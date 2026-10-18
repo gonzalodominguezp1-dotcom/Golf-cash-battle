@@ -5,9 +5,21 @@ import { InsufficientFundsError } from './wallet/WalletService.js';
 import { MatchService } from './match/MatchService.js';
 import { COURSES } from './game/courses.js';
 import { GolfGame } from './game/GolfGame.js';
+import { isMuted, setMuted, sfx, unlockAudio } from './game/audio.js';
 
 const wallet = new LocalWallet();
-const matches = new MatchService(wallet);
+const matches = new MatchService(wallet, Math.random, COURSES.length);
+
+try {
+  setMuted(localStorage.getItem('gcb.muted') === '1');
+} catch {}
+
+// sonido suave en todos los botones
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('button')) return;
+  unlockAudio();
+  sfx.tap();
+});
 const app = document.getElementById('app');
 
 const fmt = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
@@ -127,6 +139,9 @@ async function startMatch(tier) {
     if (e instanceof InsufficientFundsError) return showWallet();
     throw e;
   }
+  // #hoyo3 en la URL: la práctica empieza por ese hoyo (útil para probar)
+  const forced = /^#hoyo(\d)$/.exec(location.hash);
+  if (forced && tier.entryFee === 0) Object.assign(match, { courses: [Number(forced[1]) - 1], holes: 1 });
   const view = h(`
     <main class="screen matchmaking">
       <h1>Buscando rivales…</h1>
@@ -157,7 +172,7 @@ async function startMatch(tier) {
 // ---------- juego ----------
 
 function playHole(match, index) {
-  const course = COURSES[index % COURSES.length];
+  const course = COURSES[match.courses[index]];
   const view = h(`
     <main class="play-screen">
       <div class="stage"></div>
@@ -167,7 +182,12 @@ function playHole(match, index) {
         <div class="pill">Par ${course.par}</div>
         <div class="pill strokes">Golpes <b>0</b></div>
         <div class="pill dist">— m</div>
+        <button class="pill mute" aria-label="Sonido">${isMuted() ? '🔇' : '🔊'}</button>
       </div>
+      <div class="rivals">${match.players
+        .map((p) => `<div class="chip ${p.isBot ? '' : 'me'}" data-id="${p.id}" style="--c:${p.color}"><i>${p.name[0]}</i><b>0</b></div>`)
+        .join('')}</div>
+      <div class="toasts"></div>
       <div class="intro-banner">
         <small>Hoyo ${index + 1}</small>
         <strong>${course.name}</strong>
@@ -191,7 +211,7 @@ function playHole(match, index) {
       if (finished) return;
       finished = true;
       game.locked = true;
-      const standings = matches.recordHole(match, index, course.par, strokes);
+      const standings = matches.recordHole(match, index, course.par, strokes, game.finishBots());
       showHoleResult(match, index, course, strokes, standings);
     };
     game = new GolfGame(view.querySelector('.stage'), {
@@ -200,11 +220,17 @@ function playHole(match, index) {
         power.querySelector('span').textContent = `${Math.round(p * 100)}%`;
         power.classList.toggle('active', p > 0);
       },
+      onRival: (p, st) => {
+        setChip(p.id, st.strokes, st.sunk);
+        if (st.sunk) toast(`${p.name} ha embocado en ${st.strokes}`, p.color);
+      },
       onStroke: (n) => {
+        setChip('me', n, false);
         strokesEl.textContent = n;
         hint.classList.add('gone');
       },
       onCup: (n) => {
+        setChip('me', n, true);
         cupBanner.textContent = scoreLabel(n, course.par);
         cupBanner.classList.add('show');
         distEl.textContent = '0 m';
@@ -215,8 +241,30 @@ function playHole(match, index) {
         if (n >= MAX_STROKES_PER_HOLE) finish(n);
       },
     });
-    game.load(course);
+    game.load(course, { bots: match.players.filter((p) => p.isBot), ballColor: match.players[0].color });
     showDistance();
+    const muteBtn = view.querySelector('.mute');
+    muteBtn.addEventListener('click', () => {
+      setMuted(!isMuted());
+      muteBtn.textContent = isMuted() ? '🔇' : '🔊';
+      try {
+        localStorage.setItem('gcb.muted', isMuted() ? '1' : '0');
+      } catch {}
+    });
+    function setChip(id, strokes, sunk) {
+      const chip = view.querySelector(`.chip[data-id="${id}"]`);
+      if (!chip) return;
+      chip.querySelector('b').textContent = sunk ? `✓${strokes}` : strokes;
+      chip.classList.toggle('sunk', sunk);
+      chip.classList.remove('bump');
+      void chip.offsetWidth;
+      chip.classList.add('bump');
+    }
+    function toast(text, color) {
+      const el = h(`<div class="toast" style="--c:${color}">${text}</div>`);
+      view.querySelector('.toasts').append(el);
+      setTimeout(() => el.remove(), 2600);
+    }
     const hold = (on) => (e) => {
       e.preventDefault();
       game.setOverview(on);
@@ -281,6 +329,7 @@ async function showResults(match) {
     </main>`);
   view.querySelector('.again').addEventListener('click', () => startMatch(match.tier));
   await shell(view);
+  if (won) sfx.coins();
 }
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));

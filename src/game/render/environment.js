@@ -100,7 +100,7 @@ export function buildEnvironment(scene, course, theme, rng) {
   waterGeo.rotateX(-Math.PI / 2);
   const water = new THREE.Mesh(
     waterGeo,
-    new THREE.MeshPhongMaterial({ color: 0x2bb3e6, shininess: 90, specular: 0xffffff, transparent: true, opacity: 0.85, flatShading: true }),
+    new THREE.MeshPhongMaterial({ color: theme.water ?? 0x2bb3e6, shininess: 90, specular: 0xffffff, transparent: true, opacity: 0.85, flatShading: true }),
   );
   water.position.y = theme.waterLevel;
   scene.add(water);
@@ -160,11 +160,35 @@ export function buildEnvironment(scene, course, theme, rng) {
     }
   });
 
+  if (theme.snowfall) {
+    const n = 600;
+    const pos = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) pos.set([(rng() - 0.5) * 40, rng() * 14, (rng() - 0.5) * 40], i * 3);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const flakes = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 0.07, transparent: true, opacity: 0.9 }));
+    flakes.frustumCulled = false;
+    scene.add(flakes);
+    animated.push((t, dt) => {
+      const p = g.attributes.position;
+      for (let i = 0; i < n; i++) {
+        let y = p.getY(i) - dt * (0.6 + (i % 5) * 0.12);
+        if (y < 0) y += 14;
+        p.setY(i, y);
+        p.setX(i, p.getX(i) + Math.sin(t + i) * dt * 0.2);
+      }
+      p.needsUpdate = true;
+    });
+  }
+
   return { sun, sunDir, update: (t, dt) => animated.forEach((f) => f(t, dt)) };
 }
 
 const leafMats = [0x2f9e44, 0x3bb54a, 0x25803a, 0x4cc25a].map((color) => new THREE.MeshLambertMaterial({ color, flatShading: true }));
 const trunkMat = new THREE.MeshLambertMaterial({ color: 0x8b5a2b, flatShading: true });
+const snowMat = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true });
+const cactusMat = new THREE.MeshLambertMaterial({ color: 0x4f9e3c, flatShading: true });
+const mesaMat = new THREE.MeshLambertMaterial({ color: 0xb8653a, flatShading: true });
 
 function shadowAll(g) {
   g.traverse((o) => {
@@ -212,6 +236,38 @@ function makeTree(kind, rng, x, y, z) {
     const coco = new THREE.Mesh(new THREE.IcosahedronGeometry(0.12, 0), new THREE.MeshLambertMaterial({ color: 0x6b4423, flatShading: true }));
     coco.position.set(px + 0.1, py - 0.1, 0.05);
     g.add(coco);
+  } else if (kind === 'snowpine') {
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 0.8, 6), trunkMat);
+    trunk.position.y = 0.4;
+    g.add(trunk);
+    for (let i = 0; i < 3; i++) {
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(1 - i * 0.25, 1.1, 7), leafMats[2]);
+      cone.position.y = 1 + i * 0.6;
+      const snow = new THREE.Mesh(new THREE.ConeGeometry(0.62 - i * 0.15, 0.55, 7), snowMat);
+      snow.position.y = 1.3 + i * 0.6;
+      g.add(cone, snow);
+    }
+  } else if (kind === 'cactus') {
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 1.4, 4, 8), cactusMat);
+    body.position.y = 0.9;
+    g.add(body);
+    for (const side of [-1, 1]) {
+      if (rng() < 0.3) continue;
+      const h = 0.7 + rng() * 0.5;
+      const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.14, 0.5, 4, 8), cactusMat);
+      arm.position.set(side * 0.45, h + 0.25, 0);
+      const elbow = new THREE.Mesh(new THREE.CapsuleGeometry(0.14, 0.25, 4, 8), cactusMat);
+      elbow.rotation.z = Math.PI / 2;
+      elbow.position.set(side * 0.28, h, 0);
+      g.add(arm, elbow);
+    }
+  } else if (kind === 'rockpile') {
+    for (let i = 0; i < 3; i++) {
+      const r = new THREE.Mesh(new THREE.DodecahedronGeometry(0.6 + rng() * 0.6, 0), mesaMat);
+      r.position.set((rng() - 0.5) * 1.2, 0.3 + i * 0.5, (rng() - 0.5) * 1.2);
+      r.scale.y = 0.7;
+      g.add(r);
+    }
   } else {
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 1.1, 6), trunkMat);
     trunk.position.y = 0.55;

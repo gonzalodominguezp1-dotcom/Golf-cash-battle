@@ -1,11 +1,12 @@
 import * as THREE from 'three';
-import { BALL_R, MAX_SHOT_SPEED, inSand, isMoving, segmentsOf, spinnerSegment, step } from './physics.js';
+import { BALL_R, MAX_SHOT_SPEED, inSand, isMoving, onBoost, segmentsOf, spinnerSegment, step } from './physics.js';
+import { Bot } from './bots.js';
 import { THEMES } from './themes.js';
 import { buildEnvironment, courseBounds } from './render/environment.js';
 import { buildCourse } from './render/course.js';
 import { AimDots, Particles, Trail } from './render/effects.js';
-import { ballTexture } from './render/textures.js';
-import { sfx, unlockAudio } from './audio.js';
+import { ballTexture, labelTexture } from './render/textures.js';
+import { setAmbient, setRolling, sfx, stopAmbient, stopRolling, unlockAudio } from './audio.js';
 
 const DT = 1 / 120;
 const INTRO_SECONDS = 2.2;
@@ -24,13 +25,14 @@ const lerpAngle = (a, b, t) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) 
  * la potencia; suelta para golpear.
  */
 export class GolfGame {
-  constructor(container, { onStroke, onSunk, onAim, onRest, onCup } = {}) {
+  constructor(container, { onStroke, onSunk, onAim, onRest, onCup, onRival } = {}) {
     this.container = container;
     this.onStroke = onStroke;
     this.onSunk = onSunk;
     this.onAim = onAim;
     this.onRest = onRest;
     this.onCup = onCup;
+    this.onRival = onRival;
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
@@ -50,7 +52,9 @@ export class GolfGame {
     this.resizeObserver.observe(container);
   }
 
-  load(course) {
+  load(course, { bots = [], ballColor = '#ff4d4d' } = {}) {
+    this.botPlayers = bots;
+    this.ballColor = ballColor;
     this.course = course;
     this.theme = THEMES[course.theme] ?? THEMES.meadow;
     this.segs = segmentsOf(course);
@@ -62,6 +66,8 @@ export class GolfGame {
     this.power = 0;
     this.drag = null;
     this.wasInSand = false;
+    this.wasOnBoost = false;
+    this.ambientOn = false;
     this.yaw = Math.atan2(course.cup[0] - course.tee[0], -(course.cup[1] - course.tee[1]));
     if (course.aimYaw !== undefined) this.yaw = course.aimYaw;
     this.camYaw = this.yaw;
@@ -84,7 +90,20 @@ export class GolfGame {
     return Math.hypot(this.ball.x - this.course.cup[0], this.ball.z - this.course.cup[1]);
   }
 
+  /** Golpes de cada rival; los que no han terminado juegan lo que les queda al instante. */
+  finishBots() {
+    const out = {};
+    for (const b of this.bots ?? []) out[b.player.id] = b.done ? b.strokes : b.finishInstantly(this.t);
+    return out;
+  }
+
+  rivals() {
+    return (this.bots ?? []).map((b) => ({ id: b.player.id, strokes: b.strokes, done: b.done, sunk: b.sunk }));
+  }
+
   dispose() {
+    stopAmbient();
+    stopRolling();
     this.running = false;
     this.renderer.setAnimationLoop(null);
     this.resizeObserver.disconnect();
@@ -104,7 +123,7 @@ export class GolfGame {
 
     this.ballMesh = new THREE.Mesh(
       new THREE.SphereGeometry(BALL_R, 32, 24),
-      new THREE.MeshPhysicalMaterial({ map: ballTexture('#ff4d4d'), roughness: 0.35, clearcoat: 1, clearcoatRoughness: 0.15 }),
+      new THREE.MeshPhysicalMaterial({ map: ballTexture(this.ballColor), roughness: 0.35, clearcoat: 1, clearcoatRoughness: 0.15 }),
     );
     this.ballMesh.castShadow = true;
     scene.add(this.ballMesh);
@@ -115,6 +134,22 @@ export class GolfGame {
     );
     this.ballGlow.rotation.x = -Math.PI / 2;
     scene.add(this.ballGlow);
+
+    // rivales: bolas fantasma con su nombre encima
+    const ghostGeo = new THREE.SphereGeometry(BALL_R, 20, 14);
+    this.bots = this.botPlayers.map((p) => {
+      const bot = new Bot(p, this.course, this.segs, Math.random);
+      const mesh = new THREE.Mesh(
+        ghostGeo,
+        new THREE.MeshStandardMaterial({ map: ballTexture(p.color), emissive: p.color, emissiveIntensity: 0.25, transparent: true, opacity: 0.75, roughness: 0.4 }),
+      );
+      const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTexture(p.name, p.color), transparent: true, depthWrite: false }));
+      label.scale.set(0.9, 0.225, 1);
+      label.renderOrder = 10;
+      scene.add(mesh, label);
+      Object.assign(bot, { mesh, label, sinkT: 0 });
+      return bot;
+    });
 
     this.particles = new Particles(scene);
     this.trail = new Trail(scene);
@@ -189,6 +224,10 @@ export class GolfGame {
     el.style.touchAction = 'none';
     el.addEventListener('pointerdown', (e) => {
       unlockAudio();
+      if (!this.ambientOn) {
+        this.ambientOn = true;
+        setAmbient(this.theme.sound);
+      }
       if (!this.course || this.sunk || this.locked || this.intro < 1 || this.drag) return;
       el.setPointerCapture(e.pointerId);
       this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, yaw: this.yaw, lastTick: this.yaw };
@@ -262,6 +301,24 @@ export class GolfGame {
     return pts;
   }
 
+  #tickBots() {
+    for (const b of this.bots) {
+      const r = b.tick(this.t, DT);
+      if (!r) continue;
+      const dx = b.ball.x - this.ball.x, dz = b.ball.z - this.ball.z;
+      const dist = Math.hypot(dx, dz);
+      const right = forwardOf(this.camYaw + Math.PI / 2);
+      const pan = THREE.MathUtils.clamp((dx * right.x + dz * right.z) / 4, -1, 1);
+      if (r.shot) sfx.rivalHit(dist, pan);
+      if (r.sunk) {
+        b.sunk = true;
+        sfx.rivalCup(pan);
+        this.particles.puff(new THREE.Vector3(b.ball.x, 0.1, b.ball.z), new THREE.Color(b.player.color).getHex(), 12, 1.2, 0.18);
+      }
+      if (r.shot || r.finished) this.onRival?.(b.player, { strokes: b.strokes, sunk: !!r.sunk, done: b.done });
+    }
+  }
+
   // ---------- bucle ----------
 
   #frame() {
@@ -271,6 +328,7 @@ export class GolfGame {
     while (this.acc >= DT) {
       this.acc -= DT;
       this.t += DT;
+      if (this.intro >= 1 && !this.locked) this.#tickBots();
       if (this.sunk) continue;
       const wasMoving = isMoving(this.ball);
       // se simula también con la bola parada: un aspa puede empujarla
@@ -291,6 +349,12 @@ export class GolfGame {
         this.particles.puff(pos, 0xf0d58a, 14, 1.6, 0.2);
       }
       this.wasInSand = sand;
+      const boost = !!onBoost(this.course, this.ball.x, this.ball.z);
+      if (boost && !this.wasOnBoost) {
+        sfx.boost();
+        this.particles.puff(pos, 0x5fd0ff, 10, 1.4, 0.2);
+      }
+      this.wasOnBoost = boost;
       if (r.sunk) {
         this.sunk = true;
         this.sunkAt = this.t;
@@ -317,6 +381,19 @@ export class GolfGame {
     if (speed > 0) {
       const axis = new THREE.Vector3(-this.ball.vz, 0, this.ball.vx).normalize();
       this.ballMesh.rotateOnWorldAxis(axis, (speed * dt) / BALL_R);
+    }
+    setRolling(this.sunk ? 0 : speed, this.wasInSand);
+    for (const b of this.bots) {
+      if (b.sunk) b.sinkT = Math.min(1, b.sinkT + dt * 4);
+      b.mesh.position.set(b.ball.x, BALL_R - b.sinkT * 0.3, b.ball.z);
+      const v = Math.hypot(b.ball.vx, b.ball.vz);
+      if (v > 0) b.mesh.rotateOnWorldAxis(new THREE.Vector3(-b.ball.vz, 0, b.ball.vx).normalize(), (v * dt) / BALL_R);
+      b.label.position.set(b.ball.x, 0.5, b.ball.z);
+      b.label.visible = !b.done;
+      b.mesh.visible = b.sinkT < 1;
+      // las etiquetas pegadas a la cámara estorban: se desvanecen de cerca
+      const camD = this.camera.position.distanceTo(b.mesh.position);
+      b.label.material.opacity = THREE.MathUtils.clamp((camD - 3.7) / 2, 0, 1);
     }
     this.ballGlow.position.set(this.ball.x, 0.006, this.ball.z);
     this.ballGlow.visible = !this.sunk;

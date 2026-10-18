@@ -1,10 +1,20 @@
 import * as THREE from 'three';
-import { BALL_R, CUP_R, WALL_HALF, segmentsOf } from '../physics.js';
-import { dirtTexture, grassTexture, sandTexture, stripeTexture, woodTexture } from './textures.js';
+import { BALL_R, CUP_R, WALL_HALF, moverPos, segmentsOf } from '../physics.js';
+import { chevronTexture, crateTexture, dirtTexture, grassTexture, sandTexture, stripeTexture, woodTexture } from './textures.js';
 
 const WALL_H = 0.32;
 const PLATFORM_DEPTH = 2.4;
 const BUMPER_COLORS = [0x4b7bec, 0xff6b6b, 0xffc145, 0x9b59b6];
+const outlineMat = new THREE.MeshBasicMaterial({ color: 0x1a1a1a, side: THREE.BackSide });
+
+/** Contorno de dibujo animado (casco invertido) alrededor de una malla. */
+function outline(mesh, grow = 0.035) {
+  const o = new THREE.Mesh(mesh.geometry, outlineMat);
+  const s = mesh.geometry.boundingSphere ?? (mesh.geometry.computeBoundingSphere(), mesh.geometry.boundingSphere);
+  o.scale.setScalar(1 + grow / Math.max(0.05, s.radius));
+  mesh.add(o);
+  return mesh;
+}
 
 /** Construye la pista: plataforma de césped, hoyo real, paredes de madera, obstáculos y bandera. */
 export function buildCourse(scene, course, theme) {
@@ -86,6 +96,7 @@ export function buildCourse(scene, course, theme) {
   // postes en las esquinas
   const postMat = new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.4 });
   const corners = new Set();
+  const posts = [];
   for (const seg of segmentsOf(course)) for (const p of seg) corners.add(p.join(','));
   for (const k of corners) {
     const [x, z] = k.split(',').map(Number);
@@ -95,6 +106,7 @@ export function buildCourse(scene, course, theme) {
     const ball = new THREE.Mesh(new THREE.SphereGeometry(WALL_HALF * 1.1, 12, 8), new THREE.MeshStandardMaterial({ color: 0xff5a4e }));
     ball.position.set(x, WALL_H + 0.17, z);
     scene.add(post, ball);
+    posts.push({ x, z, meshes: [post, ball] });
   }
 
   // setas rebotadoras
@@ -109,6 +121,8 @@ export function buildCourse(scene, course, theme) {
     );
     top.scale.y = 0.6;
     top.position.y = 0.3;
+    outline(top, 0.03);
+    outline(stem, 0.03);
     const dots = new THREE.Group();
     for (let k = 0; k < 5; k++) {
       const d = new THREE.Mesh(new THREE.SphereGeometry(b.r * 0.18, 8, 6), new THREE.MeshStandardMaterial({ color: 0xffffff }));
@@ -136,10 +150,38 @@ export function buildCourse(scene, course, theme) {
     const cap = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 8), new THREE.MeshStandardMaterial({ color: 0xffc145 }));
     cap.position.y = WALL_H * 2;
     bar.castShadow = hub.castShadow = true;
+    outline(hub, 0.03);
     g.add(bar, hub, cap);
     g.position.set(sp.x, 0, sp.z);
     scene.add(g);
     return g;
+  });
+
+  // aceleradores con flechas animadas
+  const boostTextures = (course.boosts ?? []).map((b) => {
+    const tex = chevronTexture();
+    tex.repeat.set(1, b.d / b.w);
+    const pad = new THREE.Mesh(new THREE.PlaneGeometry(b.w, b.d), new THREE.MeshBasicMaterial({ map: tex }));
+    pad.rotation.x = -Math.PI / 2;
+    pad.rotation.z = Math.atan2(b.dir[0], -b.dir[1]) * -1;
+    pad.position.set(b.x, 0.005, b.z);
+    const frame = new THREE.Mesh(new THREE.PlaneGeometry(b.w + 0.12, b.d + 0.12), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    frame.rotation.copy(pad.rotation);
+    frame.position.set(b.x, 0.004, b.z);
+    scene.add(frame, pad);
+    return tex;
+  });
+
+  // bloques que se mueven
+  const crate = crateTexture();
+  const movers = (course.movers ?? []).map((m) => {
+    const geo = new THREE.BoxGeometry(m.w, 0.42, m.d);
+    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: crate, roughness: 0.6 }));
+    mesh.position.y = 0.21;
+    mesh.castShadow = mesh.receiveShadow = true;
+    outline(mesh, 0.03);
+    scene.add(mesh);
+    return mesh;
   });
 
   // bandera con tela que ondea
@@ -166,6 +208,12 @@ export function buildCourse(scene, course, theme) {
     bumpers,
     flag: { pole, cloth },
     update(t, cameraPos, ballPos) {
+      boostTextures.forEach((tex) => (tex.offset.y = -t * 1.5));
+      (course.movers ?? []).forEach((m, i) => {
+        const p = moverPos(m, t);
+        movers[i].position.x = p.x;
+        movers[i].position.z = p.z;
+      });
       const p = clothGeo.attributes.position;
       for (let i = 0; i < p.count; i++) {
         const x = clothBase[i * 3];
@@ -179,6 +227,11 @@ export function buildCourse(scene, course, theme) {
       const targetY = near ? 1.25 : 0;
       pole.position.y += (0.85 + targetY - pole.position.y) * 0.1;
       cloth.position.y = pole.position.y + 0.83;
+      // un poste pegado a la cámara taparía media pantalla
+      for (const p of posts) {
+        const near = Math.hypot(cameraPos.x - p.x, cameraPos.z - p.z) < 1.3;
+        p.meshes.forEach((m) => (m.visible = !near));
+      }
       for (const w of walls) {
         const blocks = crosses(cameraPos.x, cameraPos.z, ballPos.x, ballPos.z, w.a, w.b);
         w.opacity += ((blocks ? 0.18 : 1) - w.opacity) * 0.2;

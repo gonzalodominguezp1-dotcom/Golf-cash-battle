@@ -10,6 +10,7 @@ const SAND_FACTOR = 4;
 const RESTITUTION = 0.72;
 const CUP_CAPTURE_SPEED = 3.5;
 const STOP_SPEED = 0.06;
+const BOOST_ACCEL = 40;
 
 export function segmentsOf(course) {
   const segs = [];
@@ -53,8 +54,32 @@ function collideSegment(ball, seg, surfVx, surfVz) {
   return 0;
 }
 
+export function moverPos(m, t) {
+  const o = Math.sin(t * m.speed + (m.phase ?? 0)) * m.range;
+  const v = Math.cos(t * m.speed + (m.phase ?? 0)) * m.range * m.speed;
+  return m.axis === 'x' ? { x: m.x + o, z: m.z, vx: v, vz: 0 } : { x: m.x, z: m.z + o, vx: 0, vz: v };
+}
+
+function collideBox(ball, cx, cz, hw, hd, svx, svz) {
+  const px = Math.max(cx - hw, Math.min(ball.x, cx + hw));
+  const pz = Math.max(cz - hd, Math.min(ball.z, cz + hd));
+  let dx = ball.x - px, dz = ball.z - pz;
+  let d = Math.hypot(dx, dz);
+  if (d < 1e-6) {
+    // centro dentro de la caja: sale por el lado más cercano
+    const ox = hw - Math.abs(ball.x - cx), oz = hd - Math.abs(ball.z - cz);
+    if (ox < oz) return bounce(ball, Math.sign(ball.x - cx) || 1, 0, ox + BALL_R, svx, svz);
+    return bounce(ball, 0, Math.sign(ball.z - cz) || 1, oz + BALL_R, svx, svz);
+  }
+  if (d < BALL_R) return bounce(ball, dx / d, dz / d, BALL_R - d, svx, svz);
+  return 0;
+}
+
+const inRect = (r, x, z) => Math.abs(x - r.x) < r.w / 2 && Math.abs(z - r.z) < r.d / 2;
+export const onBoost = (course, x, z) => (course.boosts ?? []).find((b) => inRect(b, x, z));
+
 export function inSand(course, x, z) {
-  return course.sand.some((s) => Math.abs(x - s.x) < s.w / 2 && Math.abs(z - s.z) < s.d / 2);
+  return course.sand.some((s) => inRect(s, x, z));
 }
 
 /**
@@ -72,6 +97,16 @@ export function step(course, segs, ball, t, dt) {
     ball.vx *= k;
     ball.vz *= k;
   }
+  const boost = onBoost(course, ball.x, ball.z);
+  if (boost) {
+    // los aceleradores empujan la bola hasta su velocidad en su dirección
+    const along = ball.vx * boost.dir[0] + ball.vz * boost.dir[1];
+    if (along < boost.speed) {
+      const a = Math.min(BOOST_ACCEL * dt, boost.speed - along);
+      ball.vx += boost.dir[0] * a;
+      ball.vz += boost.dir[1] * a;
+    }
+  }
   ball.x += ball.vx * dt;
   ball.z += ball.vz * dt;
 
@@ -82,6 +117,10 @@ export function step(course, segs, ball, t, dt) {
     const [cx, cz] = closestOnSegment(ball.x, ball.z, seg);
     const svx = -sp.speed * (cz - sp.z), svz = sp.speed * (cx - sp.x);
     hit = Math.max(hit, collideSegment(ball, seg, svx, svz));
+  }
+  for (const m of course.movers ?? []) {
+    const p = moverPos(m, t);
+    hit = Math.max(hit, collideBox(ball, p.x, p.z, m.w / 2, m.d / 2, p.vx, p.vz));
   }
   course.bumpers.forEach((b, i) => {
     const dx = ball.x - b.x, dz = ball.z - b.z;

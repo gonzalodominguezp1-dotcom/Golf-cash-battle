@@ -135,3 +135,66 @@ export function softDotTexture() {
     false,
   );
 }
+
+export function chevronTexture() {
+  return canvasTexture(128, (g, n) => {
+    g.fillStyle = '#1d3b8f';
+    g.fillRect(0, 0, n, n);
+    g.fillStyle = '#5fd0ff';
+    g.lineJoin = 'round';
+    for (let y = -n / 2; y < n * 1.5; y += n / 2) {
+      g.beginPath();
+      g.moveTo(n * 0.15, y + n * 0.35);
+      g.lineTo(n * 0.5, y + n * 0.08);
+      g.lineTo(n * 0.85, y + n * 0.35);
+      g.lineTo(n * 0.85, y + n * 0.5);
+      g.lineTo(n * 0.5, y + n * 0.23);
+      g.lineTo(n * 0.15, y + n * 0.5);
+      g.closePath();
+      g.fill();
+    }
+  });
+}
+
+export function crateTexture() {
+  return canvasTexture(128, (g, n) => {
+    g.fillStyle = '#ffcc33';
+    g.fillRect(0, 0, n, n);
+    g.fillStyle = '#2b2b2b';
+    for (let x = -n; x < n * 2; x += 32) {
+      g.beginPath();
+      g.moveTo(x, 0);
+      g.lineTo(x + 16, 0);
+      g.lineTo(x + 16 + n, n);
+      g.lineTo(x + n, n);
+      g.fill();
+    }
+    g.strokeStyle = '#2b2b2b';
+    g.lineWidth = 8;
+    g.strokeRect(4, 4, n - 8, n - 8);
+  });
+}
+
+export function labelTexture(text, color) {
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = 64;
+  const g = c.getContext('2d');
+  g.font = 'bold 34px system-ui, sans-serif';
+  const w = Math.min(240, g.measureText(text).width + 36);
+  g.fillStyle = 'rgba(10,30,22,0.75)';
+  g.beginPath();
+  g.roundRect((256 - w) / 2, 8, w, 48, 24);
+  g.fill();
+  g.fillStyle = color;
+  g.beginPath();
+  g.arc((256 - w) / 2 + 22, 32, 8, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = '#fff';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(text, 128 + 8, 33);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
