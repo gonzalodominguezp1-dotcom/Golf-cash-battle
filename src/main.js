@@ -106,6 +106,17 @@ async function showWallet() {
         <button class="primary" data-add="50">+50 demo</button>
         <button class="primary" data-add="200">+200 demo</button>
       </div>
+      ${
+        wallet.depositCrypto
+          ? `<h2>Depositar en cripto <small class="tag">pruebas</small></h2>
+      <div class="row">
+        <button class="primary" data-crypto="10">10 USD</button>
+        <button class="primary" data-crypto="25">25 USD</button>
+        <button class="primary" data-crypto="50">50 USD</button>
+      </div>
+      <p class="legal">Pago con NOWPayments (USDT, BTC, ETH…). Modo de pruebas: no se cobra dinero real.</p>`
+          : ''
+      }
       <h2>Movimientos</h2>
       <ul class="txs">
         ${
@@ -133,6 +144,17 @@ async function showWallet() {
         throw e;
       }
       showWallet();
+    }),
+  );
+  view.querySelectorAll('[data-crypto]').forEach((b) =>
+    b.addEventListener('click', async () => {
+      b.disabled = true;
+      try {
+        const { invoiceUrl } = await wallet.depositCrypto(Number(b.dataset.crypto));
+        location.href = invoiceUrl;
+      } catch (e) {
+        alertMsg(e.code === 'not_configured' ? 'Los depósitos en cripto todavía no están activados.' : 'No se ha podido crear el pago. Prueba otra vez.');
+      }
     }),
   );
   await shell(view);

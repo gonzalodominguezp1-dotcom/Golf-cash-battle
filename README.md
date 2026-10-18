@@ -30,6 +30,7 @@ Proyecto `golf-cash-battle` (`oyawgvqbmvtmlnyqwgdf`). Cada jugador entra con una
 - El saldo solo cambia dentro de funciones del servidor: `join_match` (cobra la entrada y elige los hoyos), `submit_hole`, `finish_match` (reparte el bote y la comisión), `abandon_match` (devuelve la entrada si no se ha jugado), `demo_deposit`.
 - Requisito: en el panel de Supabase, Authentication → Sign In / Providers → activar *Allow anonymous sign-ins*.
 - `VITE_BACKEND=local` usa la demo en el navegador (la vista previa). Si Supabase no responde, la app pasa sola a modo local.
+- Depósitos cripto con NOWPayments (Edge Functions `crypto-deposit` y `nowpayments-ipn`, tabla `deposits`). El saldo solo sube cuando llega el aviso firmado con estado `finished`, una vez por depósito. Secrets: `NOWPAYMENTS_API_KEY`, `NOWPAYMENTS_IPN_SECRET` y `NOWPAYMENTS_SANDBOX` (por defecto pruebas). URL del IPN: `https://oyawgvqbmvtmlnyqwgdf.supabase.co/functions/v1/nowpayments-ipn`.
 - Publicación: `.github/workflows/pages.yml` publica en GitHub Pages al hacer push a `main` (Settings → Pages → Source: GitHub Actions).
 
 ## Estructura

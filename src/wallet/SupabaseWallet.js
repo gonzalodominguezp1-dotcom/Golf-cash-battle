@@ -37,6 +37,20 @@ export class SupabaseWallet {
     return this.balance;
   }
 
+  /** Pide una factura de NOWPayments; el saldo sube cuando llega el aviso de pago. */
+  async depositCrypto(amount) {
+    const { data, error } = await this.db.functions.invoke('crypto-deposit', {
+      body: { amount, returnUrl: location.href.split('#')[0] },
+    });
+    if (error) {
+      const body = await error.context?.json?.().catch(() => null);
+      const e = new Error(body?.error ?? 'provider_error');
+      e.code = e.message;
+      throw e;
+    }
+    return data;
+  }
+
   // el cobro de la entrada y el premio van dentro de join_match / finish_match
   async chargeEntry() {
     throw new Error('La entrada la cobra el servidor al unirse');
