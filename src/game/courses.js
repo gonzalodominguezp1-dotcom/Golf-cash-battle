@@ -1,0 +1,41 @@
+// Cada hoyo: contorno (polígono cerrado de paredes), paredes internas,
+// obstáculos redondos, zonas de arena y aspas giratorias. Coordenadas en
+// el plano del suelo (x, z); -z es "hacia arriba" en la pantalla.
+export const COURSES = [
+  {
+    name: 'La Recta',
+    par: 2,
+    tee: [0, 8],
+    cup: [0, -8],
+    outline: [[-2.2, 9.5], [2.2, 9.5], [2.2, -9.5], [-2.2, -9.5]],
+    walls: [],
+    bumpers: [{ x: 0, z: 0, r: 0.55 }, { x: -1.2, z: -4.5, r: 0.35 }, { x: 1.2, z: -4.5, r: 0.35 }],
+    sand: [],
+    spinners: [],
+  },
+  {
+    name: 'El Codo',
+    par: 3,
+    tee: [-1.5, 8],
+    cup: [2.6, -7.2],
+    outline: [[-3, 9.5], [0, 9.5], [0, -3], [4, -3], [4, -9.5], [-3, -9.5]],
+    walls: [],
+    bumpers: [{ x: 1.8, z: -5.2, r: 0.4 }],
+    sand: [{ x: -1.5, z: -6.5, w: 2.2, d: 2.2 }],
+    spinners: [],
+  },
+  {
+    name: 'Zigzag',
+    par: 3,
+    tee: [-2, 8.5],
+    cup: [2, -8.5],
+    outline: [[-3.5, 10], [3.5, 10], [3.5, -10], [-3.5, -10]],
+    walls: [
+      [[-3.5, 3.5], [1.6, 3.5]],
+      [[-1.6, -3.5], [3.5, -3.5]],
+    ],
+    bumpers: [{ x: -2.4, z: -7, r: 0.35 }],
+    sand: [{ x: 2.3, z: 6.6, w: 1.6, d: 1.6 }],
+    spinners: [{ x: 0, z: 0, len: 2.6, speed: 1.4 }],
+  },
+];
