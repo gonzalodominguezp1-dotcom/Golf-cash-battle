@@ -4,26 +4,38 @@ const BOT_NAMES = ['Lucía', 'Marco', 'Sofía', 'Diego', 'Valen', 'Hugo', 'Nora'
 
 /**
  * Reparto del bote: gana quien menos golpes totales haga (pura habilidad,
- * sin elementos de azar en el resultado). Si hay empate, el premio se divide.
+ * sin elementos de azar en el resultado). Si hay empate en cabeza, decide el
+ * hoyo de desempate (distancia al objetivo, menor gana); si aun así siguen
+ * empatados, el premio se divide.
  */
-export function settle(players, tier) {
+export function settle(players, tier, tiebreak = {}) {
   const pot = potFor(tier);
   const commission = round2(pot * PLATFORM_COMMISSION);
   const prize = round2(pot - commission);
-  const ranked = [...players].sort((a, b) => a.total - b.total);
-  const best = ranked[0].total;
-  const winners = ranked.filter((p) => p.total === best);
+  const td = (p) => tiebreak[p.id] ?? Infinity;
+  const key = (p) => [p.total, p.total === best ? td(p) : 0];
+  const best = Math.min(...players.map((p) => p.total));
+  const same = (a, b) => key(a)[0] === key(b)[0] && key(a)[1] === key(b)[1];
+  const ranked = [...players].sort((a, b) => key(a)[0] - key(b)[0] || key(a)[1] - key(b)[1]);
+  const winners = ranked.filter((p) => same(p, ranked[0]));
   const share = round2(prize / winners.length);
   return {
     pot,
     commission,
     prize,
-    ranking: ranked.map((p, i) => ({
+    ranking: ranked.map((p) => ({
       ...p,
-      position: ranked.findIndex((q) => q.total === p.total) + 1,
-      payout: p.total === best ? share : 0,
+      tiebreak: tiebreak[p.id],
+      position: ranked.findIndex((q) => same(q, p)) + 1,
+      payout: winners.includes(p) ? share : 0,
     })),
   };
+}
+
+/** Jugadores empatados en cabeza (necesitan desempate si son 2 o más). */
+export function leaders(players) {
+  const best = Math.min(...players.map((p) => p.total));
+  return players.filter((p) => p.total === best);
 }
 
 /** Oponentes simulados para la demo; en producción son jugadores reales. */
@@ -84,8 +96,8 @@ export class MatchService {
   }
 
   /** Cierra la partida y paga al ganador (o ganadores en empate). */
-  async finish(match) {
-    const result = settle(match.players, match.tier);
+  async finish(match, tiebreak = {}) {
+    const result = settle(match.players, match.tier, tiebreak);
     const me = result.ranking.find((p) => p.id === 'me');
     if (me.payout > 0) await this.wallet.payPrize(me.payout, `Premio ${match.tier.name} #${match.id}`);
     return { ...result, me };

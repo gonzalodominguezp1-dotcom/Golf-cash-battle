@@ -90,3 +90,19 @@ export const COURSES = [
     waypoints: [[0, -4]],
   },
 ];
+
+// Desempate: sin agujero. Un tiro cada uno y gana quien pare más cerca de la diana.
+export const TIEBREAK_COURSE = {
+  name: 'Desempate',
+  par: 1,
+  theme: 'sunset',
+  noCup: true,
+  tee: [0, 9],
+  cup: [0, -6],
+  outline: [[-3, 10.5], [3, 10.5], [3, -10.5], [-3, -10.5]],
+  walls: [],
+  bumpers: [{ x: -1.3, z: 0, r: 0.4 }, { x: 1.3, z: 0, r: 0.4 }],
+  sand: [{ x: 0, z: -9, w: 3.2, d: 1.6 }],
+  spinners: [],
+  waypoints: [],
+};

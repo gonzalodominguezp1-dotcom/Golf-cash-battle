@@ -6,6 +6,8 @@ import { buildEnvironment, courseBounds } from './render/environment.js';
 import { buildCourse } from './render/course.js';
 import { AimDots, Particles, Trail } from './render/effects.js';
 import { ballTexture, labelTexture } from './render/textures.js';
+import { skinMaterial } from './render/ballSkins.js';
+import { SKINS } from '../progress/skins.js';
 import { setAmbient, setRolling, sfx, stopAmbient, stopRolling, unlockAudio } from './audio.js';
 
 const DT = 1 / 120;
@@ -52,9 +54,9 @@ export class GolfGame {
     this.resizeObserver.observe(container);
   }
 
-  load(course, { bots = [], ballColor = '#ff4d4d' } = {}) {
+  load(course, { bots = [], skin = SKINS[0] } = {}) {
     this.botPlayers = bots;
-    this.ballColor = ballColor;
+    this.skin = skin;
     this.course = course;
     this.theme = THEMES[course.theme] ?? THEMES.meadow;
     this.segs = segmentsOf(course);
@@ -97,6 +99,16 @@ export class GolfGame {
     return out;
   }
 
+  /** Desempate: distancia final de cada rival al objetivo. */
+  botDistances() {
+    const out = {};
+    for (const b of this.bots ?? []) {
+      if (!b.done) b.finishInstantly(this.t);
+      out[b.player.id] = Math.hypot(b.ball.x - this.course.cup[0], b.ball.z - this.course.cup[1]);
+    }
+    return out;
+  }
+
   rivals() {
     return (this.bots ?? []).map((b) => ({ id: b.player.id, strokes: b.strokes, done: b.done, sunk: b.sunk }));
   }
@@ -123,7 +135,7 @@ export class GolfGame {
 
     this.ballMesh = new THREE.Mesh(
       new THREE.SphereGeometry(BALL_R, 32, 24),
-      new THREE.MeshPhysicalMaterial({ map: ballTexture(this.ballColor), roughness: 0.35, clearcoat: 1, clearcoatRoughness: 0.15 }),
+      skinMaterial(this.skin),
     );
     this.ballMesh.castShadow = true;
     scene.add(this.ballMesh);
@@ -152,7 +164,7 @@ export class GolfGame {
     });
 
     this.particles = new Particles(scene);
-    this.trail = new Trail(scene);
+    this.trail = new Trail(scene, 28, this.skin.trail);
     this.aimDots = new AimDots(scene);
 
     const b = courseBounds(this.course);
@@ -229,6 +241,7 @@ export class GolfGame {
         setAmbient(this.theme.sound);
       }
       if (!this.course || this.sunk || this.locked || this.intro < 1 || this.drag) return;
+      if (this.course.noCup && this.strokes >= 1) return;
       el.setPointerCapture(e.pointerId);
       this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, yaw: this.yaw, lastTick: this.yaw };
     });
@@ -257,6 +270,8 @@ export class GolfGame {
       this.onAim?.(0);
       this.aimDots.hide();
       if (power < 0.05 || isMoving(this.ball) || this.sunk) return;
+      // desempate: un solo tiro
+      if (this.course.noCup && this.strokes >= 1) return;
       const fwd = forwardOf(this.yaw);
       const speed = power * MAX_SHOT_SPEED;
       this.ball.vx = fwd.x * speed;

@@ -11,6 +11,7 @@ export const TIERS = [
   { id: 'silver', name: 'Plata', entryFee: 5, color: '#b8c4cc' },
   { id: 'gold', name: 'Oro', entryFee: 10, color: '#f2c94c' },
   { id: 'diamond', name: 'Diamante', entryFee: 25, color: '#6fd3f2' },
+  { id: 'emerald', name: 'Esmeralda', entryFee: 50, color: '#2ee59d' },
 ];
 
 export function potFor(tier) {

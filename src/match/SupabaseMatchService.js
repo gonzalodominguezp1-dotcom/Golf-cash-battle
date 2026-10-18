@@ -48,8 +48,10 @@ export class SupabaseMatchService {
     return ranked.map((p) => ({ ...p, position: ranked.findIndex((q) => q.total === p.total) + 1 }));
   }
 
-  async finish(match) {
-    const data = await this.#rpc('finish_match', { p_match: match.id });
+  /** tiebreak: { idJugador: distancia } del hoyo de desempate, si lo hubo. */
+  async finish(match, tiebreak = {}) {
+    const byUuid = Object.fromEntries(Object.entries(tiebreak).map(([id, d]) => [match.players.find((p) => p.id === id)?.uuid ?? id, d]));
+    const data = await this.#rpc('finish_match_tb', { p_match: match.id, p_tiebreak: byUuid });
     await this.wallet.getBalance();
     const ranking = data.players.map(toPlayer).sort((a, b) => a.position - b.position);
     return {
@@ -70,6 +72,7 @@ export class SupabaseMatchService {
 function toPlayer(p) {
   return {
     id: p.is_me ? 'me' : p.id,
+    uuid: p.id,
     name: p.name,
     isBot: p.is_bot,
     color: p.color,
@@ -78,5 +81,6 @@ function toPlayer(p) {
     total: p.total ?? 0,
     position: p.position ?? undefined,
     payout: Number(p.payout ?? 0),
+    tiebreak: p.tiebreak == null ? undefined : Number(p.tiebreak),
   };
 }

@@ -22,9 +22,11 @@ export function buildCourse(scene, course, theme) {
 
   // plataforma con el agujero del hoyo recortado
   const shape = new THREE.Shape(course.outline.map(([x, z]) => new THREE.Vector2(x, -z)));
-  const hole = new THREE.Path();
-  hole.absarc(hx, -hz, CUP_R, 0, Math.PI * 2, true);
-  shape.holes.push(hole);
+  if (!course.noCup) {
+    const hole = new THREE.Path();
+    hole.absarc(hx, -hz, CUP_R, 0, Math.PI * 2, true);
+    shape.holes.push(hole);
+  }
   const geo = new THREE.ExtrudeGeometry(shape, { depth: PLATFORM_DEPTH, bevelEnabled: false, curveSegments: 32 });
   geo.rotateX(-Math.PI / 2);
   geo.translate(0, -PLATFORM_DEPTH, 0);
@@ -52,7 +54,8 @@ export function buildCourse(scene, course, theme) {
   const rim = new THREE.Mesh(new THREE.RingGeometry(CUP_R, CUP_R + 0.035, 40), new THREE.MeshBasicMaterial({ color: 0xffffff }));
   rim.rotation.x = -Math.PI / 2;
   rim.position.set(hx, 0.003, hz);
-  scene.add(cupInside, cupBottom, rim);
+  if (!course.noCup) scene.add(cupInside, cupBottom, rim);
+  else scene.add(bullseye(hx, hz));
 
   // arena con bordes redondeados
   const sandTex = sandTexture();
@@ -244,6 +247,26 @@ export function buildCourse(scene, course, theme) {
       bumpers.forEach((b) => (b.userData.squash = (b.userData.squash ?? 0) * 0.85));
     },
   };
+}
+
+// Diana del desempate: anillos de colores, gana la bola que pare más cerca del centro
+function bullseye(x, z) {
+  const g = new THREE.Group();
+  const colors = [0xff3d7f, 0xffffff, 0xffc93d, 0xffffff, 0x3dd6ff, 0xffffff, 0xff3d7f];
+  const step = 0.32;
+  colors.forEach((c, i) => {
+    const r0 = (colors.length - 1 - i) * step, r1 = r0 + step;
+    const m = new THREE.Mesh(
+      i === colors.length - 1 ? new THREE.CircleGeometry(r1, 40) : new THREE.RingGeometry(r0, r1, 48),
+      new THREE.MeshStandardMaterial({ color: c, roughness: 0.6, emissive: c, emissiveIntensity: 0.15 }),
+    );
+    m.rotation.x = -Math.PI / 2;
+    m.position.y = 0.002 + i * 0.0004;
+    m.receiveShadow = true;
+    g.add(m);
+  });
+  g.position.set(x, 0, z);
+  return g;
 }
 
 // ¿El segmento cámara→bola cruza la pared? (con margen por el grosor)

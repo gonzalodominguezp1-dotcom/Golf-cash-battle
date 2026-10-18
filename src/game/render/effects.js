@@ -105,9 +105,11 @@ export class Particles {
 
 /** Estela de la bola. */
 export class Trail {
-  constructor(scene, n = 28) {
+  constructor(scene, n = 28, color = '#ffffff') {
     this.n = n;
     this.points = [];
+    this.rainbow = color === 'rainbow';
+    this.color = new THREE.Color(this.rainbow ? '#ffffff' : color);
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
     geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 4), 4));
@@ -128,7 +130,8 @@ export class Trail {
     for (let i = 0; i < this.n; i++) {
       const v = this.points[i];
       if (v) p.setXYZ(i, v.x, v.y, v.z);
-      c.setXYZW(i, 1, 1, 1, v ? (1 - i / this.n) * 0.7 : 0);
+      const col = this.rainbow ? new THREE.Color().setHSL(i / this.n, 1, 0.6) : this.color;
+      c.setXYZW(i, col.r, col.g, col.b, v ? (1 - i / this.n) * 0.8 : 0);
     }
     p.needsUpdate = c.needsUpdate = true;
     this.geo.setDrawRange(0, this.n);

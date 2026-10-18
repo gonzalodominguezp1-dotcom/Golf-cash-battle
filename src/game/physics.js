@@ -136,7 +136,7 @@ export function step(course, segs, ball, t, dt) {
   const [hx, hz] = course.cup;
   const toCup = Math.hypot(ball.x - hx, ball.z - hz);
   const v = Math.hypot(ball.vx, ball.vz);
-  if (toCup < CUP_R && v < CUP_CAPTURE_SPEED) {
+  if (!course.noCup && toCup < CUP_R && v < CUP_CAPTURE_SPEED) {
     ball.x = hx;
     ball.z = hz;
     ball.vx = ball.vz = 0;

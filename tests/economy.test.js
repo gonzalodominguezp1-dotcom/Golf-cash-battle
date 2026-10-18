@@ -38,3 +38,12 @@ test('sin saldo no se puede entrar', async () => {
   for (let i = 0; i < 4; i++) await svc.join(diamond);
   await assert.rejects(svc.join(diamond), /Saldo insuficiente/);
 });
+
+test('desempate: gana quien queda más cerca del objetivo', () => {
+  const r = settle(players([7, 7, 10, 8, 11, 12, 9, 10]), gold, { me: 1.4, p1: 0.6 });
+  assert.equal(r.ranking[0].id, 'p1');
+  assert.equal(r.ranking[0].payout, 72);
+  assert.equal(r.ranking[1].id, 'me');
+  assert.equal(r.ranking[1].position, 2);
+  assert.equal(r.ranking[1].payout, 0);
+});

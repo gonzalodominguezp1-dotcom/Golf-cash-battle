@@ -82,9 +82,10 @@ export class Bot {
     const miss = 1 - this.player.skill;
     const ang = Math.atan2(dx, -dz) + gauss(rng) * (0.015 + miss * 0.09);
     const dirX = Math.sin(ang), dirZ = -Math.cos(ang);
-    let power = powerFor(course, segs, ball, dirX, dirZ, target.isCup ? dist + 0.4 : dist);
+    const firm = target.isCup && !course.noCup;
+    let power = powerFor(course, segs, ball, dirX, dirZ, firm ? dist + 0.4 : dist);
     // al hoyo se le pega con firmeza: la búsqueda da justo el mínimo para llegar
-    if (target.isCup) power *= 1.15;
+    if (firm) power *= 1.15;
     power = Math.min(1, Math.max(0.05, power * (1 + gauss(rng) * (0.04 + miss * 0.12))));
     ball.vx = dirX * power * MAX_SHOT_SPEED;
     ball.vz = dirZ * power * MAX_SHOT_SPEED;
@@ -98,7 +99,8 @@ export class Bot {
   tick(t, dt) {
     if (this.done) return null;
     if (!isMoving(this.ball)) {
-      if (this.strokes >= MAX_STROKES_PER_HOLE) {
+      // desempate: un tiro y donde pare
+      if (this.strokes >= (this.course.noCup ? 1 : MAX_STROKES_PER_HOLE)) {
         this.done = true;
         return { finished: true };
       }
