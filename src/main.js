@@ -161,19 +161,32 @@ function playHole(match, index) {
   const view = h(`
     <main class="play-screen">
       <div class="stage"></div>
+      <div class="vignette"></div>
       <div class="hud">
         <div class="pill">Hoyo ${index + 1}/${match.holes}</div>
-        <div class="pill">${course.name} · Par ${course.par}</div>
+        <div class="pill">Par ${course.par}</div>
         <div class="pill strokes">Golpes <b>0</b></div>
+        <div class="pill dist">— m</div>
       </div>
-      <div class="hint">Arrastra hacia atrás y suelta para golpear</div>
-      <div class="power"><div></div></div>
+      <div class="intro-banner">
+        <small>Hoyo ${index + 1}</small>
+        <strong>${course.name}</strong>
+        <span>Par ${course.par}</span>
+      </div>
+      <div class="cup-banner"></div>
+      <div class="hint"><span>↔ Desliza para apuntar</span><span>↓ Tira hacia abajo y suelta</span></div>
+      <div class="power"><div class="fill"></div><span>0%</span></div>
+      <button class="map-btn" aria-label="Ver el hoyo completo">Ver hoyo</button>
     </main>`);
   shell(view, { hideHeader: true }).then(() => {
     const strokesEl = view.querySelector('.strokes b');
-    const powerEl = view.querySelector('.power div');
+    const distEl = view.querySelector('.dist');
+    const power = view.querySelector('.power');
     const hint = view.querySelector('.hint');
+    const cupBanner = view.querySelector('.cup-banner');
+    const mapBtn = view.querySelector('.map-btn');
     let finished = false;
+    const showDistance = () => (distEl.textContent = `${game.distanceToCup().toFixed(1)} m`);
     const finish = (strokes) => {
       if (finished) return;
       finished = true;
@@ -183,19 +196,36 @@ function playHole(match, index) {
     };
     game = new GolfGame(view.querySelector('.stage'), {
       onAim: (p) => {
-        powerEl.style.width = `${p * 100}%`;
-        powerEl.parentElement.classList.toggle('active', p > 0);
+        power.querySelector('.fill').style.height = `${p * 100}%`;
+        power.querySelector('span').textContent = `${Math.round(p * 100)}%`;
+        power.classList.toggle('active', p > 0);
       },
       onStroke: (n) => {
         strokesEl.textContent = n;
         hint.classList.add('gone');
       },
+      onCup: (n) => {
+        cupBanner.textContent = scoreLabel(n, course.par);
+        cupBanner.classList.add('show');
+        distEl.textContent = '0 m';
+      },
       onSunk: finish,
       onRest: (n) => {
+        showDistance();
         if (n >= MAX_STROKES_PER_HOLE) finish(n);
       },
     });
     game.load(course);
+    showDistance();
+    const hold = (on) => (e) => {
+      e.preventDefault();
+      game.setOverview(on);
+      mapBtn.classList.toggle('on', on);
+    };
+    mapBtn.addEventListener('pointerdown', hold(true));
+    mapBtn.addEventListener('pointerup', hold(false));
+    mapBtn.addEventListener('pointerleave', hold(false));
+    mapBtn.addEventListener('pointercancel', hold(false));
   });
 }
 

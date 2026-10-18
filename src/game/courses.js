@@ -5,6 +5,7 @@ export const COURSES = [
   {
     name: 'La Recta',
     par: 2,
+    theme: 'meadow',
     tee: [0, 8],
     cup: [0, -8],
     outline: [[-2.2, 9.5], [2.2, 9.5], [2.2, -9.5], [-2.2, -9.5]],
@@ -16,6 +17,8 @@ export const COURSES = [
   {
     name: 'El Codo',
     par: 3,
+    theme: 'beach',
+    aimYaw: 0,
     tee: [-1.5, 8],
     cup: [2.6, -7.2],
     outline: [[-3, 9.5], [0, 9.5], [0, -3], [4, -3], [4, -9.5], [-3, -9.5]],
@@ -27,6 +30,8 @@ export const COURSES = [
   {
     name: 'Zigzag',
     par: 3,
+    theme: 'sunset',
+    aimYaw: 0.73,
     tee: [-2, 8.5],
     cup: [2, -8.5],
     outline: [[-3.5, 10], [3.5, 10], [3.5, -10], [-3.5, -10]],

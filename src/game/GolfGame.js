@@ -1,45 +1,50 @@
 import * as THREE from 'three';
-import { BALL_R, CUP_R, MAX_SHOT_SPEED, WALL_HALF, isMoving, segmentsOf, spinnerSegment, step } from './physics.js';
+import { BALL_R, MAX_SHOT_SPEED, inSand, isMoving, segmentsOf, spinnerSegment, step } from './physics.js';
+import { THEMES } from './themes.js';
+import { buildEnvironment, courseBounds } from './render/environment.js';
+import { buildCourse } from './render/course.js';
+import { AimDots, Particles, Trail } from './render/effects.js';
+import { ballTexture } from './render/textures.js';
+import { sfx, unlockAudio } from './audio.js';
 
 const DT = 1 / 120;
-const WALL_H = 0.35;
-const MAX_DRAG = 3.2; // metros de arrastre para potencia máxima
+const INTRO_SECONDS = 2.2;
+const FOLLOW_DIST = 3.2;
+const FOLLOW_HEIGHT = 1.45;
+const LOOK_AHEAD = 2.2;
 
-const COLORS = {
-  sky: 0x8fd3ff,
-  grass: 0x5cbf4a,
-  grassDark: 0x3f9a35,
-  wall: 0xf4f1e8,
-  wallTop: 0xe0573e,
-  sand: 0xf0d58a,
-  bumper: 0x4b7bec,
-  spinner: 0xe0573e,
-  ground: 0x2f7d32,
-};
+const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+const damp = (rate, dt) => 1 - Math.exp(-rate * dt);
+const forwardOf = (yaw) => new THREE.Vector3(Math.sin(yaw), 0, -Math.cos(yaw));
+const lerpAngle = (a, b, t) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * t;
 
 /**
- * Renderiza un hoyo con Three.js y gestiona el tiro "tirachinas": arrastra
- * desde cualquier punto y suelta; la bola sale en sentido contrario.
+ * Hoyo en 3D con cámara en tercera persona detrás de la bola.
+ * Controles: arrastra a los lados para apuntar y hacia abajo para cargar
+ * la potencia; suelta para golpear.
  */
 export class GolfGame {
-  constructor(container, { onStroke, onSunk, onAim, onRest } = {}) {
+  constructor(container, { onStroke, onSunk, onAim, onRest, onCup } = {}) {
     this.container = container;
     this.onStroke = onStroke;
     this.onSunk = onSunk;
     this.onAim = onAim;
     this.onRest = onRest;
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    this.onCup = onCup;
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(this.renderer.domElement);
-    this.camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
-    this.raycaster = new THREE.Raycaster();
-    this.plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    this.camera = new THREE.PerspectiveCamera(55, 1, 0.05, 400);
     this.clock = new THREE.Clock();
     this.acc = 0;
     this.t = 0;
     this.running = false;
+    this.overview = false;
     this.#bindInput();
     this.resizeObserver = new ResizeObserver(() => this.#resize());
     this.resizeObserver.observe(container);
@@ -47,20 +52,36 @@ export class GolfGame {
 
   load(course) {
     this.course = course;
+    this.theme = THEMES[course.theme] ?? THEMES.meadow;
     this.segs = segmentsOf(course);
     this.ball = { x: course.tee[0], z: course.tee[1], vx: 0, vz: 0 };
-    this.lastRest = { x: this.ball.x, z: this.ball.z };
     this.strokes = 0;
     this.sunk = false;
-    this.sinkAnim = 0;
+    this.sunkAt = 0;
     this.t = 0;
+    this.power = 0;
+    this.drag = null;
+    this.wasInSand = false;
+    this.yaw = Math.atan2(course.cup[0] - course.tee[0], -(course.cup[1] - course.tee[1]));
+    if (course.aimYaw !== undefined) this.yaw = course.aimYaw;
+    this.camYaw = this.yaw;
     this.#buildScene();
     this.#resize();
+    this.intro = 0;
+    this.#placeCamera(1, true);
     if (!this.running) {
       this.running = true;
       this.clock.start();
       this.renderer.setAnimationLoop(() => this.#frame());
     }
+  }
+
+  setOverview(on) {
+    this.overview = on;
+  }
+
+  distanceToCup() {
+    return Math.hypot(this.ball.x - this.course.cup[0], this.ball.z - this.course.cup[1]);
   }
 
   dispose() {
@@ -74,273 +95,253 @@ export class GolfGame {
   // ---------- escena ----------
 
   #buildScene() {
-    const c = this.course;
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(COLORS.sky);
-    scene.fog = new THREE.Fog(COLORS.sky, 30, 70);
     this.scene = scene;
+    let seed = [...this.course.name].reduce((a, c) => a * 31 + c.charCodeAt(0), 7) % 2147483647;
+    const rng = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    this.env = buildEnvironment(scene, this.course, this.theme, rng);
+    this.courseView = buildCourse(scene, this.course, this.theme);
 
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x3a6b35, 1.1));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.6);
-    sun.position.set(6, 14, 6);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
-    Object.assign(sun.shadow.camera, { left: -14, right: 14, top: 14, bottom: -14 });
-    scene.add(sun);
-
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), new THREE.MeshLambertMaterial({ color: COLORS.ground }));
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -0.05;
-    ground.receiveShadow = true;
-    scene.add(ground);
-
-    // césped con forma del contorno
-    const shape = new THREE.Shape(c.outline.map(([x, z]) => new THREE.Vector2(x, -z)));
-    const green = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshLambertMaterial({ color: COLORS.grass }));
-    green.rotation.x = -Math.PI / 2;
-    green.receiveShadow = true;
-    scene.add(green);
-    this.#addStripes(shape);
-
-    for (const s of c.sand) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(s.w, s.d), new THREE.MeshLambertMaterial({ color: COLORS.sand }));
-      m.rotation.x = -Math.PI / 2;
-      m.position.set(s.x, 0.004, s.z);
-      m.receiveShadow = true;
-      scene.add(m);
-    }
-
-    const wallMat = new THREE.MeshLambertMaterial({ color: COLORS.wall });
-    const capMat = new THREE.MeshLambertMaterial({ color: COLORS.wallTop });
-    for (const seg of this.segs) this.#addWall(seg, wallMat, capMat);
-
-    for (const b of c.bumpers) {
-      const m = new THREE.Mesh(new THREE.CylinderGeometry(b.r, b.r, WALL_H * 1.2, 20), new THREE.MeshLambertMaterial({ color: COLORS.bumper }));
-      m.position.set(b.x, (WALL_H * 1.2) / 2, b.z);
-      m.castShadow = true;
-      scene.add(m);
-    }
-
-    this.spinnerMeshes = c.spinners.map((sp) => {
-      const g = new THREE.Group();
-      const bar = new THREE.Mesh(new THREE.BoxGeometry(sp.len, WALL_H, WALL_HALF * 2), new THREE.MeshLambertMaterial({ color: COLORS.spinner }));
-      bar.position.y = WALL_H / 2;
-      bar.castShadow = true;
-      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, WALL_H * 1.6, 12), wallMat);
-      hub.position.y = WALL_H * 0.8;
-      g.add(bar, hub);
-      g.position.set(sp.x, 0, sp.z);
-      scene.add(g);
-      return g;
-    });
-
-    // hoyo + bandera
-    const [hx, hz] = c.cup;
-    const cup = new THREE.Mesh(new THREE.CircleGeometry(CUP_R, 28), new THREE.MeshBasicMaterial({ color: 0x14210f }));
-    cup.rotation.x = -Math.PI / 2;
-    cup.position.set(hx, 0.006, hz);
-    scene.add(cup);
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.6, 8), new THREE.MeshLambertMaterial({ color: 0xffffff }));
-    pole.position.set(hx, 0.8, hz);
-    pole.castShadow = true;
-    const flagGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0.6, -0.18, 0), new THREE.Vector3(0, -0.36, 0)]);
-    flagGeo.computeVertexNormals();
-    this.flag = new THREE.Mesh(flagGeo, new THREE.MeshLambertMaterial({ color: 0xff3b30, side: THREE.DoubleSide }));
-    this.flag.position.set(hx, 1.58, hz);
-    scene.add(pole, this.flag);
-
-    // bola
-    this.ballMesh = new THREE.Mesh(new THREE.SphereGeometry(BALL_R, 24, 16), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 }));
+    this.ballMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(BALL_R, 32, 24),
+      new THREE.MeshPhysicalMaterial({ map: ballTexture('#ff4d4d'), roughness: 0.35, clearcoat: 1, clearcoatRoughness: 0.15 }),
+    );
     this.ballMesh.castShadow = true;
     scene.add(this.ballMesh);
+    // halo bajo la bola para verla siempre, también en sombra
+    this.ballGlow = new THREE.Mesh(
+      new THREE.RingGeometry(BALL_R * 1.4, BALL_R * 1.9, 32),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthWrite: false }),
+    );
+    this.ballGlow.rotation.x = -Math.PI / 2;
+    scene.add(this.ballGlow);
 
-    // flecha de apuntado
-    this.aim = new THREE.Group();
-    const arrowMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
-    this.aimShaft = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 1), arrowMat);
-    this.aimShaft.rotation.x = -Math.PI / 2;
-    this.aimHead = new THREE.Mesh(new THREE.CircleGeometry(0.22, 3), arrowMat);
-    this.aimHead.rotation.set(-Math.PI / 2, 0, -Math.PI / 2); // punta hacia +z local
-    this.aim.add(this.aimShaft, this.aimHead);
-    this.aim.position.y = 0.02;
-    this.aim.visible = false;
-    this.aimMat = arrowMat;
-    scene.add(this.aim);
+    this.particles = new Particles(scene);
+    this.trail = new Trail(scene);
+    this.aimDots = new AimDots(scene);
 
-    this.#addTrees();
-  }
-
-  #addStripes(shape) {
-    // franjas de corte del césped, solo en hoyos rectangulares
-    if (this.course.outline.length !== 4) return;
-    const box = new THREE.Box2().setFromPoints(shape.getPoints());
-    const mat = new THREE.MeshLambertMaterial({ color: COLORS.grassDark, transparent: true, opacity: 0.25 });
-    for (let y = box.min.y; y + 1 <= box.max.y; y += 2) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(box.max.x - box.min.x, 1), mat);
-      m.rotation.x = -Math.PI / 2;
-      m.position.set((box.max.x + box.min.x) / 2, 0.002, -(y + 0.5));
-      m.receiveShadow = true;
-      this.scene.add(m);
-    }
-  }
-
-  #addWall([[ax, az], [bx, bz]], wallMat, capMat) {
-    const len = Math.hypot(bx - ax, bz - az) + WALL_HALF * 2;
-    const angle = Math.atan2(bz - az, bx - ax);
-    const g = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(len, WALL_H, WALL_HALF * 2), wallMat);
-    body.position.y = WALL_H / 2;
-    body.castShadow = body.receiveShadow = true;
-    const cap = new THREE.Mesh(new THREE.BoxGeometry(len, 0.06, WALL_HALF * 2 + 0.02), capMat);
-    cap.position.y = WALL_H;
-    g.add(body, cap);
-    g.position.set((ax + bx) / 2, 0, (az + bz) / 2);
-    g.rotation.y = -angle;
-    this.scene.add(g);
-  }
-
-  #addTrees() {
-    const trunkMat = new THREE.MeshLambertMaterial({ color: 0x8b5a2b });
-    const leafMats = [0x2e8b3d, 0x3aa34a, 0x247a33].map((color) => new THREE.MeshLambertMaterial({ color, flatShading: true }));
-    let seed = this.course.name.length * 97;
-    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-    for (let i = 0; i < 26; i++) {
-      const side = i % 2 ? 1 : -1;
-      const x = side * (6 + rnd() * 9);
-      const z = -14 + rnd() * 28;
-      const s = 0.7 + rnd() * 0.8;
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12 * s, 0.16 * s, 0.8 * s, 6), trunkMat);
-      trunk.position.set(x, 0.4 * s, z);
-      const leaves = new THREE.Mesh(new THREE.ConeGeometry(0.8 * s, 1.8 * s, 7), leafMats[i % 3]);
-      leaves.position.set(x, 1.6 * s, z);
-      trunk.castShadow = leaves.castShadow = true;
-      this.scene.add(trunk, leaves);
-    }
+    const b = courseBounds(this.course);
+    this.bounds = b;
   }
 
   #resize() {
     const w = this.container.clientWidth || 1, h = this.container.clientHeight || 1;
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
-    if (this.course) this.#frameCamera();
+    this.camera.fov = w < h ? 62 : 50;
     this.camera.updateProjectionMatrix();
   }
 
-  #frameCamera() {
-    // encuadra el hoyo completo, con vista inclinada desde el tee
-    const xs = this.course.outline.map((p) => p[0]), zs = this.course.outline.map((p) => p[1]);
-    const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cz = (Math.min(...zs) + Math.max(...zs)) / 2;
-    const width = Math.max(...xs) - Math.min(...xs) + 1.5, depth = Math.max(...zs) - Math.min(...zs) + 1.5;
-    const vfov = THREE.MathUtils.degToRad(this.camera.fov);
-    const hfov = 2 * Math.atan(Math.tan(vfov / 2) * this.camera.aspect);
-    const tilt = THREE.MathUtils.degToRad(62);
-    const distForDepth = (depth * Math.sin(tilt) * 0.62) / Math.tan(vfov / 2);
-    const distForWidth = width / 2 / Math.tan(hfov / 2);
-    const dist = Math.max(distForDepth, distForWidth) * 1.02;
-    this.camera.position.set(cx, Math.sin(tilt) * dist, cz + Math.cos(tilt) * dist);
-    this.camera.lookAt(cx, 0, cz + 0.6);
+  // ---------- cámara ----------
+
+  #followTarget() {
+    const fwd = forwardOf(this.camYaw);
+    const dist = FOLLOW_DIST + this.power * 0.7;
+    const pos = new THREE.Vector3(this.ball.x, 0, this.ball.z).addScaledVector(fwd, -dist);
+    pos.y = FOLLOW_HEIGHT + this.power * 0.35;
+    const look = new THREE.Vector3(this.ball.x, 0.15, this.ball.z).addScaledVector(fwd, LOOK_AHEAD);
+    return { pos, look };
+  }
+
+  #overviewTarget() {
+    const b = this.bounds;
+    const cx = (b.minX + b.maxX) / 2, cz = (b.minZ + b.maxZ) / 2;
+    const depth = b.maxZ - b.minZ, width = b.maxX - b.minX;
+    const span = Math.max(depth, width * 1.6);
+    return { pos: new THREE.Vector3(cx, span * 0.95, cz + span * 0.55), look: new THREE.Vector3(cx, 0, cz - 0.5) };
+  }
+
+  #celebrateTarget() {
+    const [hx, hz] = this.course.cup;
+    const a = this.camYaw + Math.PI + (this.t - this.sunkAt) * 0.6;
+    return { pos: new THREE.Vector3(hx + Math.sin(a) * 2.4, 1.3, hz - Math.cos(a) * 2.4), look: new THREE.Vector3(hx, 0.3, hz) };
+  }
+
+  #placeCamera(dt, snap = false) {
+    let target;
+    if (this.intro < 1) {
+      const a = this.#overviewTarget(), f = this.#followTarget();
+      const k = ease(Math.max(0, (this.intro - 0.35) / 0.65));
+      target = { pos: a.pos.clone().lerp(f.pos, k), look: a.look.clone().lerp(f.look, k) };
+      snap = true;
+    } else if (this.sunk) target = this.#celebrateTarget();
+    else if (this.overview) target = this.#overviewTarget();
+    else target = this.#followTarget();
+
+    this.camPos ??= target.pos.clone();
+    this.camLook ??= target.look.clone();
+    if (snap) {
+      this.camPos.copy(target.pos);
+      this.camLook.copy(target.look);
+    } else {
+      const k = damp(this.overview ? 4 : 7, dt);
+      this.camPos.lerp(target.pos, k);
+      this.camLook.lerp(target.look, k);
+    }
+    this.camera.position.copy(this.camPos);
+    this.camera.lookAt(this.camLook);
   }
 
   // ---------- input ----------
-
-  #pointerToWorld(e) {
-    const r = this.renderer.domElement.getBoundingClientRect();
-    const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
-    this.raycaster.setFromCamera(ndc, this.camera);
-    const p = new THREE.Vector3();
-    return this.raycaster.ray.intersectPlane(this.plane, p) ? p : null;
-  }
 
   #bindInput() {
     const el = this.renderer.domElement;
     el.style.touchAction = 'none';
     el.addEventListener('pointerdown', (e) => {
-      if (!this.course || this.sunk || isMoving(this.ball) || this.locked) return;
-      const p = this.#pointerToWorld(e);
-      if (!p) return;
+      unlockAudio();
+      if (!this.course || this.sunk || this.locked || this.intro < 1 || this.drag) return;
       el.setPointerCapture(e.pointerId);
-      this.drag = { start: p, current: p };
+      this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, yaw: this.yaw, lastTick: this.yaw };
     });
     el.addEventListener('pointermove', (e) => {
-      if (!this.drag) return;
-      const p = this.#pointerToWorld(e);
-      if (p) this.drag.current = p;
+      const d = this.drag;
+      if (!d || e.pointerId !== d.id) return;
+      const h = el.clientHeight || 1, w = el.clientWidth || 1;
+      const canShoot = !isMoving(this.ball);
+      this.power = canShoot ? THREE.MathUtils.clamp((e.clientY - d.y) / (h * 0.32), 0, 1) : 0;
+      // más precisión al apuntar cuanto más cargado está el golpe
+      d.yaw += ((e.clientX - (d.px ?? d.x)) * 2.4 * (1 - 0.65 * this.power)) / w;
+      d.px = e.clientX;
+      this.yaw = d.yaw;
+      if (Math.abs(this.yaw - d.lastTick) > 0.08) {
+        d.lastTick = this.yaw;
+        sfx.tick();
+      }
+      this.onAim?.(this.power);
     });
-    const release = () => {
-      if (!this.drag) return;
-      const { power, dx, dz } = this.#aimVector();
+    const release = (e) => {
+      const d = this.drag;
+      if (!d || e.pointerId !== d.id) return;
       this.drag = null;
-      this.aim.visible = false;
+      const power = this.power;
+      this.power = 0;
       this.onAim?.(0);
-      if (power < 0.04) return;
-      this.ball.vx = dx * power * MAX_SHOT_SPEED;
-      this.ball.vz = dz * power * MAX_SHOT_SPEED;
-      this.lastRest = { x: this.ball.x, z: this.ball.z };
+      this.aimDots.hide();
+      if (power < 0.05 || isMoving(this.ball) || this.sunk) return;
+      const fwd = forwardOf(this.yaw);
+      const speed = power * MAX_SHOT_SPEED;
+      this.ball.vx = fwd.x * speed;
+      this.ball.vz = fwd.z * speed;
       this.strokes++;
-      this.onStroke?.(this.strokes);
+      sfx.hit(power);
+      this.particles.puff(new THREE.Vector3(this.ball.x, 0.05, this.ball.z), 0x9be37f, 8, 1, 0.18);
       navigator.vibrate?.(15);
+      this.onStroke?.(this.strokes);
     };
     el.addEventListener('pointerup', release);
-    el.addEventListener('pointercancel', () => {
+    el.addEventListener('pointercancel', (e) => {
+      if (this.drag?.id !== e.pointerId) return;
       this.drag = null;
-      this.aim.visible = false;
+      this.power = 0;
       this.onAim?.(0);
     });
   }
 
-  #aimVector() {
-    const vx = this.drag.start.x - this.drag.current.x, vz = this.drag.start.z - this.drag.current.z;
-    const len = Math.hypot(vx, vz);
-    if (len < 1e-4) return { power: 0, dx: 0, dz: 0 };
-    return { power: Math.min(1, len / MAX_DRAG), dx: vx / len, dz: vz / len };
+  #predictPath() {
+    const fwd = forwardOf(this.yaw);
+    const sim = { x: this.ball.x, z: this.ball.z, vx: fwd.x * this.power * MAX_SHOT_SPEED, vz: fwd.z * this.power * MAX_SHOT_SPEED };
+    const pts = [];
+    const maxLen = 1.2 + this.power * 4.5;
+    let travelled = 0, sinceBounce = -1, lastX = sim.x, lastZ = sim.z, acc = 0;
+    const course = { ...this.course, spinners: [] }; // la previsión ignora las aspas
+    for (let i = 0; i < 1200 && travelled < maxLen; i++) {
+      const r = step(course, this.segs, sim, this.t, DT);
+      const d = Math.hypot(sim.x - lastX, sim.z - lastZ);
+      travelled += d;
+      acc += d;
+      lastX = sim.x;
+      lastZ = sim.z;
+      if (acc >= 0.22) {
+        acc = 0;
+        pts.push({ x: sim.x, z: sim.z });
+      }
+      if (r.hit > 0 && sinceBounce < 0) sinceBounce = 0;
+      if (sinceBounce >= 0 && (sinceBounce += d) > 1) break;
+      if (r.sunk || !isMoving(sim)) break;
+    }
+    return pts;
   }
 
   // ---------- bucle ----------
 
   #frame() {
     const dt = Math.min(this.clock.getDelta(), 0.1);
+    if (this.intro < 1) this.intro = Math.min(1, this.intro + dt / INTRO_SECONDS);
     this.acc += dt;
     while (this.acc >= DT) {
       this.acc -= DT;
       this.t += DT;
       if (this.sunk) continue;
-      // se simula también con la bola parada: un aspa puede empujarla
       const wasMoving = isMoving(this.ball);
+      // se simula también con la bola parada: un aspa puede empujarla
       const r = step(this.course, this.segs, this.ball, this.t, DT);
-      if (wasMoving && !r.sunk && !isMoving(this.ball)) this.onRest?.(this.strokes);
-      if (r.hit > 3) navigator.vibrate?.(8);
+      const pos = new THREE.Vector3(this.ball.x, BALL_R, this.ball.z);
+      if (r.bumper >= 0) {
+        this.courseView.bumpers[r.bumper].userData.squash = 0.18;
+        sfx.bumper();
+        this.particles.puff(pos, 0xffffff, 6, 1.2, 0.15);
+      } else if (r.hit > 2) {
+        sfx.wall(r.hit);
+        this.particles.puff(pos, 0xf3e3c3, 5, 0.8, 0.14);
+        if (r.hit > 4) navigator.vibrate?.(8);
+      }
+      const sand = inSand(this.course, this.ball.x, this.ball.z);
+      if (sand && !this.wasInSand && wasMoving) {
+        sfx.sand();
+        this.particles.puff(pos, 0xf0d58a, 14, 1.6, 0.2);
+      }
+      this.wasInSand = sand;
       if (r.sunk) {
         this.sunk = true;
+        this.sunkAt = this.t;
+        sfx.cup();
+        this.onCup?.(this.strokes);
+        this.particles.confetti(new THREE.Vector3(this.course.cup[0], 0, this.course.cup[1]));
         navigator.vibrate?.([30, 40, 60]);
-        setTimeout(() => this.onSunk?.(this.strokes), 900);
-      }
+        setTimeout(() => this.onSunk?.(this.strokes), 2200);
+      } else if (wasMoving && !isMoving(this.ball)) this.onRest?.(this.strokes);
     }
+
+    // la cámara gira suavemente hacia donde rueda la bola
+    const speed = Math.hypot(this.ball.vx, this.ball.vz);
+    if (speed > 1.2 && !this.drag) {
+      const velYaw = Math.atan2(this.ball.vx, -this.ball.vz);
+      this.yaw = lerpAngle(this.yaw, velYaw, damp(1.2, dt));
+    }
+    this.camYaw = this.drag ? this.yaw : lerpAngle(this.camYaw, this.yaw, damp(10, dt));
+    if (this.drag) this.camYaw = this.yaw;
+
+    // bola: rodar y caer en el hoyo
+    const sinkT = this.sunk ? Math.min(1, (this.t - this.sunkAt) * 4) : 0;
+    this.ballMesh.position.set(this.ball.x, BALL_R - sinkT * 0.3, this.ball.z);
+    if (speed > 0) {
+      const axis = new THREE.Vector3(-this.ball.vz, 0, this.ball.vx).normalize();
+      this.ballMesh.rotateOnWorldAxis(axis, (speed * dt) / BALL_R);
+    }
+    this.ballGlow.position.set(this.ball.x, 0.006, this.ball.z);
+    this.ballGlow.visible = !this.sunk;
+    this.ballGlow.material.opacity = isMoving(this.ball) ? 0.15 : 0.35 + Math.sin(this.t * 4) * 0.15;
 
     this.course.spinners.forEach((sp, i) => {
       const [[ax, az], [bx, bz]] = spinnerSegment(sp, this.t);
-      this.spinnerMeshes[i].rotation.y = -Math.atan2(bz - az, bx - ax);
+      this.courseView.spinners[i].rotation.y = -Math.atan2(bz - az, bx - ax);
     });
 
-    if (this.sunk) this.sinkAnim = Math.min(1, this.sinkAnim + dt * 3);
-    this.ballMesh.position.set(this.ball.x, BALL_R - this.sinkAnim * BALL_R * 2.2, this.ball.z);
-    this.ballMesh.rotation.x -= this.ball.vz * dt * 4;
-    this.ballMesh.rotation.z += this.ball.vx * dt * 4;
-    this.flag.rotation.y = Math.sin(this.t * 2.5) * 0.25;
+    if (this.drag && this.power > 0.02) {
+      const color = new THREE.Color().setHSL(0.33 - this.power * 0.33, 0.95, 0.55);
+      this.aimDots.show(this.#predictPath(), color, this.t);
+      this.aimDots.showRing(this.ballMesh.position, this.t);
+    } else this.aimDots.hide();
 
-    if (this.drag) {
-      const { power, dx, dz } = this.#aimVector();
-      this.aim.visible = power > 0.02;
-      const len = 0.4 + power * 2.6;
-      const angle = Math.atan2(dx, dz);
-      this.aim.position.set(this.ball.x, 0.02, this.ball.z);
-      this.aim.rotation.y = angle;
-      this.aimShaft.scale.y = len;
-      this.aimShaft.position.set(0, 0, len / 2 + BALL_R);
-      this.aimHead.position.set(0, 0, len + BALL_R + 0.1);
-      this.aimMat.color.setHSL(0.33 - power * 0.33, 0.9, 0.55);
-      this.onAim?.(power);
-    }
+    const sun = this.env.sun;
+    sun.position.set(this.ball.x, 0, this.ball.z).addScaledVector(this.env.sunDir, 30);
+    sun.target.position.set(this.ball.x, 0, this.ball.z);
 
+    this.env.update(this.t, dt);
+    this.courseView.update(this.t, this.camera.position, this.ball);
+    this.trail.update(this.ballMesh.position, speed > 0.5);
+    this.#placeCamera(dt);
+    this.particles.update(dt, this.camera);
     this.renderer.render(this.scene, this.camera);
   }
 }

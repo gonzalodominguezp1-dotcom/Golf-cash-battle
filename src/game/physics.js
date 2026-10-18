@@ -58,11 +58,12 @@ export function inSand(course, x, z) {
 }
 
 /**
- * Avanza la simulación dt segundos. Devuelve { sunk, hit } donde hit es la
- * velocidad del choque más fuerte (para sonidos/vibración).
+ * Avanza la simulación dt segundos. Devuelve { sunk, hit, bumper }: hit es la
+ * velocidad del choque más fuerte y bumper el índice de la seta golpeada (o -1).
  */
 export function step(course, segs, ball, t, dt) {
   let hit = 0;
+  let bumper = -1;
   const speed = Math.hypot(ball.vx, ball.vz);
   if (speed > 0) {
     const sand = inSand(course, ball.x, ball.z) ? SAND_FACTOR : 1;
@@ -82,12 +83,16 @@ export function step(course, segs, ball, t, dt) {
     const svx = -sp.speed * (cz - sp.z), svz = sp.speed * (cx - sp.x);
     hit = Math.max(hit, collideSegment(ball, seg, svx, svz));
   }
-  for (const b of course.bumpers) {
+  course.bumpers.forEach((b, i) => {
     const dx = ball.x - b.x, dz = ball.z - b.z;
     const d = Math.hypot(dx, dz);
     const minD = BALL_R + b.r;
-    if (d < minD && d > 1e-6) hit = Math.max(hit, bounce(ball, dx / d, dz / d, minD - d));
-  }
+    if (d < minD && d > 1e-6) {
+      const h = bounce(ball, dx / d, dz / d, minD - d);
+      if (h > 0) bumper = i;
+      hit = Math.max(hit, h);
+    }
+  });
 
   const [hx, hz] = course.cup;
   const toCup = Math.hypot(ball.x - hx, ball.z - hz);
@@ -96,10 +101,10 @@ export function step(course, segs, ball, t, dt) {
     ball.x = hx;
     ball.z = hz;
     ball.vx = ball.vz = 0;
-    return { sunk: true, hit };
+    return { sunk: true, hit, bumper };
   }
   if (v < STOP_SPEED) ball.vx = ball.vz = 0;
-  return { sunk: false, hit };
+  return { sunk: false, hit, bumper };
 }
 
 export function isMoving(ball) {
