@@ -139,3 +139,17 @@ h2 { margin: 20px 0 8px; font-size: 18px; }
 .results .standings li.me { background: rgba(255, 204, 51, 0.3); }
 .trophy { font-size: 64px; text-align: center; margin-top: 12px; }
 .results h1, .results > .sub { text-align: center; }
+
+.offline {
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 176, 32, 0.12);
+  color: #ffcf7a;
+  font-size: 13px;
+  text-align: center;
+}
+.loading {
+  text-align: center;
+  padding-top: 30vh;
+}

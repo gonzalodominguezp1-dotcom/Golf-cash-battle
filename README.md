@@ -22,14 +22,24 @@ npm test         # reparto del bote y wallet
 npm run build
 ```
 
+## Backend (Supabase)
+
+Proyecto `golf-cash-battle` (`oyawgvqbmvtmlnyqwgdf`). Cada jugador entra con una cuenta anónima y recibe 100 créditos demo.
+
+- Tablas: `wallets`, `transactions`, `matches`, `match_players`, `tiers`, `app_config`. RLS: cada usuario solo lee lo suyo y nadie escribe directamente.
+- El saldo solo cambia dentro de funciones del servidor: `join_match` (cobra la entrada y elige los hoyos), `submit_hole`, `finish_match` (reparte el bote y la comisión), `abandon_match` (devuelve la entrada si no se ha jugado), `demo_deposit`.
+- Requisito: en el panel de Supabase, Authentication → Sign In / Providers → activar *Allow anonymous sign-ins*.
+- `VITE_BACKEND=local` usa la demo en el navegador (la vista previa). Si Supabase no responde, la app pasa sola a modo local.
+- Publicación: `.github/workflows/pages.yml` publica en GitHub Pages al hacer push a `main` (Settings → Pages → Source: GitHub Actions).
+
 ## Estructura
 
 - `src/game/` física (sin Three.js, reutilizable en servidor), hoyos, ambientaciones (`themes.js`), sonidos y render 3D (`render/`)
-- `src/wallet/` interfaz `WalletService` + `LocalWallet` (demo). Para Supabase basta con implementar la misma interfaz.
-- `src/match/` matchmaking, puntuación y reparto del bote
+- `src/wallet/` interfaz `WalletService`, `LocalWallet` (demo local) y `SupabaseWallet`
+- `src/backend/` elige backend y conecta con Supabase
+- `src/match/` matchmaking, puntuación y reparto del bote (`MatchService` local, `SupabaseMatchService` en servidor)
 
 ## Pendiente para dinero real
 
-- Backend en Supabase: wallets, transacciones y partidas en la base de datos, cobro y pago solo desde el servidor.
 - Multijugador real y validación de los golpes en servidor (la física ya es determinista y está separada del render).
 - Pasarela de pagos, KYC/edad y revisión legal del modelo de habilidad por país.

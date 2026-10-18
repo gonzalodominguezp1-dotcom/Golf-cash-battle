@@ -17,6 +17,7 @@
   },
   "homepage": "https://github.com/gonzalodominguezp1-dotcom/golf-cash-battle#readme",
   "dependencies": {
+    "@supabase/supabase-js": "^2.118.0",
     "three": "^0.169.0"
   },
   "devDependencies": {

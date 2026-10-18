@@ -3,12 +3,14 @@ import { HOLES_PER_MATCH, MAX_STROKES_PER_HOLE, PLATFORM_COMMISSION, PLAYERS_PER
 import { LocalWallet } from './wallet/LocalWallet.js';
 import { InsufficientFundsError } from './wallet/WalletService.js';
 import { MatchService } from './match/MatchService.js';
+import { createBackend } from './backend/index.js';
 import { COURSES } from './game/courses.js';
 import { GolfGame } from './game/GolfGame.js';
 import { isMuted, setMuted, sfx, unlockAudio } from './game/audio.js';
 
-const wallet = new LocalWallet();
-const matches = new MatchService(wallet, Math.random, COURSES.length);
+let backend, wallet, matches;
+// práctica forzada con #hoyoN: siempre local, no toca el servidor
+const practice = new MatchService(new LocalWallet(), Math.random, COURSES.length);
 
 try {
   setMuted(localStorage.getItem('gcb.muted') === '1');
@@ -63,6 +65,7 @@ async function showLobby() {
       <h1>Elige tu partida</h1>
       <p class="sub">${PLAYERS_PER_MATCH} jugadores · ${HOLES_PER_MATCH} hoyos · gana quien haga menos golpes</p>
       <div class="tiers"></div>
+      ${backend.mode === 'local' ? '<p class="offline">Modo sin conexión: el saldo se guarda solo en este móvil</p>' : ''}
       <p class="legal">Créditos de demostración sin valor real. El resultado depende solo de la habilidad: mismo campo para todos y sin elementos aleatorios. Comisión de la plataforma: ${Math.round(PLATFORM_COMMISSION * 100)}% del bote.</p>
     </main>`);
   const list = view.querySelector('.tiers');
@@ -88,7 +91,7 @@ async function showLobby() {
 
 // ---------- wallet ----------
 
-const TX_LABEL = { deposit: 'Recarga', entry: 'Entrada', prize: 'Premio', refund: 'Devolución' };
+const TX_LABEL = { bonus: 'Bienvenida', withdrawal: 'Retirada', deposit: 'Recarga', entry: 'Entrada', prize: 'Premio', refund: 'Devolución' };
 
 async function showWallet() {
   const [balance, txs] = await Promise.all([wallet.getBalance(), wallet.getTransactions()]);
@@ -122,7 +125,13 @@ async function showWallet() {
     </main>`);
   view.querySelectorAll('[data-add]').forEach((b) =>
     b.addEventListener('click', async () => {
-      await wallet.deposit(Number(b.dataset.add), 'Recarga demo');
+      b.disabled = true;
+      try {
+        await wallet.deposit(Number(b.dataset.add), 'Recarga demo');
+      } catch (e) {
+        if (e.code === 'daily_cap') return alertMsg('Has llegado al límite de recargas demo de hoy');
+        throw e;
+      }
       showWallet();
     }),
   );
@@ -132,16 +141,18 @@ async function showWallet() {
 // ---------- matchmaking ----------
 
 async function startMatch(tier) {
+  // #hoyo3 en la URL: la práctica empieza por ese hoyo (útil para probar)
+  const forced = tier.entryFee === 0 && /^#hoyo(\d)$/.exec(location.hash);
+  const service = forced ? practice : matches;
   let match;
   try {
-    match = await matches.join(tier);
+    match = await service.join(tier);
   } catch (e) {
     if (e instanceof InsufficientFundsError) return showWallet();
-    throw e;
+    return alertMsg('No se ha podido crear la partida. Prueba otra vez.');
   }
-  // #hoyo3 en la URL: la práctica empieza por ese hoyo (útil para probar)
-  const forced = /^#hoyo(\d)$/.exec(location.hash);
-  if (forced && tier.entryFee === 0) Object.assign(match, { courses: [Number(forced[1]) - 1], holes: 1 });
+  match.service = service;
+  if (forced) Object.assign(match, { courses: [Number(forced[1]) - 1], holes: 1 });
   const view = h(`
     <main class="screen matchmaking">
       <h1>Buscando rivales…</h1>
@@ -154,7 +165,7 @@ async function startMatch(tier) {
   let cancelled = false;
   view.querySelector('.cancel').addEventListener('click', async () => {
     cancelled = true;
-    await matches.cancel(match);
+    await match.service.cancel(match);
     showLobby();
   });
   await shell(view);
@@ -211,8 +222,11 @@ function playHole(match, index) {
       if (finished) return;
       finished = true;
       game.locked = true;
-      const standings = matches.recordHole(match, index, course.par, strokes, game.finishBots());
-      showHoleResult(match, index, course, strokes, standings);
+      const bots = game.finishBots();
+      Promise.resolve()
+        .then(() => match.service.recordHole(match, index, course.par, strokes, bots))
+        .then((standings) => showHoleResult(match, index, course, strokes, standings))
+        .catch(() => alertMsg('Se ha perdido la conexión con el servidor. Tu partida sigue guardada.'));
     };
     game = new GolfGame(view.querySelector('.stage'), {
       onAim: (p) => {
@@ -313,7 +327,12 @@ function showHoleResult(match, index, course, strokes, standings) {
 }
 
 async function showResults(match) {
-  const result = await matches.finish(match);
+  let result;
+  try {
+    result = await match.service.finish(match);
+  } catch {
+    return alertMsg('No se ha podido cerrar la partida. Prueba otra vez.');
+  }
   const won = result.me.payout > 0;
   const view = h(`
     <main class="screen results">
@@ -334,9 +353,27 @@ async function showResults(match) {
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-wallet.subscribe((b) => {
-  const el = app.querySelector('.balance');
-  if (el) el.innerHTML = coin(b);
-});
+function alertMsg(text) {
+  app.querySelector('.overlay')?.remove();
+  const overlay = h(`
+    <div class="overlay">
+      <div class="card">
+        <h2>Ups</h2>
+        <p class="sub">${text}</p>
+        <button class="primary">Volver al lobby</button>
+      </div>
+    </div>`);
+  overlay.querySelector('button').addEventListener('click', () => showLobby());
+  app.append(overlay);
+}
 
-showLobby();
+app.innerHTML = '<main class="screen loading"><h1>⛳</h1><p class="sub">Conectando…</p></main>';
+createBackend().then((b) => {
+  backend = b;
+  ({ wallet, matches } = b);
+  wallet.subscribe((n) => {
+    const el = app.querySelector('.balance');
+    if (el) el.innerHTML = coin(n);
+  });
+  showLobby();
+});
