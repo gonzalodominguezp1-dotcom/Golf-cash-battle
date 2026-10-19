@@ -66,6 +66,7 @@ export class GolfGame {
     this.t = 0;
     this.tick = 0;
     this.shots = []; // { tick, yaw, power }: lo que se manda al servidor
+    this.aim = []; // gesto de cada tiro { d: pasos con el dedo puesto, t: giros al apuntar } para el antibots
     this.power = 0;
     this.drag = null;
     this.wasInSand = false;
@@ -244,7 +245,7 @@ export class GolfGame {
       if (!this.course || this.sunk || this.locked || this.intro < 1 || this.drag) return;
       if (this.course.noCup && this.strokes >= 1) return;
       el.setPointerCapture(e.pointerId);
-      this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, yaw: this.yaw, lastTick: this.yaw };
+      this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, yaw: this.yaw, lastTick: this.yaw, start: this.tick, turns: 0, dir: 0 };
     });
     el.addEventListener('pointermove', (e) => {
       const d = this.drag;
@@ -253,7 +254,12 @@ export class GolfGame {
       const canShoot = !isMoving(this.ball);
       this.power = canShoot ? THREE.MathUtils.clamp((e.clientY - d.y) / (h * 0.32), 0, 1) : 0;
       // más precisión al apuntar cuanto más cargado está el golpe
-      d.yaw += ((e.clientX - (d.px ?? d.x)) * 2.4 * (1 - 0.65 * this.power)) / w;
+      const dx = e.clientX - (d.px ?? d.x);
+      if (dx && Math.sign(dx) !== d.dir) {
+        if (d.dir) d.turns++;
+        d.dir = Math.sign(dx);
+      }
+      d.yaw += (dx * 2.4 * (1 - 0.65 * this.power)) / w;
       d.px = e.clientX;
       this.yaw = d.yaw;
       if (Math.abs(this.yaw - d.lastTick) > 0.08) {
@@ -278,6 +284,7 @@ export class GolfGame {
       this.ball.vx = v.vx;
       this.ball.vz = v.vz;
       this.shots.push({ tick: this.tick, ...shot });
+      this.aim.push({ d: this.tick - d.start, t: d.turns });
       this.strokes++;
       sfx.hit(power);
       this.particles.puff(new THREE.Vector3(this.ball.x, 0.05, this.ball.z), 0x9be37f, 8, 1, 0.18);

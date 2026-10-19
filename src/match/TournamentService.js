@@ -6,6 +6,9 @@ import { rpcError } from '../backend/supabase.js';
  * a su ritmo; el cliente solo manda sus tiros (cuándo, hacia dónde y con qué
  * fuerza) y el servidor los repite con la física para contar los golpes.
  */
+// por qué una cuenta no puede entrar en mesas de pago (ver _paid_block)
+export const PAID_BLOCKS = ['account_required', 'kyc_required', 'underage', 'account_review'];
+
 export class TournamentService {
   constructor(db, wallet) {
     this.db = db;
@@ -17,6 +20,7 @@ export class TournamentService {
     if (error) {
       const e = rpcError(error);
       if (e.code === 'insufficient_funds') throw new InsufficientFundsError();
+      if (PAID_BLOCKS.includes(e.code)) e.blocked = true;
       throw e;
     }
     return data;
@@ -41,9 +45,12 @@ export class TournamentService {
     return update(match, await this.#rpc('start_round', { p_t: match.id }));
   }
 
-  /** Manda los tiros de un hoyo (hole = número de hoyos es el desempate). */
-  async submitHole(match, hole, shots) {
-    const { data, error } = await this.db.functions.invoke('submit-hole', { body: { tournament: match.id, hole, shots } });
+  /**
+   * Manda los tiros de un hoyo (hole = número de hoyos es el desempate). aim
+   * es el gesto de cada tiro ({ d, t }), que mira el antibots.
+   */
+  async submitHole(match, hole, shots, aim = []) {
+    const { data, error } = await this.db.functions.invoke('submit-hole', { body: { tournament: match.id, hole, shots, aim } });
     if (error) {
       const body = await error.context?.json?.().catch(() => null);
       const e = new Error(body?.error ?? 'network');

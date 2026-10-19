@@ -69,6 +69,7 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
         <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}"><span>⛳</span>Jugar</button>
         <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}"><span>✨</span>Skins</button>
         <button data-go="wallet" class="${screen === 'wallet' ? 'on' : ''}"><span>💎</span>Wallet</button>
+        <button data-go="account" class="${screen === 'account' ? 'on' : ''}"><span>👤</span>Cuenta</button>
       </nav>`),
     );
   }
@@ -79,6 +80,7 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
 function go(to) {
   if (to === 'wallet') return showWallet();
   if (to === 'skins') return showSkins();
+  if (to === 'account') return showAccount();
   return showLobby();
 }
 
@@ -122,6 +124,7 @@ async function showLobby() {
         </div>
       </section>
       ${backend.mode === 'local' ? '<p class="offline">Modo sin conexión: el saldo se guarda solo en este móvil</p>' : ''}
+      ${backend.account?.profile?.paid_block ? `<button class="notice account-hint" data-go="account">${{ account_required: 'Guarda tu cuenta con email para jugar mesas con entrada →', kyc_required: 'Verifica tu edad e identidad para jugar mesas con entrada →', account_review: 'Tu cuenta está en revisión: de momento solo Práctica', underage: 'Mesas con entrada solo para mayores de 18' }[backend.account.profile.paid_block]}</button>` : ''}
       <div class="my-tournaments"></div>
       <div class="section-head">
         <h1>Elige tu mesa</h1>
@@ -209,6 +212,235 @@ async function showSkins() {
     grid.append(card);
   }
   await shell(view);
+}
+
+// ---------- cuenta ----------
+
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+const BLOCK_TEXT = {
+  account_required: 'Para jugar con créditos necesitas una cuenta con email. Así no pierdes tu saldo si cambias de móvil.',
+  kyc_required: 'Antes de jugar con créditos tienes que verificar tu edad e identidad. Solo se hace una vez.',
+  underage: 'Las mesas con entrada son solo para mayores de 18 años. Puedes seguir jugando en Práctica.',
+  account_review: 'Tu cuenta está en revisión por el sistema antitrampas. Mientras tanto puedes jugar en Práctica.',
+};
+
+const KYC_TEXT = {
+  none: 'Sin verificar',
+  pending: 'En curso',
+  verified: 'Verificada ✓',
+  rejected: 'Rechazada',
+};
+
+const KYC_REASON = {
+  underage: 'Hay que ser mayor de 18 años.',
+  duplicate_identity: 'Ese documento ya está en otra cuenta. Solo se permite una cuenta por persona.',
+  provider_declined: 'No se ha podido comprobar el documento. Prueba otra vez con buena luz.',
+  missing_data: 'Faltan datos del documento. Prueba otra vez.',
+};
+
+function showBlocked(code) {
+  app.querySelector('.overlay')?.remove();
+  const overlay = h(`
+    <div class="overlay">
+      <div class="card">
+        <h2>${code === 'account_review' || code === 'underage' ? 'Mesa no disponible' : 'Un paso más'}</h2>
+        <p class="sub">${BLOCK_TEXT[code] ?? BLOCK_TEXT.account_required}</p>
+        ${code === 'account_required' || code === 'kyc_required' ? '<button class="primary go">Ir a mi cuenta</button>' : ''}
+        <button class="ghost back">Volver</button>
+      </div>
+    </div>`);
+  overlay.querySelector('.go')?.addEventListener('click', () => showAccount());
+  overlay.querySelector('.back').addEventListener('click', () => overlay.remove());
+  app.append(overlay);
+}
+
+async function showAccount(note = '') {
+  screen = 'account';
+  const account = backend.account;
+  if (!account) {
+    await shell(
+      h(`<main class="screen account"><div class="section-head"><h1>Cuenta</h1></div>
+        <p class="offline">Sin conexión con el servidor: las cuentas no están disponibles en este modo.</p></main>`),
+    );
+    return;
+  }
+  const p = await account.load().catch(() => account.profile);
+  const guest = p.is_anonymous || !p.email_confirmed;
+  const kyc = p.kyc_status;
+  const name = p.username ?? 'Sin nombre';
+  const view = h(`
+    <main class="screen account">
+      <div class="profile-card holo">
+        <div class="shine"></div>
+        <span class="avatar big">${p.username ? esc(name[0]) : '?'}</span>
+        <div>
+          <small>${guest ? 'Invitado' : 'Cuenta'}</small>
+          <strong>${esc(name)}</strong>
+          <button class="chip-btn rename">Cambiar nombre</button>
+        </div>
+      </div>
+      ${note ? `<p class="notice">${note}</p>` : ''}
+      ${p.in_review ? `<p class="offline">Tu cuenta está en revisión por el sistema antitrampas.${p.held > 0 ? ` Tienes ${coin(Number(p.held))} en premios retenidos hasta que termine.` : ''}</p>` : ''}
+
+      <h2>Email</h2>
+      <div class="email-box"></div>
+
+      <h2>Edad e identidad <small class="tag">${KYC_TEXT[kyc]}</small></h2>
+      <div class="kyc-box"></div>
+
+      <p class="legal">Para jugar mesas con entrada hace falta cuenta con email, ser mayor de 18 años y verificar tu identidad (una cuenta por persona). La práctica es libre.</p>
+      ${guest ? '' : '<button class="ghost logout">Cerrar sesión</button>'}
+    </main>`);
+
+  view.querySelector('.rename').addEventListener('click', () => renameForm(view, name));
+
+  const emailBox = view.querySelector('.email-box');
+  if (!guest) {
+    emailBox.innerHTML = `<p class="field-ok">${esc(p.email)} ✓</p>`;
+  } else {
+    emailBox.append(
+      emailForm({
+        intro: p.pending_email
+          ? `Te enviamos un email a <b>${esc(p.pending_email)}</b>. Pulsa el enlace para confirmarlo, o escribe otro email.`
+          : 'Juegas como invitado. Añade tu email para guardar tu saldo, nivel y skins y poder entrar desde otro móvil.',
+        button: 'Guardar mi cuenta',
+        send: (email) => account.register(email),
+        codeType: 'email_change',
+      }),
+    );
+    const other = h('<button class="link">¿Ya tienes cuenta? Entrar</button>');
+    other.addEventListener('click', () => {
+      other.replaceWith(
+        emailForm({
+          intro: 'Entra en tu cuenta. El saldo de este invitado se queda en este móvil.',
+          button: 'Enviarme el enlace',
+          send: (email) => account.signIn(email),
+          codeType: 'email',
+        }),
+      );
+    });
+    emailBox.append(other);
+  }
+
+  const kycBox = view.querySelector('.kyc-box');
+  if (guest) {
+    kycBox.innerHTML = '<p class="sub">Primero guarda tu cuenta con email.</p>';
+  } else if (kyc === 'verified') {
+    kycBox.innerHTML = `<p class="field-ok">Identidad verificada${p.adult ? ' · mayor de 18' : ''} ✓</p>`;
+  } else {
+    kycBox.innerHTML = `
+      ${kyc === 'rejected' ? `<p class="sub">${KYC_REASON[p.kyc_reason] ?? KYC_REASON.provider_declined}</p>` : ''}
+      ${kyc === 'pending' ? '<p class="sub">Estamos esperando el resultado. Si no terminaste, vuelve a empezar.</p>' : ''}
+      <button class="primary kyc-start">${kyc === 'none' ? 'Verificar identidad' : 'Volver a verificar'}</button>
+      <p class="legal">Necesitarás tu DNI o pasaporte y la cámara del móvil. Los datos los comprueba un proveedor externo; aquí solo guardamos tu fecha de nacimiento.</p>`;
+    kycBox.querySelector('.kyc-start').addEventListener('click', async (e) => {
+      e.target.disabled = true;
+      try {
+        const r = await account.startKyc();
+        if (r.url) return (location.href = r.url);
+        if (r.status === 'verified') return showAccount();
+        kycStubForm(kycBox);
+      } catch (err) {
+        e.target.disabled = false;
+        alertMsg(err.code === 'account_required' ? 'Primero confirma tu email.' : 'No se ha podido abrir la verificación. Prueba otra vez.');
+      }
+    });
+  }
+
+  view.querySelector('.logout')?.addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    await account.signOut();
+  });
+  await shell(view);
+}
+
+// formulario de email que, tras enviar, deja escribir el código del correo
+function emailForm({ intro, button, send, codeType }) {
+  const box = h(`
+    <form class="form">
+      <p class="sub">${intro}</p>
+      <input type="email" name="email" required autocomplete="email" placeholder="tu@email.com">
+      <button class="primary">${button}</button>
+    </form>`);
+  let sentTo = null;
+  box.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = box.querySelector('button');
+    btn.disabled = true;
+    if (sentTo) {
+      try {
+        await backend.account.verifyCode(sentTo, box.code.value.trim(), codeType);
+        // si cambia de usuario la app se recarga sola; si es el mismo, se refresca
+        showAccount('Cuenta guardada ✓');
+      } catch {
+        btn.disabled = false;
+        alertMsg('El código no es válido o ha caducado.');
+      }
+      return;
+    }
+    const email = box.email.value.trim();
+    try {
+      await send(email);
+    } catch (err) {
+      btn.disabled = false;
+      const msg = {
+        email_taken: 'Ese email ya tiene cuenta. Usa “¿Ya tienes cuenta? Entrar”.',
+        no_account: 'No hay ninguna cuenta con ese email.',
+        rate_limited: 'Espera un minuto antes de pedir otro email.',
+      }[err.code];
+      return alertMsg(msg ?? 'No se ha podido enviar el email. Prueba otra vez.');
+    }
+    sentTo = email;
+    box.innerHTML = `
+      <p class="sub">Te hemos enviado un email a <b>${esc(email)}</b>. Pulsa el enlace desde este móvil, o escribe aquí el código si viene uno.</p>
+      <input name="code" required inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="Código">
+      <button class="secondary">Confirmar código</button>`;
+  });
+  return box;
+}
+
+function renameForm(view, current) {
+  const card = view.querySelector('.profile-card');
+  const form = h(`
+    <form class="form">
+      <input name="name" maxlength="16" autocomplete="nickname" value="${esc(current === 'Sin nombre' ? '' : current)}" placeholder="Nombre (3-16 letras, números o _)">
+      <button class="primary">Guardar nombre</button>
+    </form>`);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      await backend.account.setUsername(form.name.value.trim());
+      showAccount('Nombre guardado ✓');
+    } catch (err) {
+      alertMsg(err.code === 'username_taken' ? 'Ese nombre ya está cogido.' : 'Usa de 3 a 16 letras, números o _.');
+    }
+  });
+  card.after(form);
+  form.name.focus();
+}
+
+// modo pruebas: sin proveedor configurado, se pide fecha y documento a mano
+function kycStubForm(box) {
+  box.innerHTML = `
+    <form class="form">
+      <p class="sub"><small class="tag">pruebas</small> Verificación simulada: aún no hay proveedor conectado.</p>
+      <label>Fecha de nacimiento<input type="date" name="birthdate" required></label>
+      <label>Número de documento<input name="document" required minlength="5" maxlength="32" autocomplete="off"></label>
+      <button class="primary">Verificar</button>
+    </form>`;
+  const form = box.querySelector('form');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    form.querySelector('button').disabled = true;
+    try {
+      await backend.account.stubKyc(form.birthdate.value, form.document.value);
+      showAccount();
+    } catch {
+      form.querySelector('button').disabled = false;
+      alertMsg('Revisa la fecha y el número de documento.');
+    }
+  });
 }
 
 // ---------- wallet ----------
@@ -638,6 +870,10 @@ async function startTournament(tier) {
     match = await backend.tournaments.join(tier, TIERS);
   } catch (e) {
     if (e instanceof InsufficientFundsError) return showWallet();
+    if (e.blocked) {
+      backend.account?.load().catch(() => {});
+      return showBlocked(e.code);
+    }
     return alertMsg('No se ha podido entrar en el torneo. Prueba otra vez.');
   }
   if (match.resumed && match.me.holesPlayed > 0) return continueRound(match);
@@ -716,17 +952,18 @@ function playOnlineHole(match, index) {
     title: `Hoyo ${index + 1}/${match.holes}`,
     subtitle: `Torneo ${match.tier.name} · hoyo ${index + 1}`,
     players: [match.me],
-    onDone: (g) => submitOnline(match, index, g.shots, (r) => showOnlineHoleResult(match, index, course, r.strokes)),
+    onDone: (g) => submitOnline(match, index, g, (r) => showOnlineHoleResult(match, index, course, r.strokes)),
   });
 }
 
-async function submitOnline(match, hole, shots, then) {
+async function submitOnline(match, hole, g, then) {
+  const { shots, aim } = g;
   try {
-    then(await backend.tournaments.submitHole(match, hole, shots));
+    then(await backend.tournaments.submitHole(match, hole, shots, aim));
   } catch (e) {
     if (e.code === 'invalid_shots') return alertMsg('El servidor no ha podido validar los golpes de este hoyo.');
     if (['time_up', 'match_closed', 'wrong_hole'].includes(e.code)) return showOnlineResults(match);
-    retryMsg('Se ha perdido la conexión con el servidor. Tus golpes siguen guardados en el móvil.', () => submitOnline(match, hole, shots, then));
+    retryMsg('Se ha perdido la conexión con el servidor. Tus golpes siguen guardados en el móvil.', () => submitOnline(match, hole, { shots, aim }, then));
   }
 }
 
@@ -776,7 +1013,7 @@ function playOnlineTiebreak(match) {
     subtitle: 'Un tiro',
     players: [match.me],
     onDone: (g, _strokes, banner) =>
-      submitOnline(match, match.holes, g.shots, (r) => {
+      submitOnline(match, match.holes, g, (r) => {
         banner(`${r.distance.toFixed(2)} m`);
         setTimeout(() => showOnlineResults(match), 1400);
       }),
@@ -940,6 +1177,7 @@ app.innerHTML = '<main class="screen loading"><h1>⛳</h1><p class="sub">Conecta
 createBackend().then((b) => {
   backend = b;
   ({ wallet, matches } = b);
+  if (b.account) progress.attach(b.user.id, b.account.profile?.progress, (s) => b.account.saveProgress(s));
   wallet.subscribe((n) => {
     const el = app.querySelector('.balance');
     if (el) el.innerHTML = `${coin(n)}<span class="plus">+</span>`;

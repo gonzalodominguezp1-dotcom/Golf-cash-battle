@@ -1,11 +1,20 @@
-// Copia la física y los hoyos del juego a la función submit-hole, para que el
-// servidor repita los golpes con exactamente el mismo código.
-import { copyFileSync } from 'node:fs';
+// Copia la física, los hoyos y el antibots del juego a la función submit-hole,
+// para que el servidor repita los golpes con exactamente el mismo código.
+import { copyFileSync, mkdirSync } from 'node:fs';
 
-export const SHARED = ['physics.js', 'replay.js', 'courses.js'];
-const dest = new URL('../supabase/functions/submit-hole/game/', import.meta.url);
+// [origen en src/, destino en la función]
+export const SHARED = [
+  ['game/physics.js', 'game/physics.js'],
+  ['game/replay.js', 'game/replay.js'],
+  ['game/courses.js', 'game/courses.js'],
+  ['antibot/risk.js', 'antibot/risk.js'],
+];
+const dest = new URL('../supabase/functions/submit-hole/', import.meta.url);
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  for (const f of SHARED) copyFileSync(new URL(`../src/game/${f}`, import.meta.url), new URL(f, dest));
-  console.log('Física copiada a supabase/functions/submit-hole/game');
+  for (const [from, to] of SHARED) {
+    mkdirSync(new URL(to.replace(/[^/]+$/, ''), dest), { recursive: true });
+    copyFileSync(new URL(`../src/${from}`, import.meta.url), new URL(to, dest));
+  }
+  console.log('Física y antibots copiados a supabase/functions/submit-hole');
 }
