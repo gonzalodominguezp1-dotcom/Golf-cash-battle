@@ -14,6 +14,13 @@ Minigolf 3D para móvil (navegador) con partidas de 8 jugadores y entry fee: el 
 
 Las reglas económicas están en `src/config.js`.
 
+## Empezar a colaborar
+
+1. Clona el repo e instala: `git clone https://github.com/gonzalodominguezp1-dotcom/Golf-cash-battle.git && cd Golf-cash-battle && npm install` (Node 20 o superior).
+2. `npm run dev` y abre la URL que muestra (o la "Network" desde el móvil en la misma wifi). Sin configurar nada usa el Supabase de producción (`oyawgvqbmvtmlnyqwgdf`); para jugar sin servidor: `VITE_BACKEND=local npm run dev`.
+3. Trabaja en una rama y abre un PR contra `main`. Cada PR pasa las pruebas (`npm test`) en GitHub Actions; al fusionar en `main` se publica solo en https://gonzalodominguezp1-dotcom.github.io/Golf-cash-battle/ (panel de admin en `/admin.html`).
+4. Cambios en la base de datos van como migración nueva en `supabase/migrations/`; las Edge Functions están en `supabase/functions/`. Desplegarlas en Supabase necesita acceso al proyecto (pídeselo a Gonzalo).
+
 ## Desarrollo
 
 ```bash
