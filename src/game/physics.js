@@ -1,5 +1,9 @@
-// Física 2D del minigolf sobre el plano (x, z). Sin dependencias de Three.js
-// para poder probarla en Node y, más adelante, validarla en el servidor.
+// Física 2D del minigolf sobre el plano (x, z). Sin dependencias de Three.js:
+// el servidor la usa para repetir cada golpe y validar el resultado.
+//
+// Tiene que dar exactamente los mismos números en cualquier navegador y en el
+// servidor, así que solo usa + - * / y Math.sqrt (exactos según IEEE 754).
+// Nada de Math.sin, Math.cos o Math.hypot, que cambian según el motor.
 export const BALL_R = 0.13;
 export const CUP_R = 0.24;
 export const WALL_HALF = 0.15;
@@ -12,6 +16,41 @@ const CUP_CAPTURE_SPEED = 3.5;
 const STOP_SPEED = 0.06;
 const BOOST_ACCEL = 40;
 
+export const DT = 1 / 120; // paso fijo de la simulación
+
+const HALF_PI = 1.5707963267948966;
+const hyp = (x, z) => Math.sqrt(x * x + z * z);
+
+// seno y coseno deterministas: reducción a [-π/4, π/4] y polinomio de Taylor
+function sinPoly(r) {
+  const r2 = r * r;
+  return r * (1 + r2 * (-1 / 6 + r2 * (1 / 120 + r2 * (-1 / 5040 + r2 * (1 / 362880 + r2 * (-1 / 39916800 + r2 * (1 / 6227020800 + r2 * (-1 / 1307674368000))))))));
+}
+function cosPoly(r) {
+  const r2 = r * r;
+  return 1 + r2 * (-1 / 2 + r2 * (1 / 24 + r2 * (-1 / 720 + r2 * (1 / 40320 + r2 * (-1 / 3628800 + r2 * (1 / 479001600 + r2 * (-1 / 87178291200 + r2 / 20922789888000)))))));
+}
+export function dsin(x) {
+  const k = Math.round(x / HALF_PI);
+  const r = x - k * HALF_PI;
+  const q = ((k % 4) + 4) % 4;
+  return q === 0 ? sinPoly(r) : q === 1 ? cosPoly(r) : q === 2 ? -sinPoly(r) : -cosPoly(r);
+}
+export const dcos = (x) => dsin(x + HALF_PI);
+
+/**
+ * Un golpe: dirección (yaw, 0 = hacia -z) y potencia 0..1. Se redondean para
+ * que el servidor reciba exactamente lo mismo que se jugó.
+ */
+export function quantizeShot(yaw, power) {
+  return { yaw: Math.round(yaw * 1e4) / 1e4, power: Math.round(Math.min(1, Math.max(0, power)) * 1e3) / 1e3 };
+}
+
+export function shotVelocity(yaw, power) {
+  const speed = power * MAX_SHOT_SPEED;
+  return { vx: dsin(yaw) * speed, vz: -dcos(yaw) * speed };
+}
+
 export function segmentsOf(course) {
   const segs = [];
   const o = course.outline;
@@ -21,8 +60,8 @@ export function segmentsOf(course) {
 
 export function spinnerSegment(sp, t) {
   const a = sp.speed * t;
-  const dx = (Math.cos(a) * sp.len) / 2;
-  const dz = (Math.sin(a) * sp.len) / 2;
+  const dx = (dcos(a) * sp.len) / 2;
+  const dz = (dsin(a) * sp.len) / 2;
   return [[sp.x - dx, sp.z - dz], [sp.x + dx, sp.z + dz]];
 }
 
@@ -48,15 +87,15 @@ function bounce(ball, nx, nz, overlap, surfVx = 0, surfVz = 0) {
 function collideSegment(ball, seg, surfVx, surfVz) {
   const [cx, cz] = closestOnSegment(ball.x, ball.z, seg);
   const dx = ball.x - cx, dz = ball.z - cz;
-  const d = Math.hypot(dx, dz);
+  const d = hyp(dx, dz);
   const minD = BALL_R + WALL_HALF;
   if (d < minD && d > 1e-6) return bounce(ball, dx / d, dz / d, minD - d, surfVx, surfVz);
   return 0;
 }
 
 export function moverPos(m, t) {
-  const o = Math.sin(t * m.speed + (m.phase ?? 0)) * m.range;
-  const v = Math.cos(t * m.speed + (m.phase ?? 0)) * m.range * m.speed;
+  const o = dsin(t * m.speed + (m.phase ?? 0)) * m.range;
+  const v = dcos(t * m.speed + (m.phase ?? 0)) * m.range * m.speed;
   return m.axis === 'x' ? { x: m.x + o, z: m.z, vx: v, vz: 0 } : { x: m.x, z: m.z + o, vx: 0, vz: v };
 }
 
@@ -64,7 +103,7 @@ function collideBox(ball, cx, cz, hw, hd, svx, svz) {
   const px = Math.max(cx - hw, Math.min(ball.x, cx + hw));
   const pz = Math.max(cz - hd, Math.min(ball.z, cz + hd));
   let dx = ball.x - px, dz = ball.z - pz;
-  let d = Math.hypot(dx, dz);
+  let d = hyp(dx, dz);
   if (d < 1e-6) {
     // centro dentro de la caja: sale por el lado más cercano
     const ox = hw - Math.abs(ball.x - cx), oz = hd - Math.abs(ball.z - cz);
@@ -89,7 +128,7 @@ export function inSand(course, x, z) {
 export function step(course, segs, ball, t, dt) {
   let hit = 0;
   let bumper = -1;
-  const speed = Math.hypot(ball.vx, ball.vz);
+  const speed = hyp(ball.vx, ball.vz);
   if (speed > 0) {
     const sand = inSand(course, ball.x, ball.z) ? SAND_FACTOR : 1;
     const newSpeed = Math.max(0, speed - (ROLL_DECEL * sand + ROLL_DRAG * sand * speed) * dt);
@@ -124,7 +163,7 @@ export function step(course, segs, ball, t, dt) {
   }
   course.bumpers.forEach((b, i) => {
     const dx = ball.x - b.x, dz = ball.z - b.z;
-    const d = Math.hypot(dx, dz);
+    const d = hyp(dx, dz);
     const minD = BALL_R + b.r;
     if (d < minD && d > 1e-6) {
       const h = bounce(ball, dx / d, dz / d, minD - d);
@@ -134,8 +173,8 @@ export function step(course, segs, ball, t, dt) {
   });
 
   const [hx, hz] = course.cup;
-  const toCup = Math.hypot(ball.x - hx, ball.z - hz);
-  const v = Math.hypot(ball.vx, ball.vz);
+  const toCup = hyp(ball.x - hx, ball.z - hz);
+  const v = hyp(ball.vx, ball.vz);
   if (!course.noCup && toCup < CUP_R && v < CUP_CAPTURE_SPEED) {
     ball.x = hx;
     ball.z = hz;

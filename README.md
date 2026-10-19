@@ -31,6 +31,10 @@ Proyecto `golf-cash-battle` (`oyawgvqbmvtmlnyqwgdf`). Cada jugador entra con una
 - Requisito: en el panel de Supabase, Authentication → Sign In / Providers → activar *Allow anonymous sign-ins*.
 - `VITE_BACKEND=local` usa la demo en el navegador (la vista previa). Si Supabase no responde, la app pasa sola a modo local.
 - Depósitos cripto con NOWPayments (Edge Functions `crypto-deposit` y `nowpayments-ipn`, tabla `deposits`). El saldo solo sube cuando llega el aviso firmado con estado `finished`, una vez por depósito. Secrets: `NOWPAYMENTS_API_KEY`, `NOWPAYMENTS_IPN_SECRET` y `NOWPAYMENTS_SANDBOX` (por defecto pruebas). URL del IPN: `https://oyawgvqbmvtmlnyqwgdf.supabase.co/functions/v1/nowpayments-ipn`.
+- Torneos contra jugadores reales (mesas de pago): asíncronos, 8 plazas. Cada uno juega los mismos hoyos a su ritmo (20 min para terminar) y el bote se reparte cuando han terminado todos y la mesa está llena o se cierra la inscripción (15 min). Si al cerrar solo hay un jugador, se le devuelve la entrada. Tablas `tournaments`, `tournament_entries`, `tournament_holes`; funciones `join_tournament`, `start_round`, `leave_tournament`, `tournament_status`, `my_tournaments` (migración en `supabase/migrations/`).
+- Validación de golpes: el cliente no manda cuántos golpes hizo, solo cada tiro (`tick`, `yaw`, `power`). La Edge Function `submit-hole` repite el hoyo con la misma física (`src/game/replay.js`) y guarda los golpes que salen. La física solo usa operaciones exactas en IEEE 754, así que da el mismo resultado en cualquier navegador y en el servidor. Tras tocar `src/game/physics.js`, `replay.js` o `courses.js`: `npm run sync:functions` y volver a desplegar `submit-hole`.
+- Las puntuaciones de los rivales no se ven hasta que terminas tu ronda. Todos hacen al final un tiro de desempate, que solo cuenta si hay empate en cabeza.
+- La práctica se juega en el móvil contra rivales simulados. Las partidas contra bots del prototipo (`join_match`) ya no admiten entrada de pago.
 - Publicación: `.github/workflows/pages.yml` publica en GitHub Pages al hacer push a `main` (Settings → Pages → Source: GitHub Actions).
 
 ## Estructura
@@ -38,9 +42,10 @@ Proyecto `golf-cash-battle` (`oyawgvqbmvtmlnyqwgdf`). Cada jugador entra con una
 - `src/game/` física (sin Three.js, reutilizable en servidor), hoyos, ambientaciones (`themes.js`), sonidos y render 3D (`render/`)
 - `src/wallet/` interfaz `WalletService`, `LocalWallet` (demo local) y `SupabaseWallet`
 - `src/backend/` elige backend y conecta con Supabase
-- `src/match/` matchmaking, puntuación y reparto del bote (`MatchService` local, `SupabaseMatchService` en servidor)
+- `src/match/` matchmaking, puntuación y reparto del bote (`MatchService` local con bots, `TournamentService` para torneos reales)
+- `supabase/functions/submit-hole/` repite los tiros en el servidor; `game/` es una copia de `src/game` (`npm run sync:functions`)
 
 ## Pendiente para dinero real
 
-- Multijugador real y validación de los golpes en servidor (la física ya es determinista y está separada del render).
+- Antitrampas más allá de la validación: la física es determinista, así que un programa podría calcular tiros perfectos. Hará falta detectar bots (tiempos, precisión imposible) y KYC para evitar multicuentas.
 - Pasarela de pagos, KYC/edad y revisión legal del modelo de habilidad por país.

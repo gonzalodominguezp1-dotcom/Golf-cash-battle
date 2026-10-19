@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BALL_R, MAX_SHOT_SPEED, inSand, isMoving, onBoost, segmentsOf, spinnerSegment, step } from './physics.js';
+import { BALL_R, DT, MAX_SHOT_SPEED, inSand, isMoving, onBoost, quantizeShot, segmentsOf, shotVelocity, spinnerSegment, step } from './physics.js';
 import { Bot } from './bots.js';
 import { THEMES } from './themes.js';
 import { buildEnvironment, courseBounds } from './render/environment.js';
@@ -10,7 +10,6 @@ import { skinMaterial } from './render/ballSkins.js';
 import { SKINS } from '../progress/skins.js';
 import { setAmbient, setRolling, sfx, stopAmbient, stopRolling, unlockAudio } from './audio.js';
 
-const DT = 1 / 120;
 const INTRO_SECONDS = 2.2;
 const FOLLOW_DIST = 3.2;
 const FOLLOW_HEIGHT = 1.45;
@@ -65,6 +64,8 @@ export class GolfGame {
     this.sunk = false;
     this.sunkAt = 0;
     this.t = 0;
+    this.tick = 0;
+    this.shots = []; // { tick, yaw, power }: lo que se manda al servidor
     this.power = 0;
     this.drag = null;
     this.wasInSand = false;
@@ -272,10 +273,11 @@ export class GolfGame {
       if (power < 0.05 || isMoving(this.ball) || this.sunk) return;
       // desempate: un solo tiro
       if (this.course.noCup && this.strokes >= 1) return;
-      const fwd = forwardOf(this.yaw);
-      const speed = power * MAX_SHOT_SPEED;
-      this.ball.vx = fwd.x * speed;
-      this.ball.vz = fwd.z * speed;
+      const shot = quantizeShot(this.yaw, power);
+      const v = shotVelocity(shot.yaw, shot.power);
+      this.ball.vx = v.vx;
+      this.ball.vz = v.vz;
+      this.shots.push({ tick: this.tick, ...shot });
       this.strokes++;
       sfx.hit(power);
       this.particles.puff(new THREE.Vector3(this.ball.x, 0.05, this.ball.z), 0x9be37f, 8, 1, 0.18);
@@ -342,7 +344,8 @@ export class GolfGame {
     this.acc += dt;
     while (this.acc >= DT) {
       this.acc -= DT;
-      this.t += DT;
+      this.tick++;
+      this.t = this.tick * DT;
       if (this.intro >= 1 && !this.locked) this.#tickBots();
       if (this.sunk) continue;
       const wasMoving = isMoving(this.ball);

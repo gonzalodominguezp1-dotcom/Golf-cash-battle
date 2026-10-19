@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { SupabaseWallet } from '../wallet/SupabaseWallet.js';
 import { SupabaseMatchService } from '../match/SupabaseMatchService.js';
+import { TournamentService } from '../match/TournamentService.js';
 
 const URL = import.meta.env.VITE_SUPABASE_URL ?? 'https://oyawgvqbmvtmlnyqwgdf.supabase.co';
 // clave pública: solo deja llamar a lo que permiten RLS y las funciones
@@ -19,7 +20,7 @@ export async function connectSupabase() {
   }
   const wallet = new SupabaseWallet(db, session.user.id);
   await wallet.getBalance();
-  return { mode: 'supabase', db, user: session.user, wallet, matches: new SupabaseMatchService(db, wallet) };
+  return { mode: 'supabase', db, user: session.user, wallet, matches: new SupabaseMatchService(db, wallet), tournaments: new TournamentService(db, wallet) };
 }
 
 /** Pasa los errores de las funciones SQL (raise exception 'x') a algo legible. */

@@ -377,3 +377,8 @@ h2 { margin: 22px 0 10px; font-size: 21px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
 }
+
+/* torneos */
+.my-tournaments .section-head { margin-top: 18px; }
+.my-tournaments .txs li.tap { cursor: pointer; }
+.my-tournaments .txs li > span { font-weight: 800; font-size: 13px; text-align: right; }
