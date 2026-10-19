@@ -80,3 +80,35 @@ test('el servidor mide cuánto espera cada tiro con la bola parada', () => {
   assert.equal(sig.turns[0], 2);
   assert.equal(sig.drags.length, 8);
 });
+
+test('el desempate no cuenta para la precisión', () => {
+  // doce desempates "perfectos" no son doce hoyos en uno
+  const holes = bot(12).map((h) => ({ ...h, course: -1, par: 1, drags: [80], waits: [200, 300] }));
+  const r = assessRisk(holes);
+  assert.equal(r.stats.holes, 0);
+  assert.ok(!r.flags.includes('too_accurate'));
+  assert.ok(!r.flags.includes('too_many_aces'));
+});
+
+test('solo se miran los hoyos más recientes', () => {
+  // un jugador que antes jugaba como un bot y ahora juega normal
+  const holes = [...human(60), ...bot(60)];
+  assert.deepEqual(assessRisk(holes).flags, []);
+  assert.ok(assessRisk([...bot(60), ...human(60)]).flags.length > 0);
+});
+
+test('la puntuación suma el peso de cada señal', () => {
+  const r = assessRisk(bot(12));
+  assert.ok(r.score >= 8, String(r.score));
+  assert.equal(assessRisk(human(30)).score, 0);
+});
+
+test('datos del gesto basura no rompen nada', () => {
+  const replay = { waits: [10, 200] };
+  for (const aim of [null, undefined, 'x', 42, {}, [null, { d: -1, t: 1.5 }], [{ d: 1e9 }]]) {
+    const sig = holeSignals(replay, aim);
+    assert.equal(sig.drags.length, 2);
+    assert.ok(sig.drags.every((d) => d === null || Number.isInteger(d)));
+  }
+  assert.deepEqual(holeSignals({}, []).waits, []);
+});
