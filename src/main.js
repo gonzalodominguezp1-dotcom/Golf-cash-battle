@@ -122,12 +122,13 @@ async function showLobby() {
         </div>
       </section>
       ${backend.mode === 'local' ? '<p class="offline">Modo sin conexión: el saldo se guarda solo en este móvil</p>' : ''}
+      <div class="my-tournaments"></div>
       <div class="section-head">
         <h1>Elige tu mesa</h1>
         <p class="sub">${PLAYERS_PER_MATCH} jugadores · ${HOLES_PER_MATCH} hoyos · menos golpes gana</p>
       </div>
       <div class="tiers"></div>
-      <p class="legal">Créditos de demostración sin valor real. El resultado depende solo de la habilidad: mismo campo para todos y sin elementos aleatorios. En empate, hoyo de desempate: gana quien deje la bola más cerca. Comisión de la plataforma: ${Math.round(PLATFORM_COMMISSION * 100)}% del bote.</p>
+      <p class="legal">Créditos de demostración sin valor real. ${backend.tournaments ? 'Las mesas de pago son torneos contra jugadores reales: cada uno juega los mismos hoyos a su ritmo y el servidor repite cada golpe para validarlo. La práctica es contra rivales simulados. ' : ''}El resultado depende solo de la habilidad: mismo campo para todos y sin elementos aleatorios. En empate, tiro de desempate: gana quien deje la bola más cerca. Comisión de la plataforma: ${Math.round(PLATFORM_COMMISSION * 100)}% del bote.</p>
     </main>`);
   const list = view.querySelector('.tiers');
   for (const tier of TIERS) {
@@ -151,6 +152,7 @@ async function showLobby() {
     list.append(card);
   }
   await shell(view);
+  if (backend.tournaments) showMyTournaments(view.querySelector('.my-tournaments'));
 }
 
 // ---------- skins ----------
@@ -288,7 +290,10 @@ async function startMatch(tier) {
   // #hoyo3 en la URL: la práctica empieza por ese hoyo (útil para probar);
   // #hoyo3-empate además fuerza el desempate al final
   const forced = tier.entryFee === 0 && /^#hoyo(\d)(-empate)?$/.exec(location.hash);
-  const service = forced ? practice : matches;
+  // con servidor, las mesas de pago son torneos contra jugadores reales y la
+  // práctica se juega en el móvil contra rivales simulados
+  if (!forced && tier.entryFee > 0 && backend.tournaments) return startTournament(tier);
+  const service = forced || backend.tournaments ? practice : matches;
   let match;
   try {
     match = await service.join(tier);
@@ -321,7 +326,7 @@ async function startMatch(tier) {
     if (cancelled) return;
     const p = match.players[i];
     const s = seats.children[i];
-    s.classList.add('filled', ...(p.isBot ? [] : ['me']));
+    s.classList.add('filled', ...(p.id === 'me' ? ['me'] : []));
     s.style.setProperty('--c', p.color);
     s.innerHTML = `<span class="avatar">${p.name[0]}</span><span>${p.name}</span>`;
     sfx.tick();
@@ -350,7 +355,7 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
         <button class="pill mute" aria-label="Sonido">${isMuted() ? '🔇' : '🔊'}</button>
       </div>
       <div class="rivals">${players
-        .map((p) => `<div class="chip ${p.isBot ? '' : 'me'}" data-id="${p.id}" style="--c:${p.color}"><i>${p.name[0]}</i><b>${tiebreak ? '·' : 0}</b></div>`)
+        .map((p) => `<div class="chip ${p.id === 'me' ? 'me' : ''}" data-id="${p.id}" style="--c:${p.color}"><i>${p.name[0]}</i><b>${tiebreak ? '·' : 0}</b></div>`)
         .join('')}</div>
       <div class="toasts"></div>
       <div class="intro-banner">
@@ -478,11 +483,11 @@ function scoreLabel(strokes, par) {
 function standingsTable(players, highlightPayout) {
   return `<ol class="standings">${players
     .map(
-      (p, i) => `<li class="${p.isBot ? '' : 'me'} ${(p.position ?? i + 1) === 1 ? 'first' : ''}" style="--c:${p.color}">
+      (p, i) => `<li class="${p.id === 'me' ? 'me' : ''} ${(p.position ?? i + 1) === 1 ? 'first' : ''}" style="--c:${p.color}">
         <span class="pos">${p.position ?? i + 1}</span>
         <span class="name"><i></i>${p.name}</span>
-        <span class="scores">${p.scores.join(' · ')}${p.tiebreak !== undefined ? ` · 🎯${p.tiebreak.toFixed(2)}m` : ''}</span>
-        <b>${p.total}</b>
+        <span class="scores">${p.scores ? p.scores.join(' · ') : p.finished ? 'Terminado' : `Jugando · ${p.holesPlayed} hoyo${p.holesPlayed === 1 ? '' : 's'}`}${p.tiebreak !== undefined ? ` · 🎯${p.tiebreak.toFixed(2)}m` : ''}</span>
+        <b>${p.total ?? '—'}</b>
         ${highlightPayout && p.payout ? `<span class="payout">+${fmt(p.payout)}</span>` : ''}
       </li>`,
     )
@@ -566,7 +571,7 @@ function showTiebreakResult(match, tied, distances) {
       <div class="card tiebreak-card">
         <h2 class="score-title">Desempate</h2>
         <ol class="standings">${rows
-          .map((p, i) => `<li class="${p.isBot ? '' : 'me'} ${i === 0 ? 'first' : ''}" style="--c:${p.color}"><span class="pos">${i + 1}</span><span class="name"><i></i>${p.name}</span><span></span><b>${distances[p.id].toFixed(2)} m</b></li>`)
+          .map((p, i) => `<li class="${p.id === 'me' ? 'me' : ''} ${i === 0 ? 'first' : ''}" style="--c:${p.color}"><span class="pos">${i + 1}</span><span class="name"><i></i>${p.name}</span><span></span><b>${distances[p.id].toFixed(2)} m</b></li>`)
           .join('')}</ol>
         <button class="primary next">Ver resultado</button>
       </div>
@@ -618,6 +623,301 @@ async function showResults(match, tiebreak = {}) {
   view.querySelector('.again').addEventListener('click', () => startMatch(match.tier));
   await shell(view, { nav: false });
   if (won || gained.newSkins.length) sfx.coins();
+}
+
+// ---------- torneos contra jugadores reales ----------
+//
+// Asíncronos: cada jugador juega los mismos hoyos cuando quiere y el bote se
+// reparte cuando han terminado todos. Los golpes los cuenta el servidor.
+
+const POLL_MS = 5000;
+
+async function startTournament(tier) {
+  let match;
+  try {
+    match = await backend.tournaments.join(tier, TIERS);
+  } catch (e) {
+    if (e instanceof InsufficientFundsError) return showWallet();
+    return alertMsg('No se ha podido entrar en el torneo. Prueba otra vez.');
+  }
+  if (match.resumed && match.me.holesPlayed > 0) return continueRound(match);
+  showTournamentLobby(match);
+}
+
+function continueRound(match) {
+  const i = match.me.holesPlayed;
+  if (i < match.holes) playOnlineHole(match, i);
+  else offerTiebreak(match);
+}
+
+const minutesLeft = (date) => Math.max(0, Math.ceil((date - Date.now()) / 60000));
+
+function showTournamentLobby(match) {
+  const { tier } = match;
+  const view = h(`
+    <main class="screen matchmaking tier--${tier.id}">
+      <div class="radar"><span></span><span></span><span></span>${ball(progress.skin, 64)}</div>
+      <h1>Torneo ${tier.name}</h1>
+      <p class="sub count"></p>
+      <div class="seats"></div>
+      <p class="legal">Todos jugáis los mismos ${match.holes} hoyos, cada uno a su ritmo. Cuando terminéis todos (o se cierre la inscripción) gana quien menos golpes haga y se reparte el bote. El servidor repite cada golpe para que nadie pueda hacer trampas.</p>
+      <button class="primary start">Empezar a jugar</button>
+      <button class="ghost cancel">Salir y recuperar entrada</button>
+    </main>`);
+  const seats = view.querySelector('.seats');
+  const render = () => {
+    const n = match.players.length;
+    view.querySelector('.count').innerHTML = `${n}/${match.seats} jugadores · bote ${coin(tier.entryFee * n)} · cierra en ${minutesLeft(match.closesAt)} min`;
+    seats.innerHTML = '';
+    for (let i = 0; i < match.seats; i++) {
+      const p = match.players.find((q) => q.seat === i) ?? match.players[i];
+      const s = h(`<div class="seat"><span>…</span></div>`);
+      if (p) {
+        s.classList.add('filled', ...(p.id === 'me' ? ['me'] : []));
+        s.style.setProperty('--c', p.color);
+        s.innerHTML = `<span class="avatar">${p.name[0]}</span><span>${p.id === 'me' ? 'Tú' : p.name}</span>`;
+      }
+      seats.append(s);
+    }
+  };
+  render();
+  const poll = async () => {
+    if (!view.isConnected) return;
+    const before = match.players.length;
+    try {
+      await backend.tournaments.status(match);
+      if (match.players.length > before) sfx.tick();
+      if (view.isConnected) render();
+    } catch {}
+    setTimeout(poll, POLL_MS);
+  };
+  setTimeout(poll, POLL_MS);
+  view.querySelector('.start').addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    try {
+      await backend.tournaments.start(match);
+    } catch {
+      return alertMsg('No se ha podido empezar. Prueba otra vez.');
+    }
+    playOnlineHole(match, 0);
+  });
+  view.querySelector('.cancel').addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    await backend.tournaments.leave(match).catch(() => {});
+    showLobby();
+  });
+  shell(view, { nav: false });
+}
+
+function playOnlineHole(match, index) {
+  const course = COURSES[match.courses[index]];
+  playScreen(match, {
+    course,
+    title: `Hoyo ${index + 1}/${match.holes}`,
+    subtitle: `Torneo ${match.tier.name} · hoyo ${index + 1}`,
+    players: [match.me],
+    onDone: (g) => submitOnline(match, index, g.shots, (r) => showOnlineHoleResult(match, index, course, r.strokes)),
+  });
+}
+
+async function submitOnline(match, hole, shots, then) {
+  try {
+    then(await backend.tournaments.submitHole(match, hole, shots));
+  } catch (e) {
+    if (e.code === 'invalid_shots') return alertMsg('El servidor no ha podido validar los golpes de este hoyo.');
+    if (['time_up', 'match_closed', 'wrong_hole'].includes(e.code)) return showOnlineResults(match);
+    retryMsg('Se ha perdido la conexión con el servidor. Tus golpes siguen guardados en el móvil.', () => submitOnline(match, hole, shots, then));
+  }
+}
+
+function showOnlineHoleResult(match, index, course, strokes) {
+  const last = index + 1 >= match.holes;
+  const done = match.players.filter((p) => p.finished && p.id !== 'me').length;
+  const overlay = h(`
+    <div class="overlay">
+      <div class="card ${strokes <= course.par ? 'good' : ''}">
+        <h2 class="score-title">${scoreLabel(strokes, course.par)}</h2>
+        <p class="sub">${strokes} golpe${strokes === 1 ? '' : 's'} · par ${course.par}</p>
+        <p class="sub">Tu ronda: <b>${match.me.scores.join(' · ')}</b> · total <b>${match.me.total}</b></p>
+        <p class="legal">${match.players.length} jugadores en el torneo${done ? ` · ${done} ya han terminado` : ''}. Verás sus golpes cuando acabes.</p>
+        <button class="primary next">${last ? 'Tiro de desempate' : 'Siguiente hoyo'}</button>
+      </div>
+    </div>`);
+  overlay.querySelector('.next').addEventListener('click', () => (last ? offerTiebreak(match) : playOnlineHole(match, index + 1)));
+  app.append(overlay);
+}
+
+// en asíncrono no se sabe aún si habrá empate: todos tiran una vez y solo
+// cuenta para desempatar en cabeza
+function offerTiebreak(match) {
+  app.querySelector('.overlay')?.remove();
+  const overlay = h(`
+    <div class="overlay">
+      <div class="card tiebreak-card">
+        <h2 class="score-title">Tiro de desempate</h2>
+        <p class="sub">Un solo tiro en un hoyo sin agujero: deja la bola lo más cerca posible de la diana. Solo cuenta si empatas en cabeza.</p>
+        <button class="primary next">Tirar</button>
+        <button class="ghost skip">Saltar</button>
+      </div>
+    </div>`);
+  overlay.querySelector('.next').addEventListener('click', () => playOnlineTiebreak(match));
+  overlay.querySelector('.skip').addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    await backend.tournaments.leave(match).catch(() => {});
+    showOnlineResults(match);
+  });
+  app.append(overlay);
+}
+
+function playOnlineTiebreak(match) {
+  playScreen(match, {
+    course: TIEBREAK_COURSE,
+    title: 'Desempate',
+    subtitle: 'Un tiro',
+    players: [match.me],
+    onDone: (g, _strokes, banner) =>
+      submitOnline(match, match.holes, g.shots, (r) => {
+        banner(`${r.distance.toFixed(2)} m`);
+        setTimeout(() => showOnlineResults(match), 1400);
+      }),
+  });
+}
+
+function recordOnce(match) {
+  const KEY = 'gcb.tournaments.recorded';
+  let seen = [];
+  try {
+    seen = JSON.parse(localStorage.getItem(KEY) ?? '[]');
+  } catch {}
+  if (seen.includes(match.id)) return null;
+  try {
+    localStorage.setItem(KEY, JSON.stringify([match.id, ...seen].slice(0, 50)));
+  } catch {}
+  const me = match.me;
+  const won = me.payout > 0;
+  const leaders = match.players.filter((p) => p.total === me.total).length;
+  return progress.recordMatch({
+    position: me.position ?? match.players.length,
+    won,
+    entryFee: match.tier.entryFee,
+    holes: me.scores.map((strokes, i) => ({ strokes, par: COURSES[match.courses[i]].par })),
+    tiebreakWon: won && leaders > 1,
+  });
+}
+
+async function showOnlineResults(match) {
+  app.querySelector('.overlay')?.remove();
+  try {
+    await backend.tournaments.status(match);
+  } catch {}
+  screen = 'lobby';
+  const { me, tier } = match;
+  const open = match.status === 'open';
+  const cancelled = match.status === 'cancelled';
+  const won = !open && me.payout > 0;
+  const waiting = match.players.filter((p) => !p.finished).length;
+  const gained = match.status === 'settled' ? recordOnce(match) : null;
+  const ranking = [...match.players].sort((a, b) => (a.position ?? 99) - (b.position ?? 99) || (a.total ?? 999) - (b.total ?? 999));
+  let title, sub;
+  if (open) {
+    title = 'Esperando a los demás';
+    sub = waiting ? `Faltan ${waiting} jugador${waiting === 1 ? '' : 'es'} por terminar · la inscripción cierra en ${minutesLeft(match.closesAt)} min` : 'Cerrando el torneo…';
+  } else if (cancelled) {
+    title = 'No hubo rivales';
+    sub = 'Te hemos devuelto la entrada';
+  } else {
+    title = won ? '¡Has ganado!' : `Posición ${me.position} de ${match.players.length}`;
+    sub = won ? `Premio ${coin(me.payout)}` : `Bote ${coin(match.pot)} para el ganador`;
+  }
+  const view = h(`
+    <main class="screen results ${won ? 'won' : ''}">
+      ${won ? '<div class="rays"></div>' : ''}
+      <div class="trophy">${open ? '⏳' : won ? '🏆' : cancelled ? '↩️' : me.position <= 3 ? '🥈' : '⛳'}</div>
+      <h1 class="score-title">${title}</h1>
+      <p class="sub">${sub}</p>
+      ${
+        gained
+          ? `<div class="xp-card">
+        <div class="xp-head"><b>+${gained.xp} XP</b><span>${gained.level.level > gained.levelBefore ? `¡Nivel ${gained.level.level}!` : `Nivel ${gained.level.level}`}</span></div>
+        <span class="bar"><i style="--to:${(gained.level.into / gained.level.need) * 100}%"></i></span>
+      </div>`
+          : ''
+      }
+      ${
+        gained?.newSkins.length
+          ? `<h2 class="unlock-title">¡Skin desbloqueada!</h2><div class="unlocks">${gained.newSkins
+              .map((s) => `<div class="skin-card holo reveal rarity-${s.rarity}"><div class="shine"></div><span class="rarity">${RARITIES[s.rarity].name}</span>${ball(s, 76, 'float')}<b>${s.name}</b></div>`)
+              .join('')}</div>`
+          : ''
+      }
+      ${standingsTable(ranking, !open)}
+      ${match.status === 'settled' ? `<p class="legal">Bote ${fmt(match.pot)} · comisión ${fmt(match.commission)} · premio ${fmt(match.prize)}</p>` : ''}
+      ${open ? '<p class="legal">Puedes salir: el resultado y el premio aparecerán en el lobby, en «Tus torneos».</p>' : ''}
+      <div class="row">
+        <button class="primary again">${open ? 'Jugar otro' : 'Revancha'}</button>
+        <button class="ghost" data-go="lobby">Lobby</button>
+      </div>
+    </main>`);
+  view.querySelector('.again').addEventListener('click', () => startMatch(tier));
+  await shell(view, { nav: false });
+  if (won && gained) sfx.coins();
+  if (open) {
+    const key = `${match.status}:${waiting}`;
+    const poll = async () => {
+      if (!view.isConnected) return;
+      try {
+        await backend.tournaments.status(match);
+      } catch {}
+      if (!view.isConnected) return;
+      if (`${match.status}:${match.players.filter((p) => !p.finished).length}` !== key) showOnlineResults(match);
+      else setTimeout(poll, POLL_MS);
+    };
+    setTimeout(poll, POLL_MS);
+  }
+}
+
+async function showMyTournaments(box) {
+  let list;
+  try {
+    list = await backend.tournaments.mine(TIERS);
+  } catch {
+    return;
+  }
+  if (!list.length || !box.isConnected) return;
+  const label = (m) => {
+    if (m.status === 'cancelled') return 'Sin rivales · entrada devuelta';
+    if (m.status === 'settled') return m.me.payout > 0 ? `🏆 Ganaste ${coin(m.me.payout)}` : `Posición ${m.me.position} de ${m.players.length}`;
+    if (!m.me.finished) return `Sin terminar · ${m.me.holesPlayed}/${m.holes} hoyos`;
+    return `Esperando · ${m.players.filter((p) => p.finished).length}/${m.players.length} han terminado`;
+  };
+  box.append(h(`<div class="section-head"><h2>Tus torneos</h2></div>`));
+  const ul = h('<ul class="txs"></ul>');
+  for (const m of list.slice(0, 5)) {
+    const li = h(`<li class="tap"><div><b>${m.tier?.name ?? m.id}</b><small>${m.players.length} jugadores · bote ${fmt(m.tier ? m.tier.entryFee * m.players.length : m.pot)}</small></div><span>${label(m)}</span></li>`);
+    li.addEventListener('click', () => {
+      if (m.status === 'open' && !m.me.finished) return m.me.holesPlayed > 0 ? continueRound(m) : showTournamentLobby(m);
+      showOnlineResults(m);
+    });
+    ul.append(li);
+  }
+  box.append(ul);
+}
+
+function retryMsg(text, retry) {
+  app.querySelector('.overlay')?.remove();
+  const overlay = h(`
+    <div class="overlay">
+      <div class="card">
+        <h2>Sin conexión</h2>
+        <p class="sub">${text}</p>
+        <button class="primary">Reintentar</button>
+      </div>
+    </div>`);
+  overlay.querySelector('button').addEventListener('click', () => {
+    overlay.remove();
+    retry();
+  });
+  app.append(overlay);
 }
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
