@@ -1,19 +1,21 @@
 import * as THREE from 'three';
-import { BALL_R, DT, MAX_SHOT_SPEED, inSand, isMoving, onBoost, quantizeShot, segmentsOf, shotVelocity, spinnerSegment, step } from './physics.js';
+import { BALL_R, CUP_R, DT, MAX_SHOT_SPEED, inSand, isMoving, onBoost, quantizeShot, segmentsOf, shotVelocity, spinnerSegment, step } from './physics.js';
 import { Bot } from './bots.js';
 import { THEMES } from './themes.js';
 import { buildEnvironment, courseBounds } from './render/environment.js';
 import { buildCourse } from './render/course.js';
-import { AimDots, Particles, Trail } from './render/effects.js';
-import { ballTexture, labelTexture } from './render/textures.js';
+import { AimDots, Particles, Shockwaves, Trail } from './render/effects.js';
+import { ballTexture, labelTexture, softDotTexture } from './render/textures.js';
 import { skinMaterial } from './render/ballSkins.js';
 import { SKINS } from '../progress/skins.js';
-import { setAmbient, setRolling, sfx, stopAmbient, stopRolling, unlockAudio } from './audio.js';
+import { setAmbient, setCharge, setRolling, sfx, stopAmbient, stopRolling, unlockAudio } from './audio.js';
 
 const INTRO_SECONDS = 2.2;
 const FOLLOW_DIST = 3.2;
 const FOLLOW_HEIGHT = 1.45;
 const LOOK_AHEAD = 2.2;
+const SLOWMO = 0.35; // cámara lenta cuando la bola va a entrar
+const CUP_CAPTURE = 3.5; // igual que en physics.js: más rápido, la bola salta el hoyo
 
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const damp = (rate, dt) => 1 - Math.exp(-rate * dt);
@@ -26,7 +28,7 @@ const lerpAngle = (a, b, t) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) 
  * la potencia; suelta para golpear.
  */
 export class GolfGame {
-  constructor(container, { onStroke, onSunk, onAim, onRest, onCup, onRival } = {}) {
+  constructor(container, { onStroke, onSunk, onAim, onRest, onCup, onRival, onLip } = {}) {
     this.container = container;
     this.onStroke = onStroke;
     this.onSunk = onSunk;
@@ -34,6 +36,7 @@ export class GolfGame {
     this.onRest = onRest;
     this.onCup = onCup;
     this.onRival = onRival;
+    this.onLip = onLip;
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
@@ -72,6 +75,12 @@ export class GolfGame {
     this.wasInSand = false;
     this.wasOnBoost = false;
     this.ambientOn = false;
+    this.trauma = 0; // temblor de cámara
+    this.fovKick = 0;
+    this.squash = 0;
+    this.timeScale = 1;
+    this.overCup = false;
+    this.fullPower = false;
     this.yaw = Math.atan2(course.cup[0] - course.tee[0], -(course.cup[1] - course.tee[1]));
     if (course.aimYaw !== undefined) this.yaw = course.aimYaw;
     this.camYaw = this.yaw;
@@ -116,6 +125,7 @@ export class GolfGame {
   }
 
   dispose() {
+    setCharge(0);
     stopAmbient();
     stopRolling();
     this.running = false;
@@ -140,7 +150,17 @@ export class GolfGame {
       skinMaterial(this.skin),
     );
     this.ballMesh.castShadow = true;
-    scene.add(this.ballMesh);
+    // la bola va dentro de un grupo para poder aplastarla sin que gire el aplastamiento
+    this.ballRoot = new THREE.Group();
+    this.ballRoot.add(this.ballMesh);
+    scene.add(this.ballRoot);
+    // sombra de contacto suave: asienta la bola en el césped
+    this.ballShadow = new THREE.Mesh(
+      new THREE.PlaneGeometry(BALL_R * 3.2, BALL_R * 3.2),
+      new THREE.MeshBasicMaterial({ map: softDotTexture(), color: 0x000000, transparent: true, opacity: 0.45, depthWrite: false }),
+    );
+    this.ballShadow.rotation.x = -Math.PI / 2;
+    scene.add(this.ballShadow);
     // halo bajo la bola para verla siempre, también en sombra
     this.ballGlow = new THREE.Mesh(
       new THREE.RingGeometry(BALL_R * 1.4, BALL_R * 1.9, 32),
@@ -168,6 +188,7 @@ export class GolfGame {
     this.particles = new Particles(scene);
     this.trail = new Trail(scene, 28, this.skin.trail);
     this.aimDots = new AimDots(scene);
+    this.waves = new Shockwaves(scene);
 
     const b = courseBounds(this.course);
     this.bounds = b;
@@ -177,7 +198,8 @@ export class GolfGame {
     const w = this.container.clientWidth || 1, h = this.container.clientHeight || 1;
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
-    this.camera.fov = w < h ? 62 : 50;
+    this.baseFov = w < h ? 62 : 50;
+    this.camera.fov = this.baseFov + (this.fovKick ?? 0);
     this.camera.updateProjectionMatrix();
   }
 
@@ -229,6 +251,16 @@ export class GolfGame {
     }
     this.camera.position.copy(this.camPos);
     this.camera.lookAt(this.camLook);
+    if (this.trauma > 0.01) {
+      const s = this.trauma * this.trauma * 0.09;
+      this.camera.position.x += (Math.random() - 0.5) * s;
+      this.camera.position.y += (Math.random() - 0.5) * s;
+      this.camera.rotation.z += (Math.random() - 0.5) * s * 0.6;
+    }
+  }
+
+  #addShake(amount) {
+    this.trauma = Math.min(1, this.trauma + amount);
   }
 
   // ---------- input ----------
@@ -266,6 +298,12 @@ export class GolfGame {
         d.lastTick = this.yaw;
         sfx.tick();
       }
+      setCharge(this.power);
+      if (this.power >= 1 && !this.fullPower) {
+        sfx.full();
+        navigator.vibrate?.(12);
+      }
+      this.fullPower = this.power >= 1;
       this.onAim?.(this.power);
     });
     const release = (e) => {
@@ -274,6 +312,8 @@ export class GolfGame {
       this.drag = null;
       const power = this.power;
       this.power = 0;
+      this.fullPower = false;
+      setCharge(0);
       this.onAim?.(0);
       this.aimDots.hide();
       if (power < 0.05 || isMoving(this.ball) || this.sunk) return;
@@ -287,7 +327,11 @@ export class GolfGame {
       this.aim.push({ d: this.tick - d.start, t: d.turns });
       this.strokes++;
       sfx.hit(power);
-      this.particles.puff(new THREE.Vector3(this.ball.x, 0.05, this.ball.z), 0x9be37f, 8, 1, 0.18);
+      this.particles.puff(new THREE.Vector3(this.ball.x, 0.05, this.ball.z), 0x9be37f, 8 + Math.round(power * 10), 1 + power, 0.18);
+      this.waves.emit(this.ball.x, this.ball.z, 0xffffff, 0.5 + power * 0.9, 3);
+      this.squash = 0.2 + power * 0.25;
+      this.fovKick = power * 7;
+      this.#addShake(power * power * 0.45);
       navigator.vibrate?.(15);
       this.onStroke?.(this.strokes);
     };
@@ -296,6 +340,8 @@ export class GolfGame {
       if (this.drag?.id !== e.pointerId) return;
       this.drag = null;
       this.power = 0;
+      this.fullPower = false;
+      setCharge(0);
       this.onAim?.(0);
     });
   }
@@ -309,7 +355,7 @@ export class GolfGame {
     const course = { ...this.course, spinners: [] }; // la previsión ignora las aspas
     for (let i = 0; i < 1200 && travelled < maxLen; i++) {
       const r = step(course, this.segs, sim, this.t, DT);
-      const d = Math.hypot(sim.x - lastX, sim.z - lastZ);
+      const d = r.portal >= 0 ? 0 : Math.hypot(sim.x - lastX, sim.z - lastZ);
       travelled += d;
       acc += d;
       lastX = sim.x;
@@ -334,6 +380,7 @@ export class GolfGame {
       const right = forwardOf(this.camYaw + Math.PI / 2);
       const pan = THREE.MathUtils.clamp((dx * right.x + dz * right.z) / 4, -1, 1);
       if (r.shot) sfx.rivalHit(dist, pan);
+      if (r.portal >= 0) this.particles.puff(new THREE.Vector3(b.ball.x, 0.1, b.ball.z), 0xffb020, 8, 1.2, 0.16);
       if (r.sunk) {
         b.sunk = true;
         sfx.rivalCup(pan);
@@ -343,11 +390,24 @@ export class GolfGame {
     }
   }
 
+  /** ¿Va a entrar en el próximo medio segundo un golpe largo? Para la cámara lenta. */
+  #willSinkSoon() {
+    if (!this.course || this.sunk || this.course.noCup || !isMoving(this.ball)) return false;
+    const speed = Math.hypot(this.ball.vx, this.ball.vz);
+    if (speed < 1.2 || this.distanceToCup() > 1.8) return false;
+    const sim = { ...this.ball };
+    for (let i = 1; i <= 60; i++) if (step(this.course, this.segs, sim, this.t + i * DT, DT).sunk) return true;
+    return false;
+  }
+
   // ---------- bucle ----------
 
   #frame() {
-    const dt = Math.min(this.clock.getDelta(), 0.1);
-    if (this.intro < 1) this.intro = Math.min(1, this.intro + dt / INTRO_SECONDS);
+    const realDt = Math.min(this.clock.getDelta(), 0.1);
+    if (this.intro < 1) this.intro = Math.min(1, this.intro + realDt / INTRO_SECONDS);
+    this.timeScale += ((this.#willSinkSoon() ? SLOWMO : 1) - this.timeScale) * damp(this.timeScale > 0.6 ? 14 : 5, realDt);
+    // la cámara lenta solo estira el tiempo: la física sigue a paso fijo y el servidor ve los mismos pasos
+    const dt = realDt * this.timeScale;
     this.acc += dt;
     while (this.acc >= DT) {
       this.acc -= DT;
@@ -359,15 +419,47 @@ export class GolfGame {
       // se simula también con la bola parada: un aspa puede empujarla
       const r = step(this.course, this.segs, this.ball, this.t, DT);
       const pos = new THREE.Vector3(this.ball.x, BALL_R, this.ball.z);
+      if (r.portal >= 0) {
+        const p = this.course.portals[r.portal];
+        sfx.portal();
+        this.particles.puff(new THREE.Vector3(p.a[0], 0.1, p.a[1]), 0xb46cff, 14, 1.6, 0.2);
+        this.particles.puff(pos, 0xffb020, 14, 1.6, 0.2);
+        this.waves.emit(p.b[0], p.b[1], 0xffb020, 1.4, 2);
+        // la cámara salta con la bola en vez de cruzar el campo
+        const jump = new THREE.Vector3(p.b[0] - p.a[0], 0, p.b[1] - p.a[1]);
+        this.camPos?.add(jump);
+        this.camLook?.add(jump);
+        this.#addShake(0.25);
+        navigator.vibrate?.(20);
+      }
       if (r.bumper >= 0) {
         this.courseView.bumpers[r.bumper].userData.squash = 0.18;
         sfx.bumper();
         this.particles.puff(pos, 0xffffff, 6, 1.2, 0.15);
+        const b = this.course.bumpers[r.bumper];
+        this.waves.emit(b.x, b.z, 0xffffff, b.r * 3, 3.5);
+        this.squash = Math.max(this.squash, 0.15);
+        this.#addShake(Math.min(0.3, r.hit * 0.04));
       } else if (r.hit > 2) {
         sfx.wall(r.hit);
         this.particles.puff(pos, 0xf3e3c3, 5, 0.8, 0.14);
-        if (r.hit > 4) navigator.vibrate?.(8);
+        this.squash = Math.max(this.squash, Math.min(0.25, r.hit * 0.03));
+        if (r.hit > 4) {
+          navigator.vibrate?.(8);
+          this.#addShake(Math.min(0.35, (r.hit - 4) * 0.06));
+        }
       }
+      // pasa por encima del hoyo demasiado rápido: "¡uy!"
+      const toCup = Math.hypot(this.ball.x - this.course.cup[0], this.ball.z - this.course.cup[1]);
+      if (!this.course.noCup && !r.sunk && toCup < CUP_R && Math.hypot(this.ball.vx, this.ball.vz) >= CUP_CAPTURE) {
+        if (!this.overCup) {
+          this.overCup = true;
+          sfx.lip();
+          this.particles.puff(pos, 0xffffff, 6, 1, 0.12);
+          this.#addShake(0.15);
+          this.onLip?.();
+        }
+      } else if (toCup > CUP_R + 0.1) this.overCup = false;
       const sand = inSand(this.course, this.ball.x, this.ball.z);
       if (sand && !this.wasInSand && wasMoving) {
         sfx.sand();
@@ -386,6 +478,9 @@ export class GolfGame {
         sfx.cup();
         this.onCup?.(this.strokes);
         this.particles.confetti(new THREE.Vector3(this.course.cup[0], 0, this.course.cup[1]));
+        this.waves.emit(this.course.cup[0], this.course.cup[1], 0xffe066, 2.4, 1.4);
+        this.waves.emit(this.course.cup[0], this.course.cup[1], 0xffffff, 1.4, 2);
+        this.#addShake(0.3);
         navigator.vibrate?.([30, 40, 60]);
         setTimeout(() => this.onSunk?.(this.strokes), 2200);
       } else if (wasMoving && !isMoving(this.ball)) this.onRest?.(this.strokes);
@@ -402,10 +497,23 @@ export class GolfGame {
 
     // bola: rodar y caer en el hoyo
     const sinkT = this.sunk ? Math.min(1, (this.t - this.sunkAt) * 4) : 0;
-    this.ballMesh.position.set(this.ball.x, BALL_R - sinkT * 0.3, this.ball.z);
+    this.ballRoot.position.set(this.ball.x, BALL_R - sinkT * 0.3, this.ball.z);
     if (speed > 0) {
       const axis = new THREE.Vector3(-this.ball.vz, 0, this.ball.vx).normalize();
       this.ballMesh.rotateOnWorldAxis(axis, (speed * dt) / BALL_R);
+    }
+    // aplastamiento elástico al golpear o chocar
+    this.squash *= Math.exp(-realDt * 9);
+    const wob = this.squash * Math.cos(this.t * 40);
+    this.ballRoot.scale.set(1 + wob * 0.5, 1 - wob, 1 + wob * 0.5);
+    this.ballShadow.position.set(this.ball.x, 0.004, this.ball.z);
+    this.ballShadow.visible = !this.sunk;
+    this.trauma = Math.max(0, this.trauma - realDt * 2.2);
+    this.fovKick *= Math.exp(-realDt * 5);
+    const fov = this.baseFov + this.fovKick - (1 - this.timeScale) * 8;
+    if (Math.abs(this.camera.fov - fov) > 0.01) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
     }
     setRolling(this.sunk ? 0 : speed, this.wasInSand);
     for (const b of this.bots) {
@@ -432,7 +540,7 @@ export class GolfGame {
     if (this.drag && this.power > 0.02) {
       const color = new THREE.Color().setHSL(0.33 - this.power * 0.33, 0.95, 0.55);
       this.aimDots.show(this.#predictPath(), color, this.t);
-      this.aimDots.showRing(this.ballMesh.position, this.t);
+      this.aimDots.showRing(this.ballRoot.position, this.t);
     } else this.aimDots.hide();
 
     const sun = this.env.sun;
@@ -441,9 +549,10 @@ export class GolfGame {
 
     this.env.update(this.t, dt);
     this.courseView.update(this.t, this.camera.position, this.ball);
-    this.trail.update(this.ballMesh.position, speed > 0.5);
-    this.#placeCamera(dt);
+    this.trail.update(this.ballRoot.position, speed > 0.5);
+    this.#placeCamera(realDt);
     this.particles.update(dt, this.camera);
+    this.waves.update(realDt);
     this.renderer.render(this.scene, this.camera);
   }
 }

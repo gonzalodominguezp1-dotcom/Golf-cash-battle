@@ -71,7 +71,7 @@ export function sandTexture() {
       for (let x = 0; x <= n; x += 8) g.lineTo(x, y + Math.sin(x * 0.1) * 2);
       g.stroke();
     }
-  });
+  }, false);
 }
 
 export function dirtTexture() {
@@ -154,6 +154,60 @@ export function chevronTexture() {
       g.fill();
     }
   });
+}
+
+/** Flechas blancas semitransparentes que marcan hacia dónde cae una pendiente. */
+export function slopeArrowTexture() {
+  const tex = canvasTexture(128, (g, n) => {
+    g.clearRect(0, 0, n, n);
+    g.fillStyle = 'rgba(255,255,255,0.5)';
+    g.beginPath();
+    g.moveTo(n * 0.3, n * 0.62);
+    g.lineTo(n * 0.5, n * 0.42);
+    g.lineTo(n * 0.7, n * 0.62);
+    g.lineTo(n * 0.7, n * 0.72);
+    g.lineTo(n * 0.5, n * 0.52);
+    g.lineTo(n * 0.3, n * 0.72);
+    g.closePath();
+    g.fill();
+  });
+  return tex;
+}
+
+/** Degradado de luz a sombra para que la pendiente parezca una cuesta. */
+export function slopeShadeTexture() {
+  const tex = canvasTexture(64, (g, n) => {
+    const grad = g.createLinearGradient(0, 0, 0, n);
+    grad.addColorStop(0, 'rgba(0,0,0,0.4)');
+    grad.addColorStop(1, 'rgba(255,255,230,0.3)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, n, n);
+  }, false);
+  return tex;
+}
+
+/** Remolino del portal. */
+export function swirlTexture(color) {
+  return canvasTexture(128, (g, n) => {
+    const c = n / 2;
+    const grad = g.createRadialGradient(c, c, 0, c, c, c);
+    grad.addColorStop(0, '#ffffff');
+    grad.addColorStop(0.35, color);
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, n, n);
+    g.strokeStyle = 'rgba(255,255,255,0.7)';
+    g.lineWidth = 5;
+    for (let k = 0; k < 4; k++) {
+      g.beginPath();
+      for (let i = 0; i <= 40; i++) {
+        const t = i / 40, a = k * (Math.PI / 2) + t * 4, r = t * c * 0.95;
+        const x = c + Math.cos(a) * r, y = c + Math.sin(a) * r;
+        i ? g.lineTo(x, y) : g.moveTo(x, y);
+      }
+      g.stroke();
+    }
+  }, false);
 }
 
 export function crateTexture() {

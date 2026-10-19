@@ -179,3 +179,36 @@ export class AimDots {
     this.ring.visible = false;
   }
 }
+
+/** Ondas que se expanden por el suelo: golpe, setas, hoyo y portales. */
+export class Shockwaves {
+  constructor(scene, n = 6) {
+    this.items = Array.from({ length: n }, () => {
+      const m = new THREE.Mesh(new THREE.RingGeometry(0.8, 1, 40), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false }));
+      m.rotation.x = -Math.PI / 2;
+      m.visible = false;
+      scene.add(m);
+      return { m, life: 0 };
+    });
+    this.next = 0;
+  }
+
+  emit(x, z, color = 0xffffff, size = 0.8, speed = 2.5) {
+    const it = this.items[this.next++ % this.items.length];
+    Object.assign(it, { life: 1, size, speed });
+    it.m.material.color.set(color);
+    it.m.position.set(x, 0.012, z);
+    it.m.visible = true;
+  }
+
+  update(dt) {
+    for (const it of this.items) {
+      if (it.life <= 0) continue;
+      it.life -= dt * it.speed;
+      const k = 1 - Math.max(0, it.life);
+      it.m.scale.setScalar(0.15 + k * it.size);
+      it.m.material.opacity = Math.max(0, it.life) * 0.7;
+      if (it.life <= 0) it.m.visible = false;
+    }
+  }
+}

@@ -1,5 +1,6 @@
 // Cada hoyo: contorno (polígono cerrado de paredes), paredes internas,
-// setas, arena, aspas giratorias, aceleradores y bloques móviles.
+// setas, arena, aspas giratorias, aceleradores, bloques móviles, pendientes
+// y portales. Solo se añaden hoyos al final: el servidor guarda el índice.
 // Coordenadas en el plano del suelo (x, z); -z es "hacia delante".
 // waypoints: puntos de paso que usan los rivales para rodear paredes.
 export const COURSES = [
@@ -88,6 +89,93 @@ export const COURSES = [
       { x: 0, z: -5.8, w: 0.6, d: 0.6, axis: 'x', range: 0.5, speed: 2 },
     ],
     waypoints: [[0, -4]],
+  },
+  {
+    name: 'La Colina',
+    tip: 'Cuesta arriba: si te quedas corto, la bola vuelve',
+    par: 3,
+    theme: 'autumn',
+    tee: [0, 8.5],
+    cup: [0, -7.6],
+    outline: [[-2.4, 10], [2.4, 10], [2.4, -10], [-2.4, -10]],
+    walls: [],
+    bumpers: [{ x: -1.1, z: -5.6, r: 0.35 }, { x: 1.1, z: -5.6, r: 0.35 }],
+    sand: [{ x: 1.3, z: 5.6, w: 1.2, d: 1.2 }],
+    spinners: [],
+    // cuesta arriba: sin fuerza la bola vuelve rodando
+    slopes: [{ x: 0, z: 0, w: 4.8, d: 5.6, dir: [0, 1], accel: 3.2 }],
+    waypoints: [],
+  },
+  {
+    name: 'El Portal',
+    tip: 'Entra en el portal morado para salir al otro lado',
+    par: 3,
+    theme: 'night',
+    tee: [-1.6, 8.2],
+    cup: [1.6, -7.4],
+    outline: [[-3.2, 9.8], [3.2, 9.8], [3.2, -9.8], [-3.2, -9.8]],
+    walls: [[[-3.2, 0], [3.2, 0]]],
+    bumpers: [{ x: 0.2, z: -6, r: 0.4 }, { x: -1.8, z: 4.6, r: 0.35 }],
+    sand: [{ x: -1.8, z: -8.2, w: 1.6, d: 1.4 }],
+    spinners: [],
+    portals: [{ a: [1.8, 2.6], b: [-1.8, -2.2], r: 0.42 }],
+    waypoints: [[1.8, 2.6]],
+  },
+  {
+    name: 'Molinos',
+    tip: 'Espera el hueco entre las aspas',
+    par: 3,
+    theme: 'meadow',
+    tee: [0, 9.2],
+    cup: [0, -9],
+    outline: [[-2.8, 10.6], [2.8, 10.6], [2.8, -10.6], [-2.8, -10.6]],
+    walls: [],
+    bumpers: [{ x: -2, z: 0, r: 0.35 }, { x: 2, z: 0, r: 0.35 }, { x: 0, z: -6.4, r: 0.3 }],
+    sand: [],
+    spinners: [
+      { x: 0, z: 3.4, len: 3, speed: 1.3 },
+      { x: 0, z: -3.4, len: 3, speed: -1.7 },
+    ],
+    waypoints: [],
+  },
+  {
+    name: 'El Volcán',
+    tip: 'El hoyo está en la cima: ni flojo ni fuerte',
+    par: 2,
+    theme: 'volcano',
+    tee: [0, 9],
+    cup: [0, -2],
+    outline: [[-1.2, 10.4], [1.2, 10.4], [1.2, 4], [4, 4], [4, -8], [-4, -8], [-4, 4], [-1.2, 4]],
+    walls: [],
+    bumpers: [],
+    sand: [],
+    spinners: [],
+    // cima llana con el hoyo y laderas que echan la bola hacia fuera:
+    // demasiado flojo vuelve, demasiado fuerte se pasa
+    slopes: [
+      { x: 0, z: 0.6, w: 6, d: 2.8, dir: [0, 1], accel: 3 },
+      { x: 0, z: -4.6, w: 6, d: 2.8, dir: [0, -1], accel: 3 },
+      { x: -2.1, z: -2, w: 1.8, d: 2.4, dir: [-1, 0], accel: 3 },
+      { x: 2.1, z: -2, w: 1.8, d: 2.4, dir: [1, 0], accel: 3 },
+    ],
+    waypoints: [],
+  },
+  {
+    name: 'La Herradura',
+    tip: 'Usa el acelerador y sube la cuesta del final',
+    par: 4,
+    theme: 'beach',
+    aimYaw: 0,
+    tee: [-2.5, 8.6],
+    cup: [2.5, 8],
+    outline: [[-4, 10], [-1, 10], [-1, -3.6], [1, -3.6], [1, 10], [4, 10], [4, -10], [-4, -10]],
+    walls: [],
+    bumpers: [{ x: -3.2, z: -8.6, r: 0.35 }, { x: 3.2, z: -8.6, r: 0.35 }],
+    sand: [{ x: 3.2, z: -1, w: 1.2, d: 1.8 }],
+    spinners: [{ x: 0, z: -7, len: 2.4, speed: 1.2 }],
+    boosts: [{ x: -2.5, z: 2.5, w: 1, d: 1.6, dir: [0, -1], speed: 9 }],
+    slopes: [{ x: 2.5, z: 3.6, w: 3, d: 2.4, dir: [0, -1], accel: 2.6 }],
+    waypoints: [[-2.5, -6.8], [2.5, -6.8]],
   },
 ];
 

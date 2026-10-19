@@ -5,9 +5,10 @@ Minigolf 3D para móvil (navegador) con partidas de 8 jugadores y entry fee: el 
 ## Qué hay en este prototipo
 
 - **Juego 3D** con Three.js y cámara en tercera persona detrás de la bola. Desliza a los lados para apuntar y hacia abajo para cargar la potencia; "Ver hoyo" muestra el recorrido entero.
-- **5 hoyos** con su ambiente (pradera, playa, atardecer, nieve y cañón): setas rebotadoras, arena, aspa giratoria, aceleradores y bloques móviles. Cada partida juega 3, los mismos para todos.
+- **10 hoyos** con su ambiente (pradera, playa, atardecer, nieve, cañón, otoño, noche y volcán): setas rebotadoras, arena, aspas giratorias, aceleradores, bloques móviles, pendientes y portales. Cada partida juega 3, los mismos para todos. Los hoyos nuevos se añaden siempre al final de `courses.js` (el servidor guarda el índice) y después se sube `course_count` en `app_config`.
+- **Sensación de golpe**: tono de carga, temblor de cámara y onda en el golpe, bola que se aplasta al chocar, aviso cuando la bola salta el hoyo y cámara lenta cuando un golpe largo va a entrar (solo visual: la física sigue a paso fijo).
 - **Rivales en el campo**: los otros 7 juegan el mismo hoyo a la vez, con la misma física, y su resultado es el que hacen ahí. Clasificación en vivo arriba. En producción serán jugadores reales.
-- **Sonidos** generados en el navegador (madera, hoyo, campanas, ambiente), con botón para silenciar.
+- **Sonidos** generados en el navegador (madera, hoyo, campanas, portal, ambiente), con botón para silenciar.
 - **Wallet** de créditos demo (100 de bienvenida, recargas demo, historial de movimientos). Sin dinero real.
 - **Partidas** Práctica (gratis), Bronce 1, Plata 5, Oro 10 y Diamante 25. Bote = entrada × 8; premio = bote − 10%. Empates reparten el premio.
 
