@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BALL_R, CUP_R, WALL_HALF, moverPos, segmentsOf } from '../physics.js';
-import { chevronTexture, crateTexture, dirtTexture, grassTexture, sandTexture, stripeTexture, woodTexture } from './textures.js';
+import { chevronTexture, crateTexture, dirtTexture, grassTexture, sandTexture, slopeArrowTexture, slopeShadeTexture, stripeTexture, swirlTexture, woodTexture } from './textures.js';
 
 const WALL_H = 0.32;
 const PLATFORM_DEPTH = 2.4;
@@ -175,6 +175,25 @@ export function buildCourse(scene, course, theme) {
     return tex;
   });
 
+  // pendientes: sombreado de cuesta y flechas que bajan
+  const slopeTextures = (course.slopes ?? []).map((sl) => {
+    const rot = -Math.atan2(sl.dir[0], -sl.dir[1]);
+    const along = sl.dir[0] !== 0 ? sl.w : sl.d, across = sl.dir[0] !== 0 ? sl.d : sl.w;
+    const shade = new THREE.Mesh(new THREE.PlaneGeometry(across, along), new THREE.MeshBasicMaterial({ map: slopeShadeTexture(), transparent: true, depthWrite: false }));
+    shade.rotation.set(-Math.PI / 2, 0, rot);
+    shade.position.set(sl.x, 0.0025, sl.z);
+    const tex = slopeArrowTexture();
+    tex.repeat.set(Math.max(1, Math.round(across / 1.2)), along / 1.2);
+    const arrows = new THREE.Mesh(new THREE.PlaneGeometry(across, along), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
+    arrows.rotation.copy(shade.rotation);
+    arrows.position.set(sl.x, 0.0035, sl.z);
+    scene.add(shade, arrows);
+    return { tex, speed: sl.accel * 0.12 };
+  });
+
+  // portales: entrada morada y salida naranja, con remolino y columna de luz
+  const portals = (course.portals ?? []).flatMap((p) => [portalMesh(scene, p.a, p.r, '#b46cff', 0xb46cff), portalMesh(scene, p.b, p.r * 0.8, '#ffb020', 0xffb020)]);
+
   // bloques que se mueven
   const crate = crateTexture();
   const movers = (course.movers ?? []).map((m) => {
@@ -212,6 +231,12 @@ export function buildCourse(scene, course, theme) {
     flag: { pole, cloth },
     update(t, cameraPos, ballPos) {
       boostTextures.forEach((tex) => (tex.offset.y = -t * 1.5));
+      slopeTextures.forEach((s) => (s.tex.offset.y = -t * s.speed));
+      portals.forEach((p, i) => {
+        p.disc.rotation.z = t * (i % 2 ? -2 : 3);
+        p.beam.material.opacity = 0.25 + Math.sin(t * 4 + i) * 0.1;
+        p.ring.scale.setScalar(1 + Math.sin(t * 5 + i) * 0.05);
+      });
       (course.movers ?? []).forEach((m, i) => {
         const p = moverPos(m, t);
         movers[i].position.x = p.x;
@@ -247,6 +272,27 @@ export function buildCourse(scene, course, theme) {
       bumpers.forEach((b) => (b.userData.squash = (b.userData.squash ?? 0) * 0.85));
     },
   };
+}
+
+function portalMesh(scene, [x, z], r, css, color) {
+  const g = new THREE.Group();
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(r, 40), new THREE.MeshBasicMaterial({ map: swirlTexture(css), transparent: true, depthWrite: false }));
+  disc.rotation.x = -Math.PI / 2;
+  disc.position.y = 0.006;
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.045, 10, 40), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.2, roughness: 0.3 }));
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.03;
+  const beam = new THREE.Mesh(
+    new THREE.CylinderGeometry(r * 0.9, r, 1.6, 24, 1, true),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.3, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }),
+  );
+  beam.position.y = 0.8;
+  const light = new THREE.PointLight(color, 2, 3, 1.5);
+  light.position.y = 0.5;
+  g.add(disc, ring, beam, light);
+  g.position.set(x, 0, z);
+  scene.add(g);
+  return { disc, ring, beam };
 }
 
 // Diana del desempate: anillos de colores, gana la bola que pare más cerca del centro

@@ -100,7 +100,9 @@ export function buildEnvironment(scene, course, theme, rng) {
   waterGeo.rotateX(-Math.PI / 2);
   const water = new THREE.Mesh(
     waterGeo,
-    new THREE.MeshPhongMaterial({ color: theme.water ?? 0x2bb3e6, shininess: 90, specular: 0xffffff, transparent: true, opacity: 0.85, flatShading: true }),
+    theme.lava
+      ? new THREE.MeshPhongMaterial({ color: theme.water, emissive: 0xff3a0a, emissiveIntensity: 0.9, shininess: 30, flatShading: true })
+      : new THREE.MeshPhongMaterial({ color: theme.water ?? 0x2bb3e6, shininess: 90, specular: 0xffffff, transparent: true, opacity: 0.85, flatShading: true }),
   );
   water.position.y = theme.waterLevel;
   scene.add(water);
@@ -126,7 +128,18 @@ export function buildEnvironment(scene, course, theme, rng) {
       fn(x, y, z, d);
     }
   };
-  place(2.2, 40, 140, (x, y, z) => scene.add(makeTree(theme.trees[Math.floor(rng() * theme.trees.length)], rng, x, y, z)));
+  const leaves = theme.leaves?.map((color) => new THREE.MeshLambertMaterial({ color, flatShading: true }));
+  const trees = [];
+  place(2.2, 40, 140, (x, y, z) => {
+    const tree = makeTree(theme.trees[Math.floor(rng() * theme.trees.length)], rng, x, y, z, leaves);
+    tree.userData.phase = rng() * 6.28;
+    trees.push(tree);
+    scene.add(tree);
+  });
+  // los árboles se mecen un poco con el viento
+  animated.push((t) => {
+    for (const tr of trees) tr.rotation.z = Math.sin(t * 1.1 + tr.userData.phase) * 0.025;
+  });
   place(1.8, 30, 40, (x, y, z) => scene.add(makeRock(rng, x, y, z)));
   if (theme.flowers) place(1.2, 12, 70, (x, y, z) => scene.add(makeFlower(rng, x, y, z)));
   if (theme.lanterns) {
@@ -160,24 +173,48 @@ export function buildEnvironment(scene, course, theme, rng) {
     }
   });
 
-  if (theme.snowfall) {
-    const n = 600;
+  if (theme.stars) {
+    const n = 500;
     const pos = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) pos.set([(rng() - 0.5) * 40, rng() * 14, (rng() - 0.5) * 40], i * 3);
+    for (let i = 0; i < n; i++) {
+      const a = rng() * Math.PI * 2, y = 0.12 + rng() * 0.88, r = Math.sqrt(1 - y * y);
+      pos.set([Math.cos(a) * r * 170, y * 170, Math.sin(a) * r * 170], i * 3);
+    }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    const flakes = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 0.07, transparent: true, opacity: 0.9 }));
-    flakes.frustumCulled = false;
-    scene.add(flakes);
+    const stars = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 0.9, sizeAttenuation: true, fog: false, transparent: true }));
+    scene.add(stars);
+    const moon = new THREE.Mesh(new THREE.SphereGeometry(6, 24, 16), new THREE.MeshBasicMaterial({ color: 0xf4f1dc, fog: false }));
+    moon.position.copy(sunDir).multiplyScalar(160);
+    scene.add(moon);
+    animated.push((t) => (stars.material.opacity = 0.75 + Math.sin(t * 2) * 0.2));
+  }
+
+  // nieve que cae, hojas, luciérnagas o brasas que suben
+  const fl = theme.floaters ?? (theme.snowfall ? { color: 0xffffff, count: 600, size: 0.07, speed: -0.6 } : null);
+  if (fl) {
+    const n = fl.count, H = 14;
+    const pos = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) pos.set([(rng() - 0.5) * 40, rng() * H, (rng() - 0.5) * 40], i * 3);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const mat = new THREE.PointsMaterial({ color: fl.color, size: fl.size, transparent: true, opacity: 0.9, depthWrite: false });
+    if (fl.glow) mat.blending = THREE.AdditiveBlending;
+    const pts = new THREE.Points(g, mat);
+    pts.frustumCulled = false;
+    scene.add(pts);
     animated.push((t, dt) => {
       const p = g.attributes.position;
       for (let i = 0; i < n; i++) {
-        let y = p.getY(i) - dt * (0.6 + (i % 5) * 0.12);
-        if (y < 0) y += 14;
+        let y = p.getY(i) + dt * fl.speed * (1 + (i % 5) * 0.2);
+        if (y < 0) y += H;
+        if (y > H) y -= H;
         p.setY(i, y);
-        p.setX(i, p.getX(i) + Math.sin(t + i) * dt * 0.2);
+        p.setX(i, p.getX(i) + Math.sin(t + i) * dt * 0.25);
+        p.setZ(i, p.getZ(i) + Math.cos(t * 0.7 + i) * dt * 0.15);
       }
       p.needsUpdate = true;
+      if (fl.glow) mat.opacity = 0.7 + Math.sin(t * 3) * 0.25;
     });
   }
 
@@ -188,6 +225,7 @@ const leafMats = [0x2f9e44, 0x3bb54a, 0x25803a, 0x4cc25a].map((color) => new THR
 const trunkMat = new THREE.MeshLambertMaterial({ color: 0x8b5a2b, flatShading: true });
 const snowMat = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true });
 const cactusMat = new THREE.MeshLambertMaterial({ color: 0x4f9e3c, flatShading: true });
+const deadMat = new THREE.MeshLambertMaterial({ color: 0x3a2a26, flatShading: true });
 const mesaMat = new THREE.MeshLambertMaterial({ color: 0xb8653a, flatShading: true });
 
 function shadowAll(g) {
@@ -197,10 +235,10 @@ function shadowAll(g) {
   return g;
 }
 
-function makeTree(kind, rng, x, y, z) {
+function makeTree(kind, rng, x, y, z, leaves = leafMats) {
   const g = new THREE.Group();
   const s = 0.8 + rng() * 0.9;
-  const leaf = leafMats[Math.floor(rng() * leafMats.length)];
+  const leaf = leaves[Math.floor(rng() * leaves.length)];
   if (kind === 'pine') {
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 0.8, 6), trunkMat);
     trunk.position.y = 0.4;
@@ -260,6 +298,17 @@ function makeTree(kind, rng, x, y, z) {
       elbow.rotation.z = Math.PI / 2;
       elbow.position.set(side * 0.28, h, 0);
       g.add(arm, elbow);
+    }
+  } else if (kind === 'deadtree') {
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.16, 1.8, 5), deadMat);
+    trunk.position.y = 0.9;
+    g.add(trunk);
+    for (let i = 0; i < 3; i++) {
+      const br = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.06, 0.8, 4), deadMat);
+      const a = (i / 3) * Math.PI * 2 + rng();
+      br.position.set(Math.cos(a) * 0.25, 1.2 + i * 0.2, Math.sin(a) * 0.25);
+      br.rotation.set(Math.sin(a) * 0.9, 0, -Math.cos(a) * 0.9);
+      g.add(br);
     }
   } else if (kind === 'rockpile') {
     for (let i = 0; i < 3; i++) {

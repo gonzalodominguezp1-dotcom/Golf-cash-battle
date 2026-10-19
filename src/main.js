@@ -521,7 +521,7 @@ async function showWallet() {
 async function startMatch(tier) {
   // #hoyo3 en la URL: la práctica empieza por ese hoyo (útil para probar);
   // #hoyo3-empate además fuerza el desempate al final
-  const forced = tier.entryFee === 0 && /^#hoyo(\d)(-empate)?$/.exec(location.hash);
+  const forced = tier.entryFee === 0 && /^#hoyo(\d+)(-empate)?$/.exec(location.hash);
   // con servidor, las mesas de pago son torneos contra jugadores reales y la
   // práctica se juega en el móvil contra rivales simulados
   if (!forced && tier.entryFee > 0 && backend.tournaments) return startTournament(tier);
@@ -594,6 +594,7 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
         <small>${subtitle}</small>
         <strong>${course.name}</strong>
         <span>${tiebreak ? 'Deja la bola lo más cerca de la diana' : `Par ${course.par}`}</span>
+        ${course.tip && !tiebreak ? `<em>${course.tip}</em>` : ''}
       </div>
       <div class="cup-banner"></div>
       <div class="hint"><span>↔ Desliza para apuntar</span><span>↓ Tira hacia abajo y suelta</span></div>
@@ -624,6 +625,7 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
         power.querySelector('.fill').style.height = `${p * 100}%`;
         power.querySelector('span').textContent = `${Math.round(p * 100)}%`;
         power.classList.toggle('active', p > 0);
+        power.classList.toggle('full', p >= 1);
       },
       onRival: (p, st) => {
         if (tiebreak) {
@@ -644,6 +646,7 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
         distEl.textContent = '0 m';
       },
       onSunk: finish,
+      onLip: () => toast('¡Uy! Demasiado fuerte para entrar', '#ffffff'),
       onRest: (n) => {
         showDistance();
         if (tiebreak) {

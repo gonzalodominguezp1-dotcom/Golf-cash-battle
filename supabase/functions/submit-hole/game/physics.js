@@ -15,6 +15,9 @@ const RESTITUTION = 0.72;
 const CUP_CAPTURE_SPEED = 3.5;
 const STOP_SPEED = 0.06;
 const BOOST_ACCEL = 40;
+// en una pendiente más fuerte que el rozamiento la bola nunca se queda quieta:
+// rueda hasta llano (las pendientes siempre acaban en llano, nunca en pared)
+export const MIN_SLOPE_ACCEL = 1.5;
 
 export const DT = 1 / 120; // paso fijo de la simulación
 
@@ -121,13 +124,28 @@ export function inSand(course, x, z) {
   return course.sand.some((s) => inRect(s, x, z));
 }
 
+/** Pendientes: rectángulos que empujan la bola cuesta abajo (dir) con aceleración accel. */
+export const onSlope = (course, x, z) => (course.slopes ?? []).find((s) => inRect(s, x, z));
+
+/** Portales de un solo sentido: la bola que entra en a sale por b con la misma velocidad. */
+export function portalAt(course, x, z) {
+  const ps = course.portals ?? [];
+  for (let i = 0; i < ps.length; i++) {
+    const dx = x - ps[i].a[0], dz = z - ps[i].a[1];
+    if (dx * dx + dz * dz < ps[i].r * ps[i].r) return i;
+  }
+  return -1;
+}
+
 /**
- * Avanza la simulación dt segundos. Devuelve { sunk, hit, bumper }: hit es la
- * velocidad del choque más fuerte y bumper el índice de la seta golpeada (o -1).
+ * Avanza la simulación dt segundos. Devuelve { sunk, hit, bumper, portal }: hit
+ * es la velocidad del choque más fuerte, bumper el índice de la seta golpeada
+ * y portal el del portal cruzado (o -1).
  */
 export function step(course, segs, ball, t, dt) {
   let hit = 0;
   let bumper = -1;
+  let portal = -1;
   const speed = hyp(ball.vx, ball.vz);
   if (speed > 0) {
     const sand = inSand(course, ball.x, ball.z) ? SAND_FACTOR : 1;
@@ -145,6 +163,11 @@ export function step(course, segs, ball, t, dt) {
       ball.vx += boost.dir[0] * a;
       ball.vz += boost.dir[1] * a;
     }
+  }
+  const slope = onSlope(course, ball.x, ball.z);
+  if (slope) {
+    ball.vx += slope.dir[0] * slope.accel * dt;
+    ball.vz += slope.dir[1] * slope.accel * dt;
   }
   ball.x += ball.vx * dt;
   ball.z += ball.vz * dt;
@@ -172,6 +195,13 @@ export function step(course, segs, ball, t, dt) {
     }
   });
 
+  const pi = portalAt(course, ball.x, ball.z);
+  if (pi >= 0) {
+    portal = pi;
+    ball.x = course.portals[pi].b[0];
+    ball.z = course.portals[pi].b[1];
+  }
+
   const [hx, hz] = course.cup;
   const toCup = hyp(ball.x - hx, ball.z - hz);
   const v = hyp(ball.vx, ball.vz);
@@ -179,10 +209,11 @@ export function step(course, segs, ball, t, dt) {
     ball.x = hx;
     ball.z = hz;
     ball.vx = ball.vz = 0;
-    return { sunk: true, hit, bumper };
+    return { sunk: true, hit, bumper, portal };
   }
-  if (v < STOP_SPEED) ball.vx = ball.vz = 0;
-  return { sunk: false, hit, bumper };
+  const rolls = slope && slope.accel > ROLL_DECEL * (inSand(course, ball.x, ball.z) ? SAND_FACTOR : 1);
+  if (v < STOP_SPEED && !rolls) ball.vx = ball.vz = 0;
+  return { sunk: false, hit, bumper, portal };
 }
 
 export function isMoving(ball) {

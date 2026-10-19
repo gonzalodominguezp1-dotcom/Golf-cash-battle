@@ -44,8 +44,10 @@ function travel(course, segs, from, dirX, dirZ, power) {
   let d = 0;
   for (let i = 0; i < 2400 && isMoving(sim); i++) {
     const px = sim.x, pz = sim.z;
-    if (step(c, segs, sim, 0, DT).sunk) return Infinity;
-    d += Math.hypot(sim.x - px, sim.z - pz);
+    const r = step(c, segs, sim, 0, DT);
+    if (r.sunk) return Infinity;
+    // el salto de un portal no cuenta como recorrido
+    if (r.portal < 0) d += Math.hypot(sim.x - px, sim.z - pz);
   }
   return d;
 }
@@ -58,6 +60,43 @@ function powerFor(course, segs, from, dirX, dirZ, dist) {
     else hi = mid;
   }
   return (lo + hi) / 2;
+}
+
+/** Dónde para un tiro (o null si entra). */
+function landing(course, segs, from, dirX, dirZ, power) {
+  const sim = { x: from.x, z: from.z, vx: dirX * power * MAX_SHOT_SPEED, vz: dirZ * power * MAX_SHOT_SPEED };
+  const c = { ...course, spinners: [], movers: [] };
+  for (let i = 0; i < 3600 && isMoving(sim); i++) if (step(c, segs, sim, 0, DT).sunk) return null;
+  return sim;
+}
+
+const SEARCH_POWERS = Array.from({ length: 32 }, (_, i) => 0.06 + i * 0.03);
+
+/**
+ * Con pendientes o portales la distancia no crece con la potencia, así que se
+ * prueban potencias (una por paso de física, para no trabar la imagen) y se
+ * elige la que deja la bola más cerca, o la del medio de las que entran.
+ */
+class PowerSearch {
+  constructor(course, segs, from, dirX, dirZ, target) {
+    Object.assign(this, { course, segs, from: { ...from }, dirX, dirZ, target, i: 0, scored: [] });
+  }
+
+  get done() {
+    return this.i >= SEARCH_POWERS.length;
+  }
+
+  advance() {
+    const p = SEARCH_POWERS[this.i++];
+    const end = landing(this.course, this.segs, this.from, this.dirX, this.dirZ, p);
+    this.scored.push({ p, d: end ? Math.hypot(end.x - this.target.x, end.z - this.target.z) : 0 });
+  }
+
+  best() {
+    const sunk = this.scored.filter((s) => s.d === 0);
+    if (sunk.length) return sunk[Math.floor(sunk.length / 2)].p;
+    return this.scored.reduce((a, b) => (b.d < a.d ? b : a)).p;
+  }
 }
 
 function gauss(rng) {
@@ -73,8 +112,8 @@ export class Bot {
     this.wait = 0.8 + rng() * 2.2;
   }
 
-  /** Decide y lanza el siguiente tiro. */
-  shoot() {
+  /** Decide el siguiente tiro: hacia dónde y, si hace falta, empieza a buscar la potencia. */
+  plan() {
     const { ball, course, segs, rng } = this;
     const target = chooseTarget(ball, course, segs);
     const dx = target.x - ball.x, dz = target.z - ball.z;
@@ -82,10 +121,21 @@ export class Bot {
     const miss = 1 - this.player.skill;
     const ang = Math.atan2(dx, -dz) + gauss(rng) * (0.015 + miss * 0.09);
     const dirX = Math.sin(ang), dirZ = -Math.cos(ang);
+    if (course.slopes || course.portals) return { dirX, dirZ, search: new PowerSearch(course, segs, ball, dirX, dirZ, target) };
     const firm = target.isCup && !course.noCup;
     let power = powerFor(course, segs, ball, dirX, dirZ, firm ? dist + 0.4 : dist);
     // al hoyo se le pega con firmeza: la búsqueda da justo el mínimo para llegar
     if (firm) power *= 1.15;
+    return { dirX, dirZ, power };
+  }
+
+  /** Lanza el tiro planeado. */
+  shoot() {
+    const { ball, rng } = this;
+    const { dirX, dirZ, search } = this.next;
+    let power = search ? search.best() : this.next.power;
+    this.next = null;
+    const miss = 1 - this.player.skill;
     power = Math.min(1, Math.max(0.05, power * (1 + gauss(rng) * (0.04 + miss * 0.12))));
     ball.vx = dirX * power * MAX_SHOT_SPEED;
     ball.vz = dirZ * power * MAX_SHOT_SPEED;
@@ -104,12 +154,14 @@ export class Bot {
         this.done = true;
         return { finished: true };
       }
+      this.next ??= this.plan();
+      if (this.next.search && !this.next.search.done) this.next.search.advance();
       this.wait -= dt;
-      if (this.wait <= 0) {
+      if (this.wait <= 0 && !(this.next.search && !this.next.search.done)) {
         this.wait = 1 + this.rng() * 1.8;
         return { shot: this.shoot(), ...step(this.course, this.segs, this.ball, t, dt) };
       }
-    }
+    } else this.next = null; // un aspa o un bloque la ha movido: hay que volver a apuntar
     const r = step(this.course, this.segs, this.ball, t, dt);
     if (r.sunk) {
       this.done = true;

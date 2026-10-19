@@ -118,6 +118,24 @@ const DEFS = {
       }
       noise(d, { dur: 0.55, gain: 0.12, cutoff: 0.3, attack: 0.1, shape: 'sin' });
     }),
+  // portal: barrido descendente con brillo
+  portal: () =>
+    render(0.7, (d) => {
+      let ph = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / SR;
+        ph += (2 * Math.PI * (1400 * Math.exp(-t * 4) + 180)) / SR;
+        d[i] += (Math.sin(ph) + 0.4 * Math.sin(ph * 1.5)) * 0.16 * Math.exp(-t * 4) * Math.min(1, t / 0.01);
+      }
+      [88, 95].forEach((m, i) => modal(d, bell(note(m), 0.3, 0.08), 1, Math.floor((0.05 + i * 0.08) * SR)));
+    }),
+  // la bola pasa por encima del hoyo sin caer: traqueteo contra el borde
+  lip: () =>
+    render(0.4, (d) => {
+      [0, 0.04, 0.07].forEach((t, i) => modal(d, [[1300 - i * 150, 0.025, 0.3 / (i + 1)], [2600, 0.01, 0.08]], 1, Math.floor(t * SR)));
+    }),
+  // carga a tope: campanita aguda
+  full: () => render(0.3, (d) => modal(d, bell(note(91), 0.25, 0.12))),
   // clic muy suave al apuntar
   tick: () => render(0.05, (d) => modal(d, [[2600, 0.006, 0.12]])),
   // botones de la interfaz
@@ -208,6 +226,9 @@ export const sfx = {
   sand: () => play('sand', { vol: 0.8, rate: vary(0.1) }),
   boost: () => play('boost', { vol: 0.7 }),
   tick: () => play('tick', { vol: 0.5, rate: vary(0.1), wet: false }),
+  portal: () => play('portal', { vol: 0.8 }),
+  lip: () => play('lip', { vol: 0.8, rate: vary(0.08) }),
+  full: () => play('full', { vol: 0.6, wet: false }),
   tap: () => play('tap', { vol: 0.6, wet: false }),
   coins: () => play('coins', { vol: 0.8 }),
   rivalCup: (pan) => play('rivalCup', { vol: 0.5, pan }),
@@ -241,6 +262,24 @@ export function setRolling(speed, onSand) {
   const target = Math.min(0.35, speed * 0.04);
   roll.g.gain.setTargetAtTime(target, ctx.currentTime, 0.05);
   roll.f.frequency.setTargetAtTime(onSand ? 1400 : 300 + speed * 60, ctx.currentTime, 0.05);
+}
+
+let charge = null;
+/** Tono que sube mientras cargas el golpe (0 = apagado). */
+export function setCharge(power) {
+  if (!ctx) return;
+  if (!charge) {
+    const o = ctx.createOscillator();
+    o.type = 'triangle';
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    o.connect(g).connect(master);
+    o.start();
+    charge = { o, g };
+  }
+  const t = ctx.currentTime;
+  charge.g.gain.setTargetAtTime(power > 0.02 ? 0.035 + power * 0.03 : 0, t, 0.03);
+  charge.o.frequency.setTargetAtTime(220 + power * 440, t, 0.03);
 }
 
 /** Sonido ambiente según el hoyo: pájaros, olas o grillos. */
