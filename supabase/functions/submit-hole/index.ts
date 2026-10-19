@@ -2,10 +2,14 @@
 // juego y guarda los golpes que salen. El cliente nunca dice cuántos golpes
 // hizo: solo qué tiros soltó y en qué momento.
 //
-// La carpeta game/ es una copia de src/game (npm run sync:functions).
+// Además guarda las señales del antibots (cuánto tarda en tirar, si arrastra
+// el dedo) y recalcula la nota de riesgo del jugador antes de apuntar el hoyo.
+//
+// Las carpetas game/ y antibot/ son copias de src (npm run sync:functions).
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { COURSES, TIEBREAK_COURSE } from './game/courses.js';
 import { replayHole } from './game/replay.js';
+import { assessRisk, holeSignals } from './antibot/risk.js';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -19,7 +23,7 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
 
   const body = await req.json().catch(() => null);
-  const { tournament, hole, shots } = body ?? {};
+  const { tournament, hole, shots, aim } = body ?? {};
   if (typeof tournament !== 'string' || !Number.isInteger(hole) || hole < 0 || !Array.isArray(shots) || shots.length > 8) {
     return json({ error: 'bad_request' }, 400);
   }
@@ -34,12 +38,20 @@ Deno.serve(async (req) => {
     admin.from('app_config').select('value').eq('key', 'max_strokes').single(),
   ]);
   if (!t) return json({ error: 'match_not_found' }, 404);
-  const course = hole < t.courses.length ? COURSES[t.courses[hole]] : hole === t.courses.length ? TIEBREAK_COURSE : null;
+  const courseIndex = hole < t.courses.length ? t.courses[hole] : -1;
+  const course = hole < t.courses.length ? COURSES[courseIndex] : hole === t.courses.length ? TIEBREAK_COURSE : null;
   if (!course) return json({ error: 'wrong_hole' }, 400);
 
   const clean = shots.map((s: { tick: unknown; yaw: unknown; power: unknown }) => ({ tick: s?.tick, yaw: s?.yaw, power: s?.power }));
   const r = replayHole(course, clean, { maxStrokes: Number(cfg?.value ?? 8) });
   if (!r.ok) return json({ error: 'invalid_shots', reason: r.reason }, 422);
+
+  // el antibots no debe impedir apuntar el hoyo si falla
+  try {
+    await checkRisk(admin, auth.user.id, tournament, hole, courseIndex, r, Array.isArray(aim) ? aim.slice(0, 8) : []);
+  } catch (e) {
+    console.error('antibot', e);
+  }
 
   const { data, error } = await admin.rpc('_record_hole', {
     p_user: auth.user.id,
@@ -52,3 +64,28 @@ Deno.serve(async (req) => {
   if (error) return json({ error: /^[a-z_]+$/.test(error.message) ? error.message : 'db_error' }, 409);
   return json({ strokes: r.strokes, distance: r.distance, tournament: data });
 });
+
+// deno-lint-ignore no-explicit-any
+async function checkRisk(admin: any, user: string, tournament: string, hole: number, course: number, replay: any, aim: unknown[]) {
+  const sig = holeSignals(replay, aim);
+  const rec = await admin.rpc('_record_signals', {
+    p_user: user,
+    p_t: tournament,
+    p_hole: hole,
+    p_course: course,
+    p_strokes: replay.strokes,
+    p_waits: sig.waits,
+    p_drags: sig.drags,
+    p_turns: sig.turns,
+  });
+  if (rec.error) throw rec.error;
+  const { data: input, error } = await admin.rpc('_risk_inputs', { p_user: user });
+  if (error) throw error;
+  const holes = input.holes.map((h: { course: number; strokes: number; waits: number[]; drags: (number | null)[] }) => ({
+    ...h,
+    par: h.course >= 0 ? COURSES[h.course]?.par ?? 3 : 0,
+  }));
+  const risk = assessRisk(holes, input.baseline, input.rules ?? {});
+  const set = await admin.rpc('_set_risk', { p_user: user, p_score: risk.score, p_flags: risk.flags, p_stats: risk.stats });
+  if (set.error) throw set.error;
+}

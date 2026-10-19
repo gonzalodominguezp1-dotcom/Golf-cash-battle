@@ -87,7 +87,7 @@ h1, h2, .score-title { font-family: var(--display); font-weight: 400; letter-spa
   background: rgba(30, 16, 70, 0.85); backdrop-filter: blur(14px);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--line) inset;
 }
-.tabbar button { display: grid; justify-items: center; gap: 1px; background: none; padding: 6px 18px; border-radius: 16px; font-size: 12px; font-weight: 800; color: var(--muted); }
+.tabbar button { display: grid; justify-items: center; gap: 1px; background: none; padding: 6px 12px; border-radius: 16px; font-size: 12px; font-weight: 800; color: var(--muted); }
 .tabbar button span { font-size: 20px; }
 .tabbar button.on { background: linear-gradient(180deg, var(--pink), #b5179e); color: #fff; box-shadow: 0 6px 16px rgba(255, 61, 154, 0.45); }
 
@@ -382,3 +382,27 @@ h2 { margin: 22px 0 10px; font-size: 21px; }
 .my-tournaments .section-head { margin-top: 18px; }
 .my-tournaments .txs li.tap { cursor: pointer; }
 .my-tournaments .txs li > span { font-weight: 800; font-size: 13px; text-align: right; }
+
+/* ---------- cuenta ---------- */
+
+.profile-card {
+  display: flex; align-items: center; gap: 16px; margin-top: 8px; padding: 18px; border-radius: 24px;
+  background: var(--m-gold); color: #3a2500; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5) inset, 0 14px 34px rgba(242, 183, 5, 0.35);
+}
+.profile-card > div:last-child { display: grid; gap: 4px; min-width: 0; }
+.profile-card small { font-weight: 700; }
+.profile-card strong { font-family: var(--display); font-weight: 400; font-size: 30px; line-height: 1.1; overflow-wrap: anywhere; }
+.profile-card .chip-btn { background: rgba(0, 0, 0, 0.12); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15) inset; }
+.avatar.big { width: 64px; height: 64px; font-size: 28px; text-transform: uppercase; }
+.form { display: grid; gap: 10px; margin-top: 10px; }
+.form label { display: grid; gap: 6px; font-size: 13px; font-weight: 700; color: var(--muted); }
+.form input {
+  font: inherit; color: inherit; width: 100%; padding: 13px 14px; border-radius: 14px; border: 0;
+  background: var(--panel-2); box-shadow: 0 0 0 1px var(--line) inset; color-scheme: dark;
+}
+.form input:focus { outline: 2px solid var(--pink); }
+.form .sub, .kyc-box .sub { margin: 0; }
+.field-ok { margin: 0; padding: 12px 14px; border-radius: 14px; background: rgba(62, 207, 110, 0.14); color: #9ff0b8; font-weight: 700; overflow-wrap: anywhere; }
+.notice { display: block; width: 100%; margin: 12px 0 0; padding: 10px 12px; border-radius: 12px; background: rgba(94, 240, 255, 0.14); color: #b8f6ff; font-size: 13px; font-weight: 700; text-align: center; }
+.link { background: none; color: var(--muted); text-decoration: underline; padding: 10px 0; font-size: 14px; }
+.kyc-box .primary { width: 100%; }

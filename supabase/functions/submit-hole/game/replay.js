@@ -10,8 +10,10 @@ export const MAX_HOLE_TICKS = 120 * 60 * 10; // 10 minutos por hoyo
 const SETTLE_TICKS = 120 * 30; // tras el último golpe se espera a que pare la bola
 
 /**
- * Devuelve { ok, reason?, strokes, sunk, distance }. distance es lo que queda
- * hasta el hoyo (o la diana del desempate) cuando la bola se para.
+ * Devuelve { ok, reason?, strokes, sunk, distance, waits }. distance es lo que
+ * queda hasta el hoyo (o la diana del desempate) cuando la bola se para.
+ * waits[i] son los pasos que llevaba la bola parada antes del golpe i (el
+ * antibots lo usa para ver si alguien tira sin pararse a apuntar).
  */
 export function replayHole(course, shots, { maxStrokes = 8 } = {}) {
   const fail = (reason) => ({ ok: false, reason, strokes: 0, sunk: false, distance: null });
@@ -31,11 +33,14 @@ export function replayHole(course, shots, { maxStrokes = 8 } = {}) {
   const ball = { x: course.tee[0], z: course.tee[1], vx: 0, vz: 0 };
   const dist = () => Math.sqrt((ball.x - course.cup[0]) * (ball.x - course.cup[0]) + (ball.z - course.cup[1]) * (ball.z - course.cup[1]));
   const end = shots[shots.length - 1].tick + SETTLE_TICKS;
+  const waits = [];
+  let restSince = 0;
   let next = 0;
   for (let tick = 0; tick <= end; tick++) {
     if (next < shots.length && shots[next].tick === tick) {
       // como en el juego: solo se puede golpear con la bola parada
       if (isMoving(ball)) return fail('ball_moving');
+      waits.push(tick - restSince);
       const v = shotVelocity(shots[next].yaw, shots[next].power);
       ball.vx = v.vx;
       ball.vz = v.vz;
@@ -45,12 +50,13 @@ export function replayHole(course, shots, { maxStrokes = 8 } = {}) {
     const r = step(course, segs, ball, (tick + 1) * DT, DT);
     if (r.sunk) {
       if (next < shots.length) return fail('shots_after_sunk');
-      return { ok: true, strokes: shots.length, sunk: true, distance: 0 };
+      return { ok: true, strokes: shots.length, sunk: true, distance: 0, waits };
     }
+    if (wasMoving && !isMoving(ball)) restSince = tick + 1;
     if (next === shots.length && wasMoving && !isMoving(ball)) {
       // la bola se ha parado tras el último golpe
-      if (course.noCup) return { ok: true, strokes: 1, sunk: false, distance: dist() };
-      if (shots.length >= maxStrokes) return { ok: true, strokes: maxStrokes, sunk: false, distance: dist() };
+      if (course.noCup) return { ok: true, strokes: 1, sunk: false, distance: dist(), waits };
+      if (shots.length >= maxStrokes) return { ok: true, strokes: maxStrokes, sunk: false, distance: dist(), waits };
     }
   }
   if (next < shots.length) return fail('bad_tick');

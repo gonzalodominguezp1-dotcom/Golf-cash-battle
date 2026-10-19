@@ -24,7 +24,7 @@ npm run build
 
 ## Backend (Supabase)
 
-Proyecto `golf-cash-battle` (`oyawgvqbmvtmlnyqwgdf`). Cada jugador entra con una cuenta anónima y recibe 100 créditos demo.
+Proyecto `golf-cash-battle` (`oyawgvqbmvtmlnyqwgdf`). Cada jugador entra como invitado (cuenta anónima) y recibe 100 créditos demo.
 
 - Tablas: `wallets`, `transactions`, `matches`, `match_players`, `tiers`, `app_config`. RLS: cada usuario solo lee lo suyo y nadie escribe directamente.
 - El saldo solo cambia dentro de funciones del servidor: `join_match` (cobra la entrada y elige los hoyos), `submit_hole`, `finish_match` (reparte el bote y la comisión), `abandon_match` (devuelve la entrada si no se ha jugado), `demo_deposit`.
@@ -35,6 +35,10 @@ Proyecto `golf-cash-battle` (`oyawgvqbmvtmlnyqwgdf`). Cada jugador entra con una
 - Validación de golpes: el cliente no manda cuántos golpes hizo, solo cada tiro (`tick`, `yaw`, `power`). La Edge Function `submit-hole` repite el hoyo con la misma física (`src/game/replay.js`) y guarda los golpes que salen. La física solo usa operaciones exactas en IEEE 754, así que da el mismo resultado en cualquier navegador y en el servidor. Tras tocar `src/game/physics.js`, `replay.js` o `courses.js`: `npm run sync:functions` y volver a desplegar `submit-hole`.
 - Las puntuaciones de los rivales no se ven hasta que terminas tu ronda. Todos hacen al final un tiro de desempate, que solo cuenta si hay empate en cabeza.
 - La práctica se juega en el móvil contra rivales simulados. Las partidas contra bots del prototipo (`join_match`) ya no admiten entrada de pago.
+- Cuentas: se empieza como invitado (cuenta anónima). Al añadir el email (pestaña Cuenta) la misma cuenta pasa a permanente y conserva saldo, nivel y skins. Para entrar en otro móvil se pide un enlace o código por email. Perfil en `profiles` (nombre público, progreso); funciones `my_profile`, `set_username`, `save_progress`. Requisitos en el panel: Authentication → Sign In / Providers → *Allow manual linking* activado, y en URL Configuration la dirección de la web (GitHub Pages) como Site URL. Para que el email traiga código además de enlace, añadir `{{ .Token }}` a las plantillas *Change email address* y *Magic link*.
+- Mesas con entrada: solo con email confirmado, +18 e identidad verificada; una identidad = una cuenta (se guarda un hash del documento, no el número). Lo comprueba un trigger en `tournament_entries` (`_paid_block`), así que no se puede saltar desde el cliente.
+- Verificación de identidad: Edge Function `kyc` con proveedor intercambiable (`supabase/functions/kyc/providers.ts`). Con los secrets `DIDIT_API_KEY`, `DIDIT_WORKFLOW_ID` y `DIDIT_WEBHOOK_SECRET` usa Didit (documento + selfie) y su webhook va a `https://oyawgvqbmvtmlnyqwgdf.supabase.co/functions/v1/kyc/webhook`. Sin ellos funciona en modo pruebas: fecha de nacimiento y número de documento escritos a mano. Antes de dinero real hay que poner Didit.
+- Antibots: `submit-hole` guarda en `shot_signals` cuánto tarda cada tiro con la bola parada y el gesto del dedo que manda el móvil, y `src/antibot/risk.js` busca tiros instantáneos, tiempos robóticos, tiros sin gesto y precisión imposible frente a la media de todos en ese hoyo. Una cuenta marcada (`player_risk`) no entra en mesas de pago y sus premios van a `held_payouts`. Para revisarla, en el editor SQL: `select review_player('<id>', 'cleared')` (libera los premios) o `'blocked'`. Los umbrales se pueden cambiar en `app_config.antibot`.
 - Publicación: `.github/workflows/pages.yml` publica en GitHub Pages al hacer push a `main` (Settings → Pages → Source: GitHub Actions).
 
 ## Estructura
@@ -43,9 +47,13 @@ Proyecto `golf-cash-battle` (`oyawgvqbmvtmlnyqwgdf`). Cada jugador entra con una
 - `src/wallet/` interfaz `WalletService`, `LocalWallet` (demo local) y `SupabaseWallet`
 - `src/backend/` elige backend y conecta con Supabase
 - `src/match/` matchmaking, puntuación y reparto del bote (`MatchService` local con bots, `TournamentService` para torneos reales)
-- `supabase/functions/submit-hole/` repite los tiros en el servidor; `game/` es una copia de `src/game` (`npm run sync:functions`)
+- `src/account/` cuenta, email y verificación de identidad
+- `src/antibot/` nota de riesgo a partir de las señales de cada hoyo
+- `supabase/functions/submit-hole/` repite los tiros en el servidor; `game/` y `antibot/` son copias de `src/` (`npm run sync:functions`)
+- `supabase/functions/kyc/` verificación de identidad y su webhook
 
 ## Pendiente para dinero real
 
-- Antitrampas más allá de la validación: la física es determinista, así que un programa podría calcular tiros perfectos. Hará falta detectar bots (tiempos, precisión imposible) y KYC para evitar multicuentas.
-- Pasarela de pagos, KYC/edad y revisión legal del modelo de habilidad por país.
+- Poner las claves de Didit (o del proveedor elegido) en lugar del modo pruebas.
+- El antibots sube el coste de hacer trampas pero un bot cuidadoso puede imitar tiempos y gestos; lo que más frena es la precisión imposible, la retención de premios y que una identidad verificada solo tenga una cuenta. Hará falta revisar a mano las cuentas marcadas y ajustar los umbrales con datos reales.
+- Pasarela de pagos y revisión legal del modelo de habilidad por país.

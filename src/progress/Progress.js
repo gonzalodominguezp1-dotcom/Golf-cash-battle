@@ -14,7 +14,8 @@ export function levelOf(xp) {
 
 /**
  * Nivel, estadísticas y skins del jugador. Solo cosmético: no toca el saldo
- * ni la partida, así que de momento vive en el navegador.
+ * ni la partida. Vive en el navegador y, con cuenta, se copia al servidor para
+ * no perderlo al cambiar de móvil.
  */
 export class Progress {
   constructor(storage = defaultStorage()) {
@@ -23,6 +24,20 @@ export class Progress {
     try {
       Object.assign(this.state, JSON.parse(storage?.getItem(KEY) ?? '{}'));
     } catch {}
+  }
+
+  /**
+   * Une el progreso con el guardado en la cuenta. Gana el que lleva más XP;
+   * si el móvil era de otra cuenta, manda el del servidor. save(state) guarda
+   * en el servidor cada cambio a partir de ahora.
+   */
+  attach(owner, remote, save) {
+    const r = remote ?? {};
+    const other = this.state.owner && this.state.owner !== owner;
+    if (other || (r.xp ?? 0) > this.state.xp) this.state = { ...EMPTY, ...r };
+    this.state.owner = owner;
+    this.remote = save;
+    this.#save();
   }
 
   get level() {
@@ -96,6 +111,8 @@ export class Progress {
     try {
       this.storage?.setItem(KEY, JSON.stringify(this.state));
     } catch {}
+    // sin conexión no pasa nada: se vuelve a subir con el siguiente cambio
+    this.remote?.(this.state)?.catch?.(() => {});
   }
 }
 

@@ -32,3 +32,23 @@ test('hoyo de desempate: la bola nunca entra y el bot tira una sola vez', () => 
   assert.ok(!isMoving(bot.ball));
   assert.ok(Math.hypot(bot.ball.x, bot.ball.z + 6) < 3);
 });
+
+test('el progreso de la cuenta gana si lleva más XP o el móvil era de otra cuenta', async () => {
+  const { Progress } = await import('../src/progress/Progress.js');
+  const mem = () => {
+    const m = new Map();
+    return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, v) };
+  };
+  const saved = [];
+  const p = new Progress(mem());
+  p.recordMatch({ position: 1, won: true, entryFee: 1, holes: [{ strokes: 2, par: 3 }] });
+  const localXp = p.state.xp;
+  p.attach('u1', { xp: 10, wins: 0 }, async (s) => saved.push({ ...s }));
+  assert.equal(p.state.xp, localXp);
+  assert.equal(saved.at(-1).xp, localXp);
+  p.attach('u1', { xp: localXp + 500, wins: 9, equipped: 'classic' }, async () => {});
+  assert.equal(p.state.wins, 9);
+  p.attach('u2', { xp: 0 }, async () => {});
+  assert.equal(p.state.xp, 0);
+  assert.equal(p.state.owner, 'u2');
+});
