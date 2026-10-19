@@ -4,9 +4,9 @@ import { SupabaseMatchService } from '../match/SupabaseMatchService.js';
 import { TournamentService } from '../match/TournamentService.js';
 import { AccountService } from '../account/AccountService.js';
 
-const URL = import.meta.env.VITE_SUPABASE_URL ?? 'https://oyawgvqbmvtmlnyqwgdf.supabase.co';
+export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL ?? 'https://oyawgvqbmvtmlnyqwgdf.supabase.co';
 // clave pública: solo deja llamar a lo que permiten RLS y las funciones
-const KEY = import.meta.env.VITE_SUPABASE_KEY ?? 'sb_publishable_-fSLfcF-N9H9V7XgcDCwsg_YtaqRsbe';
+export const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY ?? 'sb_publishable_-fSLfcF-N9H9V7XgcDCwsg_YtaqRsbe';
 
 /**
  * Entra con la sesión guardada (o una cuenta de invitado nueva) y monta los
@@ -14,7 +14,7 @@ const KEY = import.meta.env.VITE_SUPABASE_KEY ?? 'sb_publishable_-fSLfcF-N9H9V7X
  * la app para empezar limpia con la cuenta nueva.
  */
 export async function connectSupabase() {
-  const db = createClient(URL, KEY);
+  const db = createClient(SUPABASE_URL, SUPABASE_KEY);
   let {
     data: { session },
   } = await db.auth.getSession();
