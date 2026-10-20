@@ -61,7 +61,9 @@ export function buildEnvironment(scene, course, theme, rng) {
   scene.add(new THREE.HemisphereLight(theme.skyHorizon, theme.groundMid, theme.ambient));
   const sun = new THREE.DirectionalLight(theme.sunColor, theme.sunIntensity);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 900 && (window.matchMedia?.('(pointer: fine)').matches ?? true);
+  const shadowRes = isDesktop ? 4096 : 2048;
+  sun.shadow.mapSize.set(shadowRes, shadowRes);
   sun.shadow.bias = -0.0005;
   sun.shadow.normalBias = 0.02;
   Object.assign(sun.shadow.camera, { left: -12, right: 12, top: 12, bottom: -12, near: 1, far: 80 });

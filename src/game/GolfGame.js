@@ -28,7 +28,20 @@ const lerpAngle = (a, b, t) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) 
  * la potencia; suelta para golpear.
  */
 export class GolfGame {
-  constructor(container, { onStroke, onSunk, onAim, onRest, onCup, onRival, onLip } = {}) {
+  #onContextMenu = null;
+  #onPointerDown = null;
+  #onPointerMove = null;
+  #onPointerUp = null;
+  #onPointerCancel = null;
+  #onWheel = null;
+  #onKeyDown = null;
+  #onKeyUp = null;
+  #onPointerLockChange = null;
+  #onPointerLockError = null;
+  #onClickCanvas = null;
+  #onBlur = null;
+
+  constructor(container, { onStroke, onSunk, onAim, onRest, onCup, onRival, onLip, onOpenSettings, onOverviewChange } = {}) {
     this.container = container;
     this.onStroke = onStroke;
     this.onSunk = onSunk;
@@ -37,6 +50,8 @@ export class GolfGame {
     this.onCup = onCup;
     this.onRival = onRival;
     this.onLip = onLip;
+    this.onOpenSettings = onOpenSettings;
+    this.onOverviewChange = onOverviewChange;
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
@@ -50,7 +65,21 @@ export class GolfGame {
     this.acc = 0;
     this.t = 0;
     this.running = false;
+    this.paused = false;
     this.overview = false;
+    this.overviewYaw = 0;
+    this.overviewPitch = 0.85;
+    this.zoomLevel = 1.0;
+    this.orbitYaw = 0;
+    this.orbiting = false;
+    this.isPointerLocked = false;
+    this.charging = false;
+    this.chargeAnchor = null;
+    this.mouseTurns = 0;
+    this.chargeStartTick = 0;
+    this.aimStartTick = 0;
+    this.lastMouseX = null;
+    this.lastMouseTick = 0;
     this.#bindInput();
     this.resizeObserver = new ResizeObserver(() => this.#resize());
     this.resizeObserver.observe(container);
@@ -72,6 +101,18 @@ export class GolfGame {
     this.aim = []; // gesto de cada tiro { d: pasos con el dedo puesto, t: giros al apuntar } para el antibots
     this.power = 0;
     this.drag = null;
+    this.charging = false;
+    this.chargeAnchor = null;
+    this.orbiting = false;
+    this.orbitYaw = 0;
+    this.overview = false;
+    this.paused = false;
+    this.overviewYaw = 0;
+    this.overviewPitch = 0.85;
+    this.mouseTurns = 0;
+    this.chargeStartTick = 0;
+    this.aimStartTick = 0;
+    this.lastMouseX = null;
     this.wasInSand = false;
     this.wasOnBoost = false;
     this.ambientOn = false;
@@ -96,7 +137,58 @@ export class GolfGame {
   }
 
   setOverview(on) {
-    this.overview = on;
+    this.overview = !!on;
+    if (this.overview) {
+      this.charging = false;
+      this.chargeAnchor = null;
+      this.power = 0;
+      this.fullPower = false;
+      setCharge(0);
+      this.onAim?.(0);
+      this.aimDots.hide();
+      this.overviewYaw = 0;
+      this.overviewPitch = 0.85;
+    }
+    this.onOverviewChange?.(this.overview);
+  }
+
+  setPaused(on) {
+    this.paused = !!on;
+    if (this.paused) {
+      if (this.charging || this.power > 0) {
+        this.charging = false;
+        this.chargeAnchor = null;
+        this.power = 0;
+        this.fullPower = false;
+        setCharge(0);
+        this.onAim?.(0);
+        this.aimDots?.hide();
+      }
+    }
+  }
+
+  requestPointerLock() {
+    const el = this.renderer?.domElement;
+    if (!el || typeof document === 'undefined') return;
+    if (document.pointerLockElement === el || this.isPointerLocked) return;
+    try {
+      const p = el.requestPointerLock?.({ unadjustedMovement: true });
+      if (p && typeof p.catch === 'function') {
+        p.catch(() => {
+          try { el.requestPointerLock?.(); } catch {}
+        });
+      }
+    } catch {
+      try { el.requestPointerLock?.(); } catch {}
+    }
+  }
+
+  exitPointerLock() {
+    if (typeof document !== 'undefined' && document.pointerLockElement) {
+      try {
+        document.exitPointerLock?.();
+      } catch {}
+    }
   }
 
   distanceToCup() {
@@ -131,6 +223,7 @@ export class GolfGame {
     this.running = false;
     this.renderer.setAnimationLoop(null);
     this.resizeObserver.disconnect();
+    this.#unbindInput?.();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
@@ -197,8 +290,15 @@ export class GolfGame {
   #resize() {
     const w = this.container.clientWidth || 1, h = this.container.clientHeight || 1;
     this.renderer.setSize(w, h, false);
-    this.camera.aspect = w / h;
-    this.baseFov = w < h ? 62 : 50;
+    const aspect = w / h;
+    this.camera.aspect = aspect;
+    if (aspect < 1) {
+      this.baseFov = 62;
+    } else if (aspect <= 1.85) {
+      this.baseFov = 48;
+    } else {
+      this.baseFov = 42;
+    }
     this.camera.fov = this.baseFov + (this.fovKick ?? 0);
     this.camera.updateProjectionMatrix();
   }
@@ -207,9 +307,13 @@ export class GolfGame {
 
   #followTarget() {
     const fwd = forwardOf(this.camYaw);
-    const dist = FOLLOW_DIST + this.power * 0.7;
+    const isWidescreen = (this.container.clientWidth || 1) >= (this.container.clientHeight || 1);
+    const zoom = this.zoomLevel ?? 1;
+    const baseDist = (isWidescreen ? 3.5 : FOLLOW_DIST) * zoom;
+    const baseHeight = (isWidescreen ? 1.6 : FOLLOW_HEIGHT) * (0.85 + 0.15 * zoom);
+    const dist = baseDist + this.power * 0.7;
     const pos = new THREE.Vector3(this.ball.x, 0, this.ball.z).addScaledVector(fwd, -dist);
-    pos.y = FOLLOW_HEIGHT + this.power * 0.35;
+    pos.y = baseHeight + this.power * 0.35;
     const look = new THREE.Vector3(this.ball.x, 0.15, this.ball.z).addScaledVector(fwd, LOOK_AHEAD);
     return { pos, look };
   }
@@ -217,9 +321,20 @@ export class GolfGame {
   #overviewTarget() {
     const b = this.bounds;
     const cx = (b.minX + b.maxX) / 2, cz = (b.minZ + b.maxZ) / 2;
-    const depth = b.maxZ - b.minZ, width = b.maxX - b.minX;
-    const span = Math.max(depth, width * 1.6);
-    return { pos: new THREE.Vector3(cx, span * 0.95, cz + span * 0.55), look: new THREE.Vector3(cx, 0, cz - 0.5) };
+    const depth = Math.max(12, b.maxZ - b.minZ), width = Math.max(10, b.maxX - b.minX);
+    const aspect = (this.container.clientWidth || 1) / (this.container.clientHeight || 1);
+    // Holgura para ver todo el terreno con márgenes generosos
+    const span = (aspect > 1 ? Math.max(depth * 1.15, (width * 1.7) / aspect) : Math.max(depth * 1.35, width * 1.9)) * (this.zoomLevel ?? 1);
+    const yaw = this.overviewYaw || 0;
+    const pitch = THREE.MathUtils.clamp(this.overviewPitch ?? 0.85, 0.25, 1.35);
+    const dist = span * 1.1;
+    const look = new THREE.Vector3(cx, 0, cz);
+    const pos = new THREE.Vector3(
+      cx + Math.sin(yaw) * Math.cos(pitch) * dist,
+      Math.sin(pitch) * dist,
+      cz + Math.cos(yaw) * Math.cos(pitch) * dist,
+    );
+    return { pos, look };
   }
 
   #celebrateTarget() {
@@ -265,85 +380,380 @@ export class GolfGame {
 
   // ---------- input ----------
 
+  #executeShot(power, dragTicks = 16, turns = 1) {
+    if (power < 0.05 || isMoving(this.ball) || this.sunk) return;
+    if (this.course.noCup && this.strokes >= 1) return;
+    const shot = quantizeShot(this.yaw, power);
+    const v = shotVelocity(shot.yaw, shot.power);
+    this.ball.vx = v.vx;
+    this.ball.vz = v.vz;
+    this.shots.push({ tick: this.tick, ...shot });
+    this.aim.push({ d: Math.max(8, dragTicks), t: Math.max(1, turns) });
+    this.strokes++;
+    sfx.hit(power);
+    this.particles.puff(new THREE.Vector3(this.ball.x, 0.05, this.ball.z), 0x9be37f, 8 + Math.round(power * 10), 1 + power, 0.18);
+    this.waves.emit(this.ball.x, this.ball.z, 0xffffff, 0.5 + power * 0.9, 3);
+    this.squash = 0.2 + power * 0.25;
+    this.fovKick = power * 7;
+    this.#addShake(power * power * 0.45);
+    navigator.vibrate?.(15);
+    this.onStroke?.(this.strokes);
+  }
+
   #bindInput() {
     const el = this.renderer.domElement;
     el.style.touchAction = 'none';
-    el.addEventListener('pointerdown', (e) => {
+
+    this.#onContextMenu = (e) => e.preventDefault();
+    el.addEventListener('contextmenu', this.#onContextMenu);
+
+    this.#onPointerLockChange = () => {
+      const isLocked = typeof document !== 'undefined' && document.pointerLockElement === el;
+      this.isPointerLocked = isLocked;
+      if (this.container) {
+        this.container.classList.toggle('pointer-locked', isLocked);
+      }
+    };
+    this.#onPointerLockError = () => {
+      this.isPointerLocked = false;
+    };
+    if (typeof document !== 'undefined') {
+      document.addEventListener('pointerlockchange', this.#onPointerLockChange);
+      document.addEventListener('pointerlockerror', this.#onPointerLockError);
+    }
+
+    this.#onClickCanvas = () => {
+      if (!this.sunk && !this.locked && this.intro >= 1) {
+        this.requestPointerLock();
+      }
+    };
+    el.addEventListener('click', this.#onClickCanvas);
+
+    this.#onPointerDown = (e) => {
       unlockAudio();
       if (!this.ambientOn) {
         this.ambientOn = true;
         setAmbient(this.theme.sound);
       }
-      if (!this.course || this.sunk || this.locked || this.intro < 1 || this.drag) return;
+      if (this.paused || !this.course || this.sunk || this.locked || this.intro < 1) return;
       if (this.course.noCup && this.strokes >= 1) return;
-      el.setPointerCapture(e.pointerId);
-      this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, yaw: this.yaw, lastTick: this.yaw, start: this.tick, turns: 0, dir: 0 };
-    });
-    el.addEventListener('pointermove', (e) => {
-      const d = this.drag;
-      if (!d || e.pointerId !== d.id) return;
-      const h = el.clientHeight || 1, w = el.clientWidth || 1;
-      const canShoot = !isMoving(this.ball);
-      this.power = canShoot ? THREE.MathUtils.clamp((e.clientY - d.y) / (h * 0.32), 0, 1) : 0;
-      // más precisión al apuntar cuanto más cargado está el golpe
-      const dx = e.clientX - (d.px ?? d.x);
-      if (dx && Math.sign(dx) !== d.dir) {
-        if (d.dir) d.turns++;
-        d.dir = Math.sign(dx);
+      if (this.overview) {
+        // En la vista completa del mapa no se permite realizar tiros
+        return;
       }
-      d.yaw += (dx * 2.4 * (1 - 0.65 * this.power)) / w;
-      d.px = e.clientX;
-      this.yaw = d.yaw;
-      if (Math.abs(this.yaw - d.lastTick) > 0.08) {
-        d.lastTick = this.yaw;
-        sfx.tick();
+
+      const isMouse = e.pointerType === 'mouse';
+      if (isMouse) {
+        // Bloquear puntero en pantalla para no salir de ventana ni pasar a otros monitores
+        this.requestPointerLock();
+        if (e.button === 0) {
+          if (isMoving(this.ball)) return;
+          // NOTA: NO llamamos a setPointerCapture en ratón porque en Pointer Lock lanza InvalidStateError
+          this.charging = true;
+          this.chargeStartTick = this.tick;
+          this.mouseTurns = 0;
+          this.chargeAnchor = {
+            id: e.pointerId,
+            x: e.clientX,
+            y: e.clientY,
+            baseYaw: this.yaw,
+            lastTick: this.yaw,
+            dir: 0,
+            startPower: this.power,
+            dragY: 0,
+            userAdjusted: false,
+          };
+          if (!this.aimStartTick) this.aimStartTick = this.tick;
+        } else if (e.button === 2) {
+          if (this.charging || this.power > 0) {
+            this.charging = false;
+            this.chargeAnchor = null;
+            this.power = 0;
+            this.fullPower = false;
+            setCharge(0);
+            this.onAim?.(0);
+            this.aimDots.hide();
+          } else {
+            this.orbiting = true;
+            this.orbitAnchorX = e.clientX;
+          }
+        }
+      } else {
+        if (this.drag) return;
+        try { el.setPointerCapture?.(e.pointerId); } catch {}
+        this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, yaw: this.yaw, lastTick: this.yaw, start: this.tick, turns: 0, dir: 0 };
+      }
+    };
+
+    this.#onPointerMove = (e) => {
+      if (this.paused) return;
+      const isMouse = e.pointerType === 'mouse';
+      if (isMouse) {
+        const isLocked = typeof document !== 'undefined' && document.pointerLockElement === el;
+        if (this.overview) {
+          const dx = e.movementX ?? (this.lastMouseX != null ? e.clientX - this.lastMouseX : 0);
+          const dy = e.movementY ?? (this.lastMouseY != null ? e.clientY - this.lastMouseY : 0);
+          this.lastMouseX = e.clientX;
+          this.lastMouseY = e.clientY;
+          this.overviewYaw = (this.overviewYaw || 0) + dx * 0.004;
+          this.overviewPitch = THREE.MathUtils.clamp((this.overviewPitch ?? 0.85) - dy * 0.003, 0.25, 1.35);
+          return;
+        }
+        if (this.orbiting) {
+          const mx = e.movementX ?? 0;
+          if (isLocked) {
+            this.orbitYaw = (this.orbitYaw || 0) + (mx * 2.8) / (el.clientWidth || 1);
+          } else {
+            const dx = e.clientX - this.orbitAnchorX;
+            this.orbitYaw = (dx * 2.8) / (el.clientWidth || 1);
+          }
+          return;
+        }
+        if (this.charging && this.chargeAnchor) {
+          const ca = this.chargeAnchor;
+          const h = el.clientHeight || 1, w = el.clientWidth || 1;
+          const my = e.movementY ?? 0;
+          ca.dragY = (ca.dragY || 0) + my;
+          const dy = isLocked ? ca.dragY : (e.clientY - ca.y);
+          this.lastMouseY = e.clientY;
+          this.lastMouseX = e.clientX;
+
+          // Si el jugador desplaza el ratón verticalmente (> 3px), pasamos a calibración manual de fuerza
+          if (Math.abs(isLocked ? ca.dragY : dy) > 3) {
+            ca.userAdjusted = true;
+            const baseP = ca.startPower || 0;
+            this.power = THREE.MathUtils.clamp(baseP + (dy / (h * 0.32)), 0, 1);
+          }
+
+          // Ajuste simultáneo de dirección horizontal con el ratón
+          const mx = isLocked ? (e.movementX ?? 0) : (e.clientX - (ca.px ?? ca.x));
+          if (mx !== 0) {
+            if (Math.sign(mx) !== ca.dir) {
+              if (ca.dir) this.mouseTurns = (this.mouseTurns || 0) + 1;
+              ca.dir = Math.sign(mx);
+            }
+            ca.baseYaw += (mx * 2.2 * (1 - 0.65 * this.power)) / w;
+            ca.px = e.clientX;
+            this.yaw = ca.baseYaw;
+          }
+          if (Math.abs(this.yaw - ca.lastTick) > 0.08) {
+            ca.lastTick = this.yaw;
+            sfx.tick();
+          }
+          setCharge(this.power);
+          if (this.power >= 1 && !this.fullPower) {
+            sfx.full();
+          }
+          this.fullPower = this.power >= 1;
+          this.onAim?.(this.power);
+          return;
+        }
+        // Apuntado libre al mover el cursor sin pulsar botones
+        if (!isMoving(this.ball) && !this.sunk && this.intro >= 1) {
+          const dx = e.movementX ?? (this.lastMouseX != null ? e.clientX - this.lastMouseX : 0);
+          this.lastMouseX = e.clientX;
+          if (dx !== 0) {
+            if (Math.sign(dx) !== this.mouseDir) {
+              if (this.mouseDir) this.mouseTurns = (this.mouseTurns || 0) + 1;
+              this.mouseDir = Math.sign(dx);
+            }
+            const sens = 0.0032;
+            this.yaw += dx * sens;
+            if (Math.abs(this.yaw - this.lastMouseTick) > 0.08) {
+              this.lastMouseTick = this.yaw;
+              sfx.tick();
+            }
+          }
+        }
+      } else {
+        const d = this.drag;
+        if (!d || e.pointerId !== d.id) return;
+        const h = el.clientHeight || 1, w = el.clientWidth || 1;
+        const canShoot = !isMoving(this.ball);
+        this.power = canShoot ? THREE.MathUtils.clamp((e.clientY - d.y) / (h * 0.32), 0, 1) : 0;
+        const dx = e.clientX - (d.px ?? d.x);
+        if (dx && Math.sign(dx) !== d.dir) {
+          if (d.dir) d.turns++;
+          d.dir = Math.sign(dx);
+        }
+        d.yaw += (dx * 2.4 * (1 - 0.65 * this.power)) / w;
+        d.px = e.clientX;
+        this.yaw = d.yaw;
+        if (Math.abs(this.yaw - d.lastTick) > 0.08) {
+          d.lastTick = this.yaw;
+          sfx.tick();
+        }
+        setCharge(this.power);
+        if (this.power >= 1 && !this.fullPower) {
+          sfx.full();
+          navigator.vibrate?.(12);
+        }
+        this.fullPower = this.power >= 1;
+        this.onAim?.(this.power);
+      }
+    };
+
+    this.#onPointerUp = (e) => {
+      if (this.paused || this.overview) return;
+      const isMouse = e.pointerType === 'mouse';
+      if (isMouse) {
+        if (e.button === 0 && this.charging) {
+          if (el.hasPointerCapture?.(e.pointerId)) {
+            try { el.releasePointerCapture(e.pointerId); } catch {}
+          }
+          const power = this.power;
+          const dragTicks = Math.max(12, this.tick - this.chargeStartTick);
+          const turns = Math.max(1, this.mouseTurns || 1);
+          this.charging = false;
+          this.chargeAnchor = null;
+          this.power = 0;
+          this.fullPower = false;
+          setCharge(0);
+          this.onAim?.(0);
+          this.aimDots.hide();
+          if (power >= 0.04) {
+            this.#executeShot(power, dragTicks, turns);
+          }
+          this.mouseTurns = 0;
+        } else if (e.button === 2) {
+          this.orbiting = false;
+          this.orbitYaw = 0;
+        }
+      } else {
+        const d = this.drag;
+        if (!d || e.pointerId !== d.id) return;
+        this.drag = null;
+        const power = this.power;
+        this.power = 0;
+        this.fullPower = false;
+        setCharge(0);
+        this.onAim?.(0);
+        this.aimDots.hide();
+        this.#executeShot(power, this.tick - d.start, d.turns);
+      }
+    };
+
+    this.#onPointerCancel = (e) => {
+      if (e.pointerType === 'mouse') {
+        // Al entrar en pointer lock o cambiar captura, el navegador emite pointercancel en mouse.
+        // No cancelamos el tiro en ratón por este evento de transición.
+        return;
+      } else if (this.drag?.id === e.pointerId) {
+        this.drag = null;
+        this.power = 0;
+        this.fullPower = false;
+        setCharge(0);
+        this.onAim?.(0);
+      }
+    };
+
+    this.#onWheel = (e) => {
+      e.preventDefault();
+      if (this.paused) return;
+      if (this.overview) {
+        const delta = Math.sign(e.deltaY) * 0.08;
+        this.zoomLevel = THREE.MathUtils.clamp((this.zoomLevel ?? 1) + delta, 0.55, 1.9);
+        return;
+      }
+      // Si el usuario mantiene pulsado Ctrl o Alt, o la bola está en movimiento, la rueda hace zoom de cámara:
+      if (e.ctrlKey || e.altKey || isMoving(this.ball) || this.sunk || this.intro < 1) {
+        const delta = Math.sign(e.deltaY) * 0.08;
+        this.zoomLevel = THREE.MathUtils.clamp((this.zoomLevel ?? 1) + delta, 0.65, 1.55);
+        return;
+      }
+      // Con la bola parada, la rueda del ratón ajusta directamente la fuerza de tiro:
+      // Hacia arriba: más fuerte (+5%). Hacia abajo: más flojo (-5%).
+      const delta = -Math.sign(e.deltaY) * 0.05;
+      this.power = THREE.MathUtils.clamp(Math.round((this.power + delta) * 100) / 100, 0, 1);
+      if (this.charging && this.chargeAnchor) {
+        this.chargeAnchor.userAdjusted = true;
+        const h = el.clientHeight || 1;
+        const isLocked = typeof document !== 'undefined' && document.pointerLockElement === el;
+        const dy = isLocked ? (this.chargeAnchor.dragY || 0) : ((this.lastMouseY ?? this.chargeAnchor.y) - this.chargeAnchor.y);
+        this.chargeAnchor.startPower = THREE.MathUtils.clamp(this.power - (dy / (h * 0.32)), 0, 1);
       }
       setCharge(this.power);
+      this.onAim?.(this.power);
       if (this.power >= 1 && !this.fullPower) {
         sfx.full();
-        navigator.vibrate?.(12);
+        this.fullPower = true;
+      } else if (this.power < 1) {
+        this.fullPower = false;
       }
-      this.fullPower = this.power >= 1;
-      this.onAim?.(this.power);
-    });
-    const release = (e) => {
-      const d = this.drag;
-      if (!d || e.pointerId !== d.id) return;
-      this.drag = null;
-      const power = this.power;
-      this.power = 0;
-      this.fullPower = false;
-      setCharge(0);
-      this.onAim?.(0);
-      this.aimDots.hide();
-      if (power < 0.05 || isMoving(this.ball) || this.sunk) return;
-      // desempate: un solo tiro
-      if (this.course.noCup && this.strokes >= 1) return;
-      const shot = quantizeShot(this.yaw, power);
-      const v = shotVelocity(shot.yaw, shot.power);
-      this.ball.vx = v.vx;
-      this.ball.vz = v.vz;
-      this.shots.push({ tick: this.tick, ...shot });
-      this.aim.push({ d: this.tick - d.start, t: d.turns });
-      this.strokes++;
-      sfx.hit(power);
-      this.particles.puff(new THREE.Vector3(this.ball.x, 0.05, this.ball.z), 0x9be37f, 8 + Math.round(power * 10), 1 + power, 0.18);
-      this.waves.emit(this.ball.x, this.ball.z, 0xffffff, 0.5 + power * 0.9, 3);
-      this.squash = 0.2 + power * 0.25;
-      this.fovKick = power * 7;
-      this.#addShake(power * power * 0.45);
-      navigator.vibrate?.(15);
-      this.onStroke?.(this.strokes);
+      if (this.power <= 0.02) {
+        this.aimDots.hide();
+      }
     };
-    el.addEventListener('pointerup', release);
-    el.addEventListener('pointercancel', (e) => {
-      if (this.drag?.id !== e.pointerId) return;
-      this.drag = null;
-      this.power = 0;
-      this.fullPower = false;
-      setCharge(0);
-      this.onAim?.(0);
-    });
+
+    this.#onKeyDown = (e) => {
+      if (e.code === 'Space') {
+        if (!this.sunk && this.intro >= 1) {
+          e.preventDefault();
+          this.setOverview(!this.overview);
+        }
+      } else if (e.code === 'Escape') {
+        e.preventDefault();
+        if (this.overview) {
+          this.setOverview(false);
+          return;
+        }
+        if (this.charging || this.power > 0) {
+          this.charging = false;
+          this.chargeAnchor = null;
+          this.power = 0;
+          this.fullPower = false;
+          setCharge(0);
+          this.onAim?.(0);
+          this.aimDots.hide();
+        }
+        this.exitPointerLock();
+        this.onOpenSettings?.();
+      }
+    };
+
+    this.#onKeyUp = () => {};
+
+    this.#onBlur = () => {
+      if (this.charging || this.power > 0) {
+        this.charging = false;
+        this.chargeAnchor = null;
+        this.power = 0;
+        this.fullPower = false;
+        setCharge(0);
+        this.onAim?.(0);
+        this.aimDots.hide();
+      }
+    };
+
+    el.addEventListener('pointerdown', this.#onPointerDown);
+    window.addEventListener('pointermove', this.#onPointerMove);
+    window.addEventListener('pointerup', this.#onPointerUp);
+    window.addEventListener('pointercancel', this.#onPointerCancel);
+    el.addEventListener('wheel', this.#onWheel, { passive: false });
+    window.addEventListener('keydown', this.#onKeyDown);
+    window.addEventListener('keyup', this.#onKeyUp);
+    window.addEventListener('blur', this.#onBlur);
+  }
+
+  #unbindInput() {
+    this.exitPointerLock();
+    if (typeof document !== 'undefined') {
+      if (this.#onPointerLockChange) document.removeEventListener('pointerlockchange', this.#onPointerLockChange);
+      if (this.#onPointerLockError) document.removeEventListener('pointerlockerror', this.#onPointerLockError);
+    }
+    const el = this.renderer?.domElement;
+    if (el) {
+      if (this.#onClickCanvas) el.removeEventListener('click', this.#onClickCanvas);
+      if (this.#onContextMenu) el.removeEventListener('contextmenu', this.#onContextMenu);
+      if (this.#onPointerDown) el.removeEventListener('pointerdown', this.#onPointerDown);
+      if (this.#onWheel) el.removeEventListener('wheel', this.#onWheel);
+    }
+    if (this.#onPointerMove) window.removeEventListener('pointermove', this.#onPointerMove);
+    if (this.#onPointerUp) window.removeEventListener('pointerup', this.#onPointerUp);
+    if (this.#onPointerCancel) window.removeEventListener('pointercancel', this.#onPointerCancel);
+    if (this.#onKeyDown) window.removeEventListener('keydown', this.#onKeyDown);
+    if (this.#onKeyUp) window.removeEventListener('keyup', this.#onKeyUp);
+    if (this.#onBlur) window.removeEventListener('blur', this.#onBlur);
   }
 
   #predictPath() {
@@ -414,7 +824,7 @@ export class GolfGame {
       this.tick++;
       this.t = this.tick * DT;
       if (this.intro >= 1 && !this.locked) this.#tickBots();
-      if (this.sunk) continue;
+      if (this.sunk || this.paused) continue;
       const wasMoving = isMoving(this.ball);
       // se simula también con la bola parada: un aspa puede empujarla
       const r = step(this.course, this.segs, this.ball, this.t, DT);
@@ -475,6 +885,7 @@ export class GolfGame {
       if (r.sunk) {
         this.sunk = true;
         this.sunkAt = this.t;
+        this.exitPointerLock();
         sfx.cup();
         this.onCup?.(this.strokes);
         this.particles.confetti(new THREE.Vector3(this.course.cup[0], 0, this.course.cup[1]));
@@ -486,14 +897,40 @@ export class GolfGame {
       } else if (wasMoving && !isMoving(this.ball)) this.onRest?.(this.strokes);
     }
 
+    // control de carga de tiro con ratón
+    if (!isMoving(this.ball) && !this.sunk && this.intro >= 1 && !this.locked && !this.overview) {
+      if (this.charging) {
+        if (!this.chargeAnchor?.userAdjusted) {
+          const elapsedSec = (this.tick - this.chargeStartTick) * DT;
+          const base = this.chargeAnchor?.startPower || 0;
+          this.power = THREE.MathUtils.clamp(base + elapsedSec / 1.4, 0, 1);
+          setCharge(this.power);
+          if (this.power >= 1 && !this.fullPower) {
+            sfx.full();
+            this.fullPower = true;
+          }
+          this.onAim?.(this.power);
+        }
+      }
+    }
+
     // la cámara gira suavemente hacia donde rueda la bola
     const speed = Math.hypot(this.ball.vx, this.ball.vz);
-    if (speed > 1.2 && !this.drag) {
+    if (speed > 1.2 && !this.drag && !this.charging) {
       const velYaw = Math.atan2(this.ball.vx, -this.ball.vz);
       this.yaw = lerpAngle(this.yaw, velYaw, damp(1.2, dt));
     }
-    this.camYaw = this.drag ? this.yaw : lerpAngle(this.camYaw, this.yaw, damp(10, dt));
-    if (this.drag) this.camYaw = this.yaw;
+    const targetCamYaw = this.orbiting ? this.yaw + (this.orbitYaw || 0) : this.yaw;
+    this.camYaw = (this.drag || this.charging || this.orbiting)
+      ? targetCamYaw
+      : lerpAngle(this.camYaw, targetCamYaw, damp(10, dt));
+
+    if (this.renderer?.domElement) {
+      if (this.orbiting) this.renderer.domElement.style.cursor = 'grabbing';
+      else if (this.charging) this.renderer.domElement.style.cursor = 'crosshair';
+      else if (!isMoving(this.ball) && !this.sunk && this.intro >= 1) this.renderer.domElement.style.cursor = 'crosshair';
+      else this.renderer.domElement.style.cursor = 'default';
+    }
 
     // bola: rodar y caer en el hoyo
     const sinkT = this.sunk ? Math.min(1, (this.t - this.sunkAt) * 4) : 0;
@@ -537,7 +974,7 @@ export class GolfGame {
       this.courseView.spinners[i].rotation.y = -Math.atan2(bz - az, bx - ax);
     });
 
-    if (this.drag && this.power > 0.02) {
+    if ((this.drag || this.charging || this.spaceCharging || this.power > 0.02) && this.power > 0.02) {
       const color = new THREE.Color().setHSL(0.33 - this.power * 0.33, 0.95, 0.55);
       this.aimDots.show(this.#predictPath(), color, this.t);
       this.aimDots.showRing(this.ballRoot.position, this.t);

@@ -11,7 +11,8 @@ import { segmentsOf } from './game/physics.js';
 import { isMuted, setMuted, sfx, unlockAudio } from './game/audio.js';
 import { Progress } from './progress/Progress.js';
 import { CHALLENGES, RARITIES, SKINS } from './progress/skins.js';
-import { ballPreview } from './game/render/ballSkins.js';
+import { ballPreview, skinMaterial } from './game/render/ballSkins.js';
+import * as THREE from 'three';
 
 let backend, wallet, matches;
 // práctica forzada con #hoyoN: siempre local, no toca el servidor
@@ -41,10 +42,15 @@ const ball = (skin, size = 96, cls = '') => `<img class="ball-img ${cls}" src="$
 
 let game = null;
 let screen = 'lobby';
+let activeSkinInspector = null;
 
 async function shell(content, { hideHeader = false, nav = true } = {}) {
   game?.dispose();
   game = null;
+  if (activeSkinInspector) {
+    try { activeSkinInspector.destroy(); } catch {}
+    activeSkinInspector = null;
+  }
   const balance = await wallet.getBalance();
   app.innerHTML = '';
   window.scrollTo(0, 0);
@@ -53,13 +59,36 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
     app.append(
       h(`
       <header class="topbar">
-        <button class="level" data-go="skins" style="--p:${(into / need) * 100}%">
-          <span class="level-ring"><b>${level}</b></span>
-          <span class="level-text"><small>Nivel</small><span class="xpbar"><i></i></span></span>
-        </button>
-        <button class="balance" data-go="wallet">${coin(balance)}<span class="plus">+</span></button>
+        <div class="topbar-brand">
+          <button class="brand-btn" data-go="lobby">
+            <span class="brand-icon">⛳</span>
+            <span class="brand-name">Golf Cash Battle</span>
+          </button>
+        </div>
+        <nav class="desktop-nav">
+          <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}"><span>⛳</span>Jugar <kbd>1</kbd></button>
+          <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}"><span>✨</span>Skins <kbd>2</kbd></button>
+          <button data-go="wallet" class="${screen === 'wallet' ? 'on' : ''}"><span>💎</span>Wallet <kbd>3</kbd></button>
+          <button data-go="account" class="${screen === 'account' ? 'on' : ''}"><span>👤</span>Cuenta <kbd>4</kbd></button>
+        </nav>
+        <div class="topbar-right">
+          <button class="level" data-go="skins" style="--p:${(into / need) * 100}%" title="Nivel ${level} · ${(into / need * 100).toFixed(0)}%">
+            <span class="level-ring"><b>${level}</b></span>
+            <span class="level-text"><small>Nivel</small><span class="xpbar"><i></i></span></span>
+          </button>
+          <button class="balance" data-go="wallet" title="Tu saldo">${coin(balance)}<span class="plus">+</span></button>
+          <button class="pill mute topbar-sound-btn" aria-label="Sonido" title="Silenciar / Activar sonido (M)">${isMuted() ? '🔇' : '🔊'}</button>
+        </div>
       </header>`),
     );
+    const topMute = app.querySelector('.topbar-sound-btn');
+    if (topMute) {
+      topMute.addEventListener('click', () => {
+        setMuted(!isMuted());
+        topMute.textContent = isMuted() ? '🔇' : '🔊';
+        try { localStorage.setItem('gcb.muted', isMuted() ? '1' : '0'); } catch {}
+      });
+    }
   }
   app.append(content);
   if (!hideHeader && nav) {
@@ -76,6 +105,32 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
   app.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => go(b.dataset.go)));
   bindHolo(app);
 }
+
+// Atajos globales de navegación por teclado en menús y modales
+window.addEventListener('keydown', (e) => {
+  const overlay = document.querySelector('.overlay');
+  if (overlay) {
+    if (e.code === 'Enter') {
+      const btn = overlay.querySelector('.primary, .next, .confirm, button:not(.close):not(.cancel)');
+      if (btn) { e.preventDefault(); btn.click(); return; }
+    } else if (e.code === 'Escape') {
+      const closeBtn = overlay.querySelector('.close, .cancel, .home, button');
+      if (closeBtn) { e.preventDefault(); closeBtn.click(); return; }
+    }
+    return;
+  }
+  if (game || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.code === 'Digit1') go('lobby');
+  else if (e.code === 'Digit2') go('skins');
+  else if (e.code === 'Digit3') go('wallet');
+  else if (e.code === 'Digit4') go('account');
+  else if (e.code === 'KeyM') {
+    setMuted(!isMuted());
+    const topMute = document.querySelector('.topbar-sound-btn');
+    if (topMute) topMute.textContent = isMuted() ? '🔇' : '🔊';
+    try { localStorage.setItem('gcb.muted', isMuted() ? '1' : '0'); } catch {}
+  }
+});
 
 function go(to) {
   if (to === 'wallet') return showWallet();
@@ -116,19 +171,33 @@ async function showLobby() {
   const view = h(`
     <main class="screen lobby">
       <section class="hero rarity-${skin.rarity}">
-        <div class="hero-ball">${ball(skin, 110, 'spin')}<div class="hero-shadow"></div></div>
+        <div class="hero-ball">
+          <div class="hero-ball-aura"></div>
+          ${ball(skin, 110, 'spin')}
+          <div class="hero-shadow"></div>
+        </div>
         <div class="hero-text">
-          <small>${RARITIES[skin.rarity].name}</small>
+          <div class="hero-badge-row">
+            <span class="rarity-pill rarity-${skin.rarity}">${RARITIES[skin.rarity].name}</span>
+            <span class="hero-level-tag">Nivel ${progress.level.level}</span>
+          </div>
           <strong>${skin.name}</strong>
-          <button class="chip-btn" data-go="skins">Cambiar skin</button>
+          <button class="chip-btn" data-go="skins">Personalizar skin</button>
         </div>
       </section>
       ${backend.mode === 'local' ? '<p class="offline">Modo sin conexión: el saldo se guarda solo en este móvil</p>' : ''}
       ${backend.account?.profile?.paid_block ? `<button class="notice account-hint" data-go="account">${{ account_required: 'Guarda tu cuenta con email para jugar mesas con entrada →', kyc_required: 'Verifica tu edad e identidad para jugar mesas con entrada →', account_review: 'Tu cuenta está en revisión: de momento solo Práctica', underage: 'Mesas con entrada solo para mayores de 18' }[backend.account.profile.paid_block]}</button>` : ''}
       <div class="my-tournaments"></div>
       <div class="section-head">
-        <h1>Elige tu mesa</h1>
-        <p class="sub">${PLAYERS_PER_MATCH} jugadores · ${HOLES_PER_MATCH} hoyos · menos golpes gana</p>
+        <div class="section-title-row">
+          <h1>Mesas de Torneo</h1>
+          <span class="live-pill"><i class="pulse-dot"></i> EN VIVO</span>
+        </div>
+        <div class="lobby-specs">
+          <span class="spec-chip">⚔️ ${PLAYERS_PER_MATCH} Jugadores</span>
+          <span class="spec-chip">⛳ ${HOLES_PER_MATCH} Hoyos</span>
+          <span class="spec-chip">🎯 Determinista</span>
+        </div>
       </div>
       <div class="tiers"></div>
       <p class="legal">Créditos de demostración sin valor real. ${backend.tournaments ? 'Las mesas de pago son torneos contra jugadores reales: cada uno juega los mismos hoyos a su ritmo y el servidor repite cada golpe para validarlo. La práctica es contra rivales simulados. ' : ''}El resultado depende solo de la habilidad: mismo campo para todos y sin elementos aleatorios. En empate, tiro de desempate: gana quien deje la bola más cerca. Comisión de la plataforma: ${Math.round(PLATFORM_COMMISSION * 100)}% del bote.</p>
@@ -140,16 +209,19 @@ async function showLobby() {
     const card = h(`
       <div class="tier holo tier--${tier.id}">
         <div class="shine"></div>
-        <div class="sparkles"></div>
+        <div class="tier-ambient"></div>
         <div class="tier-top">
-          <span class="gem"></span>
-          <span class="tier-name">${tier.name}</span>
+          <div class="gem-wrapper"><span class="gem gem--${tier.id}"></span></div>
+          <div class="tier-identity">
+            <span class="tier-name">${tier.name}</span>
+            <span class="tier-tagline">${free ? 'Entrenamiento' : 'Torneo Esports'}</span>
+          </div>
           <span class="tier-fee">${free ? 'Gratis' : `Entrada ${coin(tier.entryFee)}`}</span>
         </div>
         <div class="tier-mid">
-          ${free ? '<span class="tier-prize small">Entrena sin arriesgar créditos</span>' : `<span class="tier-label">Premio</span><span class="tier-prize">${coin(prizeFor(tier))}</span><span class="tier-pot">Bote ${fmt(potFor(tier))}</span>`}
+          ${free ? '<span class="tier-prize small">Entrena sin arriesgar créditos</span>' : `<span class="tier-label">Premio Garantizado</span><span class="tier-prize">${coin(prizeFor(tier))}</span><span class="tier-pot">Bote ${fmt(potFor(tier))}</span>`}
         </div>
-        <button class="play" ${enough ? '' : 'disabled'}>${enough ? 'Jugar' : 'Saldo insuficiente'}</button>
+        <button class="play" ${enough ? '' : 'disabled'}>${enough ? 'Jugar Torneo' : 'Saldo insuficiente'}</button>
       </div>`);
     card.querySelector('.play').addEventListener('click', () => startMatch(tier));
     list.append(card);
@@ -158,12 +230,187 @@ async function showLobby() {
   if (backend.tournaments) showMyTournaments(view.querySelector('.my-tournaments'));
 }
 
+// ---------- inspector 3D de skins para escritorio ----------
+
+const RARITY_HEX = {
+  bronze: 0xc87a38,
+  silver: 0x94a3b8,
+  gold: 0xffd23f,
+  diamond: 0x00e5ff,
+  emerald: 0x00f076,
+};
+
+function createSkinInspector(container, initialSkin) {
+  const w = 280, h = 280;
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setSize(w, h, false);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.2;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  container.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 50);
+  camera.position.set(0, 0.32, 1.4);
+  camera.lookAt(0, 0.02, 0);
+
+  // Iluminación de estudio
+  scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+  const key = new THREE.DirectionalLight(0xfff7ed, 2.8);
+  key.position.set(2.5, 3.5, 2.5);
+  scene.add(key);
+  const fill = new THREE.DirectionalLight(0x7eaaff, 1.4);
+  fill.position.set(-2.8, -0.2, -1.5);
+  scene.add(fill);
+  const rim = new THREE.DirectionalLight(0xffffff, 2.2);
+  rim.position.set(0, 3, -2.5);
+  scene.add(rim);
+
+  const rarityColor = RARITY_HEX[initialSkin.rarity] || 0xffd23f;
+  const underLight = new THREE.PointLight(rarityColor, 3.2, 3.0);
+  underLight.position.set(0, -0.38, 0.2);
+  scene.add(underLight);
+
+  // Bola 3D
+  const geo = new THREE.SphereGeometry(0.38, 64, 48);
+  let currentMat = skinMaterial(initialSkin);
+  const ballMesh = new THREE.Mesh(geo, currentMat);
+  ballMesh.position.y = 0.02;
+  scene.add(ballMesh);
+
+  // Pedestal reflectante de estudio
+  const pedGeo = new THREE.CylinderGeometry(0.55, 0.58, 0.035, 48);
+  const pedMat = new THREE.MeshStandardMaterial({
+    color: 0x150d26,
+    metalness: 0.85,
+    roughness: 0.18,
+  });
+  const pedMesh = new THREE.Mesh(pedGeo, pedMat);
+  pedMesh.position.y = -0.42;
+  scene.add(pedMesh);
+
+  // Anillo luminoso exterior del pedestal
+  const ringGeo = new THREE.RingGeometry(0.53, 0.57, 48);
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: rarityColor,
+    side: THREE.DoubleSide,
+  });
+  const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+  ringMesh.rotation.x = -Math.PI / 2;
+  ringMesh.position.y = -0.401;
+  scene.add(ringMesh);
+
+  // Sombra suave proyectada sobre el pedestal
+  const sCanvas = document.createElement('canvas');
+  sCanvas.width = sCanvas.height = 128;
+  const sg = sCanvas.getContext('2d');
+  const rad = sg.createRadialGradient(64, 64, 0, 64, 64, 60);
+  rad.addColorStop(0, 'rgba(0,0,0,0.7)');
+  rad.addColorStop(0.5, 'rgba(0,0,0,0.25)');
+  rad.addColorStop(1, 'rgba(0,0,0,0)');
+  sg.fillStyle = rad;
+  sg.fillRect(0, 0, 128, 128);
+  const shadowTex = new THREE.CanvasTexture(sCanvas);
+  const shadowMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.95, 0.95),
+    new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, opacity: 0.8, depthWrite: false }),
+  );
+  shadowMesh.rotation.x = -Math.PI / 2;
+  shadowMesh.position.y = -0.399;
+  scene.add(shadowMesh);
+
+  let rotX = 0.12, rotY = 0;
+  let velX = 0, velY = 0.005;
+  let isDragging = false;
+  let lastX = 0, lastY = 0;
+
+  const onDown = (e) => {
+    isDragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    renderer.domElement.style.cursor = 'grabbing';
+  };
+  const onMove = (e) => {
+    if (!isDragging) return;
+    const dx = e.clientX - lastX;
+    const dy = e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    velY = dx * 0.012;
+    velX = dy * 0.012;
+    rotY += velY;
+    rotX += velX;
+  };
+  const onUp = () => {
+    isDragging = false;
+    renderer.domElement.style.cursor = 'grab';
+  };
+  const onWheel = (e) => {
+    e.preventDefault();
+    camera.position.z = Math.max(1.0, Math.min(2.1, camera.position.z + e.deltaY * 0.0015));
+  };
+
+  renderer.domElement.style.cursor = 'grab';
+  renderer.domElement.addEventListener('pointerdown', onDown);
+  renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
+
+  let active = true;
+  function animate() {
+    if (!active) return;
+    requestAnimationFrame(animate);
+    if (!isDragging) {
+      velY += (0.003 - velY) * 0.04;
+      velX *= 0.9;
+      rotY += velY;
+      rotX += velX;
+    }
+    rotX = Math.max(-1.1, Math.min(1.1, rotX));
+    ballMesh.rotation.set(rotX, rotY, 0);
+    renderer.render(scene, camera);
+  }
+  requestAnimationFrame(animate);
+
+  return {
+    setSkin(skin) {
+      const oldMat = ballMesh.material;
+      ballMesh.material = skinMaterial(skin);
+      oldMat?.dispose();
+      const col = RARITY_HEX[skin.rarity] || 0xffd23f;
+      underLight.color.setHex(col);
+      ringMat.color.setHex(col);
+    },
+    destroy() {
+      active = false;
+      renderer.domElement.removeEventListener('pointerdown', onDown);
+      renderer.domElement.removeEventListener('wheel', onWheel);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      renderer.dispose();
+      geo.dispose();
+      pedGeo.dispose();
+      pedMat.dispose();
+      ringGeo.dispose();
+      ringMat.dispose();
+      shadowMesh.geometry.dispose();
+      shadowMesh.material.dispose();
+      shadowTex.dispose();
+      ballMesh.material?.dispose();
+      renderer.domElement.remove();
+    },
+  };
+}
+
 // ---------- skins ----------
 
 async function showSkins() {
   screen = 'skins';
   const unlocked = SKINS.filter((s) => progress.isUnlocked(s)).length;
   const { level, into, need } = progress.level;
+  let selectedSkin = progress.skin;
+
   const view = h(`
     <main class="screen skins">
       <div class="section-head">
@@ -174,21 +421,70 @@ async function showSkins() {
         <div><small>Nivel</small><strong>${level}</strong></div>
         <div class="level-progress"><span><i style="width:${(into / need) * 100}%"></i></span><small>${into} / ${need} XP</small></div>
       </div>
-      <div class="skin-grid"></div>
-      <h2>Desafíos</h2>
-      <ul class="challenges">
-        ${CHALLENGES.map((c) => {
-          const st = progress.challenge(c.id);
-          const reward = SKINS.find((s) => s.unlock?.challenge === c.id);
-          return `<li class="${st.done ? 'done' : ''}">
-            ${ball(reward, 34)}
-            <div><b>${c.name}</b><span class="bar"><i style="width:${(st.value / st.goal) * 100}%"></i></span></div>
-            <small>${st.done ? '✓' : `${st.value}/${st.goal}`}</small>
-          </li>`;
-        }).join('')}
-      </ul>
+      <div class="skins-content-layout">
+        <div class="skins-left-col">
+          <div class="skin-grid"></div>
+          <h2>Desafíos</h2>
+          <ul class="challenges">
+            ${CHALLENGES.map((c) => {
+              const st = progress.challenge(c.id);
+              const reward = SKINS.find((s) => s.unlock?.challenge === c.id);
+              return `<li class="${st.done ? 'done' : ''}">
+                ${ball(reward, 34)}
+                <div><b>${c.name}</b><span class="bar"><i style="width:${(st.value / st.goal) * 100}%"></i></span></div>
+                <small>${st.done ? '✓' : `${st.value}/${st.goal}`}</small>
+              </li>`;
+            }).join('')}
+          </ul>
+        </div>
+        <aside class="skin-inspector-panel">
+          <span class="rarity badge-rarity rarity-${selectedSkin.rarity}">${RARITIES[selectedSkin.rarity].name}</span>
+          <div class="skin-inspector-canvas"></div>
+          <p class="skin-inspector-hint">🖱️ Arrastra para girar 360° · Rueda para zoom</p>
+          <h3 class="skin-inspector-name">${selectedSkin.name}</h3>
+          <p class="skin-inspector-desc">Materiales 3D con brillo físico e iridiscencia</p>
+          <button class="primary skin-inspector-btn" disabled>Equipada</button>
+        </aside>
+      </div>
     </main>`);
+
   const grid = view.querySelector('.skin-grid');
+  const inspectorCanvas = view.querySelector('.skin-inspector-canvas');
+  const inspectorName = view.querySelector('.skin-inspector-name');
+  const inspectorRarity = view.querySelector('.badge-rarity');
+  const inspectorBtn = view.querySelector('.skin-inspector-btn');
+
+  let inspector = null;
+  if (typeof window !== 'undefined' && window.innerWidth >= 900) {
+    inspector = createSkinInspector(inspectorCanvas, selectedSkin);
+    activeSkinInspector = inspector;
+  }
+
+  const updateInspector = (s) => {
+    selectedSkin = s;
+    if (inspector) inspector.setSkin(s);
+    inspectorName.textContent = s.name;
+    inspectorRarity.textContent = RARITIES[s.rarity].name;
+    inspectorRarity.className = `rarity badge-rarity rarity-${s.rarity}`;
+    const req = progress.requirement(s);
+    const open = req.ratio >= 1;
+    const isEq = progress.skin.id === s.id;
+    if (isEq) {
+      inspectorBtn.textContent = 'Equipada';
+      inspectorBtn.disabled = true;
+    } else if (open) {
+      inspectorBtn.textContent = 'Equipar skin';
+      inspectorBtn.disabled = false;
+    } else {
+      inspectorBtn.textContent = `Bloqueada (${req.text})`;
+      inspectorBtn.disabled = true;
+    }
+  };
+
+  inspectorBtn.addEventListener('click', () => {
+    if (progress.equip(selectedSkin.id)) showSkins();
+  });
+
   const order = [...SKINS].sort((a, b) => RARITIES[a.rarity].order - RARITIES[b.rarity].order);
   for (const skin of order) {
     const req = progress.requirement(skin);
@@ -206,7 +502,9 @@ async function showSkins() {
             : `<small class="req">🔒 ${req.text}</small><span class="bar"><i style="width:${req.ratio * 100}%"></i></span>`
         }
       </button>`);
+    card.addEventListener('mouseenter', () => updateInspector(skin));
     card.addEventListener('click', () => {
+      updateInspector(skin);
       if (progress.equip(skin.id)) showSkins();
     });
     grid.append(card);
@@ -269,25 +567,69 @@ async function showAccount(note = '') {
   const guest = p.is_anonymous || !p.email_confirmed;
   const kyc = p.kyc_status;
   const name = p.username ?? 'Sin nombre';
+  const lvl = progress.level;
+  const unlockedSkins = SKINS.filter((s) => progress.isUnlocked(s)).length;
+  const completedChallenges = CHALLENGES.filter((c) => progress.challenge(c.id).done).length;
   const view = h(`
     <main class="screen account">
-      <div class="profile-card holo">
+      <div class="profile-card passport-card holo">
         <div class="shine"></div>
-        <span class="avatar big">${p.username ? esc(name[0]) : '?'}</span>
-        <div>
-          <small>${guest ? 'Invitado' : 'Cuenta'}</small>
-          <strong>${esc(name)}</strong>
-          <button class="chip-btn rename">Cambiar nombre</button>
+        <div class="passport-header">
+          <div class="avatar-wrap">
+            <span class="avatar big">${p.username ? esc(name[0]) : '?'}</span>
+            <span class="avatar-lvl-badge">Nv.${lvl.level}</span>
+          </div>
+          <div class="passport-info">
+            <div class="passport-tag-row">
+              <span class="passport-status ${guest ? 'guest' : 'vip'}">${guest ? 'Pase Invitado' : 'Jugador Oficial'}</span>
+              <span class="kyc-mini-pill ${kyc === 'verified' ? 'verified' : ''}">${KYC_TEXT[kyc]}</span>
+            </div>
+            <strong class="passport-name">${esc(name)}</strong>
+            <button class="chip-btn rename">Cambiar nombre</button>
+          </div>
+        </div>
+
+        <div class="career-stats-row">
+          <div class="stat-pill">
+            <span class="stat-pill-label">Nivel</span>
+            <span class="stat-pill-val">Nv. ${lvl.level}</span>
+            <small class="stat-pill-sub">${lvl.into}/${lvl.need} XP</small>
+          </div>
+          <div class="stat-pill">
+            <span class="stat-pill-label">Victorias</span>
+            <span class="stat-pill-val">${progress.state.wins}</span>
+            <small class="stat-pill-sub">${progress.state.matches} partidas</small>
+          </div>
+          <div class="stat-pill">
+            <span class="stat-pill-label">Skins</span>
+            <span class="stat-pill-val">${unlockedSkins}/${SKINS.length}</span>
+            <small class="stat-pill-sub">colección</small>
+          </div>
+          <div class="stat-pill">
+            <span class="stat-pill-label">Desafíos</span>
+            <span class="stat-pill-val">${completedChallenges}/${CHALLENGES.length}</span>
+            <small class="stat-pill-sub">completados</small>
+          </div>
         </div>
       </div>
       ${note ? `<p class="notice">${note}</p>` : ''}
       ${p.in_review ? `<p class="offline">Tu cuenta está en revisión por el sistema antitrampas.${p.held > 0 ? ` Tienes ${coin(Number(p.held))} en premios retenidos hasta que termine.` : ''}</p>` : ''}
 
-      <h2>Email</h2>
-      <div class="email-box"></div>
+      <div class="account-card-panel">
+        <div class="panel-head">
+          <h2>Email</h2>
+          <span class="panel-badge ${guest ? 'pending' : 'verified'}">${guest ? 'Sin vincular' : 'Vinculado'}</span>
+        </div>
+        <div class="email-box"></div>
+      </div>
 
-      <h2>Edad e identidad <small class="tag">${KYC_TEXT[kyc]}</small></h2>
-      <div class="kyc-box"></div>
+      <div class="account-card-panel">
+        <div class="panel-head">
+          <h2>Edad e identidad</h2>
+          <span class="panel-badge ${kyc === 'verified' ? 'verified' : ''}">${KYC_TEXT[kyc]}</span>
+        </div>
+        <div class="kyc-box"></div>
+      </div>
 
       <p class="legal">Para jugar mesas con entrada hace falta cuenta con email, ser mayor de 18 años y verificar tu identidad (una cuenta por persona). La práctica es libre.</p>
       ${guest ? '' : '<button class="ghost logout">Cerrar sesión</button>'}
@@ -450,44 +792,84 @@ const TX_LABEL = { bonus: 'Bienvenida', withdrawal: 'Retirada', deposit: 'Recarg
 async function showWallet() {
   screen = 'wallet';
   const [balance, txs] = await Promise.all([wallet.getBalance(), wallet.getTransactions()]);
+  const prizeTotal = txs.filter((t) => t.type === 'prize' && t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
+  const matchesPlayed = txs.filter((t) => t.type === 'entry').length;
   const view = h(`
     <main class="screen wallet">
-      <div class="wallet-card holo">
-        <div class="shine"></div>
-        <span>Saldo disponible</span>
-        <strong>${coin(balance)}</strong>
-        <small>Créditos demo · sin valor real</small>
-      </div>
-      <div class="row">
-        <button class="primary" data-add="50">+50 demo</button>
-        <button class="primary" data-add="200">+200 demo</button>
-      </div>
-      ${
-        wallet.depositCrypto
-          ? `<h2>Depositar en cripto <small class="tag">pruebas</small></h2>
-      <div class="row">
-        <button class="secondary" data-crypto="10">10 USD</button>
-        <button class="secondary" data-crypto="25">25 USD</button>
-        <button class="secondary" data-crypto="50">50 USD</button>
-      </div>
-      <p class="legal">Pago con NOWPayments (USDT, BTC, ETH…). Modo de pruebas: no se cobra dinero real.</p>`
-          : ''
-      }
-      <h2>Movimientos</h2>
-      <ul class="txs">
+      <div class="wallet-dashboard-col">
+        <div class="wallet-card holo">
+          <div class="shine"></div>
+          <div class="card-ambient"></div>
+          <div class="card-header">
+            <div class="card-chip-badge"><span class="card-chip"></span><span class="card-contactless">)))</span></div>
+            <span class="card-league">DIAMOND VIP</span>
+          </div>
+          <div class="card-balance">
+            <small>Saldo Disponible</small>
+            <strong>${coin(balance)}</strong>
+          </div>
+          <div class="card-footer">
+            <div class="card-number">•••• •••• •••• ${String(Math.abs(Math.round(balance * 100)) % 9000 + 1000)}</div>
+            <div class="card-holder"><small>TITULAR</small><span>GOLF CASH PRO</span></div>
+          </div>
+        </div>
+        <div class="wallet-metrics">
+          <div class="metric-card">
+            <small>Premios Ganados</small>
+            <b>${coin(prizeTotal)}</b>
+          </div>
+          <div class="metric-card">
+            <small>Torneos Jugados</small>
+            <b>${matchesPlayed}</b>
+          </div>
+        </div>
+        <div class="deposit-section">
+          <h3>Recarga Rápida de Créditos Demo</h3>
+          <div class="row deposit-row">
+            <button class="primary deposit-btn" data-add="50"><span>+50</span> Créditos</button>
+            <button class="primary deposit-btn" data-add="200"><span>+200</span> Créditos</button>
+          </div>
+        </div>
         ${
-          txs.length
-            ? txs
-                .map(
-                  (t) => `<li>
-                    <div><b>${TX_LABEL[t.type] ?? t.type}</b><small>${t.note} · ${new Date(t.at).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}</small></div>
-                    <span class="${t.amount >= 0 ? 'pos' : 'neg'}">${t.amount >= 0 ? '+' : ''}${fmt(t.amount)}</span>
-                  </li>`,
-                )
-                .join('')
-            : '<li class="empty">Sin movimientos</li>'
+          wallet.depositCrypto
+            ? `<div class="crypto-section">
+          <h3>Depositar en Cripto <small class="tag">pruebas</small></h3>
+          <div class="row">
+            <button class="secondary" data-crypto="10">10 USD</button>
+            <button class="secondary" data-crypto="25">25 USD</button>
+            <button class="secondary" data-crypto="50">50 USD</button>
+          </div>
+          <p class="legal">Pago con NOWPayments (USDT, BTC, ETH…). Modo de pruebas: no se cobra dinero real.</p>
+        </div>`
+            : ''
         }
-      </ul>
+      </div>
+      <div class="txs-container">
+        <h3>Historial de Movimientos</h3>
+        <ul class="txs">
+          ${
+            txs.length
+              ? txs
+                  .map(
+                    (t) => {
+                      const icon = t.type === 'prize' ? '🏆' : t.type === 'entry' ? '⚔️' : t.type === 'bonus' ? '🎁' : '💎';
+                      return `<li>
+                        <div class="tx-info">
+                          <span class="tx-icon">${icon}</span>
+                          <div class="tx-text">
+                            <b>${TX_LABEL[t.type] ?? t.type}</b>
+                            <small>${t.note} · ${new Date(t.at).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}</small>
+                          </div>
+                        </div>
+                        <span class="${t.amount >= 0 ? 'pos' : 'neg'}">${t.amount >= 0 ? '+' : ''}${fmt(t.amount)}</span>
+                      </li>`;
+                    },
+                  )
+                  .join('')
+              : '<li class="empty"><span class="empty-icon">🪙</span><p>Sin movimientos todavía</p></li>'
+          }
+        </ul>
+      </div>
     </main>`);
   view.querySelectorAll('[data-add]').forEach((b) =>
     b.addEventListener('click', async () => {
@@ -584,7 +966,10 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
         <div class="pill">${tiebreak ? '1 tiro' : `Par ${course.par}`}</div>
         ${tiebreak ? '' : '<div class="pill strokes">Golpes <b>0</b></div>'}
         <div class="pill dist">— m</div>
-        <button class="pill mute" aria-label="Sonido">${isMuted() ? '🔇' : '🔊'}</button>
+        <button class="pill mute mobile-only" aria-label="Sonido">${isMuted() ? '🔇' : '🔊'}</button>
+        <button class="pill fullscreen mobile-only" aria-label="Pantalla completa" title="Pantalla completa (F11)">⛶</button>
+        <button class="pill settings-btn-hud mobile-only" aria-label="Ajustes" title="Ajustes (Esc)">⚙️</button>
+        <button class="pill desktop-esc-hint" aria-label="Ajustes">⚙️ Ajustes <kbd class="kbd-hint">Esc</kbd></button>
       </div>
       <div class="rivals">${players
         .map((p) => `<div class="chip ${p.id === 'me' ? 'me' : ''}" data-id="${p.id}" style="--c:${p.color}"><i>${p.name[0]}</i><b>${tiebreak ? '·' : 0}</b></div>`)
@@ -596,10 +981,21 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
         <span>${tiebreak ? 'Deja la bola lo más cerca de la diana' : `Par ${course.par}`}</span>
         ${course.tip && !tiebreak ? `<em>${course.tip}</em>` : ''}
       </div>
+      <div class="overview-banner">🗺️ Vista General del Mapa · Mueve el ratón para orbitar · Pulsa <kbd>Espacio</kbd> para volver</div>
       <div class="cup-banner"></div>
-      <div class="hint"><span>↔ Desliza para apuntar</span><span>↓ Tira hacia abajo y suelta</span></div>
+      <div class="hint">
+        <span class="hint-touch">↔ Desliza para apuntar · ↓ Tira y suelta</span>
+        <span class="hint-mouse">🖱️ Ratón para apuntar · Clic Izquierdo para calcular y disparar · <kbd>Espacio</kbd> Ver mapa · <kbd>Esc</kbd> Ajustes</span>
+      </div>
+      <div class="desktop-controls-bar">
+        <span><kbd>Ratón</kbd> Apuntar y Disparar</span>
+        <span><kbd>Clic Der</kbd> Cámara</span>
+        <span><kbd>Rueda</kbd> Zoom / Fuerza</span>
+        <span><kbd>Espacio</kbd> Vista mapa completo</span>
+        <span><kbd>Esc</kbd> Ajustes</span>
+      </div>
       <div class="power"><div class="fill"></div><span>0%</span></div>
-      <button class="map-btn" aria-label="Ver el hoyo completo">Ver hoyo</button>
+      <button class="map-btn" aria-label="Ver el hoyo completo">Ver mapa <kbd class="kbd-hint">Espacio</kbd></button>
     </main>`);
   shell(view, { hideHeader: true }).then(() => {
     const strokesEl = view.querySelector('.strokes b');
@@ -608,6 +1004,7 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
     const hint = view.querySelector('.hint');
     const cupBanner = view.querySelector('.cup-banner');
     const mapBtn = view.querySelector('.map-btn');
+    const stageEl = view.querySelector('.stage');
     let finished = false;
     const showDistance = () => (distEl.textContent = `${game.distanceToCup().toFixed(tiebreak ? 2 : 1)} m`);
     const banner = (text) => {
@@ -618,9 +1015,153 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
       if (finished) return;
       finished = true;
       game.locked = true;
+      game?.exitPointerLock?.();
       onDone(game, strokes, banner);
     };
+    stageEl?.addEventListener('click', () => {
+      if (!game?.overview && !view.querySelector('.in-game-settings-overlay')) {
+        game?.requestPointerLock?.();
+      }
+    });
+
+    function openSettingsMenu() {
+      const existing = view.querySelector('.in-game-settings-overlay');
+      if (existing) {
+        existing.remove();
+        game.setPaused?.(false);
+        game.requestPointerLock?.();
+        return;
+      }
+      game.setPaused?.(true);
+      game.exitPointerLock?.();
+      const overlay = h(`
+        <div class="overlay in-game-settings-overlay">
+          <div class="in-game-settings-modal">
+            <div class="settings-modal-header">
+              <div class="settings-title">
+                <h3>⚙️ Ajustes de Partida</h3>
+              </div>
+              <button class="close-settings-btn" aria-label="Cerrar ajustes">✕</button>
+            </div>
+
+            <div class="settings-modal-body">
+              <div class="settings-row">
+                <div class="settings-label">
+                  <strong>Sonido</strong>
+                  <small>Efectos ambientales y de golpe</small>
+                </div>
+                <button class="settings-btn toggle-sound-btn ${isMuted() ? 'muted' : ''}">
+                  <span class="btn-icon">${isMuted() ? '🔇' : '🔊'}</span>
+                  <span class="btn-text">${isMuted() ? 'Silenciado' : 'Activado'}</span>
+                </button>
+              </div>
+
+              <div class="settings-row">
+                <div class="settings-label">
+                  <strong>Pantalla</strong>
+                  <small>Modo inmersivo de pantalla completa</small>
+                </div>
+                <button class="settings-btn toggle-fs-btn">
+                  <span class="btn-icon">${document.fullscreenElement ? '🗗' : '⛶'}</span>
+                  <span class="btn-text">${document.fullscreenElement ? 'Ventana' : 'Pantalla Completa'}</span>
+                </button>
+              </div>
+
+              <div class="settings-row">
+                <div class="settings-label">
+                  <strong>Vista de Campo</strong>
+                  <small>Ver todo el terreno en 3D</small>
+                </div>
+                <button class="settings-btn toggle-overview-btn">
+                  <span class="btn-icon">🗺️</span>
+                  <span class="btn-text">${game.overview ? 'Volver a la bola' : 'Ver todo el terreno'}</span>
+                </button>
+              </div>
+
+              <div class="settings-controls-card">
+                <div class="card-title">🎮 Controles Activos</div>
+                <div class="controls-grid">
+                  <div class="c-item"><kbd>Ratón</kbd><span>Apuntar y calcular fuerza (pulsar/arrastrar y soltar)</span></div>
+                  <div class="c-item"><kbd>Clic Der</kbd><span>Rotar cámara alrededor de la bola</span></div>
+                  <div class="c-item"><kbd>Rueda</kbd><span>Zoom de cámara / Ajuste fino de fuerza</span></div>
+                  <div class="c-item"><kbd>Espacio</kbd><span>Visión general y completa del mapa</span></div>
+                  <div class="c-item"><kbd>Esc</kbd><span>Abrir / Cerrar este menú de ajustes</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-modal-footer">
+              <button class="primary resume-btn">▶ Reanudar partida</button>
+              <button class="danger quit-btn">🚪 Salir al Lobby</button>
+            </div>
+          </div>
+        </div>
+      `);
+
+      const close = () => {
+        overlay.remove();
+        game.setPaused?.(false);
+        game.requestPointerLock?.();
+      };
+
+      overlay.querySelector('.close-settings-btn').addEventListener('click', close);
+      overlay.querySelector('.resume-btn').addEventListener('click', close);
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) close();
+      });
+
+      const soundBtn = overlay.querySelector('.toggle-sound-btn');
+      soundBtn.addEventListener('click', () => {
+        setMuted(!isMuted());
+        const muted = isMuted();
+        soundBtn.classList.toggle('muted', muted);
+        soundBtn.querySelector('.btn-icon').textContent = muted ? '🔇' : '🔊';
+        soundBtn.querySelector('.btn-text').textContent = muted ? 'Silenciado' : 'Activado';
+        muteBtn.textContent = muted ? '🔇' : '🔊';
+        try { localStorage.setItem('gcb.muted', muted ? '1' : '0'); } catch {}
+      });
+
+      const fsModalBtn = overlay.querySelector('.toggle-fs-btn');
+      fsModalBtn.addEventListener('click', () => {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        } else {
+          document.exitFullscreen().catch(() => {});
+        }
+        setTimeout(() => {
+          const isFs = !!document.fullscreenElement;
+          fsModalBtn.querySelector('.btn-icon').textContent = isFs ? '🗗' : '⛶';
+          fsModalBtn.querySelector('.btn-text').textContent = isFs ? 'Ventana' : 'Pantalla Completa';
+        }, 100);
+      });
+
+      const ovBtn = overlay.querySelector('.toggle-overview-btn');
+      ovBtn.addEventListener('click', () => {
+        game.setOverview(!game.overview);
+        close();
+      });
+
+      overlay.querySelector('.quit-btn').addEventListener('click', () => {
+        if (confirm('¿Seguro que quieres salir al menú principal?')) {
+          overlay.remove();
+          game.setPaused?.(false);
+          game.dispose();
+          showLobby();
+        }
+      });
+
+      view.append(overlay);
+    }
+
     game = new GolfGame(view.querySelector('.stage'), {
+      onOpenSettings: openSettingsMenu,
+      onOverviewChange: (isOverview) => {
+        view.querySelector('.overview-banner')?.classList.toggle('show', isOverview);
+        if (mapBtn) {
+          mapBtn.innerHTML = isOverview ? 'Volver a la bola <kbd class="kbd-hint">Espacio</kbd>' : 'Ver mapa <kbd class="kbd-hint">Espacio</kbd>';
+          mapBtn.classList.toggle('on', isOverview);
+        }
+      },
       onAim: (p) => {
         power.querySelector('.fill').style.height = `${p * 100}%`;
         power.querySelector('span').textContent = `${Math.round(p * 100)}%`;
@@ -639,6 +1180,7 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
         if (!tiebreak) setChip('me', n, false);
         if (strokesEl) strokesEl.textContent = n;
         hint.classList.add('gone');
+        view.querySelector('.desktop-controls-bar')?.classList.add('fade-out');
       },
       onCup: (n) => {
         setChip('me', n, true);
@@ -665,6 +1207,21 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
         localStorage.setItem('gcb.muted', isMuted() ? '1' : '0');
       } catch {}
     });
+    const fsBtn = view.querySelector('.fullscreen');
+    if (fsBtn) {
+      fsBtn.addEventListener('click', () => {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        } else {
+          document.exitFullscreen().catch(() => {});
+        }
+      });
+      document.addEventListener('fullscreenchange', () => {
+        fsBtn.textContent = document.fullscreenElement ? '🗗' : '⛶';
+      });
+    }
+    view.querySelector('.settings-btn-hud')?.addEventListener('click', openSettingsMenu);
+    view.querySelector('.desktop-esc-hint')?.addEventListener('click', openSettingsMenu);
     function setChip(id, text, done) {
       const chip = view.querySelector(`.chip[data-id="${id}"]`);
       if (!chip) return;
@@ -679,15 +1236,10 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
       view.querySelector('.toasts').append(el);
       setTimeout(() => el.remove(), 2600);
     }
-    const hold = (on) => (e) => {
+    mapBtn?.addEventListener('click', (e) => {
       e.preventDefault();
-      game.setOverview(on);
-      mapBtn.classList.toggle('on', on);
-    };
-    mapBtn.addEventListener('pointerdown', hold(true));
-    mapBtn.addEventListener('pointerup', hold(false));
-    mapBtn.addEventListener('pointerleave', hold(false));
-    mapBtn.addEventListener('pointercancel', hold(false));
+      game.setOverview(!game.overview);
+    });
   });
 }
 
