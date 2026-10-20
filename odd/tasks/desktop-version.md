@@ -21,7 +21,7 @@ Adaptar el juego y sus interfaces para una experiencia de escritorio (PC) nativa
 - [x] `task-5`: Ajuste manual táctil de fuerza de tiro (arrastre hacia abajo/arriba para más fuerte/flojo, rueda y teclas W/S) — Commit: `e0f3e8d`.
 - [x] `task-6`: Visor 3D interactivo en la tienda de skins, sombras 4K y navegación por teclado en modales — Commit: `1bcad32`.
 - [x] `task-7`: Bloqueo de puntero (Pointer Lock API) para minijuego en ventana y multimonitor (`GolfGame.js`, `main.js`, `desktop-controls.test.js`) — Commit: `24a6260`.
-- [x] `task-8`: Corrección de tiro con clic izquierdo bajo Pointer Lock (evitar excepción `InvalidStateError`, ignorar `pointercancel` de transición, soporte dual carga por tiempo/arrastre manual y listeners en ventana) — `GolfGame.js`, `desktop-controls.test.js`.
+- [x] `task-8`: Corrección de tiro con clic izquierdo bajo Pointer Lock (evitar excepción `InvalidStateError`, ignorar `pointercancel` de transición, soporte dual carga por tiempo/arrastre manual y listeners en ventana) — Commit: `0e86cf3`.
 
 ## Registro de Estado y Evidencia
 - **Ruta implementada**: Delegada directa con orquestador y tareas desacopladas.
