@@ -4,6 +4,7 @@ import { Bot } from './bots.js';
 import { THEMES } from './themes.js';
 import { buildEnvironment, courseBounds } from './render/environment.js';
 import { buildCourse } from './render/course.js';
+import { ballPose, groundHeight } from './render/terrain.js';
 import { AimDots, Particles, Shockwaves, Trail } from './render/effects.js';
 import { ballTexture, labelTexture, softDotTexture } from './render/textures.js';
 import { skinMaterial } from './render/ballSkins.js';
@@ -312,9 +313,12 @@ export class GolfGame {
     const baseDist = (isWidescreen ? 3.5 : FOLLOW_DIST) * zoom;
     const baseHeight = (isWidescreen ? 1.6 : FOLLOW_HEIGHT) * (0.85 + 0.15 * zoom);
     const dist = baseDist + this.power * 0.7;
+    // con relieve la cámara sube con el césped; en un looping solo a medias
+    const pose = ballPose(this.course, this.ball.x, this.ball.z);
+    const rise = pose.inLoop ? (pose.y - BALL_R) * 0.5 : pose.ground;
     const pos = new THREE.Vector3(this.ball.x, 0, this.ball.z).addScaledVector(fwd, -dist);
-    pos.y = baseHeight + this.power * 0.35;
-    const look = new THREE.Vector3(this.ball.x, 0.15, this.ball.z).addScaledVector(fwd, LOOK_AHEAD);
+    pos.y = rise + baseHeight + this.power * 0.35;
+    const look = new THREE.Vector3(this.ball.x, rise + 0.15, this.ball.z).addScaledVector(fwd, LOOK_AHEAD);
     return { pos, look };
   }
 
@@ -339,8 +343,9 @@ export class GolfGame {
 
   #celebrateTarget() {
     const [hx, hz] = this.course.cup;
+    const hc = groundHeight(this.course, hx, hz);
     const a = this.camYaw + Math.PI + (this.t - this.sunkAt) * 0.6;
-    return { pos: new THREE.Vector3(hx + Math.sin(a) * 2.4, 1.3, hz - Math.cos(a) * 2.4), look: new THREE.Vector3(hx, 0.3, hz) };
+    return { pos: new THREE.Vector3(hx + Math.sin(a) * 2.4, hc + 1.3, hz - Math.cos(a) * 2.4), look: new THREE.Vector3(hx, hc + 0.3, hz) };
   }
 
   #placeCamera(dt, snap = false) {
@@ -772,7 +777,8 @@ export class GolfGame {
       lastZ = sim.z;
       if (acc >= 0.22) {
         acc = 0;
-        pts.push({ x: sim.x, z: sim.z });
+        const p = ballPose(this.course, sim.x, sim.z);
+        pts.push({ x: p.x, y: p.y - BALL_R, z: p.z });
       }
       if (r.hit > 0 && sinceBounce < 0) sinceBounce = 0;
       if (sinceBounce >= 0 && (sinceBounce += d) > 1) break;
@@ -828,9 +834,11 @@ export class GolfGame {
       const wasMoving = isMoving(this.ball);
       // se simula también con la bola parada: un aspa puede empujarla
       const r = step(this.course, this.segs, this.ball, this.t, DT);
-      const pos = new THREE.Vector3(this.ball.x, BALL_R, this.ball.z);
+      const pose = ballPose(this.course, this.ball.x, this.ball.z);
+      const pos = new THREE.Vector3(pose.x, pose.y, pose.z);
       if (r.portal >= 0) {
         const p = this.course.portals[r.portal];
+        if (p.tube) this.courseView.tubeFlash(r.portal, this.t);
         sfx.portal();
         this.particles.puff(new THREE.Vector3(p.a[0], 0.1, p.a[1]), 0xb46cff, 14, 1.6, 0.2);
         this.particles.puff(pos, 0xffb020, 14, 1.6, 0.2);
@@ -888,7 +896,7 @@ export class GolfGame {
         this.exitPointerLock();
         sfx.cup();
         this.onCup?.(this.strokes);
-        this.particles.confetti(new THREE.Vector3(this.course.cup[0], 0, this.course.cup[1]));
+        this.particles.confetti(new THREE.Vector3(this.course.cup[0], groundHeight(this.course, ...this.course.cup), this.course.cup[1]));
         this.waves.emit(this.course.cup[0], this.course.cup[1], 0xffe066, 2.4, 1.4);
         this.waves.emit(this.course.cup[0], this.course.cup[1], 0xffffff, 1.4, 2);
         this.#addShake(0.3);
@@ -934,7 +942,8 @@ export class GolfGame {
 
     // bola: rodar y caer en el hoyo
     const sinkT = this.sunk ? Math.min(1, (this.t - this.sunkAt) * 4) : 0;
-    this.ballRoot.position.set(this.ball.x, BALL_R - sinkT * 0.3, this.ball.z);
+    const pose = ballPose(this.course, this.ball.x, this.ball.z);
+    this.ballRoot.position.set(pose.x, pose.y - sinkT * 0.3, pose.z);
     if (speed > 0) {
       const axis = new THREE.Vector3(-this.ball.vz, 0, this.ball.vx).normalize();
       this.ballMesh.rotateOnWorldAxis(axis, (speed * dt) / BALL_R);
@@ -943,8 +952,8 @@ export class GolfGame {
     this.squash *= Math.exp(-realDt * 9);
     const wob = this.squash * Math.cos(this.t * 40);
     this.ballRoot.scale.set(1 + wob * 0.5, 1 - wob, 1 + wob * 0.5);
-    this.ballShadow.position.set(this.ball.x, 0.004, this.ball.z);
-    this.ballShadow.visible = !this.sunk;
+    this.ballShadow.position.set(pose.x, pose.ground + 0.004, pose.z);
+    this.ballShadow.visible = !this.sunk && !pose.inLoop;
     this.trauma = Math.max(0, this.trauma - realDt * 2.2);
     this.fovKick *= Math.exp(-realDt * 5);
     const fov = this.baseFov + this.fovKick - (1 - this.timeScale) * 8;
@@ -955,18 +964,19 @@ export class GolfGame {
     setRolling(this.sunk ? 0 : speed, this.wasInSand);
     for (const b of this.bots) {
       if (b.sunk) b.sinkT = Math.min(1, b.sinkT + dt * 4);
-      b.mesh.position.set(b.ball.x, BALL_R - b.sinkT * 0.3, b.ball.z);
+      const bp = ballPose(this.course, b.ball.x, b.ball.z);
+      b.mesh.position.set(bp.x, bp.y - b.sinkT * 0.3, bp.z);
       const v = Math.hypot(b.ball.vx, b.ball.vz);
       if (v > 0) b.mesh.rotateOnWorldAxis(new THREE.Vector3(-b.ball.vz, 0, b.ball.vx).normalize(), (v * dt) / BALL_R);
-      b.label.position.set(b.ball.x, 0.5, b.ball.z);
+      b.label.position.set(bp.x, bp.y + 0.37, bp.z);
       b.label.visible = !b.done;
       b.mesh.visible = b.sinkT < 1;
       // las etiquetas pegadas a la cámara estorban: se desvanecen de cerca
       const camD = this.camera.position.distanceTo(b.mesh.position);
       b.label.material.opacity = THREE.MathUtils.clamp((camD - 3.7) / 2, 0, 1);
     }
-    this.ballGlow.position.set(this.ball.x, 0.006, this.ball.z);
-    this.ballGlow.visible = !this.sunk;
+    this.ballGlow.position.set(pose.x, pose.ground + 0.006, pose.z);
+    this.ballGlow.visible = !this.sunk && !pose.inLoop;
     this.ballGlow.material.opacity = isMoving(this.ball) ? 0.15 : 0.35 + Math.sin(this.t * 4) * 0.15;
 
     this.course.spinners.forEach((sp, i) => {

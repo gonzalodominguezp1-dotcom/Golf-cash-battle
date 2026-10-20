@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DT, MIN_SLOPE_ACCEL, inSand, isMoving, portalAt, quantizeShot, segmentsOf, shotVelocity, step } from '../src/game/physics.js';
+import { DT, MIN_SLOPE_ACCEL, inSand, isMoving, onMound, portalAt, quantizeShot, segmentsOf, shotVelocity, step, windmillBlocks } from '../src/game/physics.js';
+import { groundHeight, hasRelief } from '../src/game/render/terrain.js';
 import { replayHole } from '../src/game/replay.js';
 import { COURSES } from '../src/game/courses.js';
 import { Bot } from '../src/game/bots.js';
@@ -81,4 +82,71 @@ test('el servidor repite bien un golpe que cruza el portal', () => {
   }
   assert.ok(best, 'algún golpe cruza el portal');
   assert.ok(best.ball.z < 0, 'sale al otro lado de la pared');
+});
+
+// tiro recto desde la salida: dónde para la bola (o null si entra)
+function straightShot(c, power, tick0 = 0) {
+  const segs = segmentsOf(c);
+  const ball = { x: c.tee[0], z: c.tee[1], vx: 0, vz: 0 };
+  Object.assign(ball, shotVelocity(c.aimYaw ?? 0, power));
+  let crossed = -1;
+  for (let t = tick0 + 1; isMoving(ball) && t < tick0 + 120 * 30; t++) {
+    const r = step(c, segs, ball, t * DT, DT);
+    if (r.sunk) return null;
+    if (r.portal >= 0) crossed = r.portal;
+  }
+  return { ...ball, crossed };
+}
+
+test('looping: flojo vuelve atrás, fuerte lo completa', () => {
+  const c = COURSES.find((x) => x.name === 'Looping Neón');
+  const [l] = c.loops;
+  const entry = l.z + l.len / 2, exit = l.z - l.len / 2;
+  assert.ok(straightShot(c, 0.4).z > entry, 'un tiro flojo vuelve antes del looping');
+  const strong = straightShot(c, 0.9);
+  assert.ok(strong === null || strong.z < exit, 'un tiro fuerte pasa al otro lado');
+  // las pendientes del looping no levantan el césped
+  assert.ok(!hasRelief(c));
+  assert.equal(groundHeight(c, l.x, l.z), 0);
+});
+
+test('molino: las aspas tapan la puerta según el momento del golpe', () => {
+  const c = COURSES.find((x) => x.name === 'Molino Neón');
+  const [wm] = c.windmills;
+  let blocked = 0;
+  const N = 2000;
+  for (let i = 0; i < N; i++) if (windmillBlocks(wm, i * 0.01)) blocked++;
+  const share = blocked / N;
+  assert.ok(share > 0.25 && share < 0.5, `tapa la puerta el ${(share * 100).toFixed(0)}% del tiempo`);
+  // el mismo tiro, en momentos distintos, a veces cruza la puerta y a veces rebota
+  const results = new Set();
+  for (let tick = 0; tick < 240; tick += 6) {
+    const end = straightShot(c, 0.75, tick);
+    results.add(end === null || end.z < wm.z - wm.depth ? 'cruza' : 'rebota');
+  }
+  assert.deepEqual([...results].sort(), ['cruza', 'rebota']);
+});
+
+test('tubos: la bola sale en la dirección del tubo', () => {
+  const c = COURSES.find((x) => x.name === 'Las Tuberías');
+  const p = c.portals[0];
+  const ball = { x: p.a[0], z: p.a[1] + 1, vx: 0, vz: -4 };
+  const segs = segmentsOf(c);
+  let r;
+  for (let t = 1; t < 240 && !(r && r.portal >= 0); t++) r = step(c, segs, ball, t * DT, DT);
+  assert.equal(r.portal, 0);
+  assert.ok(ball.vx < 0 && Math.abs(ball.vz) < 1e-9, 'sale hacia -x');
+});
+
+test('volcán: la ladera echa la bola hacia fuera y la cima es llana', () => {
+  const c = COURSES.find((x) => x.name === 'El Volcán');
+  const [m] = c.mounds;
+  assert.equal(onMound(c, m.x, m.z), null);
+  assert.ok(onMound(c, m.x + 2, m.z));
+  const ball = { x: m.x + 2, z: m.z, vx: 0, vz: 0 };
+  step(c, segmentsOf(c), ball, DT, DT);
+  assert.ok(ball.vx > 0 && ball.vz === 0);
+  // el relieve que se dibuja: cima arriba, base abajo
+  assert.ok(groundHeight(c, ...c.cup) > 1);
+  assert.equal(groundHeight(c, ...c.tee), 0);
 });

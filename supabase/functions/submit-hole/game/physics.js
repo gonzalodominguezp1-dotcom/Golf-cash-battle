@@ -127,7 +127,37 @@ export function inSand(course, x, z) {
 /** Pendientes: rectángulos que empujan la bola cuesta abajo (dir) con aceleración accel. */
 export const onSlope = (course, x, z) => (course.slopes ?? []).find((s) => inRect(s, x, z));
 
-/** Portales de un solo sentido: la bola que entra en a sale por b con la misma velocidad. */
+/**
+ * Montículos (el volcán): ladera circular entre top y base que echa la bola
+ * hacia fuera con accel. Dentro de top (la cima) y fuera de base es llano.
+ */
+export function onMound(course, x, z) {
+  for (const m of course.mounds ?? []) {
+    const dx = x - m.x, dz = z - m.z;
+    const d2 = dx * dx + dz * dz;
+    if (d2 > m.top * m.top && d2 < m.base * m.base) return m;
+  }
+  return null;
+}
+
+/**
+ * Molinos: las aspas tapan la puerta (de ancho w, a lo largo de x) cuando una
+ * pasa por abajo. Solo usa + - * / y Math.floor para que sea igual en todas partes.
+ */
+export const BLADE_HALF = 0.3;
+const TWO_PI = 6.283185307179586;
+export function windmillBlocks(wm, t) {
+  const period = TWO_PI / wm.blades;
+  const a = wm.speed * t + (wm.phase ?? 0);
+  const ph = a - Math.floor(a / period) * period;
+  return ph < BLADE_HALF || ph > period - BLADE_HALF;
+}
+export const WINDMILL_GATE_HALF = 0.08;
+
+/**
+ * Portales de un solo sentido: la bola que entra en a sale por b con la misma
+ * velocidad. Los tubos son portales con out: la dirección en la que sale.
+ */
 export function portalAt(course, x, z) {
   const ps = course.portals ?? [];
   for (let i = 0; i < ps.length; i++) {
@@ -169,6 +199,13 @@ export function step(course, segs, ball, t, dt) {
     ball.vx += slope.dir[0] * slope.accel * dt;
     ball.vz += slope.dir[1] * slope.accel * dt;
   }
+  const mound = slope ? null : onMound(course, ball.x, ball.z);
+  if (mound) {
+    const dx = ball.x - mound.x, dz = ball.z - mound.z;
+    const d = hyp(dx, dz);
+    ball.vx += (dx / d) * mound.accel * dt;
+    ball.vz += (dz / d) * mound.accel * dt;
+  }
   ball.x += ball.vx * dt;
   ball.z += ball.vz * dt;
 
@@ -184,6 +221,9 @@ export function step(course, segs, ball, t, dt) {
     const p = moverPos(m, t);
     hit = Math.max(hit, collideBox(ball, p.x, p.z, m.w / 2, m.d / 2, p.vx, p.vz));
   }
+  for (const wm of course.windmills ?? []) {
+    if (windmillBlocks(wm, t)) hit = Math.max(hit, collideBox(ball, wm.x, wm.gateZ, wm.w / 2, WINDMILL_GATE_HALF, 0, 0));
+  }
   course.bumpers.forEach((b, i) => {
     const dx = ball.x - b.x, dz = ball.z - b.z;
     const d = hyp(dx, dz);
@@ -198,8 +238,15 @@ export function step(course, segs, ball, t, dt) {
   const pi = portalAt(course, ball.x, ball.z);
   if (pi >= 0) {
     portal = pi;
-    ball.x = course.portals[pi].b[0];
-    ball.z = course.portals[pi].b[1];
+    const p = course.portals[pi];
+    ball.x = p.b[0];
+    ball.z = p.b[1];
+    if (p.out) {
+      // los tubos sueltan la bola en su dirección, con la misma velocidad
+      const v = hyp(ball.vx, ball.vz);
+      ball.vx = p.out[0] * v;
+      ball.vz = p.out[1] * v;
+    }
   }
 
   const [hx, hz] = course.cup;
@@ -211,7 +258,8 @@ export function step(course, segs, ball, t, dt) {
     ball.vx = ball.vz = 0;
     return { sunk: true, hit, bumper, portal };
   }
-  const rolls = slope && slope.accel > ROLL_DECEL * (inSand(course, ball.x, ball.z) ? SAND_FACTOR : 1);
+  const incline = slope ?? mound;
+  const rolls = incline && incline.accel > ROLL_DECEL * (inSand(course, ball.x, ball.z) ? SAND_FACTOR : 1);
   if (v < STOP_SPEED && !rolls) ball.vx = ball.vz = 0;
   return { sunk: false, hit, bumper, portal };
 }
