@@ -36,6 +36,9 @@ export class GolfGame {
   #onWheel = null;
   #onKeyDown = null;
   #onKeyUp = null;
+  #onPointerLockChange = null;
+  #onPointerLockError = null;
+  #onClickCanvas = null;
 
   constructor(container, { onStroke, onSunk, onAim, onRest, onCup, onRival, onLip } = {}) {
     this.container = container;
@@ -63,6 +66,7 @@ export class GolfGame {
     this.zoomLevel = 1.0;
     this.orbitYaw = 0;
     this.orbiting = false;
+    this.isPointerLocked = false;
     this.charging = false;
     this.spaceCharging = false;
     this.chargeAnchor = null;
@@ -132,6 +136,31 @@ export class GolfGame {
 
   setOverview(on) {
     this.overview = on;
+    if (on) this.exitPointerLock();
+  }
+
+  requestPointerLock() {
+    const el = this.renderer?.domElement;
+    if (!el || typeof document === 'undefined') return;
+    if (document.pointerLockElement === el) return;
+    try {
+      const p = el.requestPointerLock?.({ unadjustedMovement: true });
+      if (p && typeof p.catch === 'function') {
+        p.catch(() => {
+          try { el.requestPointerLock?.(); } catch {}
+        });
+      }
+    } catch {
+      try { el.requestPointerLock?.(); } catch {}
+    }
+  }
+
+  exitPointerLock() {
+    if (typeof document !== 'undefined' && document.pointerLockElement) {
+      try {
+        document.exitPointerLock?.();
+      } catch {}
+    }
   }
 
   distanceToCup() {
@@ -343,6 +372,28 @@ export class GolfGame {
     this.#onContextMenu = (e) => e.preventDefault();
     el.addEventListener('contextmenu', this.#onContextMenu);
 
+    this.#onPointerLockChange = () => {
+      const isLocked = typeof document !== 'undefined' && document.pointerLockElement === el;
+      this.isPointerLocked = isLocked;
+      if (this.container) {
+        this.container.classList.toggle('pointer-locked', isLocked);
+      }
+    };
+    this.#onPointerLockError = () => {
+      this.isPointerLocked = false;
+    };
+    if (typeof document !== 'undefined') {
+      document.addEventListener('pointerlockchange', this.#onPointerLockChange);
+      document.addEventListener('pointerlockerror', this.#onPointerLockError);
+    }
+
+    this.#onClickCanvas = () => {
+      if (!this.sunk && !this.locked && this.intro >= 1) {
+        this.requestPointerLock();
+      }
+    };
+    el.addEventListener('click', this.#onClickCanvas);
+
     this.#onPointerDown = (e) => {
       unlockAudio();
       if (!this.ambientOn) {
@@ -354,6 +405,8 @@ export class GolfGame {
 
       const isMouse = e.pointerType === 'mouse';
       if (isMouse) {
+        // Bloquear puntero en pantalla para no salir de ventana ni pasar a otros monitores
+        this.requestPointerLock();
         if (e.button === 0) {
           if (isMoving(this.ball)) return;
           el.setPointerCapture(e.pointerId);
@@ -368,6 +421,7 @@ export class GolfGame {
             lastTick: this.yaw,
             dir: 0,
             startPower: this.power,
+            dragY: 0,
           };
           if (!this.aimStartTick) this.aimStartTick = this.tick;
         } else if (e.button === 2) {
@@ -395,15 +449,22 @@ export class GolfGame {
     this.#onPointerMove = (e) => {
       const isMouse = e.pointerType === 'mouse';
       if (isMouse) {
+        const isLocked = typeof document !== 'undefined' && document.pointerLockElement === el;
         if (this.orbiting) {
-          const dx = e.clientX - this.orbitAnchorX;
-          this.orbitYaw = (dx * 2.8) / (el.clientWidth || 1);
+          const mx = e.movementX ?? 0;
+          if (isLocked) {
+            this.orbitYaw = (this.orbitYaw || 0) + (mx * 2.8) / (el.clientWidth || 1);
+          } else {
+            const dx = e.clientX - this.orbitAnchorX;
+            this.orbitYaw = (dx * 2.8) / (el.clientWidth || 1);
+          }
           return;
         }
         if (this.charging && this.chargeAnchor) {
           const ca = this.chargeAnchor;
           const h = el.clientHeight || 1, w = el.clientWidth || 1;
-          const dy = e.clientY - ca.y;
+          ca.dragY = (ca.dragY || 0) + (e.movementY ?? 0);
+          const dy = isLocked ? ca.dragY : (e.clientY - ca.y);
           this.lastMouseY = e.clientY;
           this.lastMouseX = e.clientX;
           // Arrastrar hacia abajo/atrás incrementa la fuerza con el ratón; empujar hacia adelante la reduce
@@ -411,13 +472,13 @@ export class GolfGame {
           this.power = THREE.MathUtils.clamp(baseP + (dy / (h * 0.32)), 0, 1);
 
           // Ajuste simultáneo de dirección horizontal con el ratón
-          const dx = e.clientX - (ca.px ?? ca.x);
-          if (dx !== 0) {
-            if (Math.sign(dx) !== ca.dir) {
+          const mx = isLocked ? (e.movementX ?? 0) : (e.clientX - (ca.px ?? ca.x));
+          if (mx !== 0) {
+            if (Math.sign(mx) !== ca.dir) {
               if (ca.dir) this.mouseTurns = (this.mouseTurns || 0) + 1;
-              ca.dir = Math.sign(dx);
+              ca.dir = Math.sign(mx);
             }
-            ca.baseYaw += (dx * 2.2 * (1 - 0.65 * this.power)) / w;
+            ca.baseYaw += (mx * 2.2 * (1 - 0.65 * this.power)) / w;
             ca.px = e.clientX;
             this.yaw = ca.baseYaw;
           }
@@ -549,7 +610,8 @@ export class GolfGame {
       this.power = THREE.MathUtils.clamp(Math.round((this.power + delta) * 100) / 100, 0, 1);
       if (this.charging && this.chargeAnchor) {
         const h = el.clientHeight || 1;
-        const dy = (this.lastMouseY ?? this.chargeAnchor.y) - this.chargeAnchor.y;
+        const isLocked = typeof document !== 'undefined' && document.pointerLockElement === el;
+        const dy = isLocked ? (this.chargeAnchor.dragY || 0) : ((this.lastMouseY ?? this.chargeAnchor.y) - this.chargeAnchor.y);
         this.chargeAnchor.startPower = THREE.MathUtils.clamp(this.power - (dy / (h * 0.32)), 0, 1);
       }
       setCharge(this.power);
@@ -577,7 +639,8 @@ export class GolfGame {
           this.power = THREE.MathUtils.clamp(Math.round((this.power + 0.05) * 100) / 100, 0, 1);
           if (this.charging && this.chargeAnchor) {
             const h = el.clientHeight || 1;
-            const dy = (this.lastMouseY ?? this.chargeAnchor.y) - this.chargeAnchor.y;
+            const isLocked = typeof document !== 'undefined' && document.pointerLockElement === el;
+            const dy = isLocked ? (this.chargeAnchor.dragY || 0) : ((this.lastMouseY ?? this.chargeAnchor.y) - this.chargeAnchor.y);
             this.chargeAnchor.startPower = THREE.MathUtils.clamp(this.power - (dy / (h * 0.32)), 0, 1);
           }
           setCharge(this.power);
@@ -594,7 +657,8 @@ export class GolfGame {
           this.power = THREE.MathUtils.clamp(Math.round((this.power - 0.05) * 100) / 100, 0, 1);
           if (this.charging && this.chargeAnchor) {
             const h = el.clientHeight || 1;
-            const dy = (this.lastMouseY ?? this.chargeAnchor.y) - this.chargeAnchor.y;
+            const isLocked = typeof document !== 'undefined' && document.pointerLockElement === el;
+            const dy = isLocked ? (this.chargeAnchor.dragY || 0) : ((this.lastMouseY ?? this.chargeAnchor.y) - this.chargeAnchor.y);
             this.chargeAnchor.startPower = THREE.MathUtils.clamp(this.power - (dy / (h * 0.32)), 0, 1);
           }
           setCharge(this.power);
@@ -648,6 +712,7 @@ export class GolfGame {
           this.aimDots.hide();
         }
         if (this.overview) this.setOverview(false);
+        this.exitPointerLock();
       }
     };
 
@@ -685,8 +750,14 @@ export class GolfGame {
   }
 
   #unbindInput() {
+    this.exitPointerLock();
+    if (typeof document !== 'undefined') {
+      if (this.#onPointerLockChange) document.removeEventListener('pointerlockchange', this.#onPointerLockChange);
+      if (this.#onPointerLockError) document.removeEventListener('pointerlockerror', this.#onPointerLockError);
+    }
     const el = this.renderer?.domElement;
     if (el) {
+      if (this.#onClickCanvas) el.removeEventListener('click', this.#onClickCanvas);
       if (this.#onContextMenu) el.removeEventListener('contextmenu', this.#onContextMenu);
       if (this.#onPointerDown) el.removeEventListener('pointerdown', this.#onPointerDown);
       if (this.#onPointerMove) el.removeEventListener('pointermove', this.#onPointerMove);
@@ -827,6 +898,7 @@ export class GolfGame {
       if (r.sunk) {
         this.sunk = true;
         this.sunkAt = this.t;
+        this.exitPointerLock();
         sfx.cup();
         this.onCup?.(this.strokes);
         this.particles.confetti(new THREE.Vector3(this.course.cup[0], 0, this.course.cup[1]));

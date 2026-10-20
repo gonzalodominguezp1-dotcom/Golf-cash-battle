@@ -835,7 +835,7 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
         <span><kbd>W / S / Rueda</kbd> Ajustar potencia</span>
         <span><kbd>Espacio</kbd> Golpear</span>
         <span><kbd>Clic Der</kbd> Cámara</span>
-        <span><kbd>Esc</kbd> Cancelar</span>
+        <span><kbd>Esc</kbd> Cancelar / Liberar ratón</span>
         <span><kbd>Tab</kbd> Ver hoyo</span>
         <span><kbd>R</kbd> Recentrar</span>
       </div>
@@ -849,6 +849,7 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
     const hint = view.querySelector('.hint');
     const cupBanner = view.querySelector('.cup-banner');
     const mapBtn = view.querySelector('.map-btn');
+    const stageEl = view.querySelector('.stage');
     let finished = false;
     const showDistance = () => (distEl.textContent = `${game.distanceToCup().toFixed(tiebreak ? 2 : 1)} m`);
     const banner = (text) => {
@@ -859,8 +860,12 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
       if (finished) return;
       finished = true;
       game.locked = true;
+      game?.exitPointerLock?.();
       onDone(game, strokes, banner);
     };
+    stageEl?.addEventListener('click', () => {
+      game?.requestPointerLock?.();
+    });
     game = new GolfGame(view.querySelector('.stage'), {
       onAim: (p) => {
         power.querySelector('.fill').style.height = `${p * 100}%`;

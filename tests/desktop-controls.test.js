@@ -137,3 +137,38 @@ test('ajuste fino de potencia mediante rueda de ratón y teclas W/S', () => {
   assert.equal(power, 0.0, 'Potencia no debe bajar de 0.0');
 });
 
+test('cálculo de fuerza y apuntado con pointer lock activo mediante deltas relativos movementX y movementY', () => {
+  const h = 800, w = 1200;
+  const dragScale = h * 0.32; // 256px
+  let dragY = 0;
+  let yaw = 0;
+  let power = 0;
+
+  // En Pointer Lock, el ratón envía deltas relativos por evento sin tocar bordes de pantalla
+  const onPointerLockMove = (movementX, movementY, isCharging = true) => {
+    if (isCharging) {
+      dragY += movementY;
+      power = Math.max(0, Math.min(1, dragY / dragScale));
+      yaw += (movementX * 2.2 * (1 - 0.65 * power)) / w;
+    } else {
+      yaw += movementX * 0.0032;
+    }
+  };
+
+  // 1. Apuntado libre con Pointer Lock (sin límite de bordes de ventana ni salto a segundo monitor)
+  onPointerLockMove(50, 0, false);
+  assert.ok(yaw > 0.15 && yaw < 0.17, `Yaw esperado tras apuntado libre ~0.16, obtenido: ${yaw}`);
+
+  // 2. Tirar hacia atrás/abajo para acumular fuerza
+  onPointerLockMove(0, 100, true); // +100px delta
+  assert.ok(power > 0.38 && power < 0.40, `Fuerza esperada ~0.39, obtenida: ${power}`);
+
+  // 3. Empujar hacia adelante/arriba para reducir fuerza (tirar más flojo con deltas negativos)
+  onPointerLockMove(0, -40, true); // -40px delta
+  assert.ok(power > 0.22 && power < 0.24, `Fuerza reducida esperada ~0.23, obtenida: ${power}`);
+
+  // 4. Empujar por encima del inicio (delta acumulado <= 0)
+  onPointerLockMove(0, -100, true);
+  assert.equal(power, 0, 'Fuerza debe ser 0 al empujar más arriba del origen');
+});
+
