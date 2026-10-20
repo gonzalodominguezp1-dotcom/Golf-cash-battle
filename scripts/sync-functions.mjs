@@ -1,6 +1,7 @@
 // Copia la física, los hoyos y el antibots del juego a la función submit-hole,
 // para que el servidor repita los golpes con exactamente el mismo código.
 import { copyFileSync, mkdirSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 // [origen en src/, destino en la función]
 export const SHARED = [
@@ -11,7 +12,7 @@ export const SHARED = [
 ];
 const dest = new URL('../supabase/functions/submit-hole/', import.meta.url);
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   for (const [from, to] of SHARED) {
     mkdirSync(new URL(to.replace(/[^/]+$/, ''), dest), { recursive: true });
     copyFileSync(new URL(`../src/${from}`, import.meta.url), new URL(to, dest));

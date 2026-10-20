@@ -5,7 +5,7 @@
 // Además guarda las señales del antibots (cuánto tarda en tirar, si arrastra
 // el dedo) y recalcula la nota de riesgo del jugador antes de apuntar el hoyo.
 //
-// Las carpetas game/ y antibot/ son copias de src (npm run sync:functions).
+// Las carpetas game/ y antibot/ son copias de src (pnpm run sync:functions).
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { COURSES, TIEBREAK_COURSE } from './game/courses.js';
 import { replayHole } from './game/replay.js';

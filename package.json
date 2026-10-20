@@ -25,5 +25,10 @@
     "vite": "^5.4.10"
   },
   "private": true,
-  "type": "module"
+  "type": "module",
+  "packageManager": "pnpm@11.24.0",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  }
 }

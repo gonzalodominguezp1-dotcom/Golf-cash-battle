@@ -1,2 +1,10 @@
 node_modules
 dist
+.env
+.env.local
+.env.*.local
+*.log
+pnpm-debug.log*
+.DS_Store
+Thumbs.db
+

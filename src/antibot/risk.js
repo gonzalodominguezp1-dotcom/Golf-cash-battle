@@ -9,7 +9,7 @@
 //
 // Nada de esto es prueba por sí solo: una cuenta marcada no puede entrar en
 // mesas de pago y sus premios quedan retenidos hasta que una persona la revise.
-// Se comparte con la función submit-hole (npm run sync:functions).
+// Se comparte con la función submit-hole (pnpm run sync:functions).
 
 export const DEFAULT_RULES = {
   window: 60, // últimos hoyos que se miran

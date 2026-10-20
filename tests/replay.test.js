@@ -91,6 +91,6 @@ test('la función del servidor usa la misma física que el juego', async () => {
   for (const [f, to] of SHARED) {
     const src = readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8');
     const fn = readFileSync(new URL(`../supabase/functions/submit-hole/${to}`, import.meta.url), 'utf8');
-    assert.equal(fn, src, `${f} desactualizado: npm run sync:functions`);
+    assert.equal(fn, src, `${f} desactualizado: pnpm run sync:functions`);
   }
 });
