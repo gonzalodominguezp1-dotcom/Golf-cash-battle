@@ -10,19 +10,26 @@ export const MAX_HOLE_TICKS = 120 * 60 * 10; // 10 minutos por hoyo
 const SETTLE_TICKS = 120 * 30; // tras el último golpe se espera a que pare la bola
 
 /**
- * Devuelve { ok, reason?, strokes, sunk, distance, waits }. distance es lo que
- * queda hasta el hoyo (o la diana del desempate) cuando la bola se para.
- * waits[i] son los pasos que llevaba la bola parada antes del golpe i (el
- * antibots lo usa para ver si alguien tira sin pararse a apuntar).
+ * Devuelve { ok, reason?, strokes, sunk, sunkTick, timedOut, distance, waits }.
+ * distance es lo que queda hasta el hoyo (o la diana del desempate) cuando la
+ * bola se para. sunkTick es el paso en el que entró (para el contador de
+ * tiempo). waits[i] son los pasos que llevaba la bola parada antes del golpe i
+ * (el antibots lo usa para ver si alguien tira sin pararse a apuntar).
+ *
+ * endTick: el cliente se quedó sin tiempo en ese paso. Lo que no entre hasta
+ * entonces queda descalificado (timedOut) y cuenta como maxStrokes.
  */
-export function replayHole(course, shots, { maxStrokes = 8 } = {}) {
+export function replayHole(course, shots, { maxStrokes = 8, endTick = null } = {}) {
   const fail = (reason) => ({ ok: false, reason, strokes: 0, sunk: false, distance: null });
-  if (!Array.isArray(shots) || shots.length === 0) return fail('no_shots');
+  const timed = endTick !== null && endTick !== undefined;
+  if (timed && (course.noCup || !Number.isInteger(endTick) || endTick < 1 || endTick > MAX_HOLE_TICKS)) return fail('bad_end');
+  if (!Array.isArray(shots) || (shots.length === 0 && !timed)) return fail('no_shots');
   const limit = course.noCup ? 1 : maxStrokes;
   if (shots.length > limit) return fail('too_many_shots');
   let prev = -1;
   for (const s of shots) {
     if (!s || !Number.isInteger(s.tick) || s.tick <= prev || s.tick > MAX_HOLE_TICKS) return fail('bad_tick');
+    if (timed && s.tick >= endTick) return fail('bad_tick');
     if (!Number.isFinite(s.yaw) || !Number.isFinite(s.power) || Math.abs(s.yaw) > 1e4) return fail('bad_shot');
     const q = quantizeShot(s.yaw, s.power);
     if (q.yaw !== s.yaw || q.power !== s.power || s.power < 0.05) return fail('bad_shot');
@@ -32,7 +39,8 @@ export function replayHole(course, shots, { maxStrokes = 8 } = {}) {
   const segs = segmentsOf(course);
   const ball = { x: course.tee[0], z: course.tee[1], vx: 0, vz: 0 };
   const dist = () => Math.sqrt((ball.x - course.cup[0]) * (ball.x - course.cup[0]) + (ball.z - course.cup[1]) * (ball.z - course.cup[1]));
-  const end = shots[shots.length - 1].tick + SETTLE_TICKS;
+  const end = timed ? endTick - 1 : shots[shots.length - 1].tick + SETTLE_TICKS;
+  const timeout = () => ({ ok: true, strokes: maxStrokes, sunk: false, sunkTick: null, timedOut: true, distance: dist(), waits });
   const waits = [];
   let restSince = 0;
   let next = 0;
@@ -50,16 +58,17 @@ export function replayHole(course, shots, { maxStrokes = 8 } = {}) {
     const r = step(course, segs, ball, (tick + 1) * DT, DT);
     if (r.sunk) {
       if (next < shots.length) return fail('shots_after_sunk');
-      return { ok: true, strokes: shots.length, sunk: true, distance: 0, waits };
+      return { ok: true, strokes: shots.length, sunk: true, sunkTick: tick + 1, timedOut: false, distance: 0, waits };
     }
     if (wasMoving && !isMoving(ball)) restSince = tick + 1;
     if (next === shots.length && wasMoving && !isMoving(ball)) {
       // la bola se ha parado tras el último golpe
-      if (course.noCup) return { ok: true, strokes: 1, sunk: false, distance: dist(), waits };
-      if (shots.length >= maxStrokes) return { ok: true, strokes: maxStrokes, sunk: false, distance: dist(), waits };
+      if (course.noCup) return { ok: true, strokes: 1, sunk: false, sunkTick: null, timedOut: false, distance: dist(), waits };
+      if (shots.length >= maxStrokes) return { ok: true, strokes: maxStrokes, sunk: false, sunkTick: null, timedOut: false, distance: dist(), waits };
     }
   }
   if (next < shots.length) return fail('bad_tick');
+  if (timed) return timeout();
   // el hoyo no está terminado: faltan golpes
   return fail('unfinished');
 }

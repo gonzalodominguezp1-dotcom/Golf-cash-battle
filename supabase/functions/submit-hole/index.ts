@@ -2,6 +2,11 @@
 // juego y guarda los golpes que salen. El cliente nunca dice cuántos golpes
 // hizo: solo qué tiros soltó y en qué momento.
 //
+// Si el cliente se quedó sin tiempo (end: el paso en el que acabó el contador
+// de 20 s), lo que no entre hasta ese paso queda descalificado con el máximo.
+// También se guarda el paso en el que entró la bola: al cerrar el torneo, quien
+// emboque más de 20 s después del más rápido queda descalificado en ese hoyo.
+//
 // Además guarda las señales del antibots (cuánto tarda en tirar, si arrastra
 // el dedo) y recalcula la nota de riesgo del jugador antes de apuntar el hoyo.
 //
@@ -23,8 +28,9 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
 
   const body = await req.json().catch(() => null);
-  const { tournament, hole, shots, aim } = body ?? {};
-  if (typeof tournament !== 'string' || !Number.isInteger(hole) || hole < 0 || !Array.isArray(shots) || shots.length > 8) {
+  const { tournament, hole, shots, aim, end } = body ?? {};
+  if (typeof tournament !== 'string' || !Number.isInteger(hole) || hole < 0 || !Array.isArray(shots) || shots.length > 8 ||
+      (end != null && !Number.isInteger(end))) {
     return json({ error: 'bad_request' }, 400);
   }
 
@@ -43,7 +49,7 @@ Deno.serve(async (req) => {
   if (!course) return json({ error: 'wrong_hole' }, 400);
 
   const clean = shots.map((s: { tick: unknown; yaw: unknown; power: unknown }) => ({ tick: s?.tick, yaw: s?.yaw, power: s?.power }));
-  const r = replayHole(course, clean, { maxStrokes: Number(cfg?.value ?? 8) });
+  const r = replayHole(course, clean, { maxStrokes: Number(cfg?.value ?? 8), endTick: course.noCup ? null : end ?? null });
   if (!r.ok) return json({ error: 'invalid_shots', reason: 'reason' in r ? r.reason : null }, 422);
 
   // el antibots no debe impedir apuntar el hoyo si falla
@@ -53,16 +59,18 @@ Deno.serve(async (req) => {
     console.error('antibot', e);
   }
 
-  const { data, error } = await admin.rpc('_record_hole', {
+  const { data, error } = await admin.rpc('_record_timed_hole', {
     p_user: auth.user.id,
     p_t: tournament,
     p_hole: hole,
     p_shots: clean,
     p_strokes: r.strokes,
     p_distance: r.distance,
+    p_sunk_tick: r.sunkTick ?? null,
+    p_dq: !!r.timedOut,
   });
   if (error) return json({ error: /^[a-z_]+$/.test(error.message) ? error.message : 'db_error' }, 409);
-  return json({ strokes: r.strokes, distance: r.distance, tournament: data });
+  return json({ strokes: r.strokes, distance: r.distance, timed_out: !!r.timedOut, tournament: data });
 });
 
 // deno-lint-ignore no-explicit-any
