@@ -638,13 +638,15 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
       <div class="cup-banner"></div>
       <div class="hint">
         <span class="hint-touch">↔ Desliza para apuntar · ↓ Tira y suelta</span>
-        <span class="hint-mouse">🖱️ Ratón para apuntar · Clic Izq. o [Espacio] para cargar y golpear</span>
+        <span class="hint-mouse">🖱️ Ratón para apuntar · Arrastra Clic Izq. o usa W/S/Rueda para ajustar fuerza (flojo / fuerte) · Suelta o [Espacio] para golpear</span>
       </div>
       <div class="desktop-controls-bar">
         <span><kbd>Ratón</kbd> Apuntar</span>
-        <span><kbd>Clic Izq / Espacio</kbd> Tirar</span>
+        <span><kbd>Clic Izq + Arrastre</kbd> Fuerza (Flojo / Fuerte)</span>
+        <span><kbd>W / S / Rueda</kbd> Ajustar potencia</span>
+        <span><kbd>Espacio</kbd> Golpear</span>
         <span><kbd>Clic Der</kbd> Cámara</span>
-        <span><kbd>Rueda</kbd> Zoom</span>
+        <span><kbd>Esc</kbd> Cancelar</span>
         <span><kbd>Tab</kbd> Ver hoyo</span>
         <span><kbd>R</kbd> Recentrar</span>
       </div>

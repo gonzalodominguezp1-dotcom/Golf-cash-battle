@@ -64,6 +64,8 @@ export class GolfGame {
     this.orbitYaw = 0;
     this.orbiting = false;
     this.charging = false;
+    this.spaceCharging = false;
+    this.chargeAnchor = null;
     this.keyLeft = false;
     this.keyRight = false;
     this.keyShift = false;
@@ -94,6 +96,8 @@ export class GolfGame {
     this.power = 0;
     this.drag = null;
     this.charging = false;
+    this.spaceCharging = false;
+    this.chargeAnchor = null;
     this.orbiting = false;
     this.orbitYaw = 0;
     this.keyLeft = false;
@@ -352,14 +356,25 @@ export class GolfGame {
       if (isMouse) {
         if (e.button === 0) {
           if (isMoving(this.ball)) return;
+          el.setPointerCapture(e.pointerId);
           this.charging = true;
           this.chargeStartTick = this.tick;
           this.mouseTurns = 0;
-          this.chargeAnchorY = e.clientY;
+          this.chargeAnchor = {
+            id: e.pointerId,
+            x: e.clientX,
+            y: e.clientY,
+            baseYaw: this.yaw,
+            lastTick: this.yaw,
+            dir: 0,
+            startPower: this.power,
+          };
           if (!this.aimStartTick) this.aimStartTick = this.tick;
         } else if (e.button === 2) {
-          if (this.charging) {
+          if (this.charging || this.spaceCharging || this.power > 0) {
             this.charging = false;
+            this.spaceCharging = false;
+            this.chargeAnchor = null;
             this.power = 0;
             this.fullPower = false;
             setCharge(0);
@@ -385,6 +400,40 @@ export class GolfGame {
           this.orbitYaw = (dx * 2.8) / (el.clientWidth || 1);
           return;
         }
+        if (this.charging && this.chargeAnchor) {
+          const ca = this.chargeAnchor;
+          const h = el.clientHeight || 1, w = el.clientWidth || 1;
+          const dy = e.clientY - ca.y;
+          this.lastMouseY = e.clientY;
+          this.lastMouseX = e.clientX;
+          // Arrastrar hacia abajo/atrás incrementa la fuerza con el ratón; empujar hacia adelante la reduce
+          const baseP = ca.startPower || 0;
+          this.power = THREE.MathUtils.clamp(baseP + (dy / (h * 0.32)), 0, 1);
+
+          // Ajuste simultáneo de dirección horizontal con el ratón
+          const dx = e.clientX - (ca.px ?? ca.x);
+          if (dx !== 0) {
+            if (Math.sign(dx) !== ca.dir) {
+              if (ca.dir) this.mouseTurns = (this.mouseTurns || 0) + 1;
+              ca.dir = Math.sign(dx);
+            }
+            ca.baseYaw += (dx * 2.2 * (1 - 0.65 * this.power)) / w;
+            ca.px = e.clientX;
+            this.yaw = ca.baseYaw;
+          }
+          if (Math.abs(this.yaw - ca.lastTick) > 0.08) {
+            ca.lastTick = this.yaw;
+            sfx.tick();
+          }
+          setCharge(this.power);
+          if (this.power >= 1 && !this.fullPower) {
+            sfx.full();
+          }
+          this.fullPower = this.power >= 1;
+          this.onAim?.(this.power);
+          return;
+        }
+        // Apuntado libre al mover el cursor sin pulsar botones
         if (!isMoving(this.ball) && !this.sunk && this.intro >= 1) {
           const dx = e.movementX ?? (this.lastMouseX != null ? e.clientX - this.lastMouseX : 0);
           this.lastMouseX = e.clientX;
@@ -393,7 +442,7 @@ export class GolfGame {
               if (this.mouseDir) this.mouseTurns = (this.mouseTurns || 0) + 1;
               this.mouseDir = Math.sign(dx);
             }
-            const sens = 0.0032 * (1 - 0.5 * this.power);
+            const sens = 0.0032;
             this.yaw += dx * sens;
             if (Math.abs(this.yaw - this.lastMouseTick) > 0.08) {
               this.lastMouseTick = this.yaw;
@@ -433,10 +482,14 @@ export class GolfGame {
       const isMouse = e.pointerType === 'mouse';
       if (isMouse) {
         if (e.button === 0 && this.charging) {
+          if (el.hasPointerCapture?.(e.pointerId)) {
+            try { el.releasePointerCapture(e.pointerId); } catch {}
+          }
           const power = this.power;
           const dragTicks = Math.max(12, this.tick - this.chargeStartTick);
           const turns = Math.max(1, this.mouseTurns || 1);
           this.charging = false;
+          this.chargeAnchor = null;
           this.power = 0;
           this.fullPower = false;
           setCharge(0);
@@ -465,6 +518,7 @@ export class GolfGame {
     this.#onPointerCancel = (e) => {
       if (e.pointerType === 'mouse') {
         this.charging = false;
+        this.chargeAnchor = null;
         this.orbiting = false;
         this.orbitYaw = 0;
         this.power = 0;
@@ -483,20 +537,95 @@ export class GolfGame {
 
     this.#onWheel = (e) => {
       e.preventDefault();
-      const delta = Math.sign(e.deltaY) * 0.08;
-      this.zoomLevel = THREE.MathUtils.clamp((this.zoomLevel ?? 1) + delta, 0.65, 1.55);
+      // Si el usuario mantiene pulsado Ctrl o Alt, o la bola está en movimiento, la rueda hace zoom de cámara:
+      if (e.ctrlKey || e.altKey || isMoving(this.ball) || this.sunk || this.intro < 1) {
+        const delta = Math.sign(e.deltaY) * 0.08;
+        this.zoomLevel = THREE.MathUtils.clamp((this.zoomLevel ?? 1) + delta, 0.65, 1.55);
+        return;
+      }
+      // Con la bola parada, la rueda del ratón ajusta directamente la fuerza de tiro:
+      // Hacia arriba: más fuerte (+5%). Hacia abajo: más flojo (-5%).
+      const delta = -Math.sign(e.deltaY) * 0.05;
+      this.power = THREE.MathUtils.clamp(Math.round((this.power + delta) * 100) / 100, 0, 1);
+      if (this.charging && this.chargeAnchor) {
+        const h = el.clientHeight || 1;
+        const dy = (this.lastMouseY ?? this.chargeAnchor.y) - this.chargeAnchor.y;
+        this.chargeAnchor.startPower = THREE.MathUtils.clamp(this.power - (dy / (h * 0.32)), 0, 1);
+      }
+      setCharge(this.power);
+      this.onAim?.(this.power);
+      if (this.power >= 1 && !this.fullPower) {
+        sfx.full();
+        this.fullPower = true;
+      } else if (this.power < 1) {
+        this.fullPower = false;
+      }
+      if (this.power <= 0.02) {
+        this.aimDots.hide();
+      }
     };
 
     this.#onKeyDown = (e) => {
-      if (e.repeat && e.code !== 'ArrowLeft' && e.code !== 'ArrowRight' && e.code !== 'KeyA' && e.code !== 'KeyD') return;
+      if (e.repeat && e.code !== 'ArrowLeft' && e.code !== 'ArrowRight' && e.code !== 'KeyA' && e.code !== 'KeyD' && e.code !== 'KeyW' && e.code !== 'KeyS' && e.code !== 'ArrowUp' && e.code !== 'ArrowDown') return;
       if (e.code === 'KeyA' || e.code === 'ArrowLeft') this.keyLeft = true;
       else if (e.code === 'KeyD' || e.code === 'ArrowRight') this.keyRight = true;
       else if (e.shiftKey) this.keyShift = true;
-      else if (e.code === 'Space') {
-        if (!isMoving(this.ball) && !this.sunk && this.intro >= 1 && !this.charging) {
+      else if (e.code === 'KeyW' || e.code === 'ArrowUp') {
+        // Incrementar fuerza de tiro con teclado (más fuerte)
+        if (!isMoving(this.ball) && !this.sunk && this.intro >= 1) {
           e.preventDefault();
-          this.charging = true;
-          this.chargeStartTick = this.tick;
+          this.power = THREE.MathUtils.clamp(Math.round((this.power + 0.05) * 100) / 100, 0, 1);
+          if (this.charging && this.chargeAnchor) {
+            const h = el.clientHeight || 1;
+            const dy = (this.lastMouseY ?? this.chargeAnchor.y) - this.chargeAnchor.y;
+            this.chargeAnchor.startPower = THREE.MathUtils.clamp(this.power - (dy / (h * 0.32)), 0, 1);
+          }
+          setCharge(this.power);
+          this.onAim?.(this.power);
+          if (this.power >= 1 && !this.fullPower) {
+            sfx.full();
+            this.fullPower = true;
+          }
+        }
+      } else if (e.code === 'KeyS' || e.code === 'ArrowDown') {
+        // Reducir fuerza de tiro con teclado (más flojo)
+        if (!isMoving(this.ball) && !this.sunk && this.intro >= 1) {
+          e.preventDefault();
+          this.power = THREE.MathUtils.clamp(Math.round((this.power - 0.05) * 100) / 100, 0, 1);
+          if (this.charging && this.chargeAnchor) {
+            const h = el.clientHeight || 1;
+            const dy = (this.lastMouseY ?? this.chargeAnchor.y) - this.chargeAnchor.y;
+            this.chargeAnchor.startPower = THREE.MathUtils.clamp(this.power - (dy / (h * 0.32)), 0, 1);
+          }
+          setCharge(this.power);
+          this.onAim?.(this.power);
+          if (this.power < 1) this.fullPower = false;
+          if (this.power <= 0.02) this.aimDots.hide();
+        }
+      } else if (e.code === 'Space') {
+        if (!isMoving(this.ball) && !this.sunk && this.intro >= 1) {
+          e.preventDefault();
+          if (this.power >= 0.05) {
+            // Disparar con la fuerza ajustada previamente
+            const p = this.power;
+            const dragTicks = Math.max(12, this.tick - (this.chargeStartTick || this.tick));
+            const turns = Math.max(1, this.mouseTurns || 1);
+            this.charging = false;
+            this.spaceCharging = false;
+            this.chargeAnchor = null;
+            this.power = 0;
+            this.fullPower = false;
+            setCharge(0);
+            this.onAim?.(0);
+            this.aimDots.hide();
+            this.#executeShot(p, dragTicks, turns);
+            this.mouseTurns = 0;
+          } else if (!this.spaceCharging) {
+            // Cargar fuerza progresivamente manteniendo espacio
+            this.spaceCharging = true;
+            this.chargeStartTick = this.tick;
+            if (!this.aimStartTick) this.aimStartTick = this.tick;
+          }
         }
       } else if (e.code === 'Tab' || e.code === 'KeyM') {
         e.preventDefault();
@@ -508,8 +637,10 @@ export class GolfGame {
           sfx.tap();
         }
       } else if (e.code === 'Escape') {
-        if (this.charging) {
+        if (this.charging || this.spaceCharging || this.power > 0) {
           this.charging = false;
+          this.spaceCharging = false;
+          this.chargeAnchor = null;
           this.power = 0;
           this.fullPower = false;
           setCharge(0);
@@ -524,12 +655,14 @@ export class GolfGame {
       if (e.code === 'KeyA' || e.code === 'ArrowLeft') this.keyLeft = false;
       else if (e.code === 'KeyD' || e.code === 'ArrowRight') this.keyRight = false;
       if (!e.shiftKey) this.keyShift = false;
-      if (e.code === 'Space' && this.charging) {
+      if (e.code === 'Space' && this.spaceCharging) {
         e.preventDefault();
         const power = this.power;
         const dragTicks = Math.max(12, this.tick - this.chargeStartTick);
         const turns = Math.max(1, this.mouseTurns || 1);
+        this.spaceCharging = false;
         this.charging = false;
+        this.chargeAnchor = null;
         this.power = 0;
         this.fullPower = false;
         setCharge(0);
@@ -716,9 +849,9 @@ export class GolfGame {
         this.yaw += keySpeed;
         this.mouseTurns = (this.mouseTurns || 0) + 1;
       }
-      if (this.charging) {
+      if (this.spaceCharging) {
         const elapsedSec = (this.tick - this.chargeStartTick) * DT;
-        this.power = THREE.MathUtils.clamp(elapsedSec / 1.15, 0, 1);
+        this.power = THREE.MathUtils.clamp(elapsedSec / 1.5, 0, 1);
         setCharge(this.power);
         if (this.power >= 1 && !this.fullPower) {
           sfx.full();
@@ -788,7 +921,7 @@ export class GolfGame {
       this.courseView.spinners[i].rotation.y = -Math.atan2(bz - az, bx - ax);
     });
 
-    if ((this.drag || this.charging) && this.power > 0.02) {
+    if ((this.drag || this.charging || this.spaceCharging || this.power > 0.02) && this.power > 0.02) {
       const color = new THREE.Color().setHSL(0.33 - this.power * 0.33, 0.95, 0.55);
       this.aimDots.show(this.#predictPath(), color, this.t);
       this.aimDots.showRing(this.ballRoot.position, this.t);
