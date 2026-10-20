@@ -232,57 +232,95 @@ async function showLobby() {
 
 // ---------- inspector 3D de skins para escritorio ----------
 
+const RARITY_HEX = {
+  bronze: 0xc87a38,
+  silver: 0x94a3b8,
+  gold: 0xffd23f,
+  diamond: 0x00e5ff,
+  emerald: 0x00f076,
+};
+
 function createSkinInspector(container, initialSkin) {
-  const w = 260, h = 260;
+  const w = 280, h = 280;
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setSize(w, h, false);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.15;
+  renderer.toneMappingExposure = 1.2;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 50);
-  camera.position.set(0, 0.25, 1.35);
-  camera.lookAt(0, 0, 0);
+  const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 50);
+  camera.position.set(0, 0.32, 1.4);
+  camera.lookAt(0, 0.02, 0);
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.9));
-  const key = new THREE.DirectionalLight(0xfff5ea, 2.4);
-  key.position.set(2, 3, 2.5);
+  // Iluminación de estudio
+  scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+  const key = new THREE.DirectionalLight(0xfff7ed, 2.8);
+  key.position.set(2.5, 3.5, 2.5);
   scene.add(key);
-  const fill = new THREE.DirectionalLight(0x8cb0ff, 1.3);
-  fill.position.set(-2.5, -0.5, -1.5);
+  const fill = new THREE.DirectionalLight(0x7eaaff, 1.4);
+  fill.position.set(-2.8, -0.2, -1.5);
   scene.add(fill);
-  const rim = new THREE.DirectionalLight(0xffffff, 1.8);
-  rim.position.set(0, 2.5, -2);
+  const rim = new THREE.DirectionalLight(0xffffff, 2.2);
+  rim.position.set(0, 3, -2.5);
   scene.add(rim);
 
-  const geo = new THREE.SphereGeometry(0.38, 48, 36);
+  const rarityColor = RARITY_HEX[initialSkin.rarity] || 0xffd23f;
+  const underLight = new THREE.PointLight(rarityColor, 3.2, 3.0);
+  underLight.position.set(0, -0.38, 0.2);
+  scene.add(underLight);
+
+  // Bola 3D
+  const geo = new THREE.SphereGeometry(0.38, 64, 48);
   let currentMat = skinMaterial(initialSkin);
   const ballMesh = new THREE.Mesh(geo, currentMat);
+  ballMesh.position.y = 0.02;
   scene.add(ballMesh);
 
-  // Sombra suave en la base
+  // Pedestal reflectante de estudio
+  const pedGeo = new THREE.CylinderGeometry(0.55, 0.58, 0.035, 48);
+  const pedMat = new THREE.MeshStandardMaterial({
+    color: 0x150d26,
+    metalness: 0.85,
+    roughness: 0.18,
+  });
+  const pedMesh = new THREE.Mesh(pedGeo, pedMat);
+  pedMesh.position.y = -0.42;
+  scene.add(pedMesh);
+
+  // Anillo luminoso exterior del pedestal
+  const ringGeo = new THREE.RingGeometry(0.53, 0.57, 48);
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: rarityColor,
+    side: THREE.DoubleSide,
+  });
+  const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+  ringMesh.rotation.x = -Math.PI / 2;
+  ringMesh.position.y = -0.401;
+  scene.add(ringMesh);
+
+  // Sombra suave proyectada sobre el pedestal
   const sCanvas = document.createElement('canvas');
   sCanvas.width = sCanvas.height = 128;
   const sg = sCanvas.getContext('2d');
   const rad = sg.createRadialGradient(64, 64, 0, 64, 64, 60);
-  rad.addColorStop(0, 'rgba(0,0,0,0.6)');
-  rad.addColorStop(0.5, 'rgba(0,0,0,0.22)');
+  rad.addColorStop(0, 'rgba(0,0,0,0.7)');
+  rad.addColorStop(0.5, 'rgba(0,0,0,0.25)');
   rad.addColorStop(1, 'rgba(0,0,0,0)');
   sg.fillStyle = rad;
   sg.fillRect(0, 0, 128, 128);
   const shadowTex = new THREE.CanvasTexture(sCanvas);
   const shadowMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.1, 1.1),
-    new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, opacity: 0.7, depthWrite: false }),
+    new THREE.PlaneGeometry(0.95, 0.95),
+    new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, opacity: 0.8, depthWrite: false }),
   );
   shadowMesh.rotation.x = -Math.PI / 2;
-  shadowMesh.position.y = -0.42;
+  shadowMesh.position.y = -0.399;
   scene.add(shadowMesh);
 
-  let rotX = 0.15, rotY = 0;
+  let rotX = 0.12, rotY = 0;
   let velX = 0, velY = 0.005;
   let isDragging = false;
   let lastX = 0, lastY = 0;
@@ -308,9 +346,14 @@ function createSkinInspector(container, initialSkin) {
     isDragging = false;
     renderer.domElement.style.cursor = 'grab';
   };
+  const onWheel = (e) => {
+    e.preventDefault();
+    camera.position.z = Math.max(1.0, Math.min(2.1, camera.position.z + e.deltaY * 0.0015));
+  };
 
   renderer.domElement.style.cursor = 'grab';
   renderer.domElement.addEventListener('pointerdown', onDown);
+  renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
   window.addEventListener('pointermove', onMove);
   window.addEventListener('pointerup', onUp);
 
@@ -335,14 +378,25 @@ function createSkinInspector(container, initialSkin) {
       const oldMat = ballMesh.material;
       ballMesh.material = skinMaterial(skin);
       oldMat?.dispose();
+      const col = RARITY_HEX[skin.rarity] || 0xffd23f;
+      underLight.color.setHex(col);
+      ringMat.color.setHex(col);
     },
     destroy() {
       active = false;
       renderer.domElement.removeEventListener('pointerdown', onDown);
+      renderer.domElement.removeEventListener('wheel', onWheel);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       renderer.dispose();
       geo.dispose();
+      pedGeo.dispose();
+      pedMat.dispose();
+      ringGeo.dispose();
+      ringMat.dispose();
+      shadowMesh.geometry.dispose();
+      shadowMesh.material.dispose();
+      shadowTex.dispose();
       ballMesh.material?.dispose();
       renderer.domElement.remove();
     },
@@ -386,7 +440,7 @@ async function showSkins() {
         <aside class="skin-inspector-panel">
           <span class="rarity badge-rarity rarity-${selectedSkin.rarity}">${RARITIES[selectedSkin.rarity].name}</span>
           <div class="skin-inspector-canvas"></div>
-          <p class="skin-inspector-hint">🖱️ Arrastra con el ratón para girar 360°</p>
+          <p class="skin-inspector-hint">🖱️ Arrastra para girar 360° · Rueda para zoom</p>
           <h3 class="skin-inspector-name">${selectedSkin.name}</h3>
           <p class="skin-inspector-desc">Materiales 3D con brillo físico e iridiscencia</p>
           <button class="primary skin-inspector-btn" disabled>Equipada</button>
