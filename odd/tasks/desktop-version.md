@@ -17,7 +17,7 @@ Adaptar el juego y sus interfaces para una experiencia de escritorio (PC) nativa
 - [x] `task-1`: Controles de ratón y motor de disparo en `GolfGame.js` (apuntado libre, click-hold, cámara orbital, zoom, atajos de teclado y telemetría de ratón) — Commit: `4c84e48`.
 - [x] `task-2`: Cámaras panorámicas, FOV adaptativo y HUD de juego para escritorio (`GolfGame.js`, `main.js`, `style.css`) — Commit: `0b0d3aa`.
 - [x] `task-3`: Shell de navegación de escritorio y rediseño responsivo de pantallas (`main.js`, `style.css`) — Commit: `0231fe9`.
-- [ ] `task-4`: Tests de telemetría, controles y validación completa de la suite.
+- [x] `task-4`: Tests de telemetría, controles y validación completa de la suite — Commit: `841b9a9`.
 
 ## Registro de Estado y Evidencia
 - **Ruta implementada**: Delegada directa con orquestador y tareas desacopladas.
@@ -26,3 +26,4 @@ Adaptar el juego y sus interfaces para una experiencia de escritorio (PC) nativa
 - **task-1 completada**: Ratón con apuntado libre, carga continua de tiro, cámara orbital (clic derecho), zoom con rueda, hotkeys (WASD/flechas, espacio, Tab, R, Esc) y telemetría de ticks de ratón probada con 32 tests unitarios pasando.
 - **task-2 completada**: FOV dinámico panorámico 16:9/21:9, HUD widescreen con rivales en posición superior despejada, barra inferior de ayuda con hotkeys contextuales (`desktop-controls-bar`), botón de pantalla completa con soporte F11 y atajo visual `Tab` en mapa.
 - **task-3 completada**: Desktop Topbar con branding, pestañas de navegación integradas con hotkeys numéricos [1-4], botón de muteo en cabecera [M], layout responsivo de 1140px, Lobby en grid de 3 columnas para tiers, skins en grid de 4 columnas y layouts split-view en Wallet y Cuenta.
+- **task-4 completada**: Nueva suite `tests/desktop-controls.test.js` añadida y validada. 36/36 tests pasando (100% pass) y build de producción con Vite verificado con éxito en 1.08s.
