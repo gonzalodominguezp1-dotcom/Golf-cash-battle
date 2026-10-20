@@ -53,13 +53,36 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
     app.append(
       h(`
       <header class="topbar">
-        <button class="level" data-go="skins" style="--p:${(into / need) * 100}%">
-          <span class="level-ring"><b>${level}</b></span>
-          <span class="level-text"><small>Nivel</small><span class="xpbar"><i></i></span></span>
-        </button>
-        <button class="balance" data-go="wallet">${coin(balance)}<span class="plus">+</span></button>
+        <div class="topbar-brand">
+          <button class="brand-btn" data-go="lobby">
+            <span class="brand-icon">⛳</span>
+            <span class="brand-name">Golf Cash Battle</span>
+          </button>
+        </div>
+        <nav class="desktop-nav">
+          <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}"><span>⛳</span>Jugar <kbd>1</kbd></button>
+          <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}"><span>✨</span>Skins <kbd>2</kbd></button>
+          <button data-go="wallet" class="${screen === 'wallet' ? 'on' : ''}"><span>💎</span>Wallet <kbd>3</kbd></button>
+          <button data-go="account" class="${screen === 'account' ? 'on' : ''}"><span>👤</span>Cuenta <kbd>4</kbd></button>
+        </nav>
+        <div class="topbar-right">
+          <button class="level" data-go="skins" style="--p:${(into / need) * 100}%" title="Nivel ${level} · ${(into / need * 100).toFixed(0)}%">
+            <span class="level-ring"><b>${level}</b></span>
+            <span class="level-text"><small>Nivel</small><span class="xpbar"><i></i></span></span>
+          </button>
+          <button class="balance" data-go="wallet" title="Tu saldo">${coin(balance)}<span class="plus">+</span></button>
+          <button class="pill mute topbar-sound-btn" aria-label="Sonido" title="Silenciar / Activar sonido (M)">${isMuted() ? '🔇' : '🔊'}</button>
+        </div>
       </header>`),
     );
+    const topMute = app.querySelector('.topbar-sound-btn');
+    if (topMute) {
+      topMute.addEventListener('click', () => {
+        setMuted(!isMuted());
+        topMute.textContent = isMuted() ? '🔇' : '🔊';
+        try { localStorage.setItem('gcb.muted', isMuted() ? '1' : '0'); } catch {}
+      });
+    }
   }
   app.append(content);
   if (!hideHeader && nav) {
@@ -76,6 +99,21 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
   app.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => go(b.dataset.go)));
   bindHolo(app);
 }
+
+// Atajos globales de navegación por teclado en menús
+window.addEventListener('keydown', (e) => {
+  if (game || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.code === 'Digit1') go('lobby');
+  else if (e.code === 'Digit2') go('skins');
+  else if (e.code === 'Digit3') go('wallet');
+  else if (e.code === 'Digit4') go('account');
+  else if (e.code === 'KeyM') {
+    setMuted(!isMuted());
+    const topMute = document.querySelector('.topbar-sound-btn');
+    if (topMute) topMute.textContent = isMuted() ? '🔇' : '🔊';
+    try { localStorage.setItem('gcb.muted', isMuted() ? '1' : '0'); } catch {}
+  }
+});
 
 function go(to) {
   if (to === 'wallet') return showWallet();

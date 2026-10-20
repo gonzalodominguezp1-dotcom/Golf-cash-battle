@@ -46,13 +46,51 @@ h1, h2, .score-title { font-family: var(--display); font-weight: 400; letter-spa
 
 /* ---------- barra superior y navegación ---------- */
 
+/* ---------- barra superior y navegación ---------- */
+
 .topbar {
   position: sticky; top: 0; z-index: 5;
-  display: flex; justify-content: space-between; align-items: center; gap: 10px;
-  padding: calc(env(safe-area-inset-top) + 10px) 16px 10px;
-  background: linear-gradient(180deg, rgba(18, 10, 43, 0.95), rgba(18, 10, 43, 0.7));
-  backdrop-filter: blur(10px);
+  display: flex; justify-content: space-between; align-items: center; gap: 16px;
+  padding: calc(env(safe-area-inset-top) + 10px) 20px 10px;
+  background: linear-gradient(180deg, rgba(18, 10, 43, 0.96), rgba(18, 10, 43, 0.78));
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line);
 }
+
+.topbar-brand { display: flex; align-items: center; }
+.brand-btn {
+  display: flex; align-items: center; gap: 10px; background: none; padding: 0;
+  font-family: var(--display); font-size: 22px; color: #fff; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  letter-spacing: 0.02em;
+}
+.brand-icon { font-size: 24px; filter: drop-shadow(0 2px 6px rgba(255, 61, 154, 0.5)); }
+
+.desktop-nav {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  background: rgba(30, 16, 70, 0.65);
+  padding: 5px 8px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px var(--line) inset;
+}
+.desktop-nav button {
+  display: flex; align-items: center; gap: 6px; background: none; padding: 7px 14px;
+  border-radius: 999px; font-size: 13px; font-weight: 800; color: var(--muted);
+  transition: all 0.15s ease;
+}
+.desktop-nav button kbd {
+  background: rgba(255, 255, 255, 0.14); color: #fff; font-size: 10px; padding: 1px 5px;
+  border-radius: 4px; font-family: inherit; font-weight: 800;
+}
+.desktop-nav button:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+.desktop-nav button.on {
+  background: linear-gradient(180deg, var(--pink), #b5179e); color: #fff;
+  box-shadow: 0 4px 14px rgba(255, 61, 154, 0.45);
+}
+
+.topbar-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+
 .level { display: flex; align-items: center; gap: 8px; background: none; padding: 0; }
 .level-ring {
   width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center;
@@ -80,6 +118,8 @@ h1, h2, .score-title { font-family: var(--display); font-weight: 400; letter-spa
   background: radial-gradient(circle at 35% 30%, #fff7c2, #ffcc00 45%, #c98a00 75%);
   box-shadow: 0 0 0 1.5px #a86f00 inset;
 }
+
+.topbar-sound-btn { font-size: 15px; padding: 6px 10px; cursor: pointer; }
 
 .tabbar {
   position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom) + 12px); z-index: 6;
@@ -489,6 +529,90 @@ h2 { margin: 22px 0 10px; font-size: 21px; }
 }
 
 @media (min-width: 900px) {
+  /* Barra superior y navegación de escritorio */
+  .topbar {
+    padding: 12px 32px;
+  }
+  .desktop-nav {
+    display: flex;
+  }
+  .tabbar {
+    display: none !important;
+  }
+
+  /* Contenedor de pantalla amplio */
+  .screen {
+    max-width: 1140px;
+    padding: 24px 32px 80px;
+  }
+
+  /* Lobby y Hero */
+  .hero {
+    padding: 24px 32px;
+    gap: 28px;
+    border-radius: 28px;
+  }
+  .hero-text strong {
+    font-size: 34px;
+  }
+  .tiers {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+  .tier {
+    transition: transform 0.22s cubic-bezier(0.2, 1, 0.4, 1), box-shadow 0.22s;
+  }
+  .tier:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55) inset, 0 18px 40px rgba(0, 0, 0, 0.5);
+  }
+
+  /* Grid de Skins en escritorio */
+  .skin-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+  .skin-card {
+    transition: transform 0.2s, box-shadow 0.2s;
+    cursor: pointer;
+  }
+  .skin-card:hover:not(.locked) {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.45);
+  }
+  .challenges {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Wallet en dos columnas */
+  .screen.wallet {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 28px;
+    align-items: start;
+  }
+  .screen.wallet .section-head, .screen.wallet .offline {
+    grid-column: 1 / -1;
+  }
+
+  /* Cuenta en dos columnas */
+  .screen.account {
+    display: grid;
+    grid-template-columns: 420px 1fr;
+    gap: 28px;
+    align-items: start;
+  }
+  .screen.account .section-head, .screen.account > .profile-card, .screen.account > .offline {
+    grid-column: 1 / -1;
+  }
+
+  /* Modales en escritorio */
+  .card {
+    width: min(100%, 540px);
+    padding: 26px 30px;
+  }
+
+  /* HUD del juego */
   .hud {
     top: 18px;
     left: 24px;
