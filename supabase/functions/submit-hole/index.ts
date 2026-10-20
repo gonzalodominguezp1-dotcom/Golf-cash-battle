@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
   if (!course) return json({ error: 'wrong_hole' }, 400);
 
   const clean = shots.map((s: { tick: unknown; yaw: unknown; power: unknown }) => ({ tick: s?.tick, yaw: s?.yaw, power: s?.power }));
-  const r = replayHole(course, clean, { maxStrokes: Number(cfg?.value ?? 8), endTick: course.noCup ? null : end ?? null });
+  const r = replayHole(course, clean, { maxStrokes: Number(cfg?.value ?? 8), endTick: hole < t.courses.length ? end ?? null : null });
   if (!r.ok) return json({ error: 'invalid_shots', reason: 'reason' in r ? r.reason : null }, 422);
 
   // el antibots no debe impedir apuntar el hoyo si falla
