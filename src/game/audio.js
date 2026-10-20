@@ -269,11 +269,12 @@ let charge = null;
 export function setCharge(power) {
   if (!ctx) return;
   if (!charge) {
-    // tono suave: dos senos (fundamental y quinta) por un filtro paso bajo,
-    // nada de triangulares chillonas
+    // tono suave: senos (fundamental y octava) por un filtro paso bajo, sin
+    // los armónicos ásperos de la triangular; agudo justo para oírse en el
+    // altavoz del móvil, que no reproduce graves
     const f = ctx.createBiquadFilter();
     f.type = 'lowpass';
-    f.frequency.value = 700;
+    f.frequency.value = 1400;
     f.Q.value = 0.4;
     const g = ctx.createGain();
     g.gain.value = 0;
@@ -282,7 +283,7 @@ export function setCharge(power) {
     const o5 = ctx.createOscillator();
     o5.type = 'sine';
     const g5 = ctx.createGain();
-    g5.gain.value = 0.35;
+    g5.gain.value = 0.18;
     o.connect(f);
     o5.connect(g5).connect(f);
     f.connect(g).connect(master);
@@ -293,19 +294,19 @@ export function setCharge(power) {
   const t = ctx.currentTime;
   const moving = Math.abs(power - charge.last) > 0.004;
   charge.last = power;
-  const pitch = 150 + power * 170;
+  const pitch = 330 + power * 330;
   charge.o.frequency.setTargetAtTime(pitch, t, 0.06);
-  charge.o5.frequency.setTargetAtTime(pitch * 1.5, t, 0.06);
-  charge.f.frequency.setTargetAtTime(500 + power * 700, t, 0.08);
+  charge.o5.frequency.setTargetAtTime(pitch * 2, t, 0.06);
+  charge.f.frequency.setTargetAtTime(1200 + power * 800, t, 0.08);
   if (power <= 0.02) {
     charge.g.gain.cancelScheduledValues(t);
     charge.g.gain.setTargetAtTime(0, t, 0.05);
   } else if (moving) {
-    // se oye mientras cambias la potencia y se apaga casi del todo si te quedas quieto apuntando
-    const level = 0.018 + power * 0.016;
+    // suena mientras cambias la potencia y baja a la mitad si te quedas quieto apuntando
+    const level = 0.035 + power * 0.03;
     charge.g.gain.cancelScheduledValues(t);
     charge.g.gain.setTargetAtTime(level, t, 0.05);
-    charge.g.gain.setTargetAtTime(level * 0.2, t + 0.25, 0.5);
+    charge.g.gain.setTargetAtTime(level * 0.5, t + 0.4, 0.6);
   }
 }
 
