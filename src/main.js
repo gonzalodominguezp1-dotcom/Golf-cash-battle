@@ -19,9 +19,14 @@ let backend, wallet, matches;
 const practice = new MatchService(new LocalWallet(), Math.random, COURSES.length);
 const progress = new Progress();
 
+// clave nueva: quien silenció sin querer cuando no se oía nada vuelve a tener sonido
+const MUTE_KEY = 'gcb.muted.v2';
 try {
-  setMuted(localStorage.getItem('gcb.muted') === '1');
+  setMuted(localStorage.getItem(MUTE_KEY) === '1');
 } catch {}
+
+// el audio solo puede arrancar con un gesto: cualquier toque o tecla vale
+for (const ev of ['pointerdown', 'touchend', 'keydown']) document.addEventListener(ev, unlockAudio, { capture: true, passive: true });
 
 // sonido suave en todos los botones
 document.addEventListener('click', (e) => {
@@ -86,7 +91,7 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
       topMute.addEventListener('click', () => {
         setMuted(!isMuted());
         topMute.textContent = isMuted() ? '🔇' : '🔊';
-        try { localStorage.setItem('gcb.muted', isMuted() ? '1' : '0'); } catch {}
+        try { localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0'); } catch {}
       });
     }
   }
@@ -128,7 +133,7 @@ window.addEventListener('keydown', (e) => {
     setMuted(!isMuted());
     const topMute = document.querySelector('.topbar-sound-btn');
     if (topMute) topMute.textContent = isMuted() ? '🔇' : '🔊';
-    try { localStorage.setItem('gcb.muted', isMuted() ? '1' : '0'); } catch {}
+    try { localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0'); } catch {}
   }
 });
 
@@ -1120,7 +1125,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         soundBtn.querySelector('.btn-icon').textContent = muted ? '🔇' : '🔊';
         soundBtn.querySelector('.btn-text').textContent = muted ? 'Silenciado' : 'Activado';
         muteBtn.textContent = muted ? '🔇' : '🔊';
-        try { localStorage.setItem('gcb.muted', muted ? '1' : '0'); } catch {}
+        try { localStorage.setItem(MUTE_KEY, muted ? '1' : '0'); } catch {}
       });
 
       const fsModalBtn = overlay.querySelector('.toggle-fs-btn');
@@ -1222,12 +1227,13 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
     });
     game.load(course, { bots: players.filter((p) => p.isBot), skin: progress.skin, firstSunkTick, timeLimit });
     showDistance();
+    if (isMuted()) toast('🔇 Sonido silenciado · actívalo en ⚙️ Ajustes', '#ffffff');
     const muteBtn = view.querySelector('.mute');
     muteBtn.addEventListener('click', () => {
       setMuted(!isMuted());
       muteBtn.textContent = isMuted() ? '🔇' : '🔊';
       try {
-        localStorage.setItem('gcb.muted', isMuted() ? '1' : '0');
+        localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0');
       } catch {}
     });
     const fsBtn = view.querySelector('.fullscreen');

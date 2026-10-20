@@ -166,7 +166,12 @@ function impulse(seconds = 1.4) {
 export function unlockAudio() {
   try {
     if (!ctx) {
-      ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SR });
+      // en iPhone, sin esto el interruptor de silencio apaga todo el audio web
+      if (navigator.audioSession) navigator.audioSession.type = 'playback';
+      const AC = window.AudioContext || window.webkitAudioContext;
+      ctx = new AC({ sampleRate: SR });
+      // reanudar dentro del gesto antes de calcular los sonidos
+      ctx.resume?.();
       const comp = ctx.createDynamicsCompressor();
       master = ctx.createGain();
       master.gain.value = muted ? 0 : 0.9;
@@ -183,7 +188,8 @@ export function unlockAudio() {
         buffers[k] = b;
       }
     }
-    if (ctx.state === 'suspended') ctx.resume();
+    // suspended o interrupted (iPhone al volver de otra app)
+    if (ctx.state !== 'running') ctx.resume?.().catch(() => {});
   } catch {
     ctx = null;
   }
