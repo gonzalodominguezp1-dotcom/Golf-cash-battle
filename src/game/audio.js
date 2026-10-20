@@ -269,17 +269,44 @@ let charge = null;
 export function setCharge(power) {
   if (!ctx) return;
   if (!charge) {
-    const o = ctx.createOscillator();
-    o.type = 'triangle';
+    // tono suave: dos senos (fundamental y quinta) por un filtro paso bajo,
+    // nada de triangulares chillonas
+    const f = ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = 700;
+    f.Q.value = 0.4;
     const g = ctx.createGain();
     g.gain.value = 0;
-    o.connect(g).connect(master);
+    const o = ctx.createOscillator();
+    o.type = 'sine';
+    const o5 = ctx.createOscillator();
+    o5.type = 'sine';
+    const g5 = ctx.createGain();
+    g5.gain.value = 0.35;
+    o.connect(f);
+    o5.connect(g5).connect(f);
+    f.connect(g).connect(master);
     o.start();
-    charge = { o, g };
+    o5.start();
+    charge = { o, o5, f, g, last: 0 };
   }
   const t = ctx.currentTime;
-  charge.g.gain.setTargetAtTime(power > 0.02 ? 0.035 + power * 0.03 : 0, t, 0.03);
-  charge.o.frequency.setTargetAtTime(220 + power * 440, t, 0.03);
+  const moving = Math.abs(power - charge.last) > 0.004;
+  charge.last = power;
+  const pitch = 150 + power * 170;
+  charge.o.frequency.setTargetAtTime(pitch, t, 0.06);
+  charge.o5.frequency.setTargetAtTime(pitch * 1.5, t, 0.06);
+  charge.f.frequency.setTargetAtTime(500 + power * 700, t, 0.08);
+  if (power <= 0.02) {
+    charge.g.gain.cancelScheduledValues(t);
+    charge.g.gain.setTargetAtTime(0, t, 0.05);
+  } else if (moving) {
+    // se oye mientras cambias la potencia y se apaga casi del todo si te quedas quieto apuntando
+    const level = 0.018 + power * 0.016;
+    charge.g.gain.cancelScheduledValues(t);
+    charge.g.gain.setTargetAtTime(level, t, 0.05);
+    charge.g.gain.setTargetAtTime(level * 0.2, t + 0.25, 0.5);
+  }
 }
 
 /** Sonido ambiente según el hoyo: pájaros, olas o grillos. */
