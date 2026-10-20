@@ -409,3 +409,124 @@ h2 { margin: 22px 0 10px; font-size: 21px; }
 .notice { display: block; width: 100%; margin: 12px 0 0; padding: 10px 12px; border-radius: 12px; background: rgba(94, 240, 255, 0.14); color: #b8f6ff; font-size: 13px; font-weight: 700; text-align: center; }
 .link { background: none; color: var(--muted); text-decoration: underline; padding: 10px 0; font-size: 14px; }
 .kyc-box .primary { width: 100%; }
+
+/* ---------- estilos de escritorio para el juego y HUD ---------- */
+
+.pill.fullscreen {
+  pointer-events: auto;
+  cursor: pointer;
+  font-size: 15px;
+  padding: 6px 11px;
+  border: 0;
+  transition: transform 0.15s, background 0.2s;
+}
+.pill.fullscreen:hover, .pill.mute:hover {
+  background: rgba(255, 255, 255, 0.22);
+  transform: scale(1.05);
+}
+
+.kbd-hint {
+  display: inline-block;
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--yellow);
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.desktop-controls-bar {
+  display: none;
+}
+
+@media (min-width: 900px) and (pointer: fine) {
+  .desktop-controls-bar {
+    position: absolute;
+    bottom: 22px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 8px 18px;
+    background: rgba(18, 10, 43, 0.82);
+    backdrop-filter: blur(14px);
+    border-radius: 999px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.15) inset;
+    pointer-events: none;
+    z-index: 5;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--muted);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+  .desktop-controls-bar.fade-out {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+  .desktop-controls-bar kbd {
+    background: rgba(255, 255, 255, 0.16);
+    color: #fff;
+    padding: 2px 7px;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 800;
+    margin-right: 5px;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+  }
+  .hint-touch { display: none !important; }
+  .hint-mouse { display: inline-block !important; }
+}
+
+@media (max-width: 899px), (pointer: coarse) {
+  .hint-mouse { display: none !important; }
+  .hint-touch { display: inline-block !important; }
+  .desktop-controls-bar { display: none !important; }
+  .kbd-hint { display: none !important; }
+}
+
+@media (min-width: 900px) {
+  .hud {
+    top: 18px;
+    left: 24px;
+    right: 24px;
+    gap: 10px;
+  }
+  .hud .pill {
+    font-size: 15px;
+    padding: 8px 16px;
+  }
+  .rivals {
+    top: 18px;
+    left: auto;
+    right: 140px;
+    gap: 6px;
+  }
+  .rivals .chip {
+    padding: 3px 10px 3px 3px;
+    font-size: 13px;
+  }
+  .power {
+    right: 32px;
+    width: 24px;
+    height: min(45vh, 320px);
+  }
+  .power span {
+    font-size: 16px;
+  }
+  .map-btn {
+    left: 24px;
+    bottom: 24px;
+    padding: 11px 16px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: transform 0.15s, background 0.2s;
+  }
+  .map-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  }
+}

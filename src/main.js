@@ -585,6 +585,7 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
         ${tiebreak ? '' : '<div class="pill strokes">Golpes <b>0</b></div>'}
         <div class="pill dist">— m</div>
         <button class="pill mute" aria-label="Sonido">${isMuted() ? '🔇' : '🔊'}</button>
+        <button class="pill fullscreen" aria-label="Pantalla completa" title="Pantalla completa (F11)">⛶</button>
       </div>
       <div class="rivals">${players
         .map((p) => `<div class="chip ${p.id === 'me' ? 'me' : ''}" data-id="${p.id}" style="--c:${p.color}"><i>${p.name[0]}</i><b>${tiebreak ? '·' : 0}</b></div>`)
@@ -597,9 +598,20 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
         ${course.tip && !tiebreak ? `<em>${course.tip}</em>` : ''}
       </div>
       <div class="cup-banner"></div>
-      <div class="hint"><span>↔ Desliza para apuntar</span><span>↓ Tira hacia abajo y suelta</span></div>
+      <div class="hint">
+        <span class="hint-touch">↔ Desliza para apuntar · ↓ Tira y suelta</span>
+        <span class="hint-mouse">🖱️ Ratón para apuntar · Clic Izq. o [Espacio] para cargar y golpear</span>
+      </div>
+      <div class="desktop-controls-bar">
+        <span><kbd>Ratón</kbd> Apuntar</span>
+        <span><kbd>Clic Izq / Espacio</kbd> Tirar</span>
+        <span><kbd>Clic Der</kbd> Cámara</span>
+        <span><kbd>Rueda</kbd> Zoom</span>
+        <span><kbd>Tab</kbd> Ver hoyo</span>
+        <span><kbd>R</kbd> Recentrar</span>
+      </div>
       <div class="power"><div class="fill"></div><span>0%</span></div>
-      <button class="map-btn" aria-label="Ver el hoyo completo">Ver hoyo</button>
+      <button class="map-btn" aria-label="Ver el hoyo completo">Ver hoyo <kbd class="kbd-hint">Tab</kbd></button>
     </main>`);
   shell(view, { hideHeader: true }).then(() => {
     const strokesEl = view.querySelector('.strokes b');
@@ -639,6 +651,7 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
         if (!tiebreak) setChip('me', n, false);
         if (strokesEl) strokesEl.textContent = n;
         hint.classList.add('gone');
+        view.querySelector('.desktop-controls-bar')?.classList.add('fade-out');
       },
       onCup: (n) => {
         setChip('me', n, true);
@@ -665,6 +678,19 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
         localStorage.setItem('gcb.muted', isMuted() ? '1' : '0');
       } catch {}
     });
+    const fsBtn = view.querySelector('.fullscreen');
+    if (fsBtn) {
+      fsBtn.addEventListener('click', () => {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        } else {
+          document.exitFullscreen().catch(() => {});
+        }
+      });
+      document.addEventListener('fullscreenchange', () => {
+        fsBtn.textContent = document.fullscreenElement ? '🗗' : '⛶';
+      });
+    }
     function setChip(id, text, done) {
       const chip = view.querySelector(`.chip[data-id="${id}"]`);
       if (!chip) return;
