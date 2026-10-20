@@ -51,6 +51,18 @@ export class GolfGame {
     this.t = 0;
     this.running = false;
     this.overview = false;
+    this.zoomLevel = 1.0;
+    this.orbitYaw = 0;
+    this.orbiting = false;
+    this.charging = false;
+    this.keyLeft = false;
+    this.keyRight = false;
+    this.keyShift = false;
+    this.mouseTurns = 0;
+    this.chargeStartTick = 0;
+    this.aimStartTick = 0;
+    this.lastMouseX = null;
+    this.lastMouseTick = 0;
     this.#bindInput();
     this.resizeObserver = new ResizeObserver(() => this.#resize());
     this.resizeObserver.observe(container);
@@ -72,6 +84,16 @@ export class GolfGame {
     this.aim = []; // gesto de cada tiro { d: pasos con el dedo puesto, t: giros al apuntar } para el antibots
     this.power = 0;
     this.drag = null;
+    this.charging = false;
+    this.orbiting = false;
+    this.orbitYaw = 0;
+    this.keyLeft = false;
+    this.keyRight = false;
+    this.keyShift = false;
+    this.mouseTurns = 0;
+    this.chargeStartTick = 0;
+    this.aimStartTick = 0;
+    this.lastMouseX = null;
     this.wasInSand = false;
     this.wasOnBoost = false;
     this.ambientOn = false;
@@ -131,6 +153,7 @@ export class GolfGame {
     this.running = false;
     this.renderer.setAnimationLoop(null);
     this.resizeObserver.disconnect();
+    this.#unbindInput?.();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
@@ -197,8 +220,15 @@ export class GolfGame {
   #resize() {
     const w = this.container.clientWidth || 1, h = this.container.clientHeight || 1;
     this.renderer.setSize(w, h, false);
-    this.camera.aspect = w / h;
-    this.baseFov = w < h ? 62 : 50;
+    const aspect = w / h;
+    this.camera.aspect = aspect;
+    if (aspect < 1) {
+      this.baseFov = 62;
+    } else if (aspect <= 1.85) {
+      this.baseFov = 48;
+    } else {
+      this.baseFov = 42;
+    }
     this.camera.fov = this.baseFov + (this.fovKick ?? 0);
     this.camera.updateProjectionMatrix();
   }
@@ -207,9 +237,13 @@ export class GolfGame {
 
   #followTarget() {
     const fwd = forwardOf(this.camYaw);
-    const dist = FOLLOW_DIST + this.power * 0.7;
+    const isWidescreen = (this.container.clientWidth || 1) >= (this.container.clientHeight || 1);
+    const zoom = this.zoomLevel ?? 1;
+    const baseDist = (isWidescreen ? 3.5 : FOLLOW_DIST) * zoom;
+    const baseHeight = (isWidescreen ? 1.6 : FOLLOW_HEIGHT) * (0.85 + 0.15 * zoom);
+    const dist = baseDist + this.power * 0.7;
     const pos = new THREE.Vector3(this.ball.x, 0, this.ball.z).addScaledVector(fwd, -dist);
-    pos.y = FOLLOW_HEIGHT + this.power * 0.35;
+    pos.y = baseHeight + this.power * 0.35;
     const look = new THREE.Vector3(this.ball.x, 0.15, this.ball.z).addScaledVector(fwd, LOOK_AHEAD);
     return { pos, look };
   }
@@ -218,8 +252,12 @@ export class GolfGame {
     const b = this.bounds;
     const cx = (b.minX + b.maxX) / 2, cz = (b.minZ + b.maxZ) / 2;
     const depth = b.maxZ - b.minZ, width = b.maxX - b.minX;
-    const span = Math.max(depth, width * 1.6);
-    return { pos: new THREE.Vector3(cx, span * 0.95, cz + span * 0.55), look: new THREE.Vector3(cx, 0, cz - 0.5) };
+    const aspect = (this.container.clientWidth || 1) / (this.container.clientHeight || 1);
+    const span = aspect > 1 ? Math.max(depth * 0.85, (width * 1.5) / aspect) : Math.max(depth, width * 1.6);
+    return {
+      pos: new THREE.Vector3(cx, span * (aspect > 1 ? 0.82 : 0.95), cz + span * 0.5),
+      look: new THREE.Vector3(cx, 0, cz - 0.5),
+    };
   }
 
   #celebrateTarget() {
@@ -265,85 +303,257 @@ export class GolfGame {
 
   // ---------- input ----------
 
+  #executeShot(power, dragTicks = 16, turns = 1) {
+    if (power < 0.05 || isMoving(this.ball) || this.sunk) return;
+    if (this.course.noCup && this.strokes >= 1) return;
+    const shot = quantizeShot(this.yaw, power);
+    const v = shotVelocity(shot.yaw, shot.power);
+    this.ball.vx = v.vx;
+    this.ball.vz = v.vz;
+    this.shots.push({ tick: this.tick, ...shot });
+    this.aim.push({ d: Math.max(8, dragTicks), t: Math.max(1, turns) });
+    this.strokes++;
+    sfx.hit(power);
+    this.particles.puff(new THREE.Vector3(this.ball.x, 0.05, this.ball.z), 0x9be37f, 8 + Math.round(power * 10), 1 + power, 0.18);
+    this.waves.emit(this.ball.x, this.ball.z, 0xffffff, 0.5 + power * 0.9, 3);
+    this.squash = 0.2 + power * 0.25;
+    this.fovKick = power * 7;
+    this.#addShake(power * power * 0.45);
+    navigator.vibrate?.(15);
+    this.onStroke?.(this.strokes);
+  }
+
   #bindInput() {
     const el = this.renderer.domElement;
     el.style.touchAction = 'none';
-    el.addEventListener('pointerdown', (e) => {
+
+    this.#onContextMenu = (e) => e.preventDefault();
+    el.addEventListener('contextmenu', this.#onContextMenu);
+
+    this.#onPointerDown = (e) => {
       unlockAudio();
       if (!this.ambientOn) {
         this.ambientOn = true;
         setAmbient(this.theme.sound);
       }
-      if (!this.course || this.sunk || this.locked || this.intro < 1 || this.drag) return;
+      if (!this.course || this.sunk || this.locked || this.intro < 1) return;
       if (this.course.noCup && this.strokes >= 1) return;
-      el.setPointerCapture(e.pointerId);
-      this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, yaw: this.yaw, lastTick: this.yaw, start: this.tick, turns: 0, dir: 0 };
-    });
-    el.addEventListener('pointermove', (e) => {
-      const d = this.drag;
-      if (!d || e.pointerId !== d.id) return;
-      const h = el.clientHeight || 1, w = el.clientWidth || 1;
-      const canShoot = !isMoving(this.ball);
-      this.power = canShoot ? THREE.MathUtils.clamp((e.clientY - d.y) / (h * 0.32), 0, 1) : 0;
-      // más precisión al apuntar cuanto más cargado está el golpe
-      const dx = e.clientX - (d.px ?? d.x);
-      if (dx && Math.sign(dx) !== d.dir) {
-        if (d.dir) d.turns++;
-        d.dir = Math.sign(dx);
+
+      const isMouse = e.pointerType === 'mouse';
+      if (isMouse) {
+        if (e.button === 0) {
+          if (isMoving(this.ball)) return;
+          this.charging = true;
+          this.chargeStartTick = this.tick;
+          this.mouseTurns = 0;
+          this.chargeAnchorY = e.clientY;
+          if (!this.aimStartTick) this.aimStartTick = this.tick;
+        } else if (e.button === 2) {
+          if (this.charging) {
+            this.charging = false;
+            this.power = 0;
+            this.fullPower = false;
+            setCharge(0);
+            this.onAim?.(0);
+            this.aimDots.hide();
+          } else {
+            this.orbiting = true;
+            this.orbitAnchorX = e.clientX;
+          }
+        }
+      } else {
+        if (this.drag) return;
+        el.setPointerCapture(e.pointerId);
+        this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, yaw: this.yaw, lastTick: this.yaw, start: this.tick, turns: 0, dir: 0 };
       }
-      d.yaw += (dx * 2.4 * (1 - 0.65 * this.power)) / w;
-      d.px = e.clientX;
-      this.yaw = d.yaw;
-      if (Math.abs(this.yaw - d.lastTick) > 0.08) {
-        d.lastTick = this.yaw;
-        sfx.tick();
-      }
-      setCharge(this.power);
-      if (this.power >= 1 && !this.fullPower) {
-        sfx.full();
-        navigator.vibrate?.(12);
-      }
-      this.fullPower = this.power >= 1;
-      this.onAim?.(this.power);
-    });
-    const release = (e) => {
-      const d = this.drag;
-      if (!d || e.pointerId !== d.id) return;
-      this.drag = null;
-      const power = this.power;
-      this.power = 0;
-      this.fullPower = false;
-      setCharge(0);
-      this.onAim?.(0);
-      this.aimDots.hide();
-      if (power < 0.05 || isMoving(this.ball) || this.sunk) return;
-      // desempate: un solo tiro
-      if (this.course.noCup && this.strokes >= 1) return;
-      const shot = quantizeShot(this.yaw, power);
-      const v = shotVelocity(shot.yaw, shot.power);
-      this.ball.vx = v.vx;
-      this.ball.vz = v.vz;
-      this.shots.push({ tick: this.tick, ...shot });
-      this.aim.push({ d: this.tick - d.start, t: d.turns });
-      this.strokes++;
-      sfx.hit(power);
-      this.particles.puff(new THREE.Vector3(this.ball.x, 0.05, this.ball.z), 0x9be37f, 8 + Math.round(power * 10), 1 + power, 0.18);
-      this.waves.emit(this.ball.x, this.ball.z, 0xffffff, 0.5 + power * 0.9, 3);
-      this.squash = 0.2 + power * 0.25;
-      this.fovKick = power * 7;
-      this.#addShake(power * power * 0.45);
-      navigator.vibrate?.(15);
-      this.onStroke?.(this.strokes);
     };
-    el.addEventListener('pointerup', release);
-    el.addEventListener('pointercancel', (e) => {
-      if (this.drag?.id !== e.pointerId) return;
-      this.drag = null;
-      this.power = 0;
-      this.fullPower = false;
-      setCharge(0);
-      this.onAim?.(0);
-    });
+
+    this.#onPointerMove = (e) => {
+      const isMouse = e.pointerType === 'mouse';
+      if (isMouse) {
+        if (this.orbiting) {
+          const dx = e.clientX - this.orbitAnchorX;
+          this.orbitYaw = (dx * 2.8) / (el.clientWidth || 1);
+          return;
+        }
+        if (!isMoving(this.ball) && !this.sunk && this.intro >= 1) {
+          const dx = e.movementX ?? (this.lastMouseX != null ? e.clientX - this.lastMouseX : 0);
+          this.lastMouseX = e.clientX;
+          if (dx !== 0) {
+            if (Math.sign(dx) !== this.mouseDir) {
+              if (this.mouseDir) this.mouseTurns = (this.mouseTurns || 0) + 1;
+              this.mouseDir = Math.sign(dx);
+            }
+            const sens = 0.0032 * (1 - 0.5 * this.power);
+            this.yaw += dx * sens;
+            if (Math.abs(this.yaw - this.lastMouseTick) > 0.08) {
+              this.lastMouseTick = this.yaw;
+              sfx.tick();
+            }
+          }
+        }
+      } else {
+        const d = this.drag;
+        if (!d || e.pointerId !== d.id) return;
+        const h = el.clientHeight || 1, w = el.clientWidth || 1;
+        const canShoot = !isMoving(this.ball);
+        this.power = canShoot ? THREE.MathUtils.clamp((e.clientY - d.y) / (h * 0.32), 0, 1) : 0;
+        const dx = e.clientX - (d.px ?? d.x);
+        if (dx && Math.sign(dx) !== d.dir) {
+          if (d.dir) d.turns++;
+          d.dir = Math.sign(dx);
+        }
+        d.yaw += (dx * 2.4 * (1 - 0.65 * this.power)) / w;
+        d.px = e.clientX;
+        this.yaw = d.yaw;
+        if (Math.abs(this.yaw - d.lastTick) > 0.08) {
+          d.lastTick = this.yaw;
+          sfx.tick();
+        }
+        setCharge(this.power);
+        if (this.power >= 1 && !this.fullPower) {
+          sfx.full();
+          navigator.vibrate?.(12);
+        }
+        this.fullPower = this.power >= 1;
+        this.onAim?.(this.power);
+      }
+    };
+
+    this.#onPointerUp = (e) => {
+      const isMouse = e.pointerType === 'mouse';
+      if (isMouse) {
+        if (e.button === 0 && this.charging) {
+          const power = this.power;
+          const dragTicks = Math.max(12, this.tick - this.chargeStartTick);
+          const turns = Math.max(1, this.mouseTurns || 1);
+          this.charging = false;
+          this.power = 0;
+          this.fullPower = false;
+          setCharge(0);
+          this.onAim?.(0);
+          this.aimDots.hide();
+          this.#executeShot(power, dragTicks, turns);
+          this.mouseTurns = 0;
+        } else if (e.button === 2) {
+          this.orbiting = false;
+          this.orbitYaw = 0;
+        }
+      } else {
+        const d = this.drag;
+        if (!d || e.pointerId !== d.id) return;
+        this.drag = null;
+        const power = this.power;
+        this.power = 0;
+        this.fullPower = false;
+        setCharge(0);
+        this.onAim?.(0);
+        this.aimDots.hide();
+        this.#executeShot(power, this.tick - d.start, d.turns);
+      }
+    };
+
+    this.#onPointerCancel = (e) => {
+      if (e.pointerType === 'mouse') {
+        this.charging = false;
+        this.orbiting = false;
+        this.orbitYaw = 0;
+        this.power = 0;
+        this.fullPower = false;
+        setCharge(0);
+        this.onAim?.(0);
+        this.aimDots.hide();
+      } else if (this.drag?.id === e.pointerId) {
+        this.drag = null;
+        this.power = 0;
+        this.fullPower = false;
+        setCharge(0);
+        this.onAim?.(0);
+      }
+    };
+
+    this.#onWheel = (e) => {
+      e.preventDefault();
+      const delta = Math.sign(e.deltaY) * 0.08;
+      this.zoomLevel = THREE.MathUtils.clamp((this.zoomLevel ?? 1) + delta, 0.65, 1.55);
+    };
+
+    this.#onKeyDown = (e) => {
+      if (e.repeat && e.code !== 'ArrowLeft' && e.code !== 'ArrowRight' && e.code !== 'KeyA' && e.code !== 'KeyD') return;
+      if (e.code === 'KeyA' || e.code === 'ArrowLeft') this.keyLeft = true;
+      else if (e.code === 'KeyD' || e.code === 'ArrowRight') this.keyRight = true;
+      else if (e.shiftKey) this.keyShift = true;
+      else if (e.code === 'Space') {
+        if (!isMoving(this.ball) && !this.sunk && this.intro >= 1 && !this.charging) {
+          e.preventDefault();
+          this.charging = true;
+          this.chargeStartTick = this.tick;
+        }
+      } else if (e.code === 'Tab' || e.code === 'KeyM') {
+        e.preventDefault();
+        this.setOverview(true);
+      } else if (e.code === 'KeyR') {
+        if (this.course && !isMoving(this.ball)) {
+          this.yaw = Math.atan2(this.course.cup[0] - this.ball.x, -(this.course.cup[1] - this.ball.z));
+          this.camYaw = this.yaw;
+          sfx.tap();
+        }
+      } else if (e.code === 'Escape') {
+        if (this.charging) {
+          this.charging = false;
+          this.power = 0;
+          this.fullPower = false;
+          setCharge(0);
+          this.onAim?.(0);
+          this.aimDots.hide();
+        }
+        if (this.overview) this.setOverview(false);
+      }
+    };
+
+    this.#onKeyUp = (e) => {
+      if (e.code === 'KeyA' || e.code === 'ArrowLeft') this.keyLeft = false;
+      else if (e.code === 'KeyD' || e.code === 'ArrowRight') this.keyRight = false;
+      if (!e.shiftKey) this.keyShift = false;
+      if (e.code === 'Space' && this.charging) {
+        e.preventDefault();
+        const power = this.power;
+        const dragTicks = Math.max(12, this.tick - this.chargeStartTick);
+        const turns = Math.max(1, this.mouseTurns || 1);
+        this.charging = false;
+        this.power = 0;
+        this.fullPower = false;
+        setCharge(0);
+        this.onAim?.(0);
+        this.aimDots.hide();
+        this.#executeShot(power, dragTicks, turns);
+        this.mouseTurns = 0;
+      } else if (e.code === 'Tab' || e.code === 'KeyM') {
+        this.setOverview(false);
+      }
+    };
+
+    el.addEventListener('pointerdown', this.#onPointerDown);
+    el.addEventListener('pointermove', this.#onPointerMove);
+    el.addEventListener('pointerup', this.#onPointerUp);
+    el.addEventListener('pointercancel', this.#onPointerCancel);
+    el.addEventListener('wheel', this.#onWheel, { passive: false });
+    window.addEventListener('keydown', this.#onKeyDown);
+    window.addEventListener('keyup', this.#onKeyUp);
+  }
+
+  #unbindInput() {
+    const el = this.renderer?.domElement;
+    if (el) {
+      if (this.#onContextMenu) el.removeEventListener('contextmenu', this.#onContextMenu);
+      if (this.#onPointerDown) el.removeEventListener('pointerdown', this.#onPointerDown);
+      if (this.#onPointerMove) el.removeEventListener('pointermove', this.#onPointerMove);
+      if (this.#onPointerUp) el.removeEventListener('pointerup', this.#onPointerUp);
+      if (this.#onPointerCancel) el.removeEventListener('pointercancel', this.#onPointerCancel);
+      if (this.#onWheel) el.removeEventListener('wheel', this.#onWheel);
+    }
+    if (this.#onKeyDown) window.removeEventListener('keydown', this.#onKeyDown);
+    if (this.#onKeyUp) window.removeEventListener('keyup', this.#onKeyUp);
   }
 
   #predictPath() {
@@ -486,14 +696,46 @@ export class GolfGame {
       } else if (wasMoving && !isMoving(this.ball)) this.onRest?.(this.strokes);
     }
 
+    // control por teclado y carga de tiro continuo
+    if (!isMoving(this.ball) && !this.sunk && this.intro >= 1 && !this.locked) {
+      const keySpeed = (this.keyShift ? 0.75 : 1.8) * dt;
+      if (this.keyLeft) {
+        this.yaw -= keySpeed;
+        this.mouseTurns = (this.mouseTurns || 0) + 1;
+      }
+      if (this.keyRight) {
+        this.yaw += keySpeed;
+        this.mouseTurns = (this.mouseTurns || 0) + 1;
+      }
+      if (this.charging) {
+        const elapsedSec = (this.tick - this.chargeStartTick) * DT;
+        this.power = THREE.MathUtils.clamp(elapsedSec / 1.15, 0, 1);
+        setCharge(this.power);
+        if (this.power >= 1 && !this.fullPower) {
+          sfx.full();
+          this.fullPower = true;
+        }
+        this.onAim?.(this.power);
+      }
+    }
+
     // la cámara gira suavemente hacia donde rueda la bola
     const speed = Math.hypot(this.ball.vx, this.ball.vz);
-    if (speed > 1.2 && !this.drag) {
+    if (speed > 1.2 && !this.drag && !this.charging) {
       const velYaw = Math.atan2(this.ball.vx, -this.ball.vz);
       this.yaw = lerpAngle(this.yaw, velYaw, damp(1.2, dt));
     }
-    this.camYaw = this.drag ? this.yaw : lerpAngle(this.camYaw, this.yaw, damp(10, dt));
-    if (this.drag) this.camYaw = this.yaw;
+    const targetCamYaw = this.orbiting ? this.yaw + (this.orbitYaw || 0) : this.yaw;
+    this.camYaw = (this.drag || this.charging || this.orbiting)
+      ? targetCamYaw
+      : lerpAngle(this.camYaw, targetCamYaw, damp(10, dt));
+
+    if (this.renderer?.domElement) {
+      if (this.orbiting) this.renderer.domElement.style.cursor = 'grabbing';
+      else if (this.charging) this.renderer.domElement.style.cursor = 'crosshair';
+      else if (!isMoving(this.ball) && !this.sunk && this.intro >= 1) this.renderer.domElement.style.cursor = 'crosshair';
+      else this.renderer.domElement.style.cursor = 'default';
+    }
 
     // bola: rodar y caer en el hoyo
     const sinkT = this.sunk ? Math.min(1, (this.t - this.sunkAt) * 4) : 0;
@@ -537,7 +779,7 @@ export class GolfGame {
       this.courseView.spinners[i].rotation.y = -Math.atan2(bz - az, bx - ax);
     });
 
-    if (this.drag && this.power > 0.02) {
+    if ((this.drag || this.charging) && this.power > 0.02) {
       const color = new THREE.Color().setHSL(0.33 - this.power * 0.33, 0.95, 0.55);
       this.aimDots.show(this.#predictPath(), color, this.t);
       this.aimDots.showRing(this.ballRoot.position, this.t);
