@@ -28,6 +28,15 @@ const lerpAngle = (a, b, t) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) 
  * la potencia; suelta para golpear.
  */
 export class GolfGame {
+  #onContextMenu = null;
+  #onPointerDown = null;
+  #onPointerMove = null;
+  #onPointerUp = null;
+  #onPointerCancel = null;
+  #onWheel = null;
+  #onKeyDown = null;
+  #onKeyUp = null;
+
   constructor(container, { onStroke, onSunk, onAim, onRest, onCup, onRival, onLip } = {}) {
     this.container = container;
     this.onStroke = onStroke;
