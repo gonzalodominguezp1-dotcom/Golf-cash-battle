@@ -985,7 +985,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       <div class="cup-banner"></div>
       <div class="hole-timer" hidden><small>Tiempo para embocar</small><b>${timeLimit}</b></div>
       <div class="hint">
-        <span class="hint-touch">↔ Desliza para mover la cámara · Arrastra desde la bola hacia atrás para tirar</span>
+        <span class="hint-touch">↔ Desliza: cámara · Arrastra la bola hacia atrás: tiro</span>
         <span class="hint-mouse">🖱️ Ratón para apuntar · Clic Izquierdo para calcular y disparar · <kbd>Espacio</kbd> Ver mapa · <kbd>Esc</kbd> Ajustes</span>
       </div>
       <div class="desktop-controls-bar">
