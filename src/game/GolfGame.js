@@ -39,6 +39,7 @@ export class GolfGame {
   #onPointerLockChange = null;
   #onPointerLockError = null;
   #onClickCanvas = null;
+  #onBlur = null;
 
   constructor(container, { onStroke, onSunk, onAim, onRest, onCup, onRival, onLip } = {}) {
     this.container = container;
@@ -142,7 +143,7 @@ export class GolfGame {
   requestPointerLock() {
     const el = this.renderer?.domElement;
     if (!el || typeof document === 'undefined') return;
-    if (document.pointerLockElement === el) return;
+    if (document.pointerLockElement === el || this.isPointerLocked) return;
     try {
       const p = el.requestPointerLock?.({ unadjustedMovement: true });
       if (p && typeof p.catch === 'function') {
@@ -409,7 +410,7 @@ export class GolfGame {
         this.requestPointerLock();
         if (e.button === 0) {
           if (isMoving(this.ball)) return;
-          el.setPointerCapture(e.pointerId);
+          // NOTA: NO llamamos a setPointerCapture en ratón porque en Pointer Lock lanza InvalidStateError
           this.charging = true;
           this.chargeStartTick = this.tick;
           this.mouseTurns = 0;
@@ -422,6 +423,7 @@ export class GolfGame {
             dir: 0,
             startPower: this.power,
             dragY: 0,
+            userAdjusted: false,
           };
           if (!this.aimStartTick) this.aimStartTick = this.tick;
         } else if (e.button === 2) {
@@ -441,7 +443,7 @@ export class GolfGame {
         }
       } else {
         if (this.drag) return;
-        el.setPointerCapture(e.pointerId);
+        try { el.setPointerCapture?.(e.pointerId); } catch {}
         this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, yaw: this.yaw, lastTick: this.yaw, start: this.tick, turns: 0, dir: 0 };
       }
     };
@@ -463,13 +465,18 @@ export class GolfGame {
         if (this.charging && this.chargeAnchor) {
           const ca = this.chargeAnchor;
           const h = el.clientHeight || 1, w = el.clientWidth || 1;
-          ca.dragY = (ca.dragY || 0) + (e.movementY ?? 0);
+          const my = e.movementY ?? 0;
+          ca.dragY = (ca.dragY || 0) + my;
           const dy = isLocked ? ca.dragY : (e.clientY - ca.y);
           this.lastMouseY = e.clientY;
           this.lastMouseX = e.clientX;
-          // Arrastrar hacia abajo/atrás incrementa la fuerza con el ratón; empujar hacia adelante la reduce
-          const baseP = ca.startPower || 0;
-          this.power = THREE.MathUtils.clamp(baseP + (dy / (h * 0.32)), 0, 1);
+
+          // Si el jugador desplaza el ratón verticalmente (> 3px), pasamos a calibración manual de fuerza
+          if (Math.abs(isLocked ? ca.dragY : dy) > 3) {
+            ca.userAdjusted = true;
+            const baseP = ca.startPower || 0;
+            this.power = THREE.MathUtils.clamp(baseP + (dy / (h * 0.32)), 0, 1);
+          }
 
           // Ajuste simultáneo de dirección horizontal con el ratón
           const mx = isLocked ? (e.movementX ?? 0) : (e.clientX - (ca.px ?? ca.x));
@@ -556,7 +563,9 @@ export class GolfGame {
           setCharge(0);
           this.onAim?.(0);
           this.aimDots.hide();
-          this.#executeShot(power, dragTicks, turns);
+          if (power >= 0.04) {
+            this.#executeShot(power, dragTicks, turns);
+          }
           this.mouseTurns = 0;
         } else if (e.button === 2) {
           this.orbiting = false;
@@ -578,15 +587,9 @@ export class GolfGame {
 
     this.#onPointerCancel = (e) => {
       if (e.pointerType === 'mouse') {
-        this.charging = false;
-        this.chargeAnchor = null;
-        this.orbiting = false;
-        this.orbitYaw = 0;
-        this.power = 0;
-        this.fullPower = false;
-        setCharge(0);
-        this.onAim?.(0);
-        this.aimDots.hide();
+        // Al entrar en pointer lock o cambiar captura, el navegador emite pointercancel en mouse.
+        // No cancelamos el tiro en ratón por este evento de transición.
+        return;
       } else if (this.drag?.id === e.pointerId) {
         this.drag = null;
         this.power = 0;
@@ -609,6 +612,7 @@ export class GolfGame {
       const delta = -Math.sign(e.deltaY) * 0.05;
       this.power = THREE.MathUtils.clamp(Math.round((this.power + delta) * 100) / 100, 0, 1);
       if (this.charging && this.chargeAnchor) {
+        this.chargeAnchor.userAdjusted = true;
         const h = el.clientHeight || 1;
         const isLocked = typeof document !== 'undefined' && document.pointerLockElement === el;
         const dy = isLocked ? (this.chargeAnchor.dragY || 0) : ((this.lastMouseY ?? this.chargeAnchor.y) - this.chargeAnchor.y);
@@ -638,6 +642,7 @@ export class GolfGame {
           e.preventDefault();
           this.power = THREE.MathUtils.clamp(Math.round((this.power + 0.05) * 100) / 100, 0, 1);
           if (this.charging && this.chargeAnchor) {
+            this.chargeAnchor.userAdjusted = true;
             const h = el.clientHeight || 1;
             const isLocked = typeof document !== 'undefined' && document.pointerLockElement === el;
             const dy = isLocked ? (this.chargeAnchor.dragY || 0) : ((this.lastMouseY ?? this.chargeAnchor.y) - this.chargeAnchor.y);
@@ -656,6 +661,7 @@ export class GolfGame {
           e.preventDefault();
           this.power = THREE.MathUtils.clamp(Math.round((this.power - 0.05) * 100) / 100, 0, 1);
           if (this.charging && this.chargeAnchor) {
+            this.chargeAnchor.userAdjusted = true;
             const h = el.clientHeight || 1;
             const isLocked = typeof document !== 'undefined' && document.pointerLockElement === el;
             const dy = isLocked ? (this.chargeAnchor.dragY || 0) : ((this.lastMouseY ?? this.chargeAnchor.y) - this.chargeAnchor.y);
@@ -740,13 +746,27 @@ export class GolfGame {
       }
     };
 
+    this.#onBlur = () => {
+      if (this.charging || this.spaceCharging || this.power > 0) {
+        this.charging = false;
+        this.spaceCharging = false;
+        this.chargeAnchor = null;
+        this.power = 0;
+        this.fullPower = false;
+        setCharge(0);
+        this.onAim?.(0);
+        this.aimDots.hide();
+      }
+    };
+
     el.addEventListener('pointerdown', this.#onPointerDown);
-    el.addEventListener('pointermove', this.#onPointerMove);
-    el.addEventListener('pointerup', this.#onPointerUp);
-    el.addEventListener('pointercancel', this.#onPointerCancel);
+    window.addEventListener('pointermove', this.#onPointerMove);
+    window.addEventListener('pointerup', this.#onPointerUp);
+    window.addEventListener('pointercancel', this.#onPointerCancel);
     el.addEventListener('wheel', this.#onWheel, { passive: false });
     window.addEventListener('keydown', this.#onKeyDown);
     window.addEventListener('keyup', this.#onKeyUp);
+    window.addEventListener('blur', this.#onBlur);
   }
 
   #unbindInput() {
@@ -760,13 +780,14 @@ export class GolfGame {
       if (this.#onClickCanvas) el.removeEventListener('click', this.#onClickCanvas);
       if (this.#onContextMenu) el.removeEventListener('contextmenu', this.#onContextMenu);
       if (this.#onPointerDown) el.removeEventListener('pointerdown', this.#onPointerDown);
-      if (this.#onPointerMove) el.removeEventListener('pointermove', this.#onPointerMove);
-      if (this.#onPointerUp) el.removeEventListener('pointerup', this.#onPointerUp);
-      if (this.#onPointerCancel) el.removeEventListener('pointercancel', this.#onPointerCancel);
       if (this.#onWheel) el.removeEventListener('wheel', this.#onWheel);
     }
+    if (this.#onPointerMove) window.removeEventListener('pointermove', this.#onPointerMove);
+    if (this.#onPointerUp) window.removeEventListener('pointerup', this.#onPointerUp);
+    if (this.#onPointerCancel) window.removeEventListener('pointercancel', this.#onPointerCancel);
     if (this.#onKeyDown) window.removeEventListener('keydown', this.#onKeyDown);
     if (this.#onKeyUp) window.removeEventListener('keyup', this.#onKeyUp);
+    if (this.#onBlur) window.removeEventListener('blur', this.#onBlur);
   }
 
   #predictPath() {
@@ -920,6 +941,19 @@ export class GolfGame {
       if (this.keyRight) {
         this.yaw += keySpeed;
         this.mouseTurns = (this.mouseTurns || 0) + 1;
+      }
+      if (this.charging) {
+        if (!this.chargeAnchor?.userAdjusted) {
+          const elapsedSec = (this.tick - this.chargeStartTick) * DT;
+          const base = this.chargeAnchor?.startPower || 0;
+          this.power = THREE.MathUtils.clamp(base + elapsedSec / 1.4, 0, 1);
+          setCharge(this.power);
+          if (this.power >= 1 && !this.fullPower) {
+            sfx.full();
+            this.fullPower = true;
+          }
+          this.onAim?.(this.power);
+        }
       }
       if (this.spaceCharging) {
         const elapsedSec = (this.tick - this.chargeStartTick) * DT;

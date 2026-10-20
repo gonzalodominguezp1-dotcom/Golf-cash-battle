@@ -172,3 +172,66 @@ test('cálculo de fuerza y apuntado con pointer lock activo mediante deltas rela
   assert.equal(power, 0, 'Fuerza debe ser 0 al empujar más arriba del origen');
 });
 
+test('disparo con clic izquierdo en modo pointer lock funciona por carga en tiempo y por arrastre', () => {
+  let isPointerLocked = true;
+  let charging = false;
+  let chargeAnchor = null;
+  let power = 0;
+  let executedShot = null;
+  const DT = 1 / 120;
+
+  // 1. Simulación de onPointerDown en ratón con pointer lock activo
+  const onPointerDown = (button, pointerType) => {
+    if (pointerType === 'mouse' && button === 0) {
+      // Inicia carga sin invocar setPointerCapture (compatible con pointer lock)
+      charging = true;
+      chargeAnchor = { startPower: 0, dragY: 0, userAdjusted: false, tick: 0 };
+    }
+  };
+
+  // 2. Simulación de pointercancel durante la transición de bloqueo
+  const onPointerCancel = (pointerType) => {
+    if (pointerType === 'mouse') {
+      // Evento de transición del navegador ignorado: NO debe abortar la carga
+      return;
+    }
+    charging = false;
+  };
+
+  // 3. Simulación de frame: carga en tiempo si el usuario no arrastra
+  const onFrame = (ticks) => {
+    if (charging && chargeAnchor && !chargeAnchor.userAdjusted) {
+      const elapsedSec = ticks * DT;
+      power = Math.min(1, elapsedSec / 1.4);
+    }
+  };
+
+  // 4. Simulación de onPointerUp: disparo con el clic izquierdo
+  const onPointerUp = (button, pointerType) => {
+    if (pointerType === 'mouse' && button === 0 && charging) {
+      charging = false;
+      chargeAnchor = null;
+      if (power >= 0.04) {
+        executedShot = { power };
+      }
+    }
+  };
+
+  onPointerDown(0, 'mouse');
+  assert.equal(charging, true, 'Clic izquierdo debe activar charging');
+
+  // Evento pointercancel no debe abortar la carga
+  onPointerCancel('mouse');
+  assert.equal(charging, true, 'pointercancel no debe desactivar el clic izquierdo');
+
+  // Mantener pulsado el botón 60 ticks (0.5s) carga progresivamente
+  onFrame(60);
+  assert.ok(power > 0.3 && power < 0.4, `Potencia esperada ~0.35 tras 0.5s, obtenida: ${power}`);
+
+  // Soltar clic izquierdo ejecuta el tiro
+  onPointerUp(0, 'mouse');
+  assert.equal(charging, false);
+  assert.ok(executedShot !== null, 'El tiro debe haberse ejecutado al soltar el clic izquierdo');
+  assert.ok(executedShot.power > 0.3);
+});
+
