@@ -11,7 +11,8 @@ import { segmentsOf } from './game/physics.js';
 import { isMuted, setMuted, sfx, unlockAudio } from './game/audio.js';
 import { Progress } from './progress/Progress.js';
 import { CHALLENGES, RARITIES, SKINS } from './progress/skins.js';
-import { ballPreview } from './game/render/ballSkins.js';
+import { ballPreview, skinMaterial } from './game/render/ballSkins.js';
+import * as THREE from 'three';
 
 let backend, wallet, matches;
 // práctica forzada con #hoyoN: siempre local, no toca el servidor
@@ -41,10 +42,15 @@ const ball = (skin, size = 96, cls = '') => `<img class="ball-img ${cls}" src="$
 
 let game = null;
 let screen = 'lobby';
+let activeSkinInspector = null;
 
 async function shell(content, { hideHeader = false, nav = true } = {}) {
   game?.dispose();
   game = null;
+  if (activeSkinInspector) {
+    try { activeSkinInspector.destroy(); } catch {}
+    activeSkinInspector = null;
+  }
   const balance = await wallet.getBalance();
   app.innerHTML = '';
   window.scrollTo(0, 0);
@@ -100,8 +106,19 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
   bindHolo(app);
 }
 
-// Atajos globales de navegación por teclado en menús
+// Atajos globales de navegación por teclado en menús y modales
 window.addEventListener('keydown', (e) => {
+  const overlay = document.querySelector('.overlay');
+  if (overlay) {
+    if (e.code === 'Enter') {
+      const btn = overlay.querySelector('.primary, .next, .confirm, button:not(.close):not(.cancel)');
+      if (btn) { e.preventDefault(); btn.click(); return; }
+    } else if (e.code === 'Escape') {
+      const closeBtn = overlay.querySelector('.close, .cancel, .home, button');
+      if (closeBtn) { e.preventDefault(); closeBtn.click(); return; }
+    }
+    return;
+  }
   if (game || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
   if (e.code === 'Digit1') go('lobby');
   else if (e.code === 'Digit2') go('skins');
@@ -196,12 +213,133 @@ async function showLobby() {
   if (backend.tournaments) showMyTournaments(view.querySelector('.my-tournaments'));
 }
 
+// ---------- inspector 3D de skins para escritorio ----------
+
+function createSkinInspector(container, initialSkin) {
+  const w = 260, h = 260;
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setSize(w, h, false);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.15;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  container.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 50);
+  camera.position.set(0, 0.25, 1.35);
+  camera.lookAt(0, 0, 0);
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+  const key = new THREE.DirectionalLight(0xfff5ea, 2.4);
+  key.position.set(2, 3, 2.5);
+  scene.add(key);
+  const fill = new THREE.DirectionalLight(0x8cb0ff, 1.3);
+  fill.position.set(-2.5, -0.5, -1.5);
+  scene.add(fill);
+  const rim = new THREE.DirectionalLight(0xffffff, 1.8);
+  rim.position.set(0, 2.5, -2);
+  scene.add(rim);
+
+  const geo = new THREE.SphereGeometry(0.38, 48, 36);
+  let currentMat = skinMaterial(initialSkin);
+  const ballMesh = new THREE.Mesh(geo, currentMat);
+  scene.add(ballMesh);
+
+  // Sombra suave en la base
+  const sCanvas = document.createElement('canvas');
+  sCanvas.width = sCanvas.height = 128;
+  const sg = sCanvas.getContext('2d');
+  const rad = sg.createRadialGradient(64, 64, 0, 64, 64, 60);
+  rad.addColorStop(0, 'rgba(0,0,0,0.6)');
+  rad.addColorStop(0.5, 'rgba(0,0,0,0.22)');
+  rad.addColorStop(1, 'rgba(0,0,0,0)');
+  sg.fillStyle = rad;
+  sg.fillRect(0, 0, 128, 128);
+  const shadowTex = new THREE.CanvasTexture(sCanvas);
+  const shadowMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.1, 1.1),
+    new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, opacity: 0.7, depthWrite: false }),
+  );
+  shadowMesh.rotation.x = -Math.PI / 2;
+  shadowMesh.position.y = -0.42;
+  scene.add(shadowMesh);
+
+  let rotX = 0.15, rotY = 0;
+  let velX = 0, velY = 0.005;
+  let isDragging = false;
+  let lastX = 0, lastY = 0;
+
+  const onDown = (e) => {
+    isDragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    renderer.domElement.style.cursor = 'grabbing';
+  };
+  const onMove = (e) => {
+    if (!isDragging) return;
+    const dx = e.clientX - lastX;
+    const dy = e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    velY = dx * 0.012;
+    velX = dy * 0.012;
+    rotY += velY;
+    rotX += velX;
+  };
+  const onUp = () => {
+    isDragging = false;
+    renderer.domElement.style.cursor = 'grab';
+  };
+
+  renderer.domElement.style.cursor = 'grab';
+  renderer.domElement.addEventListener('pointerdown', onDown);
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
+
+  let active = true;
+  function animate() {
+    if (!active) return;
+    requestAnimationFrame(animate);
+    if (!isDragging) {
+      velY += (0.003 - velY) * 0.04;
+      velX *= 0.9;
+      rotY += velY;
+      rotX += velX;
+    }
+    rotX = Math.max(-1.1, Math.min(1.1, rotX));
+    ballMesh.rotation.set(rotX, rotY, 0);
+    renderer.render(scene, camera);
+  }
+  requestAnimationFrame(animate);
+
+  return {
+    setSkin(skin) {
+      const oldMat = ballMesh.material;
+      ballMesh.material = skinMaterial(skin);
+      oldMat?.dispose();
+    },
+    destroy() {
+      active = false;
+      renderer.domElement.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      renderer.dispose();
+      geo.dispose();
+      ballMesh.material?.dispose();
+      renderer.domElement.remove();
+    },
+  };
+}
+
 // ---------- skins ----------
 
 async function showSkins() {
   screen = 'skins';
   const unlocked = SKINS.filter((s) => progress.isUnlocked(s)).length;
   const { level, into, need } = progress.level;
+  let selectedSkin = progress.skin;
+
   const view = h(`
     <main class="screen skins">
       <div class="section-head">
@@ -212,21 +350,70 @@ async function showSkins() {
         <div><small>Nivel</small><strong>${level}</strong></div>
         <div class="level-progress"><span><i style="width:${(into / need) * 100}%"></i></span><small>${into} / ${need} XP</small></div>
       </div>
-      <div class="skin-grid"></div>
-      <h2>Desafíos</h2>
-      <ul class="challenges">
-        ${CHALLENGES.map((c) => {
-          const st = progress.challenge(c.id);
-          const reward = SKINS.find((s) => s.unlock?.challenge === c.id);
-          return `<li class="${st.done ? 'done' : ''}">
-            ${ball(reward, 34)}
-            <div><b>${c.name}</b><span class="bar"><i style="width:${(st.value / st.goal) * 100}%"></i></span></div>
-            <small>${st.done ? '✓' : `${st.value}/${st.goal}`}</small>
-          </li>`;
-        }).join('')}
-      </ul>
+      <div class="skins-content-layout">
+        <div class="skins-left-col">
+          <div class="skin-grid"></div>
+          <h2>Desafíos</h2>
+          <ul class="challenges">
+            ${CHALLENGES.map((c) => {
+              const st = progress.challenge(c.id);
+              const reward = SKINS.find((s) => s.unlock?.challenge === c.id);
+              return `<li class="${st.done ? 'done' : ''}">
+                ${ball(reward, 34)}
+                <div><b>${c.name}</b><span class="bar"><i style="width:${(st.value / st.goal) * 100}%"></i></span></div>
+                <small>${st.done ? '✓' : `${st.value}/${st.goal}`}</small>
+              </li>`;
+            }).join('')}
+          </ul>
+        </div>
+        <aside class="skin-inspector-panel">
+          <span class="rarity badge-rarity rarity-${selectedSkin.rarity}">${RARITIES[selectedSkin.rarity].name}</span>
+          <div class="skin-inspector-canvas"></div>
+          <p class="skin-inspector-hint">🖱️ Arrastra con el ratón para girar 360°</p>
+          <h3 class="skin-inspector-name">${selectedSkin.name}</h3>
+          <p class="skin-inspector-desc">Materiales 3D con brillo físico e iridiscencia</p>
+          <button class="primary skin-inspector-btn" disabled>Equipada</button>
+        </aside>
+      </div>
     </main>`);
+
   const grid = view.querySelector('.skin-grid');
+  const inspectorCanvas = view.querySelector('.skin-inspector-canvas');
+  const inspectorName = view.querySelector('.skin-inspector-name');
+  const inspectorRarity = view.querySelector('.badge-rarity');
+  const inspectorBtn = view.querySelector('.skin-inspector-btn');
+
+  let inspector = null;
+  if (typeof window !== 'undefined' && window.innerWidth >= 900) {
+    inspector = createSkinInspector(inspectorCanvas, selectedSkin);
+    activeSkinInspector = inspector;
+  }
+
+  const updateInspector = (s) => {
+    selectedSkin = s;
+    if (inspector) inspector.setSkin(s);
+    inspectorName.textContent = s.name;
+    inspectorRarity.textContent = RARITIES[s.rarity].name;
+    inspectorRarity.className = `rarity badge-rarity rarity-${s.rarity}`;
+    const req = progress.requirement(s);
+    const open = req.ratio >= 1;
+    const isEq = progress.skin.id === s.id;
+    if (isEq) {
+      inspectorBtn.textContent = 'Equipada';
+      inspectorBtn.disabled = true;
+    } else if (open) {
+      inspectorBtn.textContent = 'Equipar skin';
+      inspectorBtn.disabled = false;
+    } else {
+      inspectorBtn.textContent = `Bloqueada (${req.text})`;
+      inspectorBtn.disabled = true;
+    }
+  };
+
+  inspectorBtn.addEventListener('click', () => {
+    if (progress.equip(selectedSkin.id)) showSkins();
+  });
+
   const order = [...SKINS].sort((a, b) => RARITIES[a.rarity].order - RARITIES[b.rarity].order);
   for (const skin of order) {
     const req = progress.requirement(skin);
@@ -244,7 +431,9 @@ async function showSkins() {
             : `<small class="req">🔒 ${req.text}</small><span class="bar"><i style="width:${req.ratio * 100}%"></i></span>`
         }
       </button>`);
+    card.addEventListener('mouseenter', () => updateInspector(skin));
     card.addEventListener('click', () => {
+      updateInspector(skin);
       if (progress.equip(skin.id)) showSkins();
     });
     grid.append(card);

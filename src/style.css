@@ -526,6 +526,8 @@ h2 { margin: 22px 0 10px; font-size: 21px; }
   .hint-touch { display: inline-block !important; }
   .desktop-controls-bar { display: none !important; }
   .kbd-hint { display: none !important; }
+  .skin-inspector-panel { display: none !important; }
+  .skins-content-layout { display: block; }
 }
 
 @media (min-width: 900px) {
@@ -567,7 +569,75 @@ h2 { margin: 22px 0 10px; font-size: 21px; }
     box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55) inset, 0 18px 40px rgba(0, 0, 0, 0.5);
   }
 
-  /* Grid de Skins en escritorio */
+  /* Grid y Visor 3D de Skins en escritorio */
+  .skins-content-layout {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 32px;
+    align-items: start;
+    width: 100%;
+  }
+  .skins-left-col {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-width: 0;
+  }
+  .skin-inspector-panel {
+    position: sticky;
+    top: 96px;
+    background: rgba(18, 10, 43, 0.78);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 24px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+    text-align: center;
+  }
+  .skin-inspector-canvas {
+    width: 260px;
+    height: 260px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 8px 0;
+  }
+  .skin-inspector-canvas canvas {
+    width: 260px !important;
+    height: 260px !important;
+    border-radius: 50%;
+  }
+  .skin-inspector-hint {
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 600;
+    margin: 0 0 12px;
+  }
+  .skin-inspector-name {
+    font-size: 22px;
+    font-weight: 800;
+    color: #fff;
+    margin: 4px 0;
+  }
+  .skin-inspector-desc {
+    font-size: 12px;
+    color: var(--muted);
+    margin: 0 0 14px;
+  }
+  .skin-inspector-btn {
+    width: 100%;
+    margin-top: 6px;
+    font-size: 14px;
+    font-weight: 800;
+  }
+  .badge-rarity {
+    margin-bottom: 4px;
+    font-size: 12px;
+    padding: 3px 10px;
+  }
   .skin-grid {
     grid-template-columns: repeat(4, 1fr);
     gap: 16px;

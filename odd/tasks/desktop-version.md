@@ -18,7 +18,8 @@ Adaptar el juego y sus interfaces para una experiencia de escritorio (PC) nativa
 - [x] `task-2`: Cámaras panorámicas, FOV adaptativo y HUD de juego para escritorio (`GolfGame.js`, `main.js`, `style.css`) — Commit: `0b0d3aa`.
 - [x] `task-3`: Shell de navegación de escritorio y rediseño responsivo de pantallas (`main.js`, `style.css`) — Commit: `0231fe9`.
 - [x] `task-4`: Tests de telemetría, controles y validación completa de la suite — Commit: `841b9a9`.
-- [x] `task-5`: Ajuste manual táctil de fuerza de tiro (arrastre hacia abajo/arriba para más fuerte/flojo, rueda y teclas W/S) — Commit: `e0f3e8d`.
+- [x] `task-5`: Ajuste manual táctil de fuerza de tiro (arrastre hacia abajo/arriba para más fuerte/flojo, rueda y teclas W/S) — Commit: `e4cafb0`.
+- [x] `task-6`: Visor 3D interactivo de skins con rotación 360°, sombras HD 4096px en escritorio y navegación por teclado en modales (`Enter`/`Esc`) — Commit: `5e50cd3`.
 
 ## Registro de Estado y Evidencia
 - **Ruta implementada**: Delegada directa con orquestador y tareas desacopladas.
@@ -29,3 +30,4 @@ Adaptar el juego y sus interfaces para una experiencia de escritorio (PC) nativa
 - **task-3 completada**: Desktop Topbar con branding, pestañas de navegación integradas con hotkeys numéricos [1-4], botón de muteo en cabecera [M], layout responsivo de 1140px, Lobby en grid de 3 columnas para tiers, skins en grid de 4 columnas y layouts split-view en Wallet y Cuenta.
 - **task-4 completada**: Nueva suite `tests/desktop-controls.test.js` añadida y validada. 36/36 tests pasando (100% pass) y build de producción con Vite verificado con éxito en 1.08s.
 - **task-5 completada**: Corregido el bucle de `#frame` que sobreescribía la fuerza por tiempo. Habilitado ajuste manual completo: arrastrar el ratón hacia abajo aumenta la fuerza (tiro fuerte) y empujar hacia arriba la reduce (tiro más flojo), ajuste directo por pasos de ±5% con rueda del ratón y teclas W/S o flechas, disparo inmediato con [Espacio] o al soltar el clic, y cancelación con clic derecho o [Esc]. 38/38 tests pasando.
+- **task-6 completada**: Visor interactivo 3D de skins implementado en escritorio (renderizado Three.js en tiempo real con materiales físicos MeshPhysicalMaterial, iridiscencia, sombra de contacto suave y rotación 360° al arrastrar con el ratón). Sombras HD a 4096px en pantallas de escritorio. Atajos de teclado en modales y diálogos de resultado ([Enter] para confirmar/siguiente, [Esc] para cerrar). Verificación visual completa mediante subagente de navegador.
