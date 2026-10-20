@@ -813,6 +813,7 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
         <div class="pill dist">— m</div>
         <button class="pill mute" aria-label="Sonido">${isMuted() ? '🔇' : '🔊'}</button>
         <button class="pill fullscreen" aria-label="Pantalla completa" title="Pantalla completa (F11)">⛶</button>
+        <button class="pill settings-btn-hud" aria-label="Ajustes" title="Ajustes (Esc)">⚙️</button>
       </div>
       <div class="rivals">${players
         .map((p) => `<div class="chip ${p.id === 'me' ? 'me' : ''}" data-id="${p.id}" style="--c:${p.color}"><i>${p.name[0]}</i><b>${tiebreak ? '·' : 0}</b></div>`)
@@ -824,23 +825,21 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
         <span>${tiebreak ? 'Deja la bola lo más cerca de la diana' : `Par ${course.par}`}</span>
         ${course.tip && !tiebreak ? `<em>${course.tip}</em>` : ''}
       </div>
+      <div class="overview-banner">🗺️ Vista General del Mapa · Mueve el ratón para orbitar · Pulsa <kbd>Espacio</kbd> para volver</div>
       <div class="cup-banner"></div>
       <div class="hint">
         <span class="hint-touch">↔ Desliza para apuntar · ↓ Tira y suelta</span>
-        <span class="hint-mouse">🖱️ Ratón para apuntar · Arrastra Clic Izq. o usa W/S/Rueda para ajustar fuerza (flojo / fuerte) · Suelta o [Espacio] para golpear</span>
+        <span class="hint-mouse">🖱️ Ratón para apuntar · Clic Izquierdo para calcular y disparar · <kbd>Espacio</kbd> Ver mapa · <kbd>Esc</kbd> Ajustes</span>
       </div>
       <div class="desktop-controls-bar">
-        <span><kbd>Ratón</kbd> Apuntar</span>
-        <span><kbd>Clic Izq + Arrastre</kbd> Fuerza (Flojo / Fuerte)</span>
-        <span><kbd>W / S / Rueda</kbd> Ajustar potencia</span>
-        <span><kbd>Espacio</kbd> Golpear</span>
+        <span><kbd>Ratón</kbd> Apuntar y Disparar</span>
         <span><kbd>Clic Der</kbd> Cámara</span>
-        <span><kbd>Esc</kbd> Cancelar / Liberar ratón</span>
-        <span><kbd>Tab</kbd> Ver hoyo</span>
-        <span><kbd>R</kbd> Recentrar</span>
+        <span><kbd>Rueda</kbd> Zoom / Fuerza</span>
+        <span><kbd>Espacio</kbd> Vista mapa completo</span>
+        <span><kbd>Esc</kbd> Ajustes</span>
       </div>
       <div class="power"><div class="fill"></div><span>0%</span></div>
-      <button class="map-btn" aria-label="Ver el hoyo completo">Ver hoyo <kbd class="kbd-hint">Tab</kbd></button>
+      <button class="map-btn" aria-label="Ver el hoyo completo">Ver mapa <kbd class="kbd-hint">Espacio</kbd></button>
     </main>`);
   shell(view, { hideHeader: true }).then(() => {
     const strokesEl = view.querySelector('.strokes b');
@@ -864,9 +863,145 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
       onDone(game, strokes, banner);
     };
     stageEl?.addEventListener('click', () => {
-      game?.requestPointerLock?.();
+      if (!game?.overview && !view.querySelector('.in-game-settings-overlay')) {
+        game?.requestPointerLock?.();
+      }
     });
+
+    function openSettingsMenu() {
+      const existing = view.querySelector('.in-game-settings-overlay');
+      if (existing) {
+        existing.remove();
+        game.requestPointerLock?.();
+        return;
+      }
+      game.exitPointerLock?.();
+      const overlay = h(`
+        <div class="overlay in-game-settings-overlay">
+          <div class="in-game-settings-modal">
+            <div class="settings-modal-header">
+              <div class="settings-title">
+                <h3>⚙️ Ajustes de Partida</h3>
+              </div>
+              <button class="close-settings-btn" aria-label="Cerrar ajustes">✕</button>
+            </div>
+
+            <div class="settings-modal-body">
+              <div class="settings-row">
+                <div class="settings-label">
+                  <strong>Sonido</strong>
+                  <small>Efectos ambientales y de golpe</small>
+                </div>
+                <button class="settings-btn toggle-sound-btn ${isMuted() ? 'muted' : ''}">
+                  <span class="btn-icon">${isMuted() ? '🔇' : '🔊'}</span>
+                  <span class="btn-text">${isMuted() ? 'Silenciado' : 'Activado'}</span>
+                </button>
+              </div>
+
+              <div class="settings-row">
+                <div class="settings-label">
+                  <strong>Pantalla</strong>
+                  <small>Modo inmersivo de pantalla completa</small>
+                </div>
+                <button class="settings-btn toggle-fs-btn">
+                  <span class="btn-icon">${document.fullscreenElement ? '🗗' : '⛶'}</span>
+                  <span class="btn-text">${document.fullscreenElement ? 'Ventana' : 'Pantalla Completa'}</span>
+                </button>
+              </div>
+
+              <div class="settings-row">
+                <div class="settings-label">
+                  <strong>Vista de Campo</strong>
+                  <small>Ver todo el terreno en 3D</small>
+                </div>
+                <button class="settings-btn toggle-overview-btn">
+                  <span class="btn-icon">🗺️</span>
+                  <span class="btn-text">${game.overview ? 'Volver a la bola' : 'Ver todo el terreno'}</span>
+                </button>
+              </div>
+
+              <div class="settings-controls-card">
+                <div class="card-title">🎮 Controles Activos</div>
+                <div class="controls-grid">
+                  <div class="c-item"><kbd>Ratón</kbd><span>Apuntar y calcular fuerza (pulsar/arrastrar y soltar)</span></div>
+                  <div class="c-item"><kbd>Clic Der</kbd><span>Rotar cámara alrededor de la bola</span></div>
+                  <div class="c-item"><kbd>Rueda</kbd><span>Zoom de cámara / Ajuste fino de fuerza</span></div>
+                  <div class="c-item"><kbd>Espacio</kbd><span>Visión general y completa del mapa</span></div>
+                  <div class="c-item"><kbd>Esc</kbd><span>Abrir / Cerrar este menú de ajustes</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-modal-footer">
+              <button class="primary resume-btn">▶ Reanudar partida</button>
+              <button class="danger quit-btn">🚪 Salir al Lobby</button>
+            </div>
+          </div>
+        </div>
+      `);
+
+      const close = () => {
+        overlay.remove();
+        game.requestPointerLock?.();
+      };
+
+      overlay.querySelector('.close-settings-btn').addEventListener('click', close);
+      overlay.querySelector('.resume-btn').addEventListener('click', close);
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) close();
+      });
+
+      const soundBtn = overlay.querySelector('.toggle-sound-btn');
+      soundBtn.addEventListener('click', () => {
+        setMuted(!isMuted());
+        const muted = isMuted();
+        soundBtn.classList.toggle('muted', muted);
+        soundBtn.querySelector('.btn-icon').textContent = muted ? '🔇' : '🔊';
+        soundBtn.querySelector('.btn-text').textContent = muted ? 'Silenciado' : 'Activado';
+        muteBtn.textContent = muted ? '🔇' : '🔊';
+        try { localStorage.setItem('gcb.muted', muted ? '1' : '0'); } catch {}
+      });
+
+      const fsModalBtn = overlay.querySelector('.toggle-fs-btn');
+      fsModalBtn.addEventListener('click', () => {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        } else {
+          document.exitFullscreen().catch(() => {});
+        }
+        setTimeout(() => {
+          const isFs = !!document.fullscreenElement;
+          fsModalBtn.querySelector('.btn-icon').textContent = isFs ? '🗗' : '⛶';
+          fsModalBtn.querySelector('.btn-text').textContent = isFs ? 'Ventana' : 'Pantalla Completa';
+        }, 100);
+      });
+
+      const ovBtn = overlay.querySelector('.toggle-overview-btn');
+      ovBtn.addEventListener('click', () => {
+        game.setOverview(!game.overview);
+        close();
+      });
+
+      overlay.querySelector('.quit-btn').addEventListener('click', () => {
+        if (confirm('¿Seguro que quieres salir al menú principal?')) {
+          overlay.remove();
+          game.dispose();
+          showLobby();
+        }
+      });
+
+      view.append(overlay);
+    }
+
     game = new GolfGame(view.querySelector('.stage'), {
+      onOpenSettings: openSettingsMenu,
+      onOverviewChange: (isOverview) => {
+        view.querySelector('.overview-banner')?.classList.toggle('show', isOverview);
+        if (mapBtn) {
+          mapBtn.innerHTML = isOverview ? 'Volver a la bola <kbd class="kbd-hint">Espacio</kbd>' : 'Ver mapa <kbd class="kbd-hint">Espacio</kbd>';
+          mapBtn.classList.toggle('on', isOverview);
+        }
+      },
       onAim: (p) => {
         power.querySelector('.fill').style.height = `${p * 100}%`;
         power.querySelector('span').textContent = `${Math.round(p * 100)}%`;
@@ -925,6 +1060,7 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
         fsBtn.textContent = document.fullscreenElement ? '🗗' : '⛶';
       });
     }
+    view.querySelector('.settings-btn-hud')?.addEventListener('click', openSettingsMenu);
     function setChip(id, text, done) {
       const chip = view.querySelector(`.chip[data-id="${id}"]`);
       if (!chip) return;
@@ -939,15 +1075,10 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
       view.querySelector('.toasts').append(el);
       setTimeout(() => el.remove(), 2600);
     }
-    const hold = (on) => (e) => {
+    mapBtn?.addEventListener('click', (e) => {
       e.preventDefault();
-      game.setOverview(on);
-      mapBtn.classList.toggle('on', on);
-    };
-    mapBtn.addEventListener('pointerdown', hold(true));
-    mapBtn.addEventListener('pointerup', hold(false));
-    mapBtn.addEventListener('pointerleave', hold(false));
-    mapBtn.addEventListener('pointercancel', hold(false));
+      game.setOverview(!game.overview);
+    });
   });
 }
 

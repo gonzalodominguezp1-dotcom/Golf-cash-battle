@@ -108,7 +108,7 @@ test('ajuste manual de fuerza por arrastre de ratón permite tirar más flojo o 
   assert.ok(Math.hypot(velHard.vx, velHard.vz) > Math.hypot(velSoft.vx, velSoft.vz) * 4);
 });
 
-test('ajuste fino de potencia mediante rueda de ratón y teclas W/S', () => {
+test('ajuste fino de potencia mediante rueda de ratón', () => {
   let power = 0;
   const step = 0.05;
 
@@ -117,14 +117,14 @@ test('ajuste fino de potencia mediante rueda de ratón y teclas W/S', () => {
     return power;
   };
 
-  // Subir potencia con W o rueda arriba (+5% cada paso)
+  // Subir potencia con rueda arriba (+5% cada paso)
   adjustPower(+step); // 0.05
   adjustPower(+step); // 0.10
   adjustPower(+step); // 0.15
   adjustPower(+step); // 0.20
   assert.equal(power, 0.20, 'Potencia tras 4 pasos arriba debe ser 0.20');
 
-  // Bajar potencia con S o rueda abajo (tirar más flojo)
+  // Bajar potencia con rueda abajo (tirar más flojo)
   adjustPower(-step); // 0.15
   assert.equal(power, 0.15, 'Potencia tras 1 paso abajo debe reducir a 0.15');
 
@@ -135,6 +135,106 @@ test('ajuste fino de potencia mediante rueda de ratón y teclas W/S', () => {
   // Ajuste a potencia mínima (suelo 0.0)
   for (let i = 0; i < 30; i++) adjustPower(-step);
   assert.equal(power, 0.0, 'Potencia no debe bajar de 0.0');
+});
+
+test('tecla Espacio conmuta visión completa del mapa 3D y prohíbe el tiro mientras está activa', () => {
+  let overview = false;
+  let charging = false;
+  let overviewYaw = 0;
+  let overviewPitch = 0.85;
+  let shotExecuted = false;
+
+  const onKeyDown = (code) => {
+    if (code === 'Space') {
+      overview = !overview;
+      if (overview) charging = false;
+    }
+  };
+
+  const onPointerDown = () => {
+    if (overview) {
+      // Prohibido tirar durante la vista completa del mapa
+      return;
+    }
+    charging = true;
+  };
+
+  const onPointerMove = (movementX, movementY) => {
+    if (overview) {
+      // Rotar la cámara del mapa completo con el ratón
+      overviewYaw += movementX * 0.004;
+      overviewPitch = Math.max(0.25, Math.min(1.35, overviewPitch - movementY * 0.003));
+      return;
+    }
+  };
+
+  const onPointerUp = () => {
+    if (overview) return;
+    if (charging) {
+      shotExecuted = true;
+      charging = false;
+    }
+  };
+
+  // 1. Inicialmente no está en overview y se puede cargar tiro
+  onPointerDown();
+  assert.equal(charging, true);
+
+  // 2. Pulsar Espacio activa la vista completa del mapa y cancela cualquier tiro pendiente
+  onKeyDown('Space');
+  assert.equal(overview, true, 'Espacio debe activar la vista completa del mapa');
+  assert.equal(charging, false, 'Activar overview debe cancelar carga previa');
+
+  // 3. Con overview activo, intentar tirar no hace nada
+  onPointerDown();
+  assert.equal(charging, false, 'No se puede cargar tiro en vista completa');
+  onPointerUp();
+  assert.equal(shotExecuted, false, 'No se puede disparar en vista completa');
+
+  // 4. Mover el ratón orbita la cámara del terreno completo
+  onPointerMove(15, -10);
+  assert.ok(overviewYaw > 0.05, 'El ratón debe rotar el yaw de la cámara completa');
+  assert.ok(overviewPitch > 0.85, 'El ratón debe rotar el pitch de la cámara completa');
+
+  // 5. Pulsar Espacio de nuevo sale de la vista completa y restaura el disparo
+  onKeyDown('Space');
+  assert.equal(overview, false, 'Espacio debe volver a la vista de juego normal');
+  onPointerDown();
+  assert.equal(charging, true, 'Al volver al juego se permite tirar normalmente');
+  onPointerUp();
+  assert.equal(shotExecuted, true);
+});
+
+test('tecla Esc abre el menú de ajustes y libera el puntero', () => {
+  let settingsOpen = false;
+  let pointerLocked = true;
+  let inOverview = false;
+
+  const onKeyDown = (code) => {
+    if (code === 'Escape') {
+      if (inOverview) {
+        inOverview = false;
+        return;
+      }
+      pointerLocked = false;
+      settingsOpen = !settingsOpen;
+    }
+  };
+
+  // 1. En juego normal, pulsar Esc abre ajustes y libera ratón
+  onKeyDown('Escape');
+  assert.equal(settingsOpen, true, 'Esc debe abrir el menú de ajustes');
+  assert.equal(pointerLocked, false, 'Esc debe liberar el puntero');
+
+  // 2. Pulsar Esc de nuevo cierra ajustes
+  onKeyDown('Escape');
+  assert.equal(settingsOpen, false, 'Esc de nuevo debe cerrar ajustes');
+
+  // 3. Si estaba en vista de mapa, Esc primero vuelve a la vista normal
+  inOverview = true;
+  onKeyDown('Escape');
+  assert.equal(inOverview, false, 'Esc debe salir de la vista completa del mapa');
+  assert.equal(settingsOpen, false, 'Esc en overview no abre ajustes directamente');
 });
 
 test('cálculo de fuerza y apuntado con pointer lock activo mediante deltas relativos movementX y movementY', () => {
