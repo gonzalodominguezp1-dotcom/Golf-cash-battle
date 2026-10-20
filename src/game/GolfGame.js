@@ -4,6 +4,10 @@ import { Bot } from './bots.js';
 import { THEMES } from './themes.js';
 import { buildEnvironment, courseBounds } from './render/environment.js';
 import { buildCourse } from './render/course.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { AimDots, Particles, Shockwaves, Trail } from './render/effects.js';
 import { ballTexture, labelTexture, softDotTexture } from './render/textures.js';
 import { skinMaterial } from './render/ballSkins.js';
@@ -61,6 +65,13 @@ export class GolfGame {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(this.renderer.domElement);
     this.camera = new THREE.PerspectiveCamera(55, 1, 0.05, 400);
+    // resplandor (bloom): farolillos, lava, portales y luces de neón brillan de verdad
+    this.composer = new EffectComposer(this.renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 }));
+    this.renderPass = new RenderPass(null, this.camera);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.55, 0.5, 0.82);
+    this.composer.addPass(this.renderPass);
+    this.composer.addPass(this.bloom);
+    this.composer.addPass(new OutputPass());
     this.clock = new THREE.Clock();
     this.acc = 0;
     this.t = 0;
@@ -90,6 +101,10 @@ export class GolfGame {
     this.skin = skin;
     this.course = course;
     this.theme = THEMES[course.theme] ?? THEMES.meadow;
+    // de noche y en el volcán las luces mandan: más resplandor
+    const glowy = this.theme.sunIntensity < 2 || this.theme.lava || this.theme.neon;
+    this.bloom.strength = glowy ? 0.75 : 0.4;
+    this.bloom.threshold = glowy ? 0.72 : 0.92;
     this.segs = segmentsOf(course);
     this.ball = { x: course.tee[0], z: course.tee[1], vx: 0, vz: 0 };
     this.strokes = 0;
@@ -224,6 +239,7 @@ export class GolfGame {
     this.renderer.setAnimationLoop(null);
     this.resizeObserver.disconnect();
     this.#unbindInput?.();
+    this.composer.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
@@ -290,6 +306,8 @@ export class GolfGame {
   #resize() {
     const w = this.container.clientWidth || 1, h = this.container.clientHeight || 1;
     this.renderer.setSize(w, h, false);
+    this.composer.setPixelRatio(this.renderer.getPixelRatio());
+    this.composer.setSize(w, h);
     const aspect = w / h;
     this.camera.aspect = aspect;
     if (aspect < 1) {
@@ -990,6 +1008,7 @@ export class GolfGame {
     this.#placeCamera(realDt);
     this.particles.update(dt, this.camera);
     this.waves.update(realDt);
-    this.renderer.render(this.scene, this.camera);
+    this.renderPass.scene = this.scene;
+    this.composer.render(realDt);
   }
 }
