@@ -65,6 +65,7 @@ export class GolfGame {
     this.acc = 0;
     this.t = 0;
     this.running = false;
+    this.paused = false;
     this.overview = false;
     this.overviewYaw = 0;
     this.overviewPitch = 0.85;
@@ -105,6 +106,7 @@ export class GolfGame {
     this.orbiting = false;
     this.orbitYaw = 0;
     this.overview = false;
+    this.paused = false;
     this.overviewYaw = 0;
     this.overviewPitch = 0.85;
     this.mouseTurns = 0;
@@ -148,6 +150,21 @@ export class GolfGame {
       this.overviewPitch = 0.85;
     }
     this.onOverviewChange?.(this.overview);
+  }
+
+  setPaused(on) {
+    this.paused = !!on;
+    if (this.paused) {
+      if (this.charging || this.power > 0) {
+        this.charging = false;
+        this.chargeAnchor = null;
+        this.power = 0;
+        this.fullPower = false;
+        setCharge(0);
+        this.onAim?.(0);
+        this.aimDots?.hide();
+      }
+    }
   }
 
   requestPointerLock() {
@@ -418,7 +435,7 @@ export class GolfGame {
         this.ambientOn = true;
         setAmbient(this.theme.sound);
       }
-      if (!this.course || this.sunk || this.locked || this.intro < 1) return;
+      if (this.paused || !this.course || this.sunk || this.locked || this.intro < 1) return;
       if (this.course.noCup && this.strokes >= 1) return;
       if (this.overview) {
         // En la vista completa del mapa no se permite realizar tiros
@@ -469,6 +486,7 @@ export class GolfGame {
     };
 
     this.#onPointerMove = (e) => {
+      if (this.paused) return;
       const isMouse = e.pointerType === 'mouse';
       if (isMouse) {
         const isLocked = typeof document !== 'undefined' && document.pointerLockElement === el;
@@ -576,7 +594,7 @@ export class GolfGame {
     };
 
     this.#onPointerUp = (e) => {
-      if (this.overview) return;
+      if (this.paused || this.overview) return;
       const isMouse = e.pointerType === 'mouse';
       if (isMouse) {
         if (e.button === 0 && this.charging) {
@@ -631,6 +649,7 @@ export class GolfGame {
 
     this.#onWheel = (e) => {
       e.preventDefault();
+      if (this.paused) return;
       if (this.overview) {
         const delta = Math.sign(e.deltaY) * 0.08;
         this.zoomLevel = THREE.MathUtils.clamp((this.zoomLevel ?? 1) + delta, 0.55, 1.9);
@@ -805,7 +824,7 @@ export class GolfGame {
       this.tick++;
       this.t = this.tick * DT;
       if (this.intro >= 1 && !this.locked) this.#tickBots();
-      if (this.sunk) continue;
+      if (this.sunk || this.paused) continue;
       const wasMoving = isMoving(this.ball);
       // se simula también con la bola parada: un aspa puede empujarla
       const r = step(this.course, this.segs, this.ball, this.t, DT);

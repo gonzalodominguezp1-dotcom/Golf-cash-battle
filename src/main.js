@@ -966,9 +966,10 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
         <div class="pill">${tiebreak ? '1 tiro' : `Par ${course.par}`}</div>
         ${tiebreak ? '' : '<div class="pill strokes">Golpes <b>0</b></div>'}
         <div class="pill dist">— m</div>
-        <button class="pill mute" aria-label="Sonido">${isMuted() ? '🔇' : '🔊'}</button>
-        <button class="pill fullscreen" aria-label="Pantalla completa" title="Pantalla completa (F11)">⛶</button>
-        <button class="pill settings-btn-hud" aria-label="Ajustes" title="Ajustes (Esc)">⚙️</button>
+        <button class="pill mute mobile-only" aria-label="Sonido">${isMuted() ? '🔇' : '🔊'}</button>
+        <button class="pill fullscreen mobile-only" aria-label="Pantalla completa" title="Pantalla completa (F11)">⛶</button>
+        <button class="pill settings-btn-hud mobile-only" aria-label="Ajustes" title="Ajustes (Esc)">⚙️</button>
+        <button class="pill desktop-esc-hint" aria-label="Ajustes">⚙️ Ajustes <kbd class="kbd-hint">Esc</kbd></button>
       </div>
       <div class="rivals">${players
         .map((p) => `<div class="chip ${p.id === 'me' ? 'me' : ''}" data-id="${p.id}" style="--c:${p.color}"><i>${p.name[0]}</i><b>${tiebreak ? '·' : 0}</b></div>`)
@@ -1027,9 +1028,11 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
       const existing = view.querySelector('.in-game-settings-overlay');
       if (existing) {
         existing.remove();
+        game.setPaused?.(false);
         game.requestPointerLock?.();
         return;
       }
+      game.setPaused?.(true);
       game.exitPointerLock?.();
       const overlay = h(`
         <div class="overlay in-game-settings-overlay">
@@ -1097,6 +1100,7 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
 
       const close = () => {
         overlay.remove();
+        game.setPaused?.(false);
         game.requestPointerLock?.();
       };
 
@@ -1140,6 +1144,7 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
       overlay.querySelector('.quit-btn').addEventListener('click', () => {
         if (confirm('¿Seguro que quieres salir al menú principal?')) {
           overlay.remove();
+          game.setPaused?.(false);
           game.dispose();
           showLobby();
         }
@@ -1216,6 +1221,7 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
       });
     }
     view.querySelector('.settings-btn-hud')?.addEventListener('click', openSettingsMenu);
+    view.querySelector('.desktop-esc-hint')?.addEventListener('click', openSettingsMenu);
     function setChip(id, text, done) {
       const chip = view.querySelector(`.chip[data-id="${id}"]`);
       if (!chip) return;
