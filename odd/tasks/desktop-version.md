@@ -22,7 +22,7 @@ Adaptar el juego y sus interfaces para una experiencia de escritorio (PC) nativa
 - [x] `task-6`: Visor 3D interactivo en la tienda de skins, sombras 4K y navegación por teclado en modales — Commit: `1bcad32`.
 - [x] `task-7`: Bloqueo de puntero (Pointer Lock API) para minijuego en ventana y multimonitor (`GolfGame.js`, `main.js`, `desktop-controls.test.js`) — Commit: `24a6260`.
 - [x] `task-8`: Corrección de tiro con clic izquierdo bajo Pointer Lock (evitar excepción `InvalidStateError`, ignorar `pointercancel` de transición, soporte dual carga por tiempo/arrastre manual y listeners en ventana) — Commit: `0e86cf3`.
-- [x] `task-9`: Eliminación de controles por teclado, reasignación de [Espacio] para visión completa del mapa 3D con órbita por ratón (tiro deshabilitado en vista general) y tecla [Esc] para Menú de Ajustes in-game (`GolfGame.js`, `main.js`, `style.css`, `desktop-controls.test.js`).
+- [x] `task-9`: Eliminación de controles por teclado, reasignación de [Espacio] para visión completa del mapa 3D con órbita por ratón (tiro deshabilitado en vista general) y tecla [Esc] para Menú de Ajustes in-game (`GolfGame.js`, `main.js`, `style.css`, `desktop-controls.test.js`) — Commit: `1a364ee`.
 
 ## Registro de Estado y Evidencia
 - **Ruta implementada**: Delegada directa con orquestador y tareas desacopladas.
