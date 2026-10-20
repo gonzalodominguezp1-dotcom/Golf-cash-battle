@@ -567,25 +567,69 @@ async function showAccount(note = '') {
   const guest = p.is_anonymous || !p.email_confirmed;
   const kyc = p.kyc_status;
   const name = p.username ?? 'Sin nombre';
+  const lvl = progress.level;
+  const unlockedSkins = SKINS.filter((s) => progress.isUnlocked(s)).length;
+  const completedChallenges = CHALLENGES.filter((c) => progress.challenge(c.id).done).length;
   const view = h(`
     <main class="screen account">
-      <div class="profile-card holo">
+      <div class="profile-card passport-card holo">
         <div class="shine"></div>
-        <span class="avatar big">${p.username ? esc(name[0]) : '?'}</span>
-        <div>
-          <small>${guest ? 'Invitado' : 'Cuenta'}</small>
-          <strong>${esc(name)}</strong>
-          <button class="chip-btn rename">Cambiar nombre</button>
+        <div class="passport-header">
+          <div class="avatar-wrap">
+            <span class="avatar big">${p.username ? esc(name[0]) : '?'}</span>
+            <span class="avatar-lvl-badge">Nv.${lvl.level}</span>
+          </div>
+          <div class="passport-info">
+            <div class="passport-tag-row">
+              <span class="passport-status ${guest ? 'guest' : 'vip'}">${guest ? 'Pase Invitado' : 'Jugador Oficial'}</span>
+              <span class="kyc-mini-pill ${kyc === 'verified' ? 'verified' : ''}">${KYC_TEXT[kyc]}</span>
+            </div>
+            <strong class="passport-name">${esc(name)}</strong>
+            <button class="chip-btn rename">Cambiar nombre</button>
+          </div>
+        </div>
+
+        <div class="career-stats-row">
+          <div class="stat-pill">
+            <span class="stat-pill-label">Nivel</span>
+            <span class="stat-pill-val">Nv. ${lvl.level}</span>
+            <small class="stat-pill-sub">${lvl.into}/${lvl.need} XP</small>
+          </div>
+          <div class="stat-pill">
+            <span class="stat-pill-label">Victorias</span>
+            <span class="stat-pill-val">${progress.state.wins}</span>
+            <small class="stat-pill-sub">${progress.state.matches} partidas</small>
+          </div>
+          <div class="stat-pill">
+            <span class="stat-pill-label">Skins</span>
+            <span class="stat-pill-val">${unlockedSkins}/${SKINS.length}</span>
+            <small class="stat-pill-sub">colección</small>
+          </div>
+          <div class="stat-pill">
+            <span class="stat-pill-label">Desafíos</span>
+            <span class="stat-pill-val">${completedChallenges}/${CHALLENGES.length}</span>
+            <small class="stat-pill-sub">completados</small>
+          </div>
         </div>
       </div>
       ${note ? `<p class="notice">${note}</p>` : ''}
       ${p.in_review ? `<p class="offline">Tu cuenta está en revisión por el sistema antitrampas.${p.held > 0 ? ` Tienes ${coin(Number(p.held))} en premios retenidos hasta que termine.` : ''}</p>` : ''}
 
-      <h2>Email</h2>
-      <div class="email-box"></div>
+      <div class="account-card-panel">
+        <div class="panel-head">
+          <h2>Email</h2>
+          <span class="panel-badge ${guest ? 'pending' : 'verified'}">${guest ? 'Sin vincular' : 'Vinculado'}</span>
+        </div>
+        <div class="email-box"></div>
+      </div>
 
-      <h2>Edad e identidad <small class="tag">${KYC_TEXT[kyc]}</small></h2>
-      <div class="kyc-box"></div>
+      <div class="account-card-panel">
+        <div class="panel-head">
+          <h2>Edad e identidad</h2>
+          <span class="panel-badge ${kyc === 'verified' ? 'verified' : ''}">${KYC_TEXT[kyc]}</span>
+        </div>
+        <div class="kyc-box"></div>
+      </div>
 
       <p class="legal">Para jugar mesas con entrada hace falta cuenta con email, ser mayor de 18 años y verificar tu identidad (una cuenta por persona). La práctica es libre.</p>
       ${guest ? '' : '<button class="ghost logout">Cerrar sesión</button>'}
@@ -748,44 +792,84 @@ const TX_LABEL = { bonus: 'Bienvenida', withdrawal: 'Retirada', deposit: 'Recarg
 async function showWallet() {
   screen = 'wallet';
   const [balance, txs] = await Promise.all([wallet.getBalance(), wallet.getTransactions()]);
+  const prizeTotal = txs.filter((t) => t.type === 'prize' && t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
+  const matchesPlayed = txs.filter((t) => t.type === 'entry').length;
   const view = h(`
     <main class="screen wallet">
-      <div class="wallet-card holo">
-        <div class="shine"></div>
-        <span>Saldo disponible</span>
-        <strong>${coin(balance)}</strong>
-        <small>Créditos demo · sin valor real</small>
-      </div>
-      <div class="row">
-        <button class="primary" data-add="50">+50 demo</button>
-        <button class="primary" data-add="200">+200 demo</button>
-      </div>
-      ${
-        wallet.depositCrypto
-          ? `<h2>Depositar en cripto <small class="tag">pruebas</small></h2>
-      <div class="row">
-        <button class="secondary" data-crypto="10">10 USD</button>
-        <button class="secondary" data-crypto="25">25 USD</button>
-        <button class="secondary" data-crypto="50">50 USD</button>
-      </div>
-      <p class="legal">Pago con NOWPayments (USDT, BTC, ETH…). Modo de pruebas: no se cobra dinero real.</p>`
-          : ''
-      }
-      <h2>Movimientos</h2>
-      <ul class="txs">
+      <div class="wallet-dashboard-col">
+        <div class="wallet-card holo">
+          <div class="shine"></div>
+          <div class="card-ambient"></div>
+          <div class="card-header">
+            <div class="card-chip-badge"><span class="card-chip"></span><span class="card-contactless">)))</span></div>
+            <span class="card-league">DIAMOND VIP</span>
+          </div>
+          <div class="card-balance">
+            <small>Saldo Disponible</small>
+            <strong>${coin(balance)}</strong>
+          </div>
+          <div class="card-footer">
+            <div class="card-number">•••• •••• •••• ${String(Math.abs(Math.round(balance * 100)) % 9000 + 1000)}</div>
+            <div class="card-holder"><small>TITULAR</small><span>GOLF CASH PRO</span></div>
+          </div>
+        </div>
+        <div class="wallet-metrics">
+          <div class="metric-card">
+            <small>Premios Ganados</small>
+            <b>${coin(prizeTotal)}</b>
+          </div>
+          <div class="metric-card">
+            <small>Torneos Jugados</small>
+            <b>${matchesPlayed}</b>
+          </div>
+        </div>
+        <div class="deposit-section">
+          <h3>Recarga Rápida de Créditos Demo</h3>
+          <div class="row deposit-row">
+            <button class="primary deposit-btn" data-add="50"><span>+50</span> Créditos</button>
+            <button class="primary deposit-btn" data-add="200"><span>+200</span> Créditos</button>
+          </div>
+        </div>
         ${
-          txs.length
-            ? txs
-                .map(
-                  (t) => `<li>
-                    <div><b>${TX_LABEL[t.type] ?? t.type}</b><small>${t.note} · ${new Date(t.at).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}</small></div>
-                    <span class="${t.amount >= 0 ? 'pos' : 'neg'}">${t.amount >= 0 ? '+' : ''}${fmt(t.amount)}</span>
-                  </li>`,
-                )
-                .join('')
-            : '<li class="empty">Sin movimientos</li>'
+          wallet.depositCrypto
+            ? `<div class="crypto-section">
+          <h3>Depositar en Cripto <small class="tag">pruebas</small></h3>
+          <div class="row">
+            <button class="secondary" data-crypto="10">10 USD</button>
+            <button class="secondary" data-crypto="25">25 USD</button>
+            <button class="secondary" data-crypto="50">50 USD</button>
+          </div>
+          <p class="legal">Pago con NOWPayments (USDT, BTC, ETH…). Modo de pruebas: no se cobra dinero real.</p>
+        </div>`
+            : ''
         }
-      </ul>
+      </div>
+      <div class="txs-container">
+        <h3>Historial de Movimientos</h3>
+        <ul class="txs">
+          ${
+            txs.length
+              ? txs
+                  .map(
+                    (t) => {
+                      const icon = t.type === 'prize' ? '🏆' : t.type === 'entry' ? '⚔️' : t.type === 'bonus' ? '🎁' : '💎';
+                      return `<li>
+                        <div class="tx-info">
+                          <span class="tx-icon">${icon}</span>
+                          <div class="tx-text">
+                            <b>${TX_LABEL[t.type] ?? t.type}</b>
+                            <small>${t.note} · ${new Date(t.at).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}</small>
+                          </div>
+                        </div>
+                        <span class="${t.amount >= 0 ? 'pos' : 'neg'}">${t.amount >= 0 ? '+' : ''}${fmt(t.amount)}</span>
+                      </li>`;
+                    },
+                  )
+                  .join('')
+              : '<li class="empty"><span class="empty-icon">🪙</span><p>Sin movimientos todavía</p></li>'
+          }
+        </ul>
+      </div>
     </main>`);
   view.querySelectorAll('[data-add]').forEach((b) =>
     b.addEventListener('click', async () => {
