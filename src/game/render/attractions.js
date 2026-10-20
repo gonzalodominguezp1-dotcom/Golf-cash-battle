@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BALL_R } from '../physics.js';
+import { loopTable, tubeTable } from '../physics.js';
 import { loopPoint } from './terrain.js';
 
 // Atracciones de minigolf: loopings, molinos, tubos y pasadizos. Cada una
@@ -17,10 +17,10 @@ const glowMat = (color, intensity = 1.6) => new THREE.MeshStandardMaterial({ col
 /** Looping: carril que da una vuelta completa, con raíles y columnas. */
 export function buildLoop(scene, loop, style, i = 0) {
   const g = new THREE.Group();
-  const N = 140, half = loop.w / 2 - 0.2;
+  const N = 160, half = loop.w / 2 - 0.2, S = loopTable(loop).length;
   const pos = [], idx = [];
   for (let k = 0; k <= N; k++) {
-    const p = k / N;
+    const p = (k / N) * S;
     for (const side of [-half, half]) {
       const q = loopPoint(loop, p, side);
       // el carril queda justo debajo de la bola: un pelo hacia fuera de la vuelta
@@ -46,7 +46,7 @@ export function buildLoop(scene, loop, style, i = 0) {
   for (const side of [-half - 0.04, half + 0.04]) {
     const pts = [];
     for (let k = 0; k <= 70; k++) {
-      const q = loopPoint(loop, k / 70, side);
+      const q = loopPoint(loop, (k / 70) * S, side);
       pts.push(new THREE.Vector3(q.x - q.dx * q.nAlong * 0.03, q.y - q.nY * 0.03 + 0.03, q.z - q.dz * q.nAlong * 0.03));
     }
     const rail = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 160, 0.045, 8), railMat);
@@ -55,7 +55,7 @@ export function buildLoop(scene, loop, style, i = 0) {
   }
 
   // dos columnas que sujetan la vuelta por arriba
-  const top = loopPoint(loop, 0.5, 0);
+  const top = loopPoint(loop, S / 2, 0);
   const postMat = style.kind === 'neon' ? new THREE.MeshStandardMaterial({ color: 0x15152a, metalness: 0.6, roughness: 0.4 }) : new THREE.MeshStandardMaterial({ color: 0xe8e8e8, metalness: 0.4, roughness: 0.4 });
   const sx = -loop.dir[1], sz = loop.dir[0];
   const h = top.y + 0.15;
@@ -175,28 +175,20 @@ export function buildWindmill(scene, wm, style, lift = 0) {
   };
 }
 
-/** Tubo: boca en el suelo, tubería por el aire y salida en la dirección out. */
-export function buildTube(scene, portal, style, i = 0, liftA = 0, liftB = 0) {
-  const [ax, az] = portal.a, [bx, bz] = portal.b;
-  const [ox, oz] = portal.out ?? [0, 0];
-  const peak = 1.4 + i * 0.45 + Math.max(liftA, liftB);
-  const pts = [
-    [ax, liftA - 0.3, az],
-    [ax, liftA + 0.5, az],
-    [(ax + bx) / 2 + (ax - bx) * 0.15, peak, (az + bz) / 2 + (az - bz) * 0.15],
-    [bx - ox * 1.1, liftB + 0.9, bz - oz * 1.1],
-    [bx - ox * 0.75, liftB + 0.3, bz - oz * 0.75],
-    [bx - ox * 0.3, liftB + BALL_R + 0.05, bz - oz * 0.3],
-  ].map(([x, y, z]) => new THREE.Vector3(x, y, z));
+/** Tubo: boca en el suelo y tubería por el aire por la que viaja la bola hasta b. */
+export function buildTube(scene, portal, style, i = 0, liftA = 0) {
+  const [ax, az] = portal.a;
+  const [ox, oz] = portal.out;
+  // el mismo recorrido que hace la bola en la física
+  const pts = tubeTable(portal).pts.map((p) => new THREE.Vector3(p.x, p.y, p.z));
   const curve = new THREE.CatmullRomCurve3(pts);
   const color = style.colors[i % style.colors.length];
   const R = 0.2;
   const pipeMat =
     style.kind === 'neon'
       ? new THREE.MeshPhysicalMaterial({ color, emissive: color, emissiveIntensity: 0.35, transparent: true, opacity: 0.38, roughness: 0.1, metalness: 0, side: THREE.DoubleSide, depthWrite: false })
-      : new THREE.MeshStandardMaterial({ color: style.kind === 'night' ? 0x2a9d4f : 0x34c759, roughness: 0.35, metalness: 0.2 });
-  const pipe = new THREE.Mesh(new THREE.TubeGeometry(curve, 90, R, 16), pipeMat);
-  pipe.castShadow = style.kind !== 'neon';
+      : new THREE.MeshStandardMaterial({ color: style.kind === 'night' ? 0x2a9d4f : 0x34c759, roughness: 0.35, metalness: 0.2, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false });
+  const pipe = new THREE.Mesh(new THREE.TubeGeometry(curve, 120, R, 16), pipeMat);
   scene.add(pipe);
   // aros en la boca y en la salida
   const ringMat = style.kind === 'day' ? new THREE.MeshStandardMaterial({ color: 0x228b3c, roughness: 0.4 }) : glowMat(color, 2.2);
@@ -211,24 +203,13 @@ export function buildTube(scene, portal, style, i = 0, liftA = 0, liftB = 0) {
   spout.position.copy(end);
   spout.lookAt(end.x + ox, end.y, end.z + oz);
   scene.add(mouth, hole, spout);
-  // bola de luz que recorre el tubo cuando entra una bola
-  const pulse = new THREE.Mesh(new THREE.SphereGeometry(R * 0.8, 14, 10), new THREE.MeshBasicMaterial({ color: style.kind === 'day' ? 0xffffff : color, transparent: true, opacity: 0.9 }));
-  pulse.visible = false;
-  scene.add(pulse);
   if (style.kind !== 'day') {
     const light = new THREE.PointLight(color, 2, 4, 1.5);
     light.position.set(ax, liftA + 0.5, az);
     scene.add(light);
   }
-  let from = -1;
   return {
-    flash(t) {
-      from = t;
-    },
     update(t) {
-      const k = from < 0 ? 1 : (t - from) / 0.45;
-      pulse.visible = k < 1;
-      if (k < 1) pulse.position.copy(curve.getPointAt(Math.max(0, k)));
       mouth.scale.setScalar(1 + Math.sin(t * 4 + i) * 0.05);
     },
   };

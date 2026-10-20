@@ -219,8 +219,7 @@ export function buildCourse(scene, course, theme) {
   });
 
   // pendientes: sombreado de cuesta y flechas que bajan, pegados al relieve
-  // (las de los loopings no: allí se dibuja la vuelta)
-  const slopeTextures = (course.slopes ?? []).filter((sl) => !sl.loop).map((sl) => {
+  const slopeTextures = (course.slopes ?? []).map((sl) => {
     const rot = -Math.atan2(sl.dir[0], -sl.dir[1]);
     const along = sl.dir[0] !== 0 ? sl.w : sl.d, across = sl.dir[0] !== 0 ? sl.d : sl.w;
     const n = relief ? Math.ceil(along / 0.2) : 1;
@@ -243,7 +242,7 @@ export function buildCourse(scene, course, theme) {
     ...(course.windmills ?? []).map((wm) => buildWindmill(scene, wm, style, lift(wm.x, wm.z))),
     ...(course.tunnels ?? []).map((tn, i) => buildTunnel(scene, tn, style, lift(tn.x, tn.z), i)),
   ];
-  const tubes = (course.portals ?? []).map((p, i) => (p.tube ? buildTube(scene, p, style, i, lift(...p.a), lift(...p.b)) : null));
+  const tubes = (course.portals ?? []).map((p, i) => (p.tube ? buildTube(scene, p, style, i, lift(...p.a)) : null));
 
   // portales: entrada morada y salida naranja, con remolino y columna de luz
   const portals = (course.portals ?? [])
@@ -288,10 +287,6 @@ export function buildCourse(scene, course, theme) {
     spinners,
     bumpers,
     flag: { pole, cloth },
-    /** La bola ha entrado en el tubo i: se ve una luz recorrerlo. */
-    tubeFlash(i, t) {
-      tubes[i]?.flash(t);
-    },
     update(t, cameraPos, ballPos) {
       attractions.forEach((a) => a.update(t, ballPos));
       tubes.forEach((tb) => tb?.update(t));

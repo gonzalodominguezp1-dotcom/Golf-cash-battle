@@ -313,9 +313,9 @@ export class GolfGame {
     const baseDist = (isWidescreen ? 3.5 : FOLLOW_DIST) * zoom;
     const baseHeight = (isWidescreen ? 1.6 : FOLLOW_HEIGHT) * (0.85 + 0.15 * zoom);
     const dist = baseDist + this.power * 0.7;
-    // con relieve la cámara sube con el césped; en un looping solo a medias
-    const pose = ballPose(this.course, this.ball.x, this.ball.z);
-    const rise = pose.inLoop ? (pose.y - BALL_R) * 0.5 : pose.ground;
+    // con relieve la cámara sube con el césped; en un looping o un tubo, a medias con la bola
+    const pose = ballPose(this.course, this.ball);
+    const rise = pose.onTrack ? pose.ground + (pose.y - BALL_R - pose.ground) * 0.5 : pose.ground;
     const pos = new THREE.Vector3(this.ball.x, 0, this.ball.z).addScaledVector(fwd, -dist);
     pos.y = rise + baseHeight + this.power * 0.35;
     const look = new THREE.Vector3(this.ball.x, rise + 0.15, this.ball.z).addScaledVector(fwd, LOOK_AHEAD);
@@ -777,7 +777,7 @@ export class GolfGame {
       lastZ = sim.z;
       if (acc >= 0.22) {
         acc = 0;
-        const p = ballPose(this.course, sim.x, sim.z);
+        const p = ballPose(this.course, sim);
         pts.push({ x: p.x, y: p.y - BALL_R, z: p.z });
       }
       if (r.hit > 0 && sinceBounce < 0) sinceBounce = 0;
@@ -834,11 +834,14 @@ export class GolfGame {
       const wasMoving = isMoving(this.ball);
       // se simula también con la bola parada: un aspa puede empujarla
       const r = step(this.course, this.segs, this.ball, this.t, DT);
-      const pose = ballPose(this.course, this.ball.x, this.ball.z);
+      const pose = ballPose(this.course, this.ball);
       const pos = new THREE.Vector3(pose.x, pose.y, pose.z);
-      if (r.portal >= 0) {
+      if (r.portal >= 0 && this.course.portals[r.portal].tube) {
+        // entra en un tubo: la bola viaja por dentro y la cámara la sigue
+        sfx.portal();
+        this.particles.puff(pos, 0x9be37f, 10, 1.2, 0.16);
+      } else if (r.portal >= 0) {
         const p = this.course.portals[r.portal];
-        if (p.tube) this.courseView.tubeFlash(r.portal, this.t);
         sfx.portal();
         this.particles.puff(new THREE.Vector3(p.a[0], 0.1, p.a[1]), 0xb46cff, 14, 1.6, 0.2);
         this.particles.puff(pos, 0xffb020, 14, 1.6, 0.2);
@@ -924,7 +927,8 @@ export class GolfGame {
 
     // la cámara gira suavemente hacia donde rueda la bola
     const speed = Math.hypot(this.ball.vx, this.ball.vz);
-    if (speed > 1.2 && !this.drag && !this.charging) {
+    // en un looping o un tubo la dirección da vueltas: la cámara espera a la salida
+    if (speed > 1.2 && !this.drag && !this.charging && !this.ball.track) {
       const velYaw = Math.atan2(this.ball.vx, -this.ball.vz);
       this.yaw = lerpAngle(this.yaw, velYaw, damp(1.2, dt));
     }
@@ -942,7 +946,7 @@ export class GolfGame {
 
     // bola: rodar y caer en el hoyo
     const sinkT = this.sunk ? Math.min(1, (this.t - this.sunkAt) * 4) : 0;
-    const pose = ballPose(this.course, this.ball.x, this.ball.z);
+    const pose = ballPose(this.course, this.ball);
     this.ballRoot.position.set(pose.x, pose.y - sinkT * 0.3, pose.z);
     if (speed > 0) {
       const axis = new THREE.Vector3(-this.ball.vz, 0, this.ball.vx).normalize();
@@ -953,7 +957,7 @@ export class GolfGame {
     const wob = this.squash * Math.cos(this.t * 40);
     this.ballRoot.scale.set(1 + wob * 0.5, 1 - wob, 1 + wob * 0.5);
     this.ballShadow.position.set(pose.x, pose.ground + 0.004, pose.z);
-    this.ballShadow.visible = !this.sunk && !pose.inLoop;
+    this.ballShadow.visible = !this.sunk && !pose.onTrack;
     this.trauma = Math.max(0, this.trauma - realDt * 2.2);
     this.fovKick *= Math.exp(-realDt * 5);
     const fov = this.baseFov + this.fovKick - (1 - this.timeScale) * 8;
@@ -964,7 +968,7 @@ export class GolfGame {
     setRolling(this.sunk ? 0 : speed, this.wasInSand);
     for (const b of this.bots) {
       if (b.sunk) b.sinkT = Math.min(1, b.sinkT + dt * 4);
-      const bp = ballPose(this.course, b.ball.x, b.ball.z);
+      const bp = ballPose(this.course, b.ball);
       b.mesh.position.set(bp.x, bp.y - b.sinkT * 0.3, bp.z);
       const v = Math.hypot(b.ball.vx, b.ball.vz);
       if (v > 0) b.mesh.rotateOnWorldAxis(new THREE.Vector3(-b.ball.vz, 0, b.ball.vx).normalize(), (v * dt) / BALL_R);
@@ -976,7 +980,7 @@ export class GolfGame {
       b.label.material.opacity = THREE.MathUtils.clamp((camD - 3.7) / 2, 0, 1);
     }
     this.ballGlow.position.set(pose.x, pose.ground + 0.006, pose.z);
-    this.ballGlow.visible = !this.sunk && !pose.inLoop;
+    this.ballGlow.visible = !this.sunk && !pose.onTrack;
     this.ballGlow.material.opacity = isMoving(this.ball) ? 0.15 : 0.35 + Math.sin(this.t * 4) * 0.15;
 
     this.course.spinners.forEach((sp, i) => {

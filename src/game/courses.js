@@ -4,24 +4,9 @@
 // dirigida). Solo se añaden hoyos al final: el servidor guarda el índice.
 // Coordenadas en el plano del suelo (x, z); -z es "hacia delante".
 // waypoints: puntos de paso que usan los rivales para rodear paredes.
-// Un looping: en física es una joroba (media subida y media bajada) a lo
-// largo de dir; si la bola no llega con fuerza a la mitad, vuelve. El dibujo
-// lo convierte en una vuelta completa. Las pendientes llevan loop para que el
-// relieve del suelo no las cuente.
-function looping({ x, z, dir, len, w, accel, radius }) {
-  const alongX = dir[0] !== 0;
-  const half = (k) => ({
-    x: x + dir[0] * k * (len / 4),
-    z: z + dir[1] * k * (len / 4),
-    w: alongX ? len / 2 : w,
-    d: alongX ? w : len / 2,
-    dir: [dir[0] * k, dir[1] * k],
-    accel,
-    loop: true,
-  });
-  return { loop: { x, z, dir, len, w, radius }, slopes: [half(-1), half(1)] };
-}
-
+// Un looping: la bola entra por un extremo (a lo largo de dir) y va por un
+// carril que da una vuelta de radio radius mientras avanza len por el suelo.
+// Si no llega con fuerza arriba, se cae y vuelve por donde ha entrado.
 // Un molino: casa que cruza la pista con una puerta de ancho w (a lo largo de
 // x) y aspas delante (del lado face) que tapan la puerta al pasar por abajo.
 function windmill({ x, z, w = 0.9, depth = 1.4, face = 1, left, right, speed, blades = 4, phase = 0 }) {
@@ -34,14 +19,14 @@ function windmill({ x, z, w = 0.9, depth = 1.4, face = 1, left, right, speed, bl
   return { windmill: { x, z, w, depth, face, left, right, speed, blades, phase, gateZ: z + face * 0.3 }, walls };
 }
 
-const LOOP_A = looping({ x: 0, z: 1, dir: [0, -1], len: 4.4, w: 1.6, accel: 3.4, radius: 1 });
-const LOOP_B1 = looping({ x: -3.6, z: 3, dir: [0, -1], len: 4.4, w: 1.6, accel: 3.4, radius: 1 });
-const LOOP_B2 = looping({ x: -0.2, z: -7.8, dir: [1, 0], len: 4.4, w: 1.6, accel: 3.4, radius: 1 });
-const LOOP_N = looping({ x: 0, z: 1.8, dir: [0, -1], len: 4.4, w: 1.6, accel: 3.4, radius: 1 });
+const LOOP_A = { x: 0, z: 1, dir: [0, -1], len: 4.4, w: 1.6, radius: 0.75 };
+const LOOP_B1 = { x: -3.6, z: 3, dir: [0, -1], len: 4.4, w: 1.6, radius: 0.75 };
+const LOOP_B2 = { x: -0.2, z: -7.8, dir: [1, 0], len: 4.4, w: 1.6, radius: 0.75 };
+const LOOP_N = { x: 0, z: 1.8, dir: [0, -1], len: 4.4, w: 1.6, radius: 0.75 };
 const MILL_NEON = windmill({ x: 0, z: 0, depth: 1.4, left: -2, right: 2, speed: 1.6 });
 const MILL_DAY = windmill({ x: 0, z: -1.5, depth: 1.6, left: -2.6, right: 2.6, speed: 1.3 });
-const MILL_N1 = windmill({ x: -1.2, z: 2.6, left: -2.6, right: 2.6, speed: 1.2, blades: 3 });
-const MILL_N2 = windmill({ x: 1.2, z: -4, left: -2.6, right: 2.6, speed: -1.3, blades: 3, phase: 0.7 });
+const MILL_N1 = windmill({ x: -1.2, z: 2.6, w: 1, left: -2.6, right: 2.6, speed: 1.2, blades: 3 });
+const MILL_N2 = windmill({ x: 1.2, z: -4, w: 1, left: -2.6, right: 2.6, speed: -1.3, blades: 3, phase: 0.7 });
 
 
 
@@ -201,7 +186,7 @@ export const COURSES = [
     spinners: [],
     // cono con la cima llana y el hoyo en el cráter: las laderas echan la bola
     // hacia fuera, así que demasiado flojo vuelve y demasiado fuerte se pasa
-    mounds: [{ x: 0, z: -2, top: 0.9, base: 3.4, accel: 3.2, height: 1.5, tint: 0x5a3a30 }],
+    mounds: [{ x: 0, z: -2, top: 0.9, base: 3.4, accel: 5.5, tint: 0x5a3a30 }],
     waypoints: [],
   },
   {
@@ -233,8 +218,7 @@ export const COURSES = [
     bumpers: [{ x: -0.8, z: -4.6, r: 0.35 }, { x: 1.1, z: -5.2, r: 0.3 }],
     sand: [{ x: -1.2, z: -8.6, w: 1.2, d: 1 }],
     spinners: [],
-    loops: [LOOP_A.loop],
-    slopes: LOOP_A.slopes,
+    loops: [LOOP_A],
     waypoints: [[0, -2.8]],
   },
   {
@@ -250,8 +234,7 @@ export const COURSES = [
     sand: [{ x: 3.4, z: -9.8, w: 1.2, d: 1 }],
     spinners: [],
     boosts: [{ x: -3.6, z: -7.8, w: 1.4, d: 1.4, dir: [1, 0], speed: 9 }],
-    loops: [LOOP_B1.loop, LOOP_B2.loop],
-    slopes: [...LOOP_B1.slopes, ...LOOP_B2.slopes],
+    loops: [LOOP_B1, LOOP_B2],
     waypoints: [[-3.6, -7.8], [3.4, -7.8]],
   },
   {
@@ -345,8 +328,7 @@ export const COURSES = [
     bumpers: [{ x: -1.2, z: -2.8, r: 0.3 }, { x: 1.2, z: -2.8, r: 0.3 }, { x: 0, z: -7.4, r: 0.35 }],
     sand: [{ x: -1.8, z: -8.6, w: 1.4, d: 1.2 }],
     spinners: [],
-    loops: [LOOP_N.loop],
-    slopes: LOOP_N.slopes,
+    loops: [LOOP_N],
     tunnels: [{ x: 0, z: -5, w: 0.9, d: 1.6 }],
     waypoints: [[0, -6.4]],
   },

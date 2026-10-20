@@ -105,7 +105,7 @@ test('looping: flojo vuelve atrás, fuerte lo completa', () => {
   assert.ok(straightShot(c, 0.4).z > entry, 'un tiro flojo vuelve antes del looping');
   const strong = straightShot(c, 0.9);
   assert.ok(strong === null || strong.z < exit, 'un tiro fuerte pasa al otro lado');
-  // las pendientes del looping no levantan el césped
+  // el looping no levanta el césped
   assert.ok(!hasRelief(c));
   assert.equal(groundHeight(c, l.x, l.z), 0);
 });
@@ -127,15 +127,37 @@ test('molino: las aspas tapan la puerta según el momento del golpe', () => {
   assert.deepEqual([...results].sort(), ['cruza', 'rebota']);
 });
 
-test('tubos: la bola sale en la dirección del tubo', () => {
+test('tubos: la bola viaja por dentro y sale en la dirección del tubo', () => {
   const c = COURSES.find((x) => x.name === 'Las Tuberías');
   const p = c.portals[0];
   const ball = { x: p.a[0], z: p.a[1] + 1, vx: 0, vz: -4 };
   const segs = segmentsOf(c);
-  let r;
-  for (let t = 1; t < 240 && !(r && r.portal >= 0); t++) r = step(c, segs, ball, t * DT, DT);
+  let t = 1, r = step(c, segs, ball, DT, DT);
+  while (r.portal < 0 && t < 240) r = step(c, segs, ball, ++t * DT, DT);
   assert.equal(r.portal, 0);
-  assert.ok(ball.vx < 0 && Math.abs(ball.vz) < 1e-9, 'sale hacia -x');
+  assert.equal(ball.track.kind, 'tube');
+  const entered = t;
+  while (ball.track && t < 1200) r = step(c, segs, ball, ++t * DT, DT);
+  assert.ok(r.trackExit, 'sale del tubo');
+  assert.ok((t - entered) * DT > 0.3, 'tarda en recorrerlo');
+  assert.ok(Math.abs(ball.x - p.b[0]) < 0.05 && Math.abs(ball.z - p.b[1]) < 0.05, 'sale por b');
+  assert.ok(ball.vx < -3.5 && ball.vz === 0, 'sale hacia -x con la velocidad que traía');
+});
+
+test('looping: si la bola se cae arriba vuelve por la entrada y nunca se queda en el carril', () => {
+  const c = COURSES.find((x) => x.name === 'Looping Neón');
+  const [l] = c.loops;
+  const segs = segmentsOf(c);
+  // como en un looping de verdad hace falta v ≥ √(5·g·R) en la entrada, algo más por el rozamiento
+  const needed = Math.sqrt(5 * 9.8 * l.radius);
+  for (const v of [2, 4, 5.5, needed, needed + 1, 11]) {
+    const ball = { x: l.x, z: l.z + l.len / 2 + 0.3, vx: 0, vz: -v };
+    let t = 0;
+    while (isMoving(ball) && t < 120 * 30) step(c, segs, ball, ++t * DT, DT);
+    assert.ok(!ball.track && !isMoving(ball), `v=${v}: la bola se para fuera del carril`);
+    const passed = ball.z < l.z - l.len / 2;
+    assert.equal(passed, v > needed, `v=${v}: ${passed ? 'pasa' : 'vuelve'}`);
+  }
 });
 
 test('volcán: la ladera echa la bola hacia fuera y la cima es llana', () => {

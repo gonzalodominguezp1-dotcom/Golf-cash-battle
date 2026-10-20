@@ -73,7 +73,7 @@ function landing(course, segs, from, dirX, dirZ, power) {
 const SEARCH_POWERS = Array.from({ length: 32 }, (_, i) => 0.06 + i * 0.03);
 
 /**
- * Con pendientes, montículos o portales la distancia no crece con la potencia, así que se
+ * Con pendientes, montículos, loopings o portales la distancia no crece con la potencia, así que se
  * prueban potencias (una por paso de física, para no trabar la imagen) y se
  * elige la que deja la bola más cerca, o la del medio de las que entran.
  */
@@ -121,7 +121,7 @@ export class Bot {
     const miss = 1 - this.player.skill;
     const ang = Math.atan2(dx, -dz) + gauss(rng) * (0.015 + miss * 0.09);
     const dirX = Math.sin(ang), dirZ = -Math.cos(ang);
-    if (course.slopes || course.mounds || course.portals) return { dirX, dirZ, search: new PowerSearch(course, segs, ball, dirX, dirZ, target) };
+    if (course.slopes || course.mounds || course.loops || course.portals) return { dirX, dirZ, search: new PowerSearch(course, segs, ball, dirX, dirZ, target) };
     const firm = target.isCup && !course.noCup;
     let power = powerFor(course, segs, ball, dirX, dirZ, firm ? dist + 0.4 : dist);
     // al hoyo se le pega con firmeza: la búsqueda da justo el mínimo para llegar
