@@ -9,6 +9,7 @@ import { AimDots, Particles, Shockwaves, Trail } from './render/effects.js';
 import { ballTexture, labelTexture, softDotTexture } from './render/textures.js';
 import { skinMaterial } from './render/ballSkins.js';
 import { SKINS } from '../progress/skins.js';
+import { HOLE_TIME_LIMIT, MAX_STROKES_PER_HOLE } from '../config.js';
 import { setAmbient, setCharge, setRolling, sfx, stopAmbient, stopRolling, unlockAudio } from './audio.js';
 
 const INTRO_SECONDS = 2.2;
@@ -17,6 +18,7 @@ const FOLLOW_HEIGHT = 1.45;
 const LOOK_AHEAD = 2.2;
 const SLOWMO = 0.35; // cámara lenta cuando la bola va a entrar
 const CUP_CAPTURE = 3.5; // igual que en physics.js: más rápido, la bola salta el hoyo
+const BALL_TOUCH_PX = 56; // radio mínimo en pantalla para coger la bola con el dedo
 
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const damp = (rate, dt) => 1 - Math.exp(-rate * dt);
@@ -25,8 +27,12 @@ const lerpAngle = (a, b, t) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) 
 
 /**
  * Hoyo en 3D con cámara en tercera persona detrás de la bola.
- * Controles: arrastra a los lados para apuntar y hacia abajo para cargar
- * la potencia; suelta para golpear.
+ * Controles táctiles: deslizar en cualquier parte mueve la cámara (y con ella
+ * hacia dónde apuntas); solo arrastrando desde la bola se carga el tiro: a
+ * los lados afina la dirección, hacia abajo la potencia; suelta para golpear.
+ *
+ * Contador: cuando el primero emboca (tú, un rival o, en torneos, el mejor
+ * tiempo del hoyo que manda el servidor) quedan HOLE_TIME_LIMIT segundos.
  */
 export class GolfGame {
   #onContextMenu = null;
@@ -42,8 +48,10 @@ export class GolfGame {
   #onClickCanvas = null;
   #onBlur = null;
 
-  constructor(container, { onStroke, onSunk, onAim, onRest, onCup, onRival, onLip, onOpenSettings, onOverviewChange } = {}) {
+  constructor(container, { onStroke, onSunk, onAim, onRest, onCup, onRival, onLip, onOpenSettings, onOverviewChange, onTimer, onTimeUp } = {}) {
     this.container = container;
+    this.onTimer = onTimer;
+    this.onTimeUp = onTimeUp;
     this.onStroke = onStroke;
     this.onSunk = onSunk;
     this.onAim = onAim;
@@ -86,7 +94,11 @@ export class GolfGame {
     this.resizeObserver.observe(container);
   }
 
-  load(course, { bots = [], skin = SKINS[0] } = {}) {
+  /**
+   * firstSunkTick: en torneos, el paso en el que embocó el más rápido de los
+   * que ya han jugado este hoyo (arranca el contador desde ese momento).
+   */
+  load(course, { bots = [], skin = SKINS[0], firstSunkTick = null, timeLimit = HOLE_TIME_LIMIT } = {}) {
     this.botPlayers = bots;
     this.skin = skin;
     this.course = course;
@@ -95,6 +107,12 @@ export class GolfGame {
     this.ball = { x: course.tee[0], z: course.tee[1], vx: 0, vz: 0 };
     this.strokes = 0;
     this.sunk = false;
+    this.timedOut = false;
+    this.endTick = null; // paso en el que se acabó el tiempo (se manda al servidor)
+    this.firstSunkTick = course.noCup ? null : firstSunkTick;
+    this.limitTicks = Math.round(timeLimit / DT);
+    this.timerShown = undefined;
+    this.camTurns = 0; // giros de cámara desde el último tiro, para el antibots
     this.sunkAt = 0;
     this.t = 0;
     this.tick = 0;
@@ -192,15 +210,86 @@ export class GolfGame {
     }
   }
 
+  /** Paso en el que se acaba el tiempo del hoyo (null si nadie ha embocado aún). */
+  get deadlineTick() {
+    return this.firstSunkTick == null ? null : this.firstSunkTick + this.limitTicks;
+  }
+
+  #noteSunk(tick) {
+    if (this.course.noCup) return;
+    if (this.firstSunkTick == null || tick < this.firstSunkTick) this.firstSunkTick = tick;
+  }
+
+  #cancelAim() {
+    this.drag = null;
+    this.charging = false;
+    this.chargeAnchor = null;
+    this.power = 0;
+    this.fullPower = false;
+    setCharge(0);
+    this.onAim?.(0);
+    this.aimDots?.hide();
+  }
+
+  #timeUp() {
+    this.timedOut = true;
+    this.endTick = this.deadlineTick;
+    this.ball.vx = 0;
+    this.ball.vz = 0;
+    this.#cancelAim();
+    this.exitPointerLock();
+    sfx.lip();
+    navigator.vibrate?.([60, 40, 60]);
+    this.onTimeUp?.(this.strokes);
+  }
+
+  /** ¿Toca la pantalla en (x, y) sobre la bola? Con margen: la bola es pequeña. */
+  #touchesBall(clientX, clientY) {
+    const el = this.renderer.domElement;
+    const rect = el.getBoundingClientRect();
+    const p = this.ballRoot.position.clone().project(this.camera);
+    if (p.z > 1) return false;
+    const sx = rect.left + ((p.x + 1) / 2) * rect.width;
+    const sy = rect.top + ((1 - p.y) / 2) * rect.height;
+    const d = this.camera.position.distanceTo(this.ballRoot.position);
+    const ballPx = (BALL_R / (d * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)))) * (rect.height / 2);
+    return Math.hypot(clientX - sx, clientY - sy) <= Math.max(BALL_TOUCH_PX, ballPx * 3);
+  }
+
   distanceToCup() {
     return Math.hypot(this.ball.x - this.course.cup[0], this.ball.z - this.course.cup[1]);
   }
 
-  /** Golpes de cada rival; los que no han terminado juegan lo que les queda al instante. */
+  /**
+   * Golpes de cada rival; los que no han terminado juegan lo que les queda al
+   * instante, a su ritmo, hasta que se acabe el tiempo (los que no emboquen
+   * quedan descalificados con el máximo).
+   */
   finishBots() {
+    const left = (this.bots ?? []).filter((b) => !b.done);
+    for (let tick = this.tick; left.some((b) => !b.done) && tick < this.tick + 120 * 300; ) {
+      tick++;
+      if (this.#disqualifyLateBots(tick)) break;
+      for (const b of left) if (b.tick(tick * DT, DT)?.sunk) this.#noteSunk(tick);
+    }
     const out = {};
-    for (const b of this.bots ?? []) out[b.player.id] = b.done ? b.strokes : b.finishInstantly(this.t);
+    for (const b of this.bots ?? []) {
+      if (!b.done) Object.assign(b, { done: true, strokes: MAX_STROKES_PER_HOLE });
+      out[b.player.id] = b.strokes;
+    }
     return out;
+  }
+
+  /** Los rivales que no han embocado cuando se acaba el tiempo. Devuelve si se ha acabado. */
+  #disqualifyLateBots(tick) {
+    const dl = this.deadlineTick;
+    if (dl == null || this.course.noCup || tick <= dl) return false;
+    for (const b of this.bots ?? []) {
+      if (b.done) continue;
+      Object.assign(b, { done: true, dq: true, strokes: MAX_STROKES_PER_HOLE });
+      this.onRival?.(b.player, { strokes: b.strokes, sunk: false, done: true, dq: true });
+    }
+    return true;
   }
 
   /** Desempate: distancia final de cada rival al objetivo. */
@@ -214,7 +303,7 @@ export class GolfGame {
   }
 
   rivals() {
-    return (this.bots ?? []).map((b) => ({ id: b.player.id, strokes: b.strokes, done: b.done, sunk: b.sunk }));
+    return (this.bots ?? []).map((b) => ({ id: b.player.id, strokes: b.strokes, done: b.done, sunk: b.sunk, dq: !!b.dq }));
   }
 
   dispose() {
@@ -379,6 +468,16 @@ export class GolfGame {
     }
   }
 
+  /** Avisa a la interfaz de los segundos que quedan (null: sin contador). */
+  #updateTimer() {
+    const dl = this.deadlineTick;
+    const left = dl == null || this.sunk || this.timedOut || this.locked ? null : Math.max(0, Math.ceil((dl - this.tick) * DT));
+    if (left === this.timerShown) return;
+    this.timerShown = left;
+    if (left != null && left <= 5 && left > 0) sfx.tick();
+    this.onTimer?.(left);
+  }
+
   #addShake(amount) {
     this.trauma = Math.min(1, this.trauma + amount);
   }
@@ -386,14 +485,15 @@ export class GolfGame {
   // ---------- input ----------
 
   #executeShot(power, dragTicks = 16, turns = 1) {
-    if (power < 0.05 || isMoving(this.ball) || this.sunk) return;
+    if (power < 0.05 || isMoving(this.ball) || this.sunk || this.timedOut) return;
     if (this.course.noCup && this.strokes >= 1) return;
     const shot = quantizeShot(this.yaw, power);
     const v = shotVelocity(shot.yaw, shot.power);
     this.ball.vx = v.vx;
     this.ball.vz = v.vz;
     this.shots.push({ tick: this.tick, ...shot });
-    this.aim.push({ d: Math.max(8, dragTicks), t: Math.max(1, turns) });
+    this.aim.push({ d: Math.max(8, dragTicks), t: Math.max(1, turns + this.camTurns) });
+    this.camTurns = 0;
     this.strokes++;
     sfx.hit(power);
     this.particles.puff(new THREE.Vector3(this.ball.x, 0.05, this.ball.z), 0x9be37f, 8 + Math.round(power * 10), 1 + power, 0.18);
@@ -440,7 +540,7 @@ export class GolfGame {
         this.ambientOn = true;
         setAmbient(this.theme.sound);
       }
-      if (this.paused || !this.course || this.sunk || this.locked || this.intro < 1) return;
+      if (this.paused || !this.course || this.sunk || this.timedOut || this.locked || this.intro < 1) return;
       if (this.course.noCup && this.strokes >= 1) return;
       if (this.overview) {
         // En la vista completa del mapa no se permite realizar tiros
@@ -486,7 +586,10 @@ export class GolfGame {
       } else {
         if (this.drag) return;
         try { el.setPointerCapture?.(e.pointerId); } catch {}
-        this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, yaw: this.yaw, lastTick: this.yaw, start: this.tick, turns: 0, dir: 0 };
+        // solo se carga el tiro si el dedo empieza en la bola; si no, es la cámara
+        const shoot = !isMoving(this.ball) && this.#touchesBall(e.clientX, e.clientY);
+        this.drag = { id: e.pointerId, shoot, x: e.clientX, y: e.clientY, yaw: this.yaw, zoom: this.zoomLevel ?? 1, lastTick: this.yaw, start: this.tick, turns: 0, dir: 0 };
+        if (shoot) navigator.vibrate?.(6);
       }
     };
 
@@ -574,6 +677,23 @@ export class GolfGame {
         const d = this.drag;
         if (!d || e.pointerId !== d.id) return;
         const h = el.clientHeight || 1, w = el.clientWidth || 1;
+        if (!d.shoot) {
+          // cámara: a los lados gira alrededor de la bola, arriba y abajo acerca o aleja
+          const dx = e.clientX - (d.px ?? d.x);
+          if (dx && Math.sign(dx) !== d.dir) {
+            if (d.dir) this.camTurns++;
+            d.dir = Math.sign(dx);
+          }
+          d.yaw -= (dx * 3.2) / w;
+          d.px = e.clientX;
+          this.yaw = d.yaw;
+          this.zoomLevel = THREE.MathUtils.clamp(d.zoom - (e.clientY - d.y) / (h * 0.8), 0.65, 1.55);
+          if (Math.abs(this.yaw - d.lastTick) > 0.12) {
+            d.lastTick = this.yaw;
+            sfx.tick();
+          }
+          return;
+        }
         const canShoot = !isMoving(this.ball);
         this.power = canShoot ? THREE.MathUtils.clamp((e.clientY - d.y) / (h * 0.32), 0, 1) : 0;
         const dx = e.clientX - (d.px ?? d.x);
@@ -628,6 +748,7 @@ export class GolfGame {
         const d = this.drag;
         if (!d || e.pointerId !== d.id) return;
         this.drag = null;
+        if (!d.shoot) return;
         const power = this.power;
         this.power = 0;
         this.fullPower = false;
@@ -788,6 +909,7 @@ export class GolfGame {
   }
 
   #tickBots() {
+    this.#disqualifyLateBots(this.tick);
     for (const b of this.bots) {
       const r = b.tick(this.t, DT);
       if (!r) continue;
@@ -799,6 +921,7 @@ export class GolfGame {
       if (r.portal >= 0) this.particles.puff(new THREE.Vector3(b.ball.x, 0.1, b.ball.z), 0xffb020, 8, 1.2, 0.16);
       if (r.sunk) {
         b.sunk = true;
+        this.#noteSunk(this.tick);
         sfx.rivalCup(pan);
         this.particles.puff(new THREE.Vector3(b.ball.x, 0.1, b.ball.z), new THREE.Color(b.player.color).getHex(), 12, 1.2, 0.18);
       }
@@ -830,7 +953,9 @@ export class GolfGame {
       this.tick++;
       this.t = this.tick * DT;
       if (this.intro >= 1 && !this.locked) this.#tickBots();
-      if (this.sunk || this.paused) continue;
+      // se acabó el tiempo: lo que entre en el paso del límite aún vale
+      if (!this.sunk && !this.timedOut && this.deadlineTick != null && this.tick > this.deadlineTick) this.#timeUp();
+      if (this.sunk || this.paused || this.timedOut) continue;
       const wasMoving = isMoving(this.ball);
       // se simula también con la bola parada: un aspa puede empujarla
       const r = step(this.course, this.segs, this.ball, this.t, DT);
@@ -896,6 +1021,7 @@ export class GolfGame {
       if (r.sunk) {
         this.sunk = true;
         this.sunkAt = this.t;
+        this.#noteSunk(this.tick);
         this.exitPointerLock();
         sfx.cup();
         this.onCup?.(this.strokes);
@@ -908,8 +1034,10 @@ export class GolfGame {
       } else if (wasMoving && !isMoving(this.ball)) this.onRest?.(this.strokes);
     }
 
+    this.#updateTimer();
+
     // control de carga de tiro con ratón
-    if (!isMoving(this.ball) && !this.sunk && this.intro >= 1 && !this.locked && !this.overview) {
+    if (!isMoving(this.ball) && !this.sunk && !this.timedOut && this.intro >= 1 && !this.locked && !this.overview) {
       if (this.charging) {
         if (!this.chargeAnchor?.userAdjusted) {
           const elapsedSec = (this.tick - this.chargeStartTick) * DT;
@@ -928,7 +1056,7 @@ export class GolfGame {
     // la cámara gira suavemente hacia donde rueda la bola
     const speed = Math.hypot(this.ball.vx, this.ball.vz);
     // en un looping o un tubo la dirección da vueltas: la cámara espera a la salida
-    if (speed > 1.2 && !this.drag && !this.charging && !this.ball.track) {
+    if (speed > 1.2 && !this.drag && !this.charging && !this.timedOut && !this.ball.track) {
       const velYaw = Math.atan2(this.ball.vx, -this.ball.vz);
       this.yaw = lerpAngle(this.yaw, velYaw, damp(1.2, dt));
     }

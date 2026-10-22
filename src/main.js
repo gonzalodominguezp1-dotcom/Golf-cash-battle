@@ -1,5 +1,5 @@
 import './style.css';
-import { HOLES_PER_MATCH, MAX_STROKES_PER_HOLE, PLATFORM_COMMISSION, PLAYERS_PER_MATCH, TIERS, potFor, prizeFor } from './config.js';
+import { HOLES_PER_MATCH, HOLE_TIME_LIMIT, MAX_STROKES_PER_HOLE, PLATFORM_COMMISSION, PLAYERS_PER_MATCH, TIERS, potFor, prizeFor } from './config.js';
 import { LocalWallet } from './wallet/LocalWallet.js';
 import { InsufficientFundsError } from './wallet/WalletService.js';
 import { MatchService, leaders } from './match/MatchService.js';
@@ -19,9 +19,14 @@ let backend, wallet, matches;
 const practice = new MatchService(new LocalWallet(), Math.random, COURSES.length);
 const progress = new Progress();
 
+// clave nueva: quien silenció sin querer cuando no se oía nada vuelve a tener sonido
+const MUTE_KEY = 'gcb.muted.v2';
 try {
-  setMuted(localStorage.getItem('gcb.muted') === '1');
+  setMuted(localStorage.getItem(MUTE_KEY) === '1');
 } catch {}
+
+// el audio solo puede arrancar con un gesto: cualquier toque o tecla vale
+for (const ev of ['pointerdown', 'touchend', 'keydown']) document.addEventListener(ev, unlockAudio, { capture: true, passive: true });
 
 // sonido suave en todos los botones
 document.addEventListener('click', (e) => {
@@ -86,7 +91,7 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
       topMute.addEventListener('click', () => {
         setMuted(!isMuted());
         topMute.textContent = isMuted() ? '🔇' : '🔊';
-        try { localStorage.setItem('gcb.muted', isMuted() ? '1' : '0'); } catch {}
+        try { localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0'); } catch {}
       });
     }
   }
@@ -128,7 +133,7 @@ window.addEventListener('keydown', (e) => {
     setMuted(!isMuted());
     const topMute = document.querySelector('.topbar-sound-btn');
     if (topMute) topMute.textContent = isMuted() ? '🔇' : '🔊';
-    try { localStorage.setItem('gcb.muted', isMuted() ? '1' : '0'); } catch {}
+    try { localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0'); } catch {}
   }
 });
 
@@ -955,7 +960,7 @@ async function startMatch(tier) {
  * Pantalla de juego. mode 'hole' es un hoyo normal; 'tiebreak' es el hoyo
  * sin agujero del desempate (un tiro, gana el más cercano).
  */
-function playScreen(match, { course, title, subtitle, players, onDone }) {
+function playScreen(match, { course, title, subtitle, players, onDone, firstSunkTick = null, timeLimit = HOLE_TIME_LIMIT }) {
   const tiebreak = !!course.noCup;
   const view = h(`
     <main class="play-screen ${tiebreak ? 'is-tiebreak' : ''}">
@@ -983,8 +988,9 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
       </div>
       <div class="overview-banner">🗺️ Vista General del Mapa · Mueve el ratón para orbitar · Pulsa <kbd>Espacio</kbd> para volver</div>
       <div class="cup-banner"></div>
+      <div class="hole-timer" hidden><small>Tiempo para embocar</small><b>${timeLimit}</b></div>
       <div class="hint">
-        <span class="hint-touch">↔ Desliza para apuntar · ↓ Tira y suelta</span>
+        <span class="hint-touch">↔ Desliza: cámara · Arrastra la bola hacia atrás: tiro</span>
         <span class="hint-mouse">🖱️ Ratón para apuntar · Clic Izquierdo para calcular y disparar · <kbd>Espacio</kbd> Ver mapa · <kbd>Esc</kbd> Ajustes</span>
       </div>
       <div class="desktop-controls-bar">
@@ -1005,6 +1011,7 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
     const cupBanner = view.querySelector('.cup-banner');
     const mapBtn = view.querySelector('.map-btn');
     const stageEl = view.querySelector('.stage');
+    const timerEl = view.querySelector('.hole-timer');
     let finished = false;
     const showDistance = () => (distEl.textContent = `${game.distanceToCup().toFixed(tiebreak ? 2 : 1)} m`);
     const banner = (text) => {
@@ -1118,7 +1125,7 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
         soundBtn.querySelector('.btn-icon').textContent = muted ? '🔇' : '🔊';
         soundBtn.querySelector('.btn-text').textContent = muted ? 'Silenciado' : 'Activado';
         muteBtn.textContent = muted ? '🔇' : '🔊';
-        try { localStorage.setItem('gcb.muted', muted ? '1' : '0'); } catch {}
+        try { localStorage.setItem(MUTE_KEY, muted ? '1' : '0'); } catch {}
       });
 
       const fsModalBtn = overlay.querySelector('.toggle-fs-btn');
@@ -1173,6 +1180,10 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
           if (st.done) setChip(p.id, '✓', true);
           return;
         }
+        if (st.dq) {
+          setChip(p.id, '✗', true);
+          return;
+        }
         setChip(p.id, st.strokes, st.sunk);
         if (st.sunk) toast(`${p.name} ha embocado en ${st.strokes}`, p.color);
       },
@@ -1188,6 +1199,23 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
         distEl.textContent = '0 m';
       },
       onSunk: finish,
+      onTimer: (left) => {
+        if (left == null) return (timerEl.hidden = true);
+        if (timerEl.hidden) toast(`⏱ ¡${left} s para embocar o quedas descalificado!`, '#ff5a5a');
+        timerEl.hidden = false;
+        timerEl.querySelector('b').textContent = left;
+        timerEl.classList.toggle('urgent', left <= 5);
+        timerEl.classList.remove('tick');
+        void timerEl.offsetWidth;
+        timerEl.classList.add('tick');
+      },
+      onTimeUp: () => {
+        timerEl.hidden = true;
+        setChip('me', '✗', true);
+        banner('¡Tiempo! Descalificado');
+        cupBanner.classList.add('dq');
+        setTimeout(() => finish(MAX_STROKES_PER_HOLE), 1600);
+      },
       onLip: () => toast('¡Uy! Demasiado fuerte para entrar', '#ffffff'),
       onRest: (n) => {
         showDistance();
@@ -1197,14 +1225,15 @@ function playScreen(match, { course, title, subtitle, players, onDone }) {
         } else if (n >= MAX_STROKES_PER_HOLE) finish(n);
       },
     });
-    game.load(course, { bots: players.filter((p) => p.isBot), skin: progress.skin });
+    game.load(course, { bots: players.filter((p) => p.isBot), skin: progress.skin, firstSunkTick, timeLimit });
     showDistance();
+    if (isMuted()) toast('🔇 Sonido silenciado · actívalo en ⚙️ Ajustes', '#ffffff');
     const muteBtn = view.querySelector('.mute');
     muteBtn.addEventListener('click', () => {
       setMuted(!isMuted());
       muteBtn.textContent = isMuted() ? '🔇' : '🔊';
       try {
-        localStorage.setItem('gcb.muted', isMuted() ? '1' : '0');
+        localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0');
       } catch {}
     });
     const fsBtn = view.querySelector('.fullscreen');
@@ -1252,10 +1281,11 @@ function playHole(match, index) {
     players: match.players,
     onDone: (g, strokes) => {
       const bots = g.finishBots();
+      const dq = g.timedOut;
       match.myHoles[index] = { strokes, par: course.par };
       Promise.resolve()
         .then(() => match.service.recordHole(match, index, course.par, strokes, bots))
-        .then((standings) => showHoleResult(match, index, course, strokes, standings))
+        .then((standings) => showHoleResult(match, index, course, strokes, standings, dq))
         .catch(() => alertMsg('Se ha perdido la conexión con el servidor. Tu partida sigue guardada.'));
     },
   });
@@ -1281,14 +1311,18 @@ function standingsTable(players, highlightPayout) {
     .join('')}</ol>`;
 }
 
-function showHoleResult(match, index, course, strokes, standings) {
+function holeHeader(strokes, par, dq) {
+  if (dq) return `<h2 class="score-title">Descalificado</h2><p class="sub">No embocaste a tiempo · se apuntan ${strokes} golpes</p>`;
+  return `<h2 class="score-title">${scoreLabel(strokes, par)}</h2><p class="sub">${strokes} golpe${strokes === 1 ? '' : 's'} · par ${par}</p>`;
+}
+
+function showHoleResult(match, index, course, strokes, standings, dq = false) {
   const last = index + 1 >= match.holes;
-  const good = strokes <= course.par;
+  const good = !dq && strokes <= course.par;
   const overlay = h(`
     <div class="overlay">
       <div class="card ${good ? 'good' : ''}">
-        <h2 class="score-title">${scoreLabel(strokes, course.par)}</h2>
-        <p class="sub">${strokes} golpe${strokes === 1 ? '' : 's'} · par ${course.par}</p>
+        ${holeHeader(strokes, course.par, dq)}
         ${standingsTable(standings)}
         <button class="primary next">${last ? 'Ver resultado' : 'Siguiente hoyo'}</button>
       </div>
@@ -1507,29 +1541,30 @@ function playOnlineHole(match, index) {
     title: `Hoyo ${index + 1}/${match.holes}`,
     subtitle: `Torneo ${match.tier.name} · hoyo ${index + 1}`,
     players: [match.me],
-    onDone: (g) => submitOnline(match, index, g, (r) => showOnlineHoleResult(match, index, course, r.strokes)),
+    firstSunkTick: match.firstTicks?.[index] ?? null,
+    timeLimit: match.timeLimit,
+    onDone: (g) => submitOnline(match, index, g, (r) => showOnlineHoleResult(match, index, course, r.strokes, r.timedOut)),
   });
 }
 
 async function submitOnline(match, hole, g, then) {
-  const { shots, aim } = g;
+  const { shots, aim, endTick } = g;
   try {
-    then(await backend.tournaments.submitHole(match, hole, shots, aim));
+    then(await backend.tournaments.submitHole(match, hole, shots, aim, endTick));
   } catch (e) {
     if (e.code === 'invalid_shots') return alertMsg('El servidor no ha podido validar los golpes de este hoyo.');
     if (['time_up', 'match_closed', 'wrong_hole'].includes(e.code)) return showOnlineResults(match);
-    retryMsg('Se ha perdido la conexión con el servidor. Tus golpes siguen guardados en el móvil.', () => submitOnline(match, hole, { shots, aim }, then));
+    retryMsg('Se ha perdido la conexión con el servidor. Tus golpes siguen guardados en el móvil.', () => submitOnline(match, hole, { shots, aim, endTick }, then));
   }
 }
 
-function showOnlineHoleResult(match, index, course, strokes) {
+function showOnlineHoleResult(match, index, course, strokes, dq = false) {
   const last = index + 1 >= match.holes;
   const done = match.players.filter((p) => p.finished && p.id !== 'me').length;
   const overlay = h(`
     <div class="overlay">
-      <div class="card ${strokes <= course.par ? 'good' : ''}">
-        <h2 class="score-title">${scoreLabel(strokes, course.par)}</h2>
-        <p class="sub">${strokes} golpe${strokes === 1 ? '' : 's'} · par ${course.par}</p>
+      <div class="card ${!dq && strokes <= course.par ? 'good' : ''}">
+        ${holeHeader(strokes, course.par, dq)}
         <p class="sub">Tu ronda: <b>${match.me.scores.join(' · ')}</b> · total <b>${match.me.total}</b></p>
         <p class="legal">${match.players.length} jugadores en el torneo${done ? ` · ${done} ya han terminado` : ''}. Verás sus golpes cuando acabes.</p>
         <button class="primary next">${last ? 'Tiro de desempate' : 'Siguiente hoyo'}</button>
