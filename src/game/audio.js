@@ -166,7 +166,12 @@ function impulse(seconds = 1.4) {
 export function unlockAudio() {
   try {
     if (!ctx) {
-      ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SR });
+      // en iPhone, sin esto el interruptor de silencio apaga todo el audio web
+      if (navigator.audioSession) navigator.audioSession.type = 'playback';
+      const AC = window.AudioContext || window.webkitAudioContext;
+      ctx = new AC({ sampleRate: SR });
+      // reanudar dentro del gesto antes de calcular los sonidos
+      ctx.resume?.();
       const comp = ctx.createDynamicsCompressor();
       master = ctx.createGain();
       master.gain.value = muted ? 0 : 0.9;
@@ -183,7 +188,8 @@ export function unlockAudio() {
         buffers[k] = b;
       }
     }
-    if (ctx.state === 'suspended') ctx.resume();
+    // suspended o interrupted (iPhone al volver de otra app)
+    if (ctx.state !== 'running') ctx.resume?.().catch(() => {});
   } catch {
     ctx = null;
   }
@@ -269,17 +275,45 @@ let charge = null;
 export function setCharge(power) {
   if (!ctx) return;
   if (!charge) {
-    const o = ctx.createOscillator();
-    o.type = 'triangle';
+    // tono suave: senos (fundamental y octava) por un filtro paso bajo, sin
+    // los armónicos ásperos de la triangular; agudo justo para oírse en el
+    // altavoz del móvil, que no reproduce graves
+    const f = ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = 1400;
+    f.Q.value = 0.4;
     const g = ctx.createGain();
     g.gain.value = 0;
-    o.connect(g).connect(master);
+    const o = ctx.createOscillator();
+    o.type = 'sine';
+    const o5 = ctx.createOscillator();
+    o5.type = 'sine';
+    const g5 = ctx.createGain();
+    g5.gain.value = 0.18;
+    o.connect(f);
+    o5.connect(g5).connect(f);
+    f.connect(g).connect(master);
     o.start();
-    charge = { o, g };
+    o5.start();
+    charge = { o, o5, f, g, last: 0 };
   }
   const t = ctx.currentTime;
-  charge.g.gain.setTargetAtTime(power > 0.02 ? 0.035 + power * 0.03 : 0, t, 0.03);
-  charge.o.frequency.setTargetAtTime(220 + power * 440, t, 0.03);
+  const moving = Math.abs(power - charge.last) > 0.004;
+  charge.last = power;
+  const pitch = 330 + power * 330;
+  charge.o.frequency.setTargetAtTime(pitch, t, 0.06);
+  charge.o5.frequency.setTargetAtTime(pitch * 2, t, 0.06);
+  charge.f.frequency.setTargetAtTime(1200 + power * 800, t, 0.08);
+  if (power <= 0.02) {
+    charge.g.gain.cancelScheduledValues(t);
+    charge.g.gain.setTargetAtTime(0, t, 0.05);
+  } else if (moving) {
+    // suena mientras cambias la potencia y baja a la mitad si te quedas quieto apuntando
+    const level = 0.035 + power * 0.03;
+    charge.g.gain.cancelScheduledValues(t);
+    charge.g.gain.setTargetAtTime(level, t, 0.05);
+    charge.g.gain.setTargetAtTime(level * 0.5, t + 0.4, 0.6);
+  }
 }
 
 /** Sonido ambiente según el hoyo: pájaros, olas o grillos. */

@@ -1,5 +1,6 @@
 import { InsufficientFundsError } from '../wallet/WalletService.js';
 import { rpcError } from '../backend/supabase.js';
+import { HOLE_TIME_LIMIT } from '../config.js';
 
 /**
  * Torneos asíncronos contra jugadores reales. Cada uno juega los mismos hoyos
@@ -47,10 +48,11 @@ export class TournamentService {
 
   /**
    * Manda los tiros de un hoyo (hole = número de hoyos es el desempate). aim
-   * es el gesto de cada tiro ({ d, t }), que mira el antibots.
+   * es el gesto de cada tiro ({ d, t }), que mira el antibots. end es el paso
+   * en el que se acabó el tiempo si no embocaste (descalificado en el hoyo).
    */
-  async submitHole(match, hole, shots, aim = []) {
-    const { data, error } = await this.db.functions.invoke('submit-hole', { body: { tournament: match.id, hole, shots, aim } });
+  async submitHole(match, hole, shots, aim = [], end = null) {
+    const { data, error } = await this.db.functions.invoke('submit-hole', { body: { tournament: match.id, hole, shots, aim, end } });
     if (error) {
       const body = await error.context?.json?.().catch(() => null);
       const e = new Error(body?.error ?? 'network');
@@ -60,7 +62,7 @@ export class TournamentService {
     }
     update(match, data.tournament);
     if (match.status !== 'open') await this.wallet.getBalance();
-    return { strokes: data.strokes, distance: data.distance };
+    return { strokes: data.strokes, distance: data.distance, timedOut: !!data.timed_out };
   }
 
   async status(match) {
@@ -96,6 +98,9 @@ export function toMatch(t, tier) {
     status: t.status,
     courses: t.courses,
     holes: t.courses.length,
+    // paso en el que embocó el más rápido en cada hoyo: arranca tu contador
+    firstTicks: t.first_ticks ?? [],
+    timeLimit: Number(t.time_limit ?? HOLE_TIME_LIMIT),
     seats: t.seats,
     closesAt: new Date(t.closes_at),
     pot: Number(t.pot),

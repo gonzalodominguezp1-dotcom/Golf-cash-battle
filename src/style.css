@@ -1961,3 +1961,191 @@ h2 { margin: 24px 0 12px; font-size: 21px; letter-spacing: -0.01em; }
   color: #fff;
 }
 
+
+/* ---------- cartas brillantes por rareza (estilo cartas FIFA / TCG) ----------
+   Bronce, plata y oro: lámina metálica clara con franjas diagonales.
+   Diamante y esmeralda: lámina prismática con destellos y halo que respira.
+   Capas: fondo metálico · ::before destello que barre · .shine holográfico que sigue al dedo · ::after purpurina */
+
+.tier--bronze, .rarity-bronze {
+  --foil: linear-gradient(135deg, #4a220c 0%, #b8682c 18%, #ffc994 34%, #c9773a 48%, #7a3a16 64%, #e8a368 82%, #5a2a10 100%);
+  --edge: #ffb37a; --glow: rgba(255, 140, 60, 0.45); --ink: #2a1206; --holo: 0.14;
+}
+.tier--silver, .rarity-silver {
+  --foil: linear-gradient(135deg, #5a6572 0%, #c9d3de 18%, #ffffff 34%, #a7b3c0 50%, #6a7684 66%, #e9eff6 84%, #66717e 100%);
+  --edge: #f2f7ff; --glow: rgba(200, 225, 255, 0.45); --ink: #151c26; --holo: 0.18;
+}
+.tier--gold, .rarity-gold {
+  --foil: linear-gradient(135deg, #7a4f00 0%, #f5c33b 17%, #fff4c0 32%, #ffcf3f 46%, #a86f00 62%, #ffe27a 80%, #8a5a00 100%);
+  --edge: #fff0a8; --glow: rgba(255, 196, 40, 0.6); --ink: #2a1800; --holo: 0.24;
+}
+.tier--diamond, .rarity-diamond {
+  --foil: linear-gradient(135deg, #0b3a6e 0%, #4fc8ff 16%, #e6fdff 30%, #8fe3ff 42%, #2a7fd0 58%, #c7f6ff 76%, #164f92 100%);
+  --edge: #c9fbff; --glow: rgba(0, 220, 255, 0.65); --ink: #021b33; --holo: 0.45;
+}
+.tier--emerald, .rarity-emerald {
+  --foil: linear-gradient(135deg, #013a22 0%, #0db26c 16%, #8dffcf 30%, #20d68a 42%, #036b3f 58%, #5dffb8 76%, #024a2c 100%);
+  --edge: #b6ffde; --glow: rgba(0, 255, 140, 0.6); --ink: #01261a; --holo: 0.4;
+}
+
+/* lámina metálica con las franjas diagonales de las cartas */
+.tier:is(.tier--bronze, .tier--silver, .tier--gold, .tier--diamond, .tier--emerald),
+.skin-card:is(.rarity-bronze, .rarity-silver, .rarity-gold, .rarity-diamond, .rarity-emerald) {
+  background:
+    repeating-linear-gradient(118deg, rgba(255, 255, 255, 0.1) 0 2px, transparent 2px 9px),
+    var(--foil);
+  background-size: 100% 100%, 220% 220%;
+  animation: foil-drift 7s ease-in-out infinite alternate;
+  border: 1.5px solid var(--edge);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), 0 0 22px var(--glow), inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 -2px 0 rgba(0, 0, 0, 0.25);
+  color: var(--ink);
+}
+@keyframes foil-drift { from { background-position: 0 0, 0% 30%; } to { background-position: 0 0, 100% 70%; } }
+
+.tier:is(.tier--bronze, .tier--silver, .tier--gold, .tier--diamond, .tier--emerald):hover {
+  border-color: #fff;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5), 0 0 34px var(--glow), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+/* destello blanco que barre la carta cada pocos segundos */
+.tier:is(.tier--bronze, .tier--silver, .tier--gold, .tier--diamond, .tier--emerald)::before,
+.hero:is(.rarity-gold, .rarity-diamond, .rarity-emerald)::before {
+  content: ''; display: block; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.75) 48%, rgba(255, 255, 255, 0.95) 50%, rgba(255, 255, 255, 0.75) 52%, transparent 62%);
+  background-size: 280% 100%;
+  mix-blend-mode: overlay;
+  animation: glint 4.2s var(--ease-smooth) infinite;
+}
+.tier--silver::before { animation-delay: 0.6s; }
+.tier--gold::before { animation-delay: 1.2s; }
+.tier--diamond::before { animation-delay: 1.8s; animation-duration: 3.2s; }
+.tier--emerald::before { animation-delay: 2.4s; animation-duration: 3.2s; }
+@keyframes glint { 0% { background-position: 130% 0; } 45%, 100% { background-position: -30% 0; } }
+
+/* capa holográfica arcoíris: se mueve sola y sigue al dedo al tocar */
+.tier:is(.tier--bronze, .tier--silver, .tier--gold, .tier--diamond, .tier--emerald) .shine,
+.skin-card:is(.rarity-bronze, .rarity-silver, .rarity-gold, .rarity-diamond, .rarity-emerald) .shine {
+  opacity: var(--holo);
+  background:
+    radial-gradient(circle at var(--mx, 50%) var(--my, 30%), rgba(255, 255, 255, 0.55), transparent 45%),
+    repeating-linear-gradient(115deg, #ff3d7f 0%, #ffd23f 7%, #3dffa8 14%, #3dd6ff 21%, #b46cff 28%, #ff3d7f 35%);
+  background-size: 100% 100%, 300% 300%;
+  background-position: 0 0, var(--mx, 50%) var(--my, 50%);
+  mix-blend-mode: color-dodge;
+  transition: opacity 0.25s;
+}
+.holo:not(.active) .shine { animation: holo-drift 5s ease-in-out infinite alternate; }
+.holo.active .shine { opacity: calc(var(--holo) * 1.8); }
+@keyframes holo-drift { from { background-position: 0 0, 0% 20%; } to { background-position: 0 0, 100% 80%; } }
+
+/* purpurina que parpadea en las cartas altas */
+.tier:is(.tier--gold, .tier--diamond, .tier--emerald)::after {
+  content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none; mix-blend-mode: screen;
+  background:
+    radial-gradient(circle at 12% 22%, #fff 0 1.2px, transparent 2.5px),
+    radial-gradient(circle at 78% 14%, #fff 0 1.5px, transparent 3px),
+    radial-gradient(circle at 64% 58%, #fff 0 1px, transparent 2px),
+    radial-gradient(circle at 30% 76%, #fff 0 1.4px, transparent 3px),
+    radial-gradient(circle at 90% 82%, #fff 0 1.1px, transparent 2.5px),
+    radial-gradient(circle at 46% 30%, #fff 0 0.9px, transparent 2px);
+  animation: twinkle 2.2s ease-in-out infinite alternate;
+}
+.tier--diamond::after, .tier--emerald::after { animation-duration: 1.4s; }
+@keyframes twinkle { from { opacity: 0.25; } to { opacity: 1; } }
+
+/* las dos más altas respiran con un halo de su color */
+.tier:is(.tier--diamond, .tier--emerald) { animation: foil-drift 7s ease-in-out infinite alternate, aura 2.6s ease-in-out infinite alternate; }
+@keyframes aura {
+  from { box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), 0 0 16px var(--glow), inset 0 1px 0 rgba(255, 255, 255, 0.6); }
+  to { box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), 0 0 40px var(--glow), 0 0 4px var(--edge), inset 0 1px 0 rgba(255, 255, 255, 0.8); }
+}
+
+/* textos sobre la lámina: tinta oscura con relieve, panel del premio en cristal oscuro */
+.tier:is(.tier--bronze, .tier--silver, .tier--gold, .tier--diamond, .tier--emerald) .tier-name {
+  color: var(--ink); font-size: 22px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.02em;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+.tier:is(.tier--bronze, .tier--silver, .tier--gold, .tier--diamond, .tier--emerald) .tier-tagline { color: var(--ink); opacity: 0.75; }
+.tier:is(.tier--bronze, .tier--silver, .tier--gold, .tier--diamond, .tier--emerald) .tier-fee {
+  background: rgba(8, 10, 16, 0.78); border-color: rgba(255, 255, 255, 0.35); color: #fff;
+}
+.tier:is(.tier--bronze, .tier--silver, .tier--gold, .tier--diamond, .tier--emerald) .gem-wrapper {
+  background: rgba(8, 10, 16, 0.7); border-color: var(--edge); box-shadow: 0 0 12px var(--glow);
+}
+.tier:is(.tier--bronze, .tier--silver, .tier--gold, .tier--diamond, .tier--emerald) .gem { box-shadow: 0 0 10px var(--edge); }
+.tier:is(.tier--bronze, .tier--silver, .tier--gold, .tier--diamond, .tier--emerald) .tier-mid {
+  background: rgba(8, 10, 16, 0.82); border-color: rgba(255, 255, 255, 0.22);
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.5);
+}
+.tier:is(.tier--bronze, .tier--silver, .tier--gold, .tier--diamond, .tier--emerald) .tier-prize { text-shadow: 0 0 14px var(--glow); }
+.tier:is(.tier--bronze, .tier--silver, .tier--gold, .tier--diamond, .tier--emerald) .play:not(:disabled) {
+  background: linear-gradient(180deg, #1b1f2a, #07090e); color: var(--edge);
+  border: 1px solid var(--edge); text-transform: uppercase; letter-spacing: 0.08em;
+  box-shadow: 0 0 16px var(--glow), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.tier:is(.tier--bronze, .tier--silver, .tier--gold, .tier--diamond, .tier--emerald) .play:hover:not(:disabled) {
+  box-shadow: 0 0 28px var(--glow), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+/* skins: misma lámina; nombre y textos en tinta */
+.skin-card:is(.rarity-bronze, .rarity-silver, .rarity-gold, .rarity-diamond, .rarity-emerald) b { color: var(--ink); text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5); }
+.skin-card:is(.rarity-bronze, .rarity-silver, .rarity-gold, .rarity-diamond, .rarity-emerald) small { color: var(--ink); opacity: 0.8; }
+.skin-card:is(.rarity-bronze, .rarity-silver, .rarity-gold, .rarity-diamond, .rarity-emerald) .rarity {
+  background: rgba(8, 10, 16, 0.8); color: var(--edge); border-color: var(--edge);
+}
+.skin-card:is(.rarity-bronze, .rarity-silver, .rarity-gold, .rarity-diamond, .rarity-emerald) .bar { background: rgba(0, 0, 0, 0.35); }
+.skin-card.locked { animation: none; }
+.skin-card.locked b, .skin-card.locked small { color: #fff; text-shadow: none; opacity: 0.9; }
+.skin-card.locked .shine { display: none; }
+.skin-card.reveal:is(.rarity-gold, .rarity-diamond, .rarity-emerald) { animation: reveal 0.7s var(--ease-out) both, foil-drift 7s ease-in-out 0.7s infinite alternate; }
+
+/* píldoras de rareza y escaparate de la skin equipada */
+.rarity-pill:is(.rarity-bronze, .rarity-silver, .rarity-gold, .rarity-diamond, .rarity-emerald) {
+  background: var(--foil); background-size: 200% 200%; color: var(--ink); border-color: var(--edge);
+  box-shadow: 0 0 12px var(--glow);
+}
+.hero:is(.rarity-bronze, .rarity-silver, .rarity-gold, .rarity-diamond, .rarity-emerald) {
+  border: 1.5px solid var(--edge);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4), 0 0 26px var(--glow), inset 0 0 40px var(--glow);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tier::before, .tier::after, .hero::before, .holo .shine, .tier, .skin-card { animation: none !important; }
+}
+/* contador cuando alguien ya ha embocado */
+.hole-timer {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 100px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 18px 8px;
+  border-radius: 16px;
+  background: rgba(10, 12, 20, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  z-index: 6;
+}
+.hole-timer[hidden] { display: none; }
+.hole-timer small {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+.hole-timer b {
+  font-family: var(--display);
+  font-size: 34px;
+  font-weight: 900;
+  line-height: 1;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.hole-timer.urgent { border-color: #ff4d4d; box-shadow: 0 0 24px rgba(255, 60, 60, 0.55); }
+.hole-timer.urgent b { color: #ff5a5a; }
+.hole-timer.tick b { animation: timerTick 0.35s var(--ease-out); }
+@keyframes timerTick { from { transform: scale(1.35); } to { transform: scale(1); } }
+.cup-banner.dq { color: #ff5a5a; text-shadow: 0 4px 24px rgba(0, 0, 0, 0.7), 0 0 32px rgba(255, 60, 60, 0.5); }

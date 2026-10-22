@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { softDotTexture } from './textures.js';
+import { BALL_R as BALL_RADIUS } from '../physics.js';
 
 /** Partículas genéricas (confeti, polvo, arena) con un único InstancedMesh. */
 export class Particles {
@@ -156,7 +157,7 @@ export class AimDots {
   show(points, color, t) {
     const n = Math.min(points.length, this.n);
     for (let i = 0; i < n; i++) {
-      this.dummy.position.set(points[i].x, 0.06, points[i].z);
+      this.dummy.position.set(points[i].x, (points[i].y ?? 0) + 0.06, points[i].z);
       const pulse = 1 + 0.25 * Math.sin(t * 8 - i * 0.6);
       this.dummy.scale.setScalar(pulse * (1 - (i / this.n) * 0.5));
       this.dummy.updateMatrix();
@@ -170,7 +171,7 @@ export class AimDots {
 
   showRing(pos, t) {
     this.ring.visible = true;
-    this.ring.position.set(pos.x, 0.01, pos.z);
+    this.ring.position.set(pos.x, pos.y - BALL_RADIUS + 0.01, pos.z);
     this.ring.scale.setScalar(1 + Math.sin(t * 4) * 0.08);
   }
 

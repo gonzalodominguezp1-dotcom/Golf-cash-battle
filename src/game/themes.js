@@ -1,6 +1,8 @@
-// Ambientación de cada hoyo: cielo, luz, terreno y decorado.
+// Ambientación de cada hoyo: cielo, luz, terreno y decorado. Solo visual:
+// cambiar el tema de un hoyo no toca la física ni el replay del servidor.
 export const THEMES = {
   meadow: {
+    rim: [0xff7ad9, 0x4fd8ff], // contraluces de color (estilo zombis de Infinite Warfare)
     sound: 'birds',
     skyTop: 0x2f8cff,
     skyHorizon: 0xcdeeff,
@@ -19,6 +21,7 @@ export const THEMES = {
     clouds: 0xffffff,
   },
   beach: {
+    rim: [0xff9a3d, 0x2fe0ff], // contraluces de color (estilo zombis de Infinite Warfare)
     sound: 'waves',
     skyTop: 0x18a8e0,
     skyHorizon: 0xd8fbff,
@@ -37,6 +40,7 @@ export const THEMES = {
     clouds: 0xffffff,
   },
   sunset: {
+    rim: [0xff3d8b, 0x6a7bff], // contraluces de color (estilo zombis de Infinite Warfare)
     sound: 'crickets',
     skyTop: 0x3b2a7a,
     skyHorizon: 0xff9a5c,
@@ -56,6 +60,7 @@ export const THEMES = {
     lanterns: true,
   },
   snow: {
+    rim: [0x8a6bff, 0x3dffd8], // contraluces de color (estilo zombis de Infinite Warfare)
     sound: 'wind',
     skyTop: 0x5b9bd5,
     skyHorizon: 0xe8f3ff,
@@ -76,6 +81,7 @@ export const THEMES = {
     snowfall: true,
   },
   canyon: {
+    rim: [0xff4f7a, 0x45c8ff], // contraluces de color (estilo zombis de Infinite Warfare)
     sound: 'wind',
     skyTop: 0x3a86d9,
     skyHorizon: 0xffe0b8,
@@ -94,6 +100,7 @@ export const THEMES = {
     clouds: 0xfff4e6,
   },
   autumn: {
+    rim: [0xff6a2b, 0xb86bff], // contraluces de color (estilo zombis de Infinite Warfare)
     sound: 'birds',
     skyTop: 0x4f8fd6,
     skyHorizon: 0xffe6c7,
@@ -114,6 +121,7 @@ export const THEMES = {
     floaters: { color: 0xe8742a, count: 90, size: 0.09, speed: -0.35 },
   },
   night: {
+    rim: [0xb44dff, 0x2fd6ff], // contraluces de color (estilo zombis de Infinite Warfare)
     sound: 'crickets',
     skyTop: 0x060b2a,
     skyHorizon: 0x2b3a7a,
@@ -131,18 +139,19 @@ export const THEMES = {
     trees: ['pine', 'round'],
     flowers: false,
     clouds: 0x5a6aa8,
-    lanterns: true,
+    lanterns: 'many',
     stars: true,
     floaters: { color: 0xd6ff7a, count: 60, size: 0.08, speed: 0.05, glow: true },
   },
   volcano: {
+    rim: [0xff7a2a, 0x6a5cff], // contraluces de color (estilo zombis de Infinite Warfare)
     sound: 'wind',
-    skyTop: 0x3a1f3f,
-    skyHorizon: 0xff8a4c,
+    skyTop: 0x14081c,
+    skyHorizon: 0xa8402a,
     sunColor: 0xffc08a,
-    sunIntensity: 2.4,
-    sunDir: [0.3, 0.6, -0.7],
-    ambient: 0.9,
+    sunIntensity: 1.9,
+    sunDir: [0.75, 0.5, 0.3],
+    ambient: 0.6,
     groundLow: 0x2b2324,
     groundMid: 0x4a3a36,
     groundHigh: 0x2e2626,
@@ -155,5 +164,100 @@ export const THEMES = {
     flowers: false,
     clouds: 0x8a6a6a,
     floaters: { color: 0xff7a2a, count: 140, size: 0.07, speed: 0.9, glow: true },
+  },
+  // neón: pista oscura con bordes de luz (neon son los colores de las luces)
+  neon: {
+    sound: 'crickets',
+    skyTop: 0x05010f,
+    skyHorizon: 0x34106a,
+    sunColor: 0xa48cff,
+    sunIntensity: 1,
+    sunDir: [-0.3, 0.8, 0.4],
+    ambient: 0.6,
+    groundLow: 0x120a24,
+    groundMid: 0x1b1036,
+    groundHigh: 0x2a1650,
+    grass: ['#161c44', '#121838'],
+    terrainOffset: -0.6,
+    waterLevel: -1.6,
+    water: 0x00b8ff,
+    trees: ['rockpile'],
+    flowers: false,
+    clouds: 0x2a1a4a,
+    stars: true,
+    floaters: { color: 0x00f0ff, count: 120, size: 0.07, speed: 0.25, glow: true },
+    neon: [0x00f0ff, 0xff2bd6, 0xfff23a],
+  },
+  neonPink: {
+    sound: 'crickets',
+    skyTop: 0x0d0221,
+    skyHorizon: 0x6a0f5a,
+    sunColor: 0xff9ae6,
+    sunIntensity: 1,
+    sunDir: [0.4, 0.75, 0.4],
+    ambient: 0.6,
+    groundLow: 0x1a0820,
+    groundMid: 0x2a0d33,
+    groundHigh: 0x3d1048,
+    grass: ['#2a0f3a', '#240c33'],
+    terrainOffset: -0.6,
+    waterLevel: -1.6,
+    water: 0x8a2bff,
+    trees: ['rockpile'],
+    flowers: false,
+    clouds: 0x4a1a4a,
+    stars: true,
+    floaters: { color: 0xff4fd8, count: 120, size: 0.07, speed: 0.25, glow: true },
+    neon: [0xff2bd6, 0x8a5cff, 0x00ffa3],
+  },
+  // noche de verano en el prado: farolillos de papel alrededor de la pista y guirnaldas
+  gardenNight: {
+    rim: [0xff4fd8, 0x3dd8ff],
+    sound: 'crickets',
+    skyTop: 0x050826,
+    skyHorizon: 0x3a2a78,
+    sunColor: 0xb8c8ff,
+    sunIntensity: 0.95,
+    sunDir: [0.45, 0.7, 0.4],
+    ambient: 0.42,
+    groundLow: 0x2c3a5a,
+    groundMid: 0x23503a,
+    groundHigh: 0x1a3a2a,
+    grass: ['#38a058', '#30904d'],
+    terrainOffset: -0.4,
+    waterLevel: -1.6,
+    water: 0x2a3fa8,
+    trees: ['round', 'pine'],
+    flowers: true,
+    clouds: 0x4a4a90,
+    lanterns: 'many',
+    festoon: true,
+    stars: true,
+    floaters: { color: 0xd6ff7a, count: 90, size: 0.08, speed: 0.05, glow: true },
+  },
+  // playa de noche con antorchas tiki y luna sobre el mar
+  beachNight: {
+    rim: [0xff6a3d, 0x2fffe0],
+    sound: 'waves',
+    skyTop: 0x040a2a,
+    skyHorizon: 0x1f4a8a,
+    sunColor: 0xc8dcff,
+    sunIntensity: 0.95,
+    sunDir: [-0.4, 0.6, -0.5],
+    ambient: 0.42,
+    groundLow: 0x8a7a5a,
+    groundMid: 0x7a6a4a,
+    groundHigh: 0x2f6a45,
+    grass: ['#3aa65a', '#33964f'],
+    terrainOffset: -1.4,
+    waterLevel: -0.9,
+    water: 0x1d5fb8,
+    trees: ['palm'],
+    flowers: false,
+    clouds: 0x3a4a8a,
+    lanterns: 'many',
+    torches: true,
+    stars: true,
+    floaters: { color: 0x7affea, count: 50, size: 0.07, speed: 0.04, glow: true },
   },
 };

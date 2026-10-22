@@ -127,7 +127,243 @@ export function inSand(course, x, z) {
 /** Pendientes: rectángulos que empujan la bola cuesta abajo (dir) con aceleración accel. */
 export const onSlope = (course, x, z) => (course.slopes ?? []).find((s) => inRect(s, x, z));
 
-/** Portales de un solo sentido: la bola que entra en a sale por b con la misma velocidad. */
+// Las cuestas no empiezan de golpe: en los bordes (EASE metros) la inclinación
+// sube suave, como un césped de verdad. smooth es el smoothstep de 0 a 1.
+const EASE = 0.6;
+const smooth = (t) => (t >= 1 ? 1 : t <= 0 ? 0 : t * t * (3 - 2 * t));
+/** Qué parte de la inclinación máxima hay a distancia a del borde de arriba en una cuesta de largo len. */
+export function easeFactor(a, len) {
+  const e = Math.min(EASE, len / 4);
+  return smooth(a / e) * smooth((len - a) / e);
+}
+const slopeLen = (s) => (s.dir[0] !== 0 ? s.w : s.d);
+/** Aceleración de la pendiente en (x, z), ya suavizada en los bordes. */
+export function slopeAccel(s, x, z) {
+  const len = slopeLen(s);
+  const a = (x - s.x) * s.dir[0] + (z - s.z) * s.dir[1] + len / 2;
+  return s.accel * easeFactor(a, len);
+}
+
+/**
+ * Montículos (el volcán): ladera circular entre top y base que echa la bola
+ * hacia fuera con accel. Dentro de top (la cima) y fuera de base es llano.
+ */
+export function onMound(course, x, z) {
+  for (const m of course.mounds ?? []) {
+    const dx = x - m.x, dz = z - m.z;
+    const d2 = dx * dx + dz * dz;
+    if (d2 > m.top * m.top && d2 < m.base * m.base) return m;
+  }
+  return null;
+}
+/** Aceleración hacia fuera del montículo a distancia d del centro, suavizada al pie y en la cima. */
+export const moundAccel = (m, d) => m.accel * easeFactor(m.base - d, m.base - m.top);
+
+/**
+ * Molinos: las aspas tapan la puerta (de ancho w, a lo largo de x) cuando una
+ * pasa por abajo. Solo usa + - * / y Math.floor para que sea igual en todas partes.
+ */
+export const BLADE_HALF = 0.3;
+const TWO_PI = 6.283185307179586;
+export function windmillBlocks(wm, t) {
+  const period = TWO_PI / wm.blades;
+  const a = wm.speed * t + (wm.phase ?? 0);
+  const ph = a - Math.floor(a / period) * period;
+  return ph < BLADE_HALF || ph > period - BLADE_HALF;
+}
+export const WINDMILL_GATE_HALF = 0.08;
+
+// ---------- loopings y tubos: tramos en los que la bola va por un carril ----------
+//
+// Mientras la bola va por un carril lleva ball.track = { kind, i, s, u, lat }:
+// s es lo recorrido por el carril, u la velocidad a lo largo de él y lat la
+// posición lateral. ball.x/z siguen la proyección en el suelo para la cámara.
+// El objeto track se sustituye en cada paso (nunca se modifica), así una copia
+// de la bola ({ ...ball }) no comparte estado con la original.
+
+export const GRAVITY = 9.8;
+const LOOP_SAMPLES = 160;
+const TUBE_SAMPLES = 64;
+const TUBE_MIN_SPEED = 4;
+const TRACK_DRAG = 0.15; // el carril es liso: frena menos que el césped
+const tables = new WeakMap();
+
+/**
+ * Perfil del looping: una trocoide que avanza len por el suelo y da una vuelta
+ * de radio radius. Devuelve muestras { s, along, y } (s = longitud de carril).
+ */
+export function loopTable(loop) {
+  let t = tables.get(loop);
+  if (t) return t;
+  const r = loop.len / TWO_PI, R = loop.radius;
+  const pts = [];
+  let s = 0;
+  for (let k = 0; k <= LOOP_SAMPLES; k++) {
+    const th = (TWO_PI * k) / LOOP_SAMPLES;
+    const along = r * th + R * dsin(th), y = R * (1 - dcos(th));
+    if (k > 0) s += hyp(along - pts[k - 1].along, y - pts[k - 1].y);
+    pts.push({ s, along, y, th });
+  }
+  t = { pts, length: s };
+  tables.set(loop, t);
+  return t;
+}
+
+/**
+ * Recorrido de un tubo: baja por la boca, sube por el aire y cae en b saliendo
+ * hacia out. Curva de Bézier cúbica muestreada; muestras { s, x, y, z }.
+ */
+export function tubeTable(p) {
+  let t = tables.get(p);
+  if (t) return t;
+  const [ax, az] = p.a, [bx, bz] = p.b, [ox, oz] = p.out;
+  const dx = bx - ax, dz = bz - az;
+  const H = 1.2 + hyp(dx, dz) * 0.12;
+  const c = [
+    [ax, -0.35, az],
+    [ax, H * 1.4, az],
+    [bx - ox * 1.6, H * 1.4, bz - oz * 1.6],
+    [bx, BALL_R, bz],
+  ];
+  const pts = [];
+  let s = 0;
+  for (let k = 0; k <= TUBE_SAMPLES; k++) {
+    const u = k / TUBE_SAMPLES, v = 1 - u;
+    const w0 = v * v * v, w1 = 3 * v * v * u, w2 = 3 * v * u * u, w3 = u * u * u;
+    const q = [0, 1, 2].map((j) => w0 * c[0][j] + w1 * c[1][j] + w2 * c[2][j] + w3 * c[3][j]);
+    if (k > 0) {
+      const o = pts[k - 1];
+      s += Math.sqrt((q[0] - o.x) * (q[0] - o.x) + (q[1] - o.y) * (q[1] - o.y) + (q[2] - o.z) * (q[2] - o.z));
+    }
+    pts.push({ s, x: q[0], y: q[1], z: q[2] });
+  }
+  t = { pts, length: s };
+  tables.set(p, t);
+  return t;
+}
+
+/** Muestra del carril en s (interpolada entre las dos más cercanas). */
+export function sampleAt(table, s) {
+  const pts = table.pts;
+  let lo = 0, hi = pts.length - 1;
+  if (s <= 0) return { ...pts[0], k: 0, f: 0 };
+  if (s >= table.length) return { ...pts[hi], k: hi - 1, f: 1 };
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (pts[mid].s <= s) lo = mid;
+    else hi = mid;
+  }
+  const a = pts[lo], b = pts[hi];
+  const f = (s - a.s) / (b.s - a.s);
+  const out = { k: lo, f };
+  for (const key in a) out[key] = a[key] + (b[key] - a[key]) * f;
+  return out;
+}
+
+// eje lateral del looping: dir girado 90°
+const loopSide = (l) => [-l.dir[1], l.dir[0]];
+/** Punto de entrada del looping (al principio, en el suelo). */
+const loopEntry = (l) => [l.x - (l.dir[0] * l.len) / 2, l.z - (l.dir[1] * l.len) / 2];
+
+/** ¿Ha cruzado la bola (de p a ball) la boca de un looping? Devuelve el carril nuevo o null. */
+function enterLoop(course, ball, px, pz) {
+  const loops = course.loops ?? [];
+  for (let i = 0; i < loops.length; i++) {
+    const l = loops[i];
+    const [ex, ez] = loopEntry(l), [sx, sz] = loopSide(l);
+    const lat = (ball.x - ex) * sx + (ball.z - ez) * sz;
+    if (Math.abs(lat) > l.w / 2) continue;
+    const before = (px - ex) * l.dir[0] + (pz - ez) * l.dir[1];
+    const after = (ball.x - ex) * l.dir[0] + (ball.z - ez) * l.dir[1];
+    const u = ball.vx * l.dir[0] + ball.vz * l.dir[1];
+    const len = loopTable(l).length;
+    // por la entrada hacia delante o por la salida marcha atrás
+    if (before < 0 && after >= 0 && u > 0) return { kind: 'loop', i, s: after, u, lat };
+    if (before > l.len && after <= l.len && u < 0) return { kind: 'loop', i, s: len - (l.len - after), u, lat };
+  }
+  return null;
+}
+
+/** Coloca ball.x/z/vx/vz según el carril (proyección en el suelo). */
+function placeOnTrack(course, ball) {
+  const tr = ball.track;
+  if (tr.kind === 'loop') {
+    const l = course.loops[tr.i];
+    const q = sampleAt(loopTable(l), tr.s);
+    const [ex, ez] = loopEntry(l), [sx, sz] = loopSide(l);
+    ball.x = ex + l.dir[0] * q.along + sx * tr.lat;
+    ball.z = ez + l.dir[1] * q.along + sz * tr.lat;
+    ball.vx = l.dir[0] * tr.u;
+    ball.vz = l.dir[1] * tr.u;
+  } else {
+    const q = sampleAt(tubeTable(course.portals[tr.i]), tr.s);
+    const p = course.portals[tr.i];
+    ball.x = q.x;
+    ball.z = q.z;
+    ball.vx = p.out[0] * tr.u;
+    ball.vz = p.out[1] * tr.u;
+  }
+}
+
+/**
+ * Un paso por el carril. En el looping manda la gravedad: si en la mitad de
+ * arriba la bola va más despacio de lo que pide la vuelta, se cae y vuelve
+ * hacia atrás. En el tubo va a velocidad constante. Devuelve 'exit' al salir.
+ */
+function trackStep(course, ball, dt) {
+  const tr = ball.track;
+  if (tr.kind === 'tube') {
+    const p = course.portals[tr.i];
+    const table = tubeTable(p);
+    const s = tr.s + Math.max(tr.u, TUBE_MIN_SPEED) * dt;
+    if (s >= table.length) {
+      ball.track = null;
+      ball.x = p.b[0] + p.out[0] * 0.01;
+      ball.z = p.b[1] + p.out[1] * 0.01;
+      ball.vx = p.out[0] * tr.u;
+      ball.vz = p.out[1] * tr.u;
+      return 'exit';
+    }
+    ball.track = { ...tr, s };
+    placeOnTrack(course, ball);
+    return null;
+  }
+  const l = course.loops[tr.i];
+  const table = loopTable(l);
+  const q = sampleAt(table, tr.s);
+  const a = table.pts[q.k], b = table.pts[q.k + 1];
+  const grade = (b.y - a.y) / (b.s - a.s); // seno de la inclinación del carril
+  let u = tr.u - GRAVITY * grade * dt;
+  // rozamiento proporcional a la velocidad: nunca deja la bola quieta en el carril
+  u -= TRACK_DRAG * u * dt;
+  // arriba la vuelta necesita velocidad: u² ≥ g·(altura sobre el centro)
+  let fell = tr.fell;
+  if (!fell && q.y > l.radius && u * u < GRAVITY * (q.y - l.radius)) {
+    fell = true;
+    u = u > 0 ? -0.3 : 0.3;
+  }
+  const s = tr.s + u * dt;
+  const [ex, ez] = loopEntry(l), [sx, sz] = loopSide(l);
+  if (s >= table.length || s <= 0) {
+    // sale al suelo por la salida (hacia delante) o por la entrada (de vuelta)
+    const along = s >= table.length ? l.len + 0.001 : -0.001;
+    ball.track = null;
+    ball.x = ex + l.dir[0] * along + sx * tr.lat;
+    ball.z = ez + l.dir[1] * along + sz * tr.lat;
+    ball.vx = l.dir[0] * u;
+    ball.vz = l.dir[1] * u;
+    return 'exit';
+  }
+  ball.track = { ...tr, s, u, fell };
+  placeOnTrack(course, ball);
+  return null;
+}
+
+/**
+ * Portales de un solo sentido: la bola que entra en a sale por b con la misma
+ * velocidad. Los tubos (portales con out) llevan la bola por dentro hasta b y
+ * la sueltan hacia out.
+ */
 export function portalAt(course, x, z) {
   const ps = course.portals ?? [];
   for (let i = 0; i < ps.length; i++) {
@@ -146,6 +382,10 @@ export function step(course, segs, ball, t, dt) {
   let hit = 0;
   let bumper = -1;
   let portal = -1;
+  if (ball.track) {
+    const ev = trackStep(course, ball, dt);
+    return { sunk: false, hit, bumper, portal, track: ball.track?.kind ?? null, trackExit: ev === 'exit' };
+  }
   const speed = hyp(ball.vx, ball.vz);
   if (speed > 0) {
     const sand = inSand(course, ball.x, ball.z) ? SAND_FACTOR : 1;
@@ -165,12 +405,30 @@ export function step(course, segs, ball, t, dt) {
     }
   }
   const slope = onSlope(course, ball.x, ball.z);
+  let incline = 0;
   if (slope) {
-    ball.vx += slope.dir[0] * slope.accel * dt;
-    ball.vz += slope.dir[1] * slope.accel * dt;
+    incline = slopeAccel(slope, ball.x, ball.z);
+    ball.vx += slope.dir[0] * incline * dt;
+    ball.vz += slope.dir[1] * incline * dt;
   }
+  const mound = slope ? null : onMound(course, ball.x, ball.z);
+  if (mound) {
+    const dx = ball.x - mound.x, dz = ball.z - mound.z;
+    const d = hyp(dx, dz);
+    incline = moundAccel(mound, d);
+    ball.vx += (dx / d) * incline * dt;
+    ball.vz += (dz / d) * incline * dt;
+  }
+  const px = ball.x, pz = ball.z;
   ball.x += ball.vx * dt;
   ball.z += ball.vz * dt;
+
+  const loop = course.loops ? enterLoop(course, ball, px, pz) : null;
+  if (loop) {
+    ball.track = loop;
+    placeOnTrack(course, ball);
+    return { sunk: false, hit, bumper, portal, track: 'loop', trackExit: false };
+  }
 
   for (const seg of segs) hit = Math.max(hit, collideSegment(ball, seg, 0, 0));
   for (const sp of course.spinners) {
@@ -183,6 +441,9 @@ export function step(course, segs, ball, t, dt) {
   for (const m of course.movers ?? []) {
     const p = moverPos(m, t);
     hit = Math.max(hit, collideBox(ball, p.x, p.z, m.w / 2, m.d / 2, p.vx, p.vz));
+  }
+  for (const wm of course.windmills ?? []) {
+    if (windmillBlocks(wm, t)) hit = Math.max(hit, collideBox(ball, wm.x, wm.gateZ, wm.w / 2, WINDMILL_GATE_HALF, 0, 0));
   }
   course.bumpers.forEach((b, i) => {
     const dx = ball.x - b.x, dz = ball.z - b.z;
@@ -198,8 +459,15 @@ export function step(course, segs, ball, t, dt) {
   const pi = portalAt(course, ball.x, ball.z);
   if (pi >= 0) {
     portal = pi;
-    ball.x = course.portals[pi].b[0];
-    ball.z = course.portals[pi].b[1];
+    const p = course.portals[pi];
+    if (p.out) {
+      // el tubo se traga la bola y la lleva por dentro con la velocidad que traía
+      ball.track = { kind: 'tube', i: pi, s: 0, u: hyp(ball.vx, ball.vz), lat: 0 };
+      placeOnTrack(course, ball);
+      return { sunk: false, hit, bumper, portal, track: 'tube', trackExit: false };
+    }
+    ball.x = p.b[0];
+    ball.z = p.b[1];
   }
 
   const [hx, hz] = course.cup;
@@ -211,11 +479,11 @@ export function step(course, segs, ball, t, dt) {
     ball.vx = ball.vz = 0;
     return { sunk: true, hit, bumper, portal };
   }
-  const rolls = slope && slope.accel > ROLL_DECEL * (inSand(course, ball.x, ball.z) ? SAND_FACTOR : 1);
+  const rolls = incline > ROLL_DECEL * (inSand(course, ball.x, ball.z) ? SAND_FACTOR : 1);
   if (v < STOP_SPEED && !rolls) ball.vx = ball.vz = 0;
   return { sunk: false, hit, bumper, portal };
 }
 
 export function isMoving(ball) {
-  return ball.vx !== 0 || ball.vz !== 0;
+  return ball.vx !== 0 || ball.vz !== 0 || !!ball.track;
 }
