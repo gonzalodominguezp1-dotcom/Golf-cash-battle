@@ -455,9 +455,9 @@ export class GolfGame {
     const baseDist = (isWidescreen ? 3.5 : FOLLOW_DIST) * zoom;
     const baseHeight = (isWidescreen ? 1.6 : FOLLOW_HEIGHT) * (0.85 + 0.15 * zoom);
     const dist = baseDist + this.power * 0.7;
-    // con relieve la cámara sube con el césped; en un looping o un tubo, a medias con la bola
+    // con relieve la cámara sube con el césped; en un looping o un tubo, casi tanto como la bola
     const pose = ballPose(this.course, this.ball);
-    const rise = pose.onTrack ? pose.ground + (pose.y - BALL_R - pose.ground) * 0.5 : pose.ground;
+    const rise = pose.onTrack ? pose.ground + (pose.y - BALL_R - pose.ground) * 0.75 : pose.ground;
     const pos = new THREE.Vector3(this.ball.x, 0, this.ball.z).addScaledVector(fwd, -dist);
     pos.y = rise + baseHeight + this.power * 0.35;
     const look = new THREE.Vector3(this.ball.x, rise + 0.15, this.ball.z).addScaledVector(fwd, LOOK_AHEAD);

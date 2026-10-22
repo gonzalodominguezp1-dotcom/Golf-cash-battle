@@ -183,27 +183,51 @@ export const WINDMILL_GATE_HALF = 0.08;
 
 export const GRAVITY = 9.8;
 const LOOP_SAMPLES = 160;
+const PAD_SAMPLES = 8;
+// radio de la vuelta / avance: con 3 la vuelta es redonda y el cruce queda abajo
+export const LOOP_RATIO = 3;
 const TUBE_SAMPLES = 64;
 const TUBE_MIN_SPEED = 4;
-const TRACK_DRAG = 0.15; // el carril es liso: frena menos que el césped
+const TRACK_DRAG = 0.25; // el carril es liso: frena menos que el césped
+// al caerse dentro de la vuelta: velocidad que conserva al tocar el carril,
+// rozamiento hasta la boca y velocidad mínima para que siempre salga
+const FELL_KEEP = 0.3;
+const FELL_DRAG = 1.2;
+const FELL_MIN_SPEED = 0.9;
+const FLY_MAX_TIME = 2;
+const TRACK_MIN_SPEED = 0.4;
+const FLY_KEEP_ALONG = 0.35;
+const HALF_TURN = 3.141592653589793;
 const tables = new WeakMap();
 
 /**
- * Perfil del looping: una trocoide que avanza len por el suelo y da una vuelta
- * de radio radius. Devuelve muestras { s, along, y } (s = longitud de carril).
+ * Perfil del looping: un tramo recto, una trocoide que da una vuelta de radio
+ * radius (redonda, con el cruce abajo) y otro tramo recto, en total len por el
+ * suelo. Muestras { s, along, y, th, kap, ny }: s = longitud de carril, kap la
+ * curvatura y ny la componente vertical de la normal hacia dentro de la vuelta.
  */
 export function loopTable(loop) {
   let t = tables.get(loop);
   if (t) return t;
-  const r = loop.len / TWO_PI, R = loop.radius;
+  const R = loop.radius, r = R / LOOP_RATIO;
+  const pad = (loop.len - TWO_PI * r) / 2;
   const pts = [];
   let s = 0;
-  for (let k = 0; k <= LOOP_SAMPLES; k++) {
-    const th = (TWO_PI * k) / LOOP_SAMPLES;
-    const along = r * th + R * dsin(th), y = R * (1 - dcos(th));
-    if (k > 0) s += hyp(along - pts[k - 1].along, y - pts[k - 1].y);
-    pts.push({ s, along, y, th });
+  const push = (along, y, th, kap, ny) => {
+    const o = pts[pts.length - 1];
+    if (o) s += hyp(along - o.along, y - o.y);
+    pts.push({ s, along, y, th, kap, ny });
+  };
+  for (let j = 0; j < PAD_SAMPLES; j++) push((pad * j) / PAD_SAMPLES, 0, 0, 0, 1);
+  for (let j = 0; j <= LOOP_SAMPLES; j++) {
+    const th = (TWO_PI * j) / LOOP_SAMPLES;
+    const c = dcos(th), sn = dsin(th);
+    // derivadas de (along, y) respecto a th
+    const da = r + R * c, dy = R * sn;
+    const v = hyp(da, dy);
+    push(pad + r * th + R * sn, R * (1 - c), th, (r * R * c + R * R) / (v * v * v), da / v);
   }
+  for (let j = 1; j <= PAD_SAMPLES; j++) push(loop.len - pad + (pad * j) / PAD_SAMPLES, 0, TWO_PI, 0, 1);
   t = { pts, length: s };
   tables.set(loop, t);
   return t;
@@ -278,23 +302,24 @@ function enterLoop(course, ball, px, pz) {
     const u = ball.vx * l.dir[0] + ball.vz * l.dir[1];
     const len = loopTable(l).length;
     // por la entrada hacia delante o por la salida marcha atrás
-    if (before < 0 && after >= 0 && u > 0) return { kind: 'loop', i, s: after, u, lat };
-    if (before > l.len && after <= l.len && u < 0) return { kind: 'loop', i, s: len - (l.len - after), u, lat };
+    if (before < 0 && after >= 0 && u > 0) return { kind: 'loop', i, s: after, u, lat, from: 1 };
+    if (before > l.len && after <= l.len && u < 0) return { kind: 'loop', i, s: len - (l.len - after), u, lat, from: -1 };
   }
   return null;
 }
 
 /** Coloca ball.x/z/vx/vz según el carril (proyección en el suelo). */
-function placeOnTrack(course, ball) {
+function placeOnTrack(course, ball, loop) {
   const tr = ball.track;
   if (tr.kind === 'loop') {
-    const l = course.loops[tr.i];
-    const q = sampleAt(loopTable(l), tr.s);
+    const l = loop ?? course.loops[tr.i];
+    const along = tr.fly ? tr.fly.a : sampleAt(loopTable(l), tr.s).along;
     const [ex, ez] = loopEntry(l), [sx, sz] = loopSide(l);
-    ball.x = ex + l.dir[0] * q.along + sx * tr.lat;
-    ball.z = ez + l.dir[1] * q.along + sz * tr.lat;
-    ball.vx = l.dir[0] * tr.u;
-    ball.vz = l.dir[1] * tr.u;
+    ball.x = ex + l.dir[0] * along + sx * tr.lat;
+    ball.z = ez + l.dir[1] * along + sz * tr.lat;
+    const u = tr.fly ? tr.fly.va : tr.u;
+    ball.vx = l.dir[0] * u;
+    ball.vz = l.dir[1] * u;
   } else {
     const q = sampleAt(tubeTable(course.portals[tr.i]), tr.s);
     const p = course.portals[tr.i];
@@ -330,32 +355,89 @@ function trackStep(course, ball, dt) {
   }
   const l = course.loops[tr.i];
   const table = loopTable(l);
+  if (tr.fly) return flyStep(l, table, ball, dt);
   const q = sampleAt(table, tr.s);
   const a = table.pts[q.k], b = table.pts[q.k + 1];
   const grade = (b.y - a.y) / (b.s - a.s); // seno de la inclinación del carril
   let u = tr.u - GRAVITY * grade * dt;
   // rozamiento proporcional a la velocidad: nunca deja la bola quieta en el carril
-  u -= TRACK_DRAG * u * dt;
-  // arriba la vuelta necesita velocidad: u² ≥ g·(altura sobre el centro)
-  let fell = tr.fell;
-  if (!fell && q.y > l.radius && u * u < GRAVITY * (q.y - l.radius)) {
-    fell = true;
-    u = u > 0 ? -0.3 : 0.3;
+  u -= (tr.fell ? FELL_DRAG : TRACK_DRAG) * u * dt;
+  // después de caerse siempre vuelve por donde entró, y nunca se queda quieta
+  if (tr.fell && u * tr.from > -FELL_MIN_SPEED) u = -tr.from * FELL_MIN_SPEED;
+  // en los tramos rectos tampoco se queda parada: sigue hacia donde iba
+  else if (grade === 0 && u < TRACK_MIN_SPEED && u > -TRACK_MIN_SPEED) u = (u > 0 || (u === 0 && tr.from > 0) ? 1 : -1) * TRACK_MIN_SPEED;
+  // arriba el carril solo sujeta la bola si va rápida: si la gravedad tira hacia
+  // dentro de la vuelta más de lo que pide la curva (u²·kap < −g·ny), se despega
+  if (!tr.fell && q.ny < 0 && u * tr.from > 0 && u * u * q.kap + GRAVITY * q.ny < 0) {
+    // cae casi en vertical: lo que avanzaba a lo largo del looping se pierde
+    const ta = b.along - a.along, ty = b.y - a.y, tl = hyp(ta, ty);
+    ball.track = { ...tr, u, fell: true, fly: { a: q.along, y: q.y, va: (FLY_KEEP_ALONG * u * ta) / tl, vy: (u * ty) / tl, t: 0, k0: q.k } };
+    placeOnTrack(course, ball);
+    return null;
   }
   const s = tr.s + u * dt;
-  const [ex, ez] = loopEntry(l), [sx, sz] = loopSide(l);
-  if (s >= table.length || s <= 0) {
-    // sale al suelo por la salida (hacia delante) o por la entrada (de vuelta)
-    const along = s >= table.length ? l.len + 0.001 : -0.001;
-    ball.track = null;
-    ball.x = ex + l.dir[0] * along + sx * tr.lat;
-    ball.z = ez + l.dir[1] * along + sz * tr.lat;
-    ball.vx = l.dir[0] * u;
-    ball.vz = l.dir[1] * u;
-    return 'exit';
-  }
-  ball.track = { ...tr, s, u, fell };
+  if (s >= table.length || s <= 0) return leaveLoop(l, ball, s >= table.length, tr.lat, u);
+  ball.track = { ...tr, s, u };
   placeOnTrack(course, ball);
+  return null;
+}
+
+/** Sale del looping al suelo por la salida (forward) o por la entrada. */
+function leaveLoop(l, ball, forward, lat, u) {
+  const [ex, ez] = loopEntry(l), [sx, sz] = loopSide(l);
+  const along = forward ? l.len + 0.001 : -0.001;
+  ball.track = null;
+  ball.x = ex + l.dir[0] * along + sx * lat;
+  ball.z = ez + l.dir[1] * along + sz * lat;
+  ball.vx = l.dir[0] * u;
+  ball.vz = l.dir[1] * u;
+  return 'exit';
+}
+
+/**
+ * La bola despegada vuela dentro de la vuelta (tiro parabólico en el plano del
+ * looping) hasta que vuelve a tocar el carril. Al caer pierde casi toda la
+ * velocidad y sigue por el carril hacia la boca por la que entró.
+ */
+function flyStep(l, table, ball, dt) {
+  const tr = ball.track, f = tr.fly;
+  const vy = f.vy - GRAVITY * dt;
+  const na = f.a + f.va * dt, ny = f.y + vy * dt;
+  const pts = table.pts;
+  let hit = -1, hitF = 0, best = 2;
+  for (let k = 0; k < pts.length - 1; k++) {
+    const p = pts[k], q = pts[k + 1];
+    // solo cae en la mitad por la que entró (así siempre vuelve por esa boca),
+    // y al despegarse no choca con el carril que acaba de dejar
+    if ((tr.from > 0 ? p.th > HALF_TURN : q.th < HALF_TURN) || (f.t < 0.1 && k > f.k0 - 4 && k < f.k0 + 4)) continue;
+    const ta = q.along - p.along, ty = q.y - p.y;
+    // solo cuenta si la bola va hacia el carril (contra la normal hacia dentro)
+    if (-ty * f.va + ta * vy >= 0) continue;
+    // corte del vuelo (f → n) con el tramo (p → q)
+    const da = na - f.a, dy = ny - f.y;
+    const den = da * ty - dy * ta;
+    if (den === 0) continue;
+    const wa = p.along - f.a, wy = p.y - f.y;
+    const tt = (wa * ty - wy * ta) / den; // a lo largo del vuelo
+    const ss = (wa * dy - wy * da) / den; // a lo largo del tramo
+    if (tt >= 0 && tt <= 1 && ss >= 0 && ss <= 1 && tt < best) {
+      best = tt;
+      hit = k;
+      hitF = ss;
+    }
+  }
+  if (hit >= 0) {
+    const p = pts[hit], q = pts[hit + 1];
+    const ta = q.along - p.along, ty = q.y - p.y, tl = hyp(ta, ty);
+    const ut = (f.va * ta + vy * ty) / tl;
+    const s = p.s + (q.s - p.s) * hitF;
+    ball.track = { ...tr, s, u: ut * FELL_KEEP, fly: null };
+    placeOnTrack(null, ball, l);
+    return null;
+  }
+  if (f.t > FLY_MAX_TIME) return leaveLoop(l, ball, tr.from < 0, tr.lat, -tr.from * FELL_MIN_SPEED);
+  ball.track = { ...tr, fly: { a: na, y: ny, va: f.va, vy, t: f.t + dt } };
+  placeOnTrack(null, ball, l);
   return null;
 }
 

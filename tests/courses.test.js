@@ -144,19 +144,60 @@ test('tubos: la bola viaja por dentro y sale en la dirección del tubo', () => {
   assert.ok(ball.vx < -3.5 && ball.vz === 0, 'sale hacia -x con la velocidad que traía');
 });
 
+// tira la bola recta al looping a velocidad v y la sigue hasta que sale del carril
+function throughLoop(c, l, v) {
+  const segs = segmentsOf(c);
+  const ball = { x: l.x, z: l.z + l.len / 2 + 0.05, vx: 0, vz: -v };
+  let t = 0, flew = false, r;
+  do {
+    r = step(c, segs, ball, ++t * DT, DT);
+    if (ball.track?.fly) flew = true;
+  } while (!r.trackExit && t < 120 * 10);
+  assert.ok(r.trackExit, `v=${v}: sale del carril`);
+  const out = Math.hypot(ball.vx, ball.vz);
+  return { passed: ball.z < l.z, out, flew, ball, time: t * DT };
+}
+
+test('looping: un solo umbral; si no llega se cae y vuelve despacio por la entrada', () => {
+  const c = COURSES.find((x) => x.name === 'Looping Neón');
+  const [l] = c.loops;
+  let threshold = null;
+  for (let v = 3; v <= 13.0001; v += 0.1) {
+    const r = throughLoop(c, l, v);
+    if (r.passed) {
+      threshold ??= v;
+      assert.ok(r.out > 0.74 * v && r.out < 0.86 * v, `v=${v.toFixed(1)}: pasa perdiendo un 15–25 % (sale a ${r.out.toFixed(2)})`);
+      assert.ok(!r.flew, `v=${v.toFixed(1)}: si pasa no se despega`);
+    } else {
+      assert.equal(threshold, null, `v=${v.toFixed(1)}: por encima del umbral siempre pasa`);
+      if (r.flew) assert.ok(r.out <= 0.35 * v, `v=${v.toFixed(1)}: tras caerse sale despacio (${r.out.toFixed(2)})`);
+      assert.ok(r.time < 5, `v=${v.toFixed(1)}: no se queda dentro`);
+    }
+  }
+  // hace falta buena potencia, pero no un tiro a tope
+  assert.ok(threshold > 6 && threshold < 8.5, `umbral ${threshold}`);
+  // justo por debajo del umbral se cae (no resbala pegada al carril)
+  assert.ok(throughLoop(c, l, threshold - 0.3).flew);
+});
+
 test('looping: si la bola se cae arriba vuelve por la entrada y nunca se queda en el carril', () => {
   const c = COURSES.find((x) => x.name === 'Looping Neón');
   const [l] = c.loops;
   const segs = segmentsOf(c);
-  // como en un looping de verdad hace falta v ≥ √(5·g·R) en la entrada, algo más por el rozamiento
-  const needed = Math.sqrt(5 * 9.8 * l.radius);
-  for (const v of [2, 4, 5.5, needed, needed + 1, 11]) {
+  for (const v of [2, 4, 5.5, 6.5, 7, 8, 11]) {
     const ball = { x: l.x, z: l.z + l.len / 2 + 0.3, vx: 0, vz: -v };
     let t = 0;
     while (isMoving(ball) && t < 120 * 30) step(c, segs, ball, ++t * DT, DT);
     assert.ok(!ball.track && !isMoving(ball), `v=${v}: la bola se para fuera del carril`);
-    const passed = ball.z < l.z - l.len / 2;
-    assert.equal(passed, v > needed, `v=${v}: ${passed ? 'pasa' : 'vuelve'}`);
+  }
+});
+
+test('looping: el mismo tiro da siempre el mismo resultado, bit a bit', () => {
+  const c = COURSES.find((x) => x.name === 'Looping Neón');
+  const [l] = c.loops;
+  for (const v of [6.8, 9]) {
+    const a = throughLoop(c, l, v).ball, b = throughLoop(c, l, v).ball;
+    assert.deepEqual([a.x, a.z, a.vx, a.vz], [b.x, b.z, b.vx, b.vz]);
   }
 });
 

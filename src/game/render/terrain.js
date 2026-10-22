@@ -1,4 +1,4 @@
-import { BALL_R, GRAVITY, loopTable, sampleAt, tubeTable } from '../physics.js';
+import { BALL_R, GRAVITY, LOOP_RATIO, loopTable, sampleAt, tubeTable } from '../physics.js';
 
 // Relieve que se ve: la física es plana (x, z) y aquí se saca la altura del
 // césped a partir de las pendientes y montículos del hoyo, para levantar la
@@ -72,9 +72,30 @@ export function loopPoint(l, s, lateral = 0) {
   };
 }
 
+/**
+ * Punto de la bola que cae dentro de la vuelta. El giro lateral y la normal se
+ * toman del carril de la mitad por la que entró a esa misma altura, así al
+ * despegarse y al volver a tocar el carril no hay saltos.
+ */
+function loopFlightPoint(l, tr) {
+  const { a, y } = tr.fly;
+  const R = l.radius, r = R / LOOP_RATIO;
+  const c = Math.min(1, Math.max(-1, 1 - y / R));
+  const sn = Math.sqrt(1 - c * c) * (tr.from > 0 ? 1 : -1);
+  const da = r + R * c, dy = R * sn, v = Math.hypot(da, dy) || 1;
+  const side = tr.lat - TWIST * sn;
+  const [dx, dz] = l.dir, sx = -dz, sz = dx;
+  const along = a - l.len / 2;
+  return { x: l.x + dx * along + sx * side, y, z: l.z + dz * along + sz * side, nAlong: -dy / v, nY: da / v, dx, dz };
+}
+
 /** Dónde se dibuja el centro de la bola (también dentro de un looping o un tubo). */
 export function ballPose(course, ball) {
   const tr = ball.track;
+  if (tr?.kind === 'loop' && tr.fly) {
+    const q = loopFlightPoint(course.loops[tr.i], tr);
+    return { x: q.x + q.dx * q.nAlong * BALL_R, y: q.y + q.nY * BALL_R, z: q.z + q.dz * q.nAlong * BALL_R, ground: 0, onTrack: true };
+  }
   if (tr?.kind === 'loop') {
     const q = loopPoint(course.loops[tr.i], tr.s, tr.lat);
     return { x: q.x + q.dx * q.nAlong * BALL_R, y: q.y + q.nY * BALL_R, z: q.z + q.dz * q.nAlong * BALL_R, ground: 0, onTrack: true };
