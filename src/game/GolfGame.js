@@ -9,6 +9,8 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { quality } from './render/quality.js';
 import { AimDots, Particles, Shockwaves, Trail } from './render/effects.js';
 import { ballTexture, labelTexture, softDotTexture } from './render/textures.js';
 import { skinMaterial } from './render/ballSkins.js';
@@ -66,7 +68,7 @@ export class GolfGame {
     this.onOpenSettings = onOpenSettings;
     this.onOverviewChange = onOverviewChange;
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, quality().pixelRatio));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -117,7 +119,8 @@ export class GolfGame {
     // de noche y en el volcán las luces mandan: más resplandor
     const glowy = this.theme.sunIntensity < 2 || this.theme.lava || this.theme.neon;
     this.bloom.strength = glowy ? 0.75 : 0.4;
-    this.bloom.threshold = glowy ? 0.72 : 0.92;
+    this.bloom.threshold = glowy ? 0.72 : 0.97;
+    this.#applyQuality();
     this.segs = segmentsOf(course);
     this.ball = { x: course.tee[0], z: course.tee[1], vx: 0, vz: 0 };
     this.strokes = 0;
@@ -168,6 +171,24 @@ export class GolfGame {
       this.clock.start();
       this.renderer.setAnimationLoop(() => this.#frame());
     }
+  }
+
+  /** Aplica la calidad elegida en Ajustes (también a mitad de partida). */
+  #applyQuality() {
+    const q = quality();
+    this.quality = q;
+    this.bloom.enabled = q.bloom;
+    this.renderer.shadowMap.enabled = q.shadows;
+    const pr = Math.min(window.devicePixelRatio, q.pixelRatio);
+    if (this.renderer.getPixelRatio() !== pr) {
+      this.renderer.setPixelRatio(pr);
+      this.#resize();
+    }
+  }
+
+  /** Cambia la calidad en caliente: resolución y resplandor al momento, el resto al volver a cargar el hoyo. */
+  refreshQuality() {
+    this.#applyQuality();
   }
 
   setOverview(on) {
@@ -343,6 +364,20 @@ export class GolfGame {
     const rng = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
     this.env = buildEnvironment(scene, this.course, this.theme, rng);
     this.courseView = buildCourse(scene, this.course, this.theme);
+    const q = quality();
+    // reflejos suaves de un estudio: los plásticos y metales dejan de verse apagados
+    // (de noche y en neón no: los metales oscuros reflejarían un estudio blanco y brillarían de más)
+    const glowy = this.theme.sunIntensity < 2 || this.theme.lava || this.theme.neon;
+    if (q.env && !glowy) {
+      this.envMap ??= new THREE.PMREMGenerator(this.renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+      scene.environment = this.envMap;
+      scene.environmentIntensity = 0.12;
+    }
+    // cada luz puntual encarece todos los materiales: solo las más fuertes
+    const points = [];
+    scene.traverse((o) => o.isPointLight && points.push(o));
+    points.sort((a, b) => b.intensity * b.distance - a.intensity * a.distance);
+    points.forEach((l, i) => (l.visible = i < q.maxLights));
 
     this.ballMesh = new THREE.Mesh(
       new THREE.SphereGeometry(BALL_R, 32, 24),
@@ -432,20 +467,43 @@ export class GolfGame {
   #overviewTarget() {
     const b = this.bounds;
     const cx = (b.minX + b.maxX) / 2, cz = (b.minZ + b.maxZ) / 2;
-    const depth = Math.max(12, b.maxZ - b.minZ), width = Math.max(10, b.maxX - b.minX);
     const aspect = (this.container.clientWidth || 1) / (this.container.clientHeight || 1);
-    // Holgura para ver todo el terreno con márgenes generosos
-    const span = (aspect > 1 ? Math.max(depth * 1.15, (width * 1.7) / aspect) : Math.max(depth * 1.35, width * 1.9)) * (this.zoomLevel ?? 1);
     const yaw = this.overviewYaw || 0;
     const pitch = THREE.MathUtils.clamp(this.overviewPitch ?? 0.85, 0.25, 1.35);
-    const dist = span * 1.1;
+    const dir = new THREE.Vector3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
     const look = new THREE.Vector3(cx, 0, cz);
-    const pos = new THREE.Vector3(
-      cx + Math.sin(yaw) * Math.cos(pitch) * dist,
-      Math.sin(pitch) * dist,
-      cz + Math.cos(yaw) * Math.cos(pitch) * dist,
-    );
-    return { pos, look };
+    const dist = this.#fitDistance(look, dir, aspect) * (this.zoomLevel ?? 1);
+    return { pos: look.clone().addScaledVector(dir, dist), look };
+  }
+
+  /**
+   * Distancia mínima para que el hoyo entero (sus 8 esquinas, con las paredes
+   * y la bandera) quepa en pantalla desde esa dirección, con un margen. Así los
+   * hoyos en L y los largos se ven completos en vertical y en horizontal.
+   */
+  #fitDistance(look, dir, aspect) {
+    const key = `${look.x},${look.z},${dir.x.toFixed(3)},${dir.y.toFixed(3)},${dir.z.toFixed(3)},${aspect.toFixed(3)},${this.baseFov}`;
+    if (this.fitCache?.key === key) return this.fitCache.dist;
+    const b = this.bounds;
+    const cam = new THREE.PerspectiveCamera(this.baseFov ?? 55, aspect, 0.1, 500);
+    const corners = [];
+    for (const x of [b.minX - 0.4, b.maxX + 0.4]) for (const z of [b.minZ - 0.4, b.maxZ + 0.4]) for (const y of [0, 1.8]) corners.push(new THREE.Vector3(x, y, z));
+    const fits = (d) => {
+      cam.position.copy(look).addScaledVector(dir, d);
+      cam.lookAt(look);
+      cam.updateMatrixWorld();
+      const v = new THREE.Vector3();
+      // arriba queda sitio para el marcador y abajo para los botones
+      return corners.every((c) => (v.copy(c).project(cam), v.z < 1 && Math.abs(v.x) < 0.9 && v.y < 0.72 && v.y > -0.8));
+    };
+    let lo = 2, hi = 200;
+    for (let i = 0; i < 22; i++) {
+      const mid = (lo + hi) / 2;
+      if (fits(mid)) hi = mid;
+      else lo = mid;
+    }
+    this.fitCache = { key, dist: hi };
+    return hi;
   }
 
   #celebrateTarget() {
@@ -498,6 +556,28 @@ export class GolfGame {
 
   #addShake(amount) {
     this.trauma = Math.min(1, this.trauma + amount);
+  }
+
+  /**
+   * Nombres de los rivales: si se pisan en pantalla, se ve el del más cercano
+   * y los de detrás se desvanecen (al salir todos del tee se amontonaban).
+   */
+  #declutterLabels() {
+    const w = this.container.clientWidth || 1, h = this.container.clientHeight || 1;
+    const placed = [];
+    const v = new THREE.Vector3();
+    const list = (this.bots ?? []).filter((b) => b.label.visible).map((b) => ({ b, d: this.camera.position.distanceTo(b.label.position) }));
+    list.sort((a, b) => a.d - b.d);
+    for (const { b, d } of list) {
+      v.copy(b.label.position).project(this.camera);
+      const x = (v.x * 0.5 + 0.5) * w, y = (-v.y * 0.5 + 0.5) * h;
+      // tamaño aproximado de la etiqueta en pantalla
+      const lw = (0.9 / d) * (h / (2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)))) * 0.75, lh = lw * 0.28;
+      const hidden = v.z > 1 || placed.some((p) => Math.abs(p.x - x) < (p.w + lw) / 2 && Math.abs(p.y - y) < (p.h + lh) / 2);
+      if (!hidden) placed.push({ x, y, w: lw, h: lh });
+      b.labelFade = THREE.MathUtils.lerp(b.labelFade ?? 1, hidden ? 0 : 1, 0.2);
+      b.label.material.opacity *= b.labelFade;
+    }
   }
 
   // ---------- input ----------
@@ -561,7 +641,11 @@ export class GolfGame {
       if (this.paused || !this.course || this.sunk || this.timedOut || this.locked || this.intro < 1) return;
       if (this.course.noCup && this.strokes >= 1) return;
       if (this.overview) {
-        // En la vista completa del mapa no se permite realizar tiros
+        // En la vista completa del mapa no se tira: con el dedo se gira la maqueta
+        if (e.pointerType !== 'mouse' && !this.drag) {
+          try { el.setPointerCapture?.(e.pointerId); } catch {}
+          this.drag = { id: e.pointerId, shoot: false, x: e.clientX, y: e.clientY, yaw: this.yaw, zoom: this.zoomLevel ?? 1, lastTick: this.yaw, start: this.tick, turns: 0, dir: 0 };
+        }
         return;
       }
 
@@ -695,6 +779,14 @@ export class GolfGame {
         const d = this.drag;
         if (!d || e.pointerId !== d.id) return;
         const h = el.clientHeight || 1, w = el.clientWidth || 1;
+        if (this.overview) {
+          // en la vista de mapa el dedo gira la maqueta (no toca el apuntado)
+          this.overviewYaw = (this.overviewYaw || 0) - (e.clientX - (d.px ?? d.x)) * (5 / w);
+          this.overviewPitch = THREE.MathUtils.clamp((this.overviewPitch ?? 0.85) + (e.clientY - (d.py ?? d.y)) * (2.5 / h), 0.25, 1.35);
+          d.px = e.clientX;
+          d.py = e.clientY;
+          return;
+        }
         if (!d.shoot) {
           // cámara: a los lados gira alrededor de la bola, arriba y abajo acerca o aleja
           const dx = e.clientX - (d.px ?? d.x);
@@ -1125,6 +1217,7 @@ export class GolfGame {
       const camD = this.camera.position.distanceTo(b.mesh.position);
       b.label.material.opacity = THREE.MathUtils.clamp((camD - 3.7) / 2, 0, 1);
     }
+    this.#declutterLabels();
     this.ballGlow.position.set(pose.x, pose.ground + 0.006, pose.z);
     this.ballGlow.visible = !this.sunk && !pose.onTrack;
     this.ballGlow.material.opacity = isMoving(this.ball) ? 0.15 : 0.35 + Math.sin(this.t * 4) * 0.15;

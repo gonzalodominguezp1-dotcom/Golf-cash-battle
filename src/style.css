@@ -1903,6 +1903,22 @@ h2 { margin: 24px 0 12px; font-size: 21px; letter-spacing: -0.01em; }
 .settings-btn:hover {
   background: rgba(255, 255, 255, 0.2);
 }
+.quality-picker {
+  display: flex;
+  gap: 4px;
+}
+.quality-picker .settings-btn {
+  padding: 8px 10px;
+}
+.settings-btn.on {
+  background: rgba(16, 185, 129, 0.25);
+  border-color: rgba(16, 185, 129, 0.7);
+  color: #a7f3d0;
+}
+.settings-row {
+  gap: 10px;
+  flex-wrap: wrap;
+}
 .settings-btn.muted {
   background: rgba(239, 68, 68, 0.16);
   border-color: rgba(239, 68, 68, 0.4);
@@ -2152,3 +2168,45 @@ h2 { margin: 24px 0 12px; font-size: 21px; letter-spacing: -0.01em; }
 .hole-timer.tick b { animation: timerTick 0.35s var(--ease-out); }
 @keyframes timerTick { from { transform: scale(1.35); } to { transform: scale(1); } }
 .cup-banner.dq { color: #ff5a5a; text-shadow: 0 4px 24px rgba(0, 0, 0, 0.7), 0 0 32px rgba(255, 60, 60, 0.5); }
+
+/* ---------- móvil: que el marcador, la ayuda y el mapa no se pisen ---------- */
+.ov-touch { display: none; }
+@media (max-width: 899px), (pointer: coarse) {
+  .ov-mouse { display: none; }
+  .ov-touch { display: inline; }
+  .overview-banner {
+    top: calc(env(safe-area-inset-top) + 92px);
+    max-width: calc(100% - 32px);
+    white-space: nowrap;
+    border-radius: 16px;
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+  .hud { gap: 6px; left: 10px; right: 10px; }
+  .hud .pill { padding: 6px 10px; font-size: 12px; }
+  .hud .pill b { font-size: 13px; }
+  .hud .pill.mute, .hud .pill.fullscreen, .hud .pill.settings-btn-hud { padding: 6px 9px; }
+  /* los rivales se deslizan de lado si no caben */
+  .rivals {
+    left: 10px;
+    right: 10px;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    pointer-events: auto;
+    padding-bottom: 4px;
+  }
+  .rivals::-webkit-scrollbar { display: none; }
+  .rivals .chip { flex: none; padding: 2px 8px 2px 2px; gap: 4px; }
+  .rivals .chip i { width: 18px; height: 18px; }
+  /* la ayuda va encima del botón del mapa, no detrás */
+  .hint { bottom: calc(env(safe-area-inset-bottom) + 76px); padding: 0 16px; }
+}
+@media (max-width: 420px) {
+  /* el sonido también está en Ajustes: así caben el resto de botones */
+  .hud .pill.mute { display: none; }
+  .brand-name { display: none; }
+  .level-text { display: none; }
+  .topbar { padding-left: 16px; padding-right: 16px; gap: 10px; }
+}
+.brand-name { white-space: nowrap; }
