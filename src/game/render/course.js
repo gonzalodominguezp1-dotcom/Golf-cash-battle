@@ -10,7 +10,7 @@ const WALL_H = 0.32;
 const PLATFORM_DEPTH = 2.4;
 const BUMPER_COLORS = [0x4b7bec, 0xff6b6b, 0xffc145, 0x9b59b6];
 const outlineMat = new THREE.MeshBasicMaterial({ color: 0x1a1a1a, side: THREE.BackSide });
-const glowMat = (color) => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 2 });
+const glowMat = (color) => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.2 });
 
 /** Contorno de dibujo animado (casco invertido) alrededor de una malla. */
 function outline(mesh, grow = 0.035) {
@@ -48,7 +48,7 @@ export function buildCourse(scene, course, theme) {
   const dirtM = dirtMaps(!!neon);
   dirtM.map.repeat.set(0.5, 1 / PLATFORM_DEPTH);
   const grassMat = neon
-    ? new THREE.MeshStandardMaterial({ map: grass, emissiveMap: grass, emissive: 0xffffff, emissiveIntensity: 0.35, roughness: 0.6, metalness: 0.2 })
+    ? new THREE.MeshStandardMaterial({ map: grass, emissiveMap: grass, emissive: 0xffffff, emissiveIntensity: 0.22, roughness: 0.6, metalness: 0.2 })
     : new THREE.MeshStandardMaterial({ map: grass, normalMap: grassM.normalMap, normalScale: new THREE.Vector2(0.6, 0.6), roughness: 0.92 });
   const platform = new THREE.Mesh(geo, [grassMat, new THREE.MeshStandardMaterial({ ...dirtM, roughness: 1 })]);
   platform.receiveShadow = true;
@@ -107,7 +107,7 @@ export function buildCourse(scene, course, theme) {
       ? new THREE.MeshStandardMaterial({ color: 0x0d0c1c, roughness: 0.4, metalness: 0.5, transparent: true })
       : new THREE.MeshStandardMaterial({ ...wood, roughness: 0.75, transparent: true });
     const capMat = neon
-      ? new THREE.MeshStandardMaterial({ color: neonColor(i), emissive: neonColor(i), emissiveIntensity: 1.8, roughness: 0.3, transparent: true })
+      ? new THREE.MeshStandardMaterial({ color: neonColor(i), emissive: neonColor(i), emissiveIntensity: 1.1, roughness: 0.3, transparent: true })
       : new THREE.MeshStandardMaterial({ color: 0xeeeeea, roughness: 0.75, envMapIntensity: 0.4, transparent: true });
     // de noche el remate de las paredes es una tira de luz del color del contraluz
     if (night && !neon) capMat.color.setHex(0x2a2a3a), capMat.emissive.setHex(theme.rim[segIndex++ % 2]), (capMat.emissiveIntensity = 0.4);
@@ -189,7 +189,7 @@ export function buildCourse(scene, course, theme) {
     stem.position.y = 0.15;
     const top = new THREE.Mesh(
       new THREE.SphereGeometry(b.r * 1.25, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2),
-      neon ? new THREE.MeshStandardMaterial({ color: neonColor(i), emissive: neonColor(i), emissiveIntensity: 0.9, roughness: 0.3 }) : new THREE.MeshStandardMaterial({ color, roughness: 0.3, emissive: color, emissiveIntensity: night ? 0.45 : 0.08 }),
+      neon ? new THREE.MeshStandardMaterial({ color: neonColor(i), emissive: neonColor(i), emissiveIntensity: 0.55, roughness: 0.3 }) : new THREE.MeshStandardMaterial({ color, roughness: 0.3, emissive: color, emissiveIntensity: night ? 0.45 : 0.08 }),
     );
     top.scale.y = 0.6;
     top.position.y = 0.3;
@@ -224,7 +224,7 @@ export function buildCourse(scene, course, theme) {
     tex.repeat.set(sp.len * 2, 1);
     const bar = new THREE.Mesh(
       new THREE.BoxGeometry(sp.len, WALL_H, WALL_HALF * 2),
-      new THREE.MeshStandardMaterial({ map: tex, roughness: 0.5, ...(neon ? { emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.8 } : {}) }),
+      new THREE.MeshStandardMaterial({ map: tex, roughness: 0.5, ...(neon ? { emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.5 } : {}) }),
     );
     bar.position.y = WALL_H / 2 + 0.02;
     const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, WALL_H * 2, 16), new THREE.MeshStandardMaterial({ color: 0x3d3d5c, metalness: 0.4, roughness: 0.4 }));

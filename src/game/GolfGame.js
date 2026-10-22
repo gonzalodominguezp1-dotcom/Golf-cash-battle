@@ -118,8 +118,8 @@ export class GolfGame {
     this.theme = THEMES[course.theme] ?? THEMES.meadow;
     // de noche y en el volcán las luces mandan: más resplandor
     const glowy = this.theme.sunIntensity < 2 || this.theme.lava || this.theme.neon;
-    this.bloom.strength = glowy ? 0.75 : 0.4;
-    this.bloom.threshold = glowy ? 0.72 : 0.97;
+    this.bloom.strength = glowy ? 0.38 : 0.3;
+    this.bloom.threshold = glowy ? 0.8 : 0.97;
     this.#applyQuality();
     this.segs = segmentsOf(course);
     this.ball = { x: course.tee[0], z: course.tee[1], vx: 0, vz: 0 };
