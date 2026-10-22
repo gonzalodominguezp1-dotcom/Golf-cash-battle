@@ -47,3 +47,11 @@ test('desempate: gana quien queda más cerca del objetivo', () => {
   assert.equal(r.ranking[1].position, 2);
   assert.equal(r.ranking[1].payout, 0);
 });
+
+test('desempate en práctica: posición 1 para el más cercano aunque el payout sea 0', () => {
+  const practice = TIERS.find((t) => t.id === 'practice');
+  const r = settle(players([7, 7, 10, 8, 11, 12, 9, 10]), practice, { me: 0.4, p1: 1.2 });
+  assert.equal(r.ranking[0].id, 'me');
+  assert.equal(r.ranking[0].position, 1);
+  assert.equal(r.ranking[0].payout, 0);
+});

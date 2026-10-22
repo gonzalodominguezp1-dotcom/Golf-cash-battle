@@ -253,19 +253,20 @@ function createSkinInspector(container, initialSkin) {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.2;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  container.appendChild(renderer.domElement);
+  renderer.domElement.style.touchAction = 'none';
+  container.replaceChildren(renderer.domElement);
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 50);
-  camera.position.set(0, 0.32, 1.4);
-  camera.lookAt(0, 0.02, 0);
+  camera.position.set(0, 0, 1.35);
+  camera.lookAt(0, 0, 0);
 
   // Iluminación de estudio
-  scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+  scene.add(new THREE.AmbientLight(0xffffff, 0.85));
   const key = new THREE.DirectionalLight(0xfff7ed, 2.8);
   key.position.set(2.5, 3.5, 2.5);
   scene.add(key);
-  const fill = new THREE.DirectionalLight(0x7eaaff, 1.4);
+  const fill = new THREE.DirectionalLight(0x7eaaff, 1.5);
   fill.position.set(-2.8, -0.2, -1.5);
   scene.add(fill);
   const rim = new THREE.DirectionalLight(0xffffff, 2.2);
@@ -273,57 +274,16 @@ function createSkinInspector(container, initialSkin) {
   scene.add(rim);
 
   const rarityColor = RARITY_HEX[initialSkin.rarity] || 0xffd23f;
-  const underLight = new THREE.PointLight(rarityColor, 3.2, 3.0);
-  underLight.position.set(0, -0.38, 0.2);
+  const underLight = new THREE.PointLight(rarityColor, 2.5, 3.0);
+  underLight.position.set(0, -0.6, 0.3);
   scene.add(underLight);
 
-  // Bola 3D
+  // Bola 3D centrada
   const geo = new THREE.SphereGeometry(0.38, 64, 48);
   let currentMat = skinMaterial(initialSkin);
   const ballMesh = new THREE.Mesh(geo, currentMat);
-  ballMesh.position.y = 0.02;
+  ballMesh.position.set(0, 0, 0);
   scene.add(ballMesh);
-
-  // Pedestal reflectante de estudio
-  const pedGeo = new THREE.CylinderGeometry(0.55, 0.58, 0.035, 48);
-  const pedMat = new THREE.MeshStandardMaterial({
-    color: 0x150d26,
-    metalness: 0.85,
-    roughness: 0.18,
-  });
-  const pedMesh = new THREE.Mesh(pedGeo, pedMat);
-  pedMesh.position.y = -0.42;
-  scene.add(pedMesh);
-
-  // Anillo luminoso exterior del pedestal
-  const ringGeo = new THREE.RingGeometry(0.53, 0.57, 48);
-  const ringMat = new THREE.MeshBasicMaterial({
-    color: rarityColor,
-    side: THREE.DoubleSide,
-  });
-  const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-  ringMesh.rotation.x = -Math.PI / 2;
-  ringMesh.position.y = -0.401;
-  scene.add(ringMesh);
-
-  // Sombra suave proyectada sobre el pedestal
-  const sCanvas = document.createElement('canvas');
-  sCanvas.width = sCanvas.height = 128;
-  const sg = sCanvas.getContext('2d');
-  const rad = sg.createRadialGradient(64, 64, 0, 64, 64, 60);
-  rad.addColorStop(0, 'rgba(0,0,0,0.7)');
-  rad.addColorStop(0.5, 'rgba(0,0,0,0.25)');
-  rad.addColorStop(1, 'rgba(0,0,0,0)');
-  sg.fillStyle = rad;
-  sg.fillRect(0, 0, 128, 128);
-  const shadowTex = new THREE.CanvasTexture(sCanvas);
-  const shadowMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.95, 0.95),
-    new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, opacity: 0.8, depthWrite: false }),
-  );
-  shadowMesh.rotation.x = -Math.PI / 2;
-  shadowMesh.position.y = -0.399;
-  scene.add(shadowMesh);
 
   let rotX = 0.12, rotY = 0;
   let velX = 0, velY = 0.005;
@@ -382,10 +342,10 @@ function createSkinInspector(container, initialSkin) {
     setSkin(skin) {
       const oldMat = ballMesh.material;
       ballMesh.material = skinMaterial(skin);
+      oldMat?.map?.dispose();
       oldMat?.dispose();
       const col = RARITY_HEX[skin.rarity] || 0xffd23f;
       underLight.color.setHex(col);
-      ringMat.color.setHex(col);
     },
     destroy() {
       active = false;
@@ -395,13 +355,7 @@ function createSkinInspector(container, initialSkin) {
       window.removeEventListener('pointerup', onUp);
       renderer.dispose();
       geo.dispose();
-      pedGeo.dispose();
-      pedMat.dispose();
-      ringGeo.dispose();
-      ringMat.dispose();
-      shadowMesh.geometry.dispose();
-      shadowMesh.material.dispose();
-      shadowTex.dispose();
+      ballMesh.material?.map?.dispose();
       ballMesh.material?.dispose();
       renderer.domElement.remove();
     },
@@ -459,15 +413,26 @@ async function showSkins() {
   const inspectorRarity = view.querySelector('.badge-rarity');
   const inspectorBtn = view.querySelector('.skin-inspector-btn');
 
-  let inspector = null;
-  if (typeof window !== 'undefined' && window.innerWidth >= 900) {
-    inspector = createSkinInspector(inspectorCanvas, selectedSkin);
-    activeSkinInspector = inspector;
-  }
+  const updateEquippedUI = () => {
+    grid.querySelectorAll('.skin-card').forEach((btn) => {
+      const id = btn.dataset.skinId;
+      const isEq = progress.skin.id === id;
+      btn.classList.toggle('equipped', isEq);
+      const small = btn.querySelector('small:not(.req)');
+      if (small) small.textContent = isEq ? 'Equipada' : 'Toca para equipar';
+    });
+  };
+
+  const updateSelectedCardUI = (selectedId) => {
+    grid.querySelectorAll('.skin-card').forEach((btn) => {
+      btn.classList.toggle('selected', btn.dataset.skinId === selectedId);
+    });
+  };
 
   const updateInspector = (s) => {
     selectedSkin = s;
-    if (inspector) inspector.setSkin(s);
+    updateSelectedCardUI(s.id);
+    if (activeSkinInspector) activeSkinInspector.setSkin(s);
     inspectorName.textContent = s.name;
     inspectorRarity.textContent = RARITIES[s.rarity].name;
     inspectorRarity.className = `rarity badge-rarity rarity-${s.rarity}`;
@@ -487,7 +452,11 @@ async function showSkins() {
   };
 
   inspectorBtn.addEventListener('click', () => {
-    if (progress.equip(selectedSkin.id)) showSkins();
+    const req = progress.requirement(selectedSkin);
+    if (req.ratio >= 1 && progress.equip(selectedSkin.id)) {
+      updateEquippedUI();
+      updateInspector(selectedSkin);
+    }
   });
 
   const order = [...SKINS].sort((a, b) => RARITIES[a.rarity].order - RARITIES[b.rarity].order);
@@ -495,8 +464,9 @@ async function showSkins() {
     const req = progress.requirement(skin);
     const open = req.ratio >= 1;
     const equipped = progress.skin.id === skin.id;
+    const isSelected = selectedSkin.id === skin.id;
     const card = h(`
-      <button class="skin-card holo rarity-${skin.rarity} ${open ? '' : 'locked'} ${equipped ? 'equipped' : ''}">
+      <button class="skin-card holo rarity-${skin.rarity} ${open ? '' : 'locked'} ${equipped ? 'equipped' : ''} ${isSelected ? 'selected' : ''}" data-skin-id="${skin.id}">
         <div class="shine"></div>
         <span class="rarity">${RARITIES[skin.rarity].name}</span>
         ${ball(skin, 76, open ? 'float' : '')}
@@ -507,14 +477,46 @@ async function showSkins() {
             : `<small class="req">🔒 ${req.text}</small><span class="bar"><i style="width:${req.ratio * 100}%"></i></span>`
         }
       </button>`);
-    card.addEventListener('mouseenter', () => updateInspector(skin));
     card.addEventListener('click', () => {
       updateInspector(skin);
-      if (progress.equip(skin.id)) showSkins();
+      if (open) {
+        if (progress.equip(skin.id)) {
+          updateEquippedUI();
+          updateInspector(skin);
+        }
+      }
     });
     grid.append(card);
   }
+
   await shell(view);
+
+  let inspector = null;
+  const syncInspector = () => {
+    if (typeof window !== 'undefined' && window.innerWidth >= 900) {
+      if (!inspector) {
+        inspector = createSkinInspector(inspectorCanvas, selectedSkin);
+      }
+    } else if (inspector) {
+      inspector.destroy();
+      inspector = null;
+    }
+  };
+
+  syncInspector();
+  window.addEventListener('resize', syncInspector);
+
+  activeSkinInspector = {
+    setSkin(skin) {
+      selectedSkin = skin;
+      inspector?.setSkin(skin);
+    },
+    destroy() {
+      window.removeEventListener('resize', syncInspector);
+      inspector?.destroy();
+      inspector = null;
+    },
+  };
 }
 
 // ---------- cuenta ----------
@@ -1410,7 +1412,7 @@ async function showResults(match, tiebreak = {}) {
   } catch {
     return alertMsg('No se ha podido cerrar la partida. Prueba otra vez.');
   }
-  const won = result.me.payout > 0;
+  const won = result.me.position === 1 || result.me.payout > 0;
   const tiebreakWon = won && tiebreak.me !== undefined;
   const gained = progress.recordMatch({ position: result.me.position, won, entryFee: match.tier.entryFee, holes: match.myHoles.filter(Boolean), tiebreakWon });
   const levelUp = gained.level.level > gained.levelBefore;
@@ -1621,7 +1623,7 @@ function recordOnce(match) {
     localStorage.setItem(KEY, JSON.stringify([match.id, ...seen].slice(0, 50)));
   } catch {}
   const me = match.me;
-  const won = me.payout > 0;
+  const won = me.position === 1 || me.payout > 0;
   const leaders = match.players.filter((p) => p.total === me.total).length;
   return progress.recordMatch({
     position: me.position ?? match.players.length,
@@ -1641,7 +1643,7 @@ async function showOnlineResults(match) {
   const { me, tier } = match;
   const open = match.status === 'open';
   const cancelled = match.status === 'cancelled';
-  const won = !open && me.payout > 0;
+  const won = !open && (me.position === 1 || me.payout > 0);
   const waiting = match.players.filter((p) => !p.finished).length;
   const gained = match.status === 'settled' ? recordOnce(match) : null;
   const ranking = [...match.players].sort((a, b) => (a.position ?? 99) - (b.position ?? 99) || (a.total ?? 999) - (b.total ?? 999));

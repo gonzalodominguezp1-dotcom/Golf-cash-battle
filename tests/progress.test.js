@@ -22,6 +22,16 @@ test('ganar desbloquea skins y no se puede equipar una bloqueada', () => {
   assert.equal(p.skin.id, 'champ');
 });
 
+test('ganar un desempate en práctica desbloquea el desafío y la skin Sangre fría', () => {
+  const p = new Progress(null);
+  assert.equal(p.challenge('tiebreak').done, false);
+  const r = p.recordMatch({ position: 1, won: true, entryFee: 0, holes: [{ strokes: 2, par: 3 }], tiebreakWon: true });
+  assert.equal(p.state.tiebreakWins, 1);
+  assert.equal(p.challenge('tiebreak').done, true);
+  assert.ok(r.newSkins.some((s) => s.id === 'ice'));
+  assert.equal(p.equip('ice'), true);
+});
+
 test('hoyo de desempate: la bola nunca entra y el bot tira una sola vez', () => {
   const segs = segmentsOf(TIEBREAK_COURSE);
   const ball = { x: 0, z: -6, vx: 0, vz: -0.5 };
