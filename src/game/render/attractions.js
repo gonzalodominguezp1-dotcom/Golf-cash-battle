@@ -12,7 +12,9 @@ export function attractionStyle(theme) {
   return { kind: 'day', colors: [0xff5a4e, 0x3d8bff, 0xffc145] };
 }
 
-const glowMat = (color, intensity = 1.6) => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: intensity, roughness: 0.35 });
+// GLOW baja todos los neones a la vez (al 60 %: con el resplandor deslumbraban)
+const GLOW = 0.6;
+const glowMat = (color, intensity = 1.6) => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: intensity * GLOW, roughness: 0.35 });
 
 /** Looping: carril que da una vuelta completa, con raíles y columnas. */
 export function buildLoop(scene, loop, style, i = 0) {
