@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { BALL_R, CUP_R, WALL_HALF, moverPos, segmentsOf } from '../physics.js';
-import { chevronTexture, crateTexture, dirtTexture, grassTexture, sandTexture, slopeArrowTexture, slopeShadeTexture, stripeTexture, swirlTexture, woodTexture } from './textures.js';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { chevronTexture, crateTexture, dirtMaps, grassMaps, sandMaps, slopeArrowTexture, slopeShadeTexture, softDotTexture, stripeTexture, swirlTexture, woodMaps } from './textures.js';
 import { groundHeight, hasRelief } from './terrain.js';
 import { attractionStyle, buildLoop, buildTube, buildTunnel, buildWindmill, neonGridTexture } from './attractions.js';
 
@@ -39,15 +41,16 @@ export function buildCourse(scene, course, theme) {
   const geo = new THREE.ExtrudeGeometry(shape, { depth: PLATFORM_DEPTH, bevelEnabled: false, curveSegments: 32 });
   geo.rotateX(-Math.PI / 2);
   geo.translate(0, -PLATFORM_DEPTH, 0);
-  const grass = neon ? neonGridTexture(theme.grass, '#' + new THREE.Color(neon[0]).getHexString()) : grassTexture(theme.grass);
+  const grassM = neon ? { map: neonGridTexture(theme.grass, '#' + new THREE.Color(neon[0]).getHexString()) } : grassMaps(theme.grass);
+  const grass = grassM.map;
   grass.repeat.set(0.5, 0.5);
-  const dirt = dirtTexture();
-  dirt.repeat.set(0.5, 1 / PLATFORM_DEPTH);
-  dirt.offset.y = 0;
+  // lateral de la maqueta: corte de terreno con capas de tierra y roca
+  const dirtM = dirtMaps(!!neon);
+  dirtM.map.repeat.set(0.5, 1 / PLATFORM_DEPTH);
   const grassMat = neon
     ? new THREE.MeshStandardMaterial({ map: grass, emissiveMap: grass, emissive: 0xffffff, emissiveIntensity: 0.35, roughness: 0.6, metalness: 0.2 })
-    : new THREE.MeshStandardMaterial({ map: grass, roughness: 0.95 });
-  const platform = new THREE.Mesh(geo, [grassMat, new THREE.MeshStandardMaterial({ map: dirt, roughness: 1, color: neon ? 0x3a2a5a : 0xffffff })]);
+    : new THREE.MeshStandardMaterial({ map: grass, normalMap: grassM.normalMap, normalScale: new THREE.Vector2(0.6, 0.6), roughness: 0.92 });
+  const platform = new THREE.Mesh(geo, [grassMat, new THREE.MeshStandardMaterial({ ...dirtM, roughness: 1 })]);
   platform.receiveShadow = true;
   scene.add(platform);
   if (relief) {
@@ -76,17 +79,17 @@ export function buildCourse(scene, course, theme) {
   else if (relief && !course.noCup) scene.add(cupCollar(hx, hz, hc, grassMat));
 
   // arena con bordes redondeados
-  const sandTex = sandTexture();
+  const sandM = course.sand.length ? sandMaps() : null;
+  if (sandM) sandM.map.repeat.set(0.6, 0.6);
+  const sandMat = sandM && new THREE.MeshStandardMaterial({ ...sandM, roughness: 1 });
   for (const s of course.sand) {
     const r = Math.min(s.w, s.d) * 0.35;
     const sh = roundedRect(s.w, s.d, r);
-    const tex = sandTex.clone();
-    tex.repeat.set(0.6, 0.6);
-    const m = new THREE.Mesh(new THREE.ShapeGeometry(sh, 8), new THREE.MeshStandardMaterial({ map: tex, roughness: 1 }));
+    const m = new THREE.Mesh(new THREE.ShapeGeometry(sh, 12), sandMat);
     m.rotation.x = -Math.PI / 2;
     m.position.set(s.x, lift(s.x, s.z) + 0.004, s.z);
     m.receiveShadow = true;
-    const edge = new THREE.Mesh(new THREE.ShapeGeometry(roundedRect(s.w + 0.14, s.d + 0.14, r + 0.07), 8), new THREE.MeshStandardMaterial({ color: 0xc9a861 }));
+    const edge = new THREE.Mesh(new THREE.ShapeGeometry(roundedRect(s.w + 0.14, s.d + 0.14, r + 0.07), 12), sandEdgeMat);
     edge.rotation.x = -Math.PI / 2;
     edge.position.set(s.x, lift(s.x, s.z) + 0.003, s.z);
     scene.add(edge, m);
@@ -95,26 +98,39 @@ export function buildCourse(scene, course, theme) {
   // paredes de madera (en neón: oscuras con una línea de luz arriba)
   const night = !!theme.rim && theme.sunIntensity < 2;
   let segIndex = 0;
-  const wood = woodTexture();
+  const wood = woodMaps();
   const walls = [];
+  const aoStrips = [];
   segmentsOf(course).forEach(([[ax, az], [bx, bz]], i) => {
     // materiales propios para poder transparentar la pared que tapa la bola
     const wallMat = neon
       ? new THREE.MeshStandardMaterial({ color: 0x0d0c1c, roughness: 0.4, metalness: 0.5, transparent: true })
-      : new THREE.MeshStandardMaterial({ map: wood, roughness: 0.8, transparent: true });
+      : new THREE.MeshStandardMaterial({ ...wood, roughness: 0.75, transparent: true });
     const capMat = neon
       ? new THREE.MeshStandardMaterial({ color: neonColor(i), emissive: neonColor(i), emissiveIntensity: 1.8, roughness: 0.3, transparent: true })
-      : new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5, transparent: true });
+      : new THREE.MeshStandardMaterial({ color: 0xeeeeea, roughness: 0.75, envMapIntensity: 0.4, transparent: true });
     // de noche el remate de las paredes es una tira de luz del color del contraluz
     if (night && !neon) capMat.color.setHex(0x2a2a3a), capMat.emissive.setHex(theme.rim[segIndex++ % 2]), (capMat.emissiveIntensity = 0.4);
     walls.push({ a: [ax, az], b: [bx, bz], mats: [wallMat, capMat], opacity: 1 });
     const len = Math.hypot(bx - ax, bz - az) + WALL_HALF * 2;
     const segs = relief ? Math.max(1, Math.ceil(len / 0.2)) : 1;
-    const bodyGeo = new THREE.BoxGeometry(len, WALL_H, WALL_HALF * 2, segs);
+    // sin relieve las paredes llevan los cantos redondeados (con relieve hace
+    // falta una caja troceada a lo largo para seguir el césped)
+    const bodyGeo = relief ? new THREE.BoxGeometry(len, WALL_H, WALL_HALF * 2, segs) : new RoundedBoxGeometry(len, WALL_H, WALL_HALF * 2, 2, 0.03);
     scaleUV(bodyGeo, len / 1.5, 1);
     bodyGeo.translate(0, WALL_H / 2, 0);
-    const capGeo = new THREE.BoxGeometry(len + 0.02, 0.05, WALL_HALF * 2 + 0.04, segs);
+    const capGeo = relief ? new THREE.BoxGeometry(len + 0.02, 0.05, WALL_HALF * 2 + 0.04, segs) : new RoundedBoxGeometry(len + 0.02, 0.06, WALL_HALF * 2 + 0.04, 2, 0.025);
     capGeo.translate(0, WALL_H + 0.02, 0);
+    // sombra de contacto: una franja oscura y difuminada al pie de la pared
+    const ao = new THREE.PlaneGeometry(len, WALL_HALF * 2 + 0.5, relief ? segs : 1, 1);
+    ao.rotateX(-Math.PI / 2);
+    ao.rotateY(-Math.atan2(bz - az, bx - ax));
+    ao.translate((ax + bx) / 2, 0.006, (az + bz) / 2);
+    if (relief) {
+      const p = ao.attributes.position;
+      for (let k = 0; k < p.count; k++) p.setY(k, p.getY(k) + lift(p.getX(k), p.getZ(k)));
+    }
+    aoStrips.push(ao);
     // se colocan en el mundo y siguen el relieve a lo largo de la pared: la base
     // se queda abajo (muro de contención) y la parte de arriba sube con el césped
     const rot = -Math.atan2(bz - az, bx - ax);
@@ -138,6 +154,12 @@ export function buildCourse(scene, course, theme) {
     body.castShadow = body.receiveShadow = cap.castShadow = true;
     scene.add(body, cap);
   });
+  if (aoStrips.length && !neon) {
+    const aoMesh = new THREE.Mesh(mergeGeometries(aoStrips), new THREE.MeshBasicMaterial({ map: aoStripTexture(), color: 0x000000, transparent: true, opacity: night ? 0.5 : 0.32, depthWrite: false }));
+    aoMesh.renderOrder = 1;
+    scene.add(aoMesh);
+  }
+
   // postes en las esquinas
   const postMat = neon ? new THREE.MeshStandardMaterial({ color: 0x1a1830, roughness: 0.3, metalness: 0.6 }) : new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.4 });
   const corners = new Set();
@@ -147,11 +169,11 @@ export function buildCourse(scene, course, theme) {
   for (const k of corners) {
     const [x, z] = k.split(',').map(Number);
     const h = lift(x, z);
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(WALL_HALF * 1.25, WALL_HALF * 1.25, WALL_H + 0.12 + h, 12), postMat);
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(WALL_HALF * 1.25, WALL_HALF * 1.3, WALL_H + 0.12 + h, 20), postMat);
     post.position.set(x, (WALL_H + 0.12 + h) / 2, z);
     post.castShadow = true;
     const ball = new THREE.Mesh(
-      new THREE.SphereGeometry(WALL_HALF * 1.1, 12, 8),
+      new THREE.SphereGeometry(WALL_HALF * 1.1, 20, 14),
       neon ? glowMat(neonColor(corner++)) : new THREE.MeshStandardMaterial({ color: 0xff5a4e, emissive: 0xff3a2e, emissiveIntensity: night ? 1.4 : 0.15 }),
     );
     ball.position.set(x, h + WALL_H + 0.17, z);
@@ -163,27 +185,34 @@ export function buildCourse(scene, course, theme) {
   const bumpers = course.bumpers.map((b, i) => {
     const g = new THREE.Group();
     const color = BUMPER_COLORS[i % BUMPER_COLORS.length];
-    const stem = new THREE.Mesh(new THREE.CylinderGeometry(b.r, b.r * 1.05, 0.3, 24), new THREE.MeshStandardMaterial({ color: 0xfff3dc, roughness: 0.7 }));
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(b.r, b.r * 1.05, 0.3, 32), new THREE.MeshStandardMaterial({ color: 0xfff3dc, roughness: 0.7 }));
     stem.position.y = 0.15;
     const top = new THREE.Mesh(
-      new THREE.SphereGeometry(b.r * 1.25, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+      new THREE.SphereGeometry(b.r * 1.25, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2),
       neon ? new THREE.MeshStandardMaterial({ color: neonColor(i), emissive: neonColor(i), emissiveIntensity: 0.9, roughness: 0.3 }) : new THREE.MeshStandardMaterial({ color, roughness: 0.3, emissive: color, emissiveIntensity: night ? 0.45 : 0.08 }),
     );
     top.scale.y = 0.6;
     top.position.y = 0.3;
     outline(top, 0.03);
     outline(stem, 0.03);
-    const dots = new THREE.Group();
+    // lunares de la seta en una sola malla
+    const dotGeos = [];
     for (let k = 0; k < 5; k++) {
-      const d = new THREE.Mesh(new THREE.SphereGeometry(b.r * 0.18, 8, 6), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: night ? 1.2 : 0.2 }));
+      const d = new THREE.SphereGeometry(b.r * 0.18, 10, 6);
       const a = (k / 5) * Math.PI * 2;
-      d.position.set(Math.cos(a) * b.r * 0.75, 0.3 + b.r * 0.42, Math.sin(a) * b.r * 0.75);
-      d.scale.y = 0.5;
-      dots.add(d);
+      d.scale(1, 0.5, 1);
+      d.translate(Math.cos(a) * b.r * 0.75, 0.3 + b.r * 0.42, Math.sin(a) * b.r * 0.75);
+      dotGeos.push(d);
     }
-    g.add(stem, top, dots);
+    const dots = new THREE.Mesh(mergeGeometries(dotGeos), dotMat(night));
+    // sombra de contacto suave bajo la seta
+    const contact = new THREE.Mesh(new THREE.PlaneGeometry(b.r * 3.6, b.r * 3.6), contactMat);
+    contact.rotation.x = -Math.PI / 2;
+    contact.position.y = 0.007;
+    contact.userData.noShadow = true;
+    g.add(stem, top, dots, contact);
     g.position.set(b.x, lift(b.x, b.z), b.z);
-    g.traverse((o) => o.isMesh && (o.castShadow = true));
+    g.traverse((o) => o.isMesh && !o.userData.noShadow && (o.castShadow = true));
     scene.add(g);
     return g;
   });
@@ -325,15 +354,18 @@ export function buildCourse(scene, course, theme) {
       cloth.position.y = pole.position.y + 0.83;
       // un poste pegado a la cámara taparía media pantalla
       for (const p of posts) {
-        const near = Math.hypot(cameraPos.x - p.x, cameraPos.z - p.z) < 1.3;
+        const near = Math.hypot(cameraPos.x - p.x, cameraPos.z - p.z) < 1.8;
         p.meshes.forEach((m) => (m.visible = !near));
       }
       for (const w of walls) {
         const blocks = crosses(cameraPos.x, cameraPos.z, ballPos.x, ballPos.z, w.a, w.b);
-        w.opacity += ((blocks ? 0.18 : 1) - w.opacity) * 0.2;
+        // la pared que tapa la bola desaparece del todo (medio transparente dejaba
+        // una franja blanquecina abajo de la pantalla)
+        w.opacity += ((blocks ? 0 : 1) - w.opacity) * 0.2;
         for (const m of w.mats) {
           m.opacity = w.opacity;
           m.depthWrite = w.opacity > 0.95;
+          m.visible = w.opacity > 0.03;
         }
       }
       bumpers.forEach((b) => b.scale.setScalar(1 + (b.userData.squash ?? 0)));
@@ -550,6 +582,26 @@ function roundedRect(w, d, r) {
 function scaleUV(geo, su, sv) {
   const uv = geo.attributes.uv;
   for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * su, uv.getY(i) * sv);
+}
+
+const sandEdgeMat = new THREE.MeshStandardMaterial({ color: 0xc9a861, roughness: 1 });
+const contactMat = new THREE.MeshBasicMaterial({ map: softDotTexture(), color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false });
+const dotMats = {};
+const dotMat = (night) => (dotMats[night] ??= new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: night ? 1.2 : 0.2 }));
+
+/** Degradado transversal: oscuro en el centro (bajo la pared) y transparente a los lados. */
+function aoStripTexture() {
+  const c = document.createElement('canvas');
+  c.width = 4;
+  c.height = 64;
+  const g = c.getContext('2d');
+  const grd = g.createLinearGradient(0, 0, 0, 64);
+  grd.addColorStop(0, 'rgba(255,255,255,0)');
+  grd.addColorStop(0.5, 'rgba(255,255,255,1)');
+  grd.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grd;
+  g.fillRect(0, 0, 4, 64);
+  return new THREE.CanvasTexture(c);
 }
 
 export { BALL_R };

@@ -1,5 +1,11 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { softDotTexture } from './textures.js';
+import { addWind, bakeStatic } from './batch.js';
+import { quality } from './quality.js';
+
+// tiempo compartido por los sombreadores animados (viento, agua)
+const windUniforms = { uTime: { value: 0 } };
 
 // Cielo, terreno, agua y decorado low-poly alrededor del hoyo.
 
@@ -28,7 +34,10 @@ function distToBounds(b, x, z) {
 
 export function buildEnvironment(scene, course, theme, rng) {
   const bounds = courseBounds(course);
-  const animated = [];
+  const animated = [(t) => (windUniforms.uTime.value = t)];
+  const q = quality();
+  // todo lo que no se mueve va aquí y al final se junta en pocas mallas
+  const decor = new THREE.Group();
 
   // --- cielo con degradado y sol ---
   const sunDir = new THREE.Vector3(...theme.sunDir).normalize();
@@ -61,13 +70,13 @@ export function buildEnvironment(scene, course, theme, rng) {
   // --- luces ---
   scene.add(new THREE.HemisphereLight(theme.skyHorizon, theme.groundMid, theme.ambient));
   const sun = new THREE.DirectionalLight(theme.sunColor, theme.sunIntensity);
-  sun.castShadow = true;
-  const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 900 && (window.matchMedia?.('(pointer: fine)').matches ?? true);
-  const shadowRes = isDesktop ? 4096 : 2048;
-  sun.shadow.mapSize.set(shadowRes, shadowRes);
+  sun.castShadow = q.shadows;
+  sun.shadow.mapSize.set(q.shadowRes, q.shadowRes);
   sun.shadow.bias = -0.0005;
   sun.shadow.normalBias = 0.02;
-  Object.assign(sun.shadow.camera, { left: -12, right: 12, top: 12, bottom: -12, near: 1, far: 80 });
+  // la sombra cubre el hoyo entero (y no más: cuanto más ajustada, más nítida)
+  const half = Math.max(8, Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ) * 0.6 + 2);
+  Object.assign(sun.shadow.camera, { left: -half, right: half, top: half, bottom: -half, near: 1, far: 80 });
   scene.add(sun, sun.target);
   // contraluces de color a ambos lados: dan los bordes rosa/cian que hacen vibrar la escena
   if (theme.rim) {
@@ -79,9 +88,9 @@ export function buildEnvironment(scene, course, theme, rng) {
     });
   }
 
-  // --- terreno low-poly ---
+  // --- terreno: colinas suaves con color por altura ---
   const size = 220, seg = 110;
-  const geo = new THREE.PlaneGeometry(size, size, seg, seg).toNonIndexed();
+  const geo = new THREE.PlaneGeometry(size, size, seg, seg);
   geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position;
   const heightAt = (x, z) => {
@@ -93,46 +102,39 @@ export function buildEnvironment(scene, course, theme, rng) {
   const colors = new Float32Array(pos.count * 3);
   const low = new THREE.Color(theme.groundLow), mid = new THREE.Color(theme.groundMid), high = new THREE.Color(theme.groundHigh);
   const c = new THREE.Color();
-  for (let i = 0; i < pos.count; i += 3) {
-    const y = (pos.getY(i) + pos.getY(i + 1) + pos.getY(i + 2)) / 3;
-    if (y < theme.waterLevel + 0.35) c.copy(low);
-    else if (y < 2.5) c.copy(mid).lerp(high, THREE.MathUtils.clamp((y - 0.5) / 3, 0, 1));
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    // la orilla pasa a arena con un degradado, no de golpe
+    const shore = THREE.MathUtils.smoothstep(y, theme.waterLevel + 0.2, theme.waterLevel + 0.7);
+    if (y < 2.5) c.copy(mid).lerp(high, THREE.MathUtils.clamp((y - 0.5) / 3, 0, 1));
     else c.copy(high).lerp(new THREE.Color(0x8a8f86), THREE.MathUtils.clamp((y - 4) / 4, 0, 0.7));
-    c.offsetHSL(0, 0, (hash(i, 3) - 0.5) * 0.04);
-    for (let k = 0; k < 3; k++) c.toArray(colors, (i + k) * 3);
+    c.lerp(low, 1 - shore);
+    // manchas grandes y suaves: prados más claros y más oscuros
+    c.offsetHSL(0, 0, (noise(x * 0.15 + 3, z * 0.15) - 0.5) * 0.08 + (hash(x, z) - 0.5) * 0.015);
+    c.toArray(colors, i * 3);
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geo.computeVertexNormals();
-  const terrain = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+  const terrain = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
   terrain.receiveShadow = true;
   scene.add(terrain);
 
   // --- agua ---
-  const waterGeo = new THREE.PlaneGeometry(size, size, 60, 60);
+  // las olas se mueven en la tarjeta gráfica (antes se recalculaban en el procesador)
+  const waterGeo = new THREE.PlaneGeometry(size, size, 90, 90);
   waterGeo.rotateX(-Math.PI / 2);
-  const water = new THREE.Mesh(
-    waterGeo,
-    theme.lava
-      ? new THREE.MeshPhongMaterial({ color: theme.water, emissive: 0xff3a0a, emissiveIntensity: 0.9, shininess: 30, flatShading: true })
-      : new THREE.MeshPhongMaterial({ color: theme.water ?? 0x2bb3e6, shininess: 90, specular: 0xffffff, transparent: true, opacity: 0.85, flatShading: true }),
-  );
+  const waterMat = theme.lava
+    ? new THREE.MeshPhongMaterial({ color: theme.water, emissive: 0xff3a0a, emissiveIntensity: 0.9, shininess: 30, flatShading: true })
+    : new THREE.MeshPhongMaterial({ color: theme.water ?? 0x2bb3e6, shininess: 110, specular: 0xffffff, transparent: true, opacity: 0.86, flatShading: true });
+  waterShader(waterMat, theme);
+  const water = new THREE.Mesh(waterGeo, waterMat);
   water.position.y = theme.waterLevel;
   scene.add(water);
   if (theme.lava) animated.push((t) => (water.material.emissiveIntensity = 0.9 + Math.sin(t * 1.7) * 0.25));
-  const base = Float32Array.from(waterGeo.attributes.position.array);
-  animated.push((t) => {
-    const p = waterGeo.attributes.position;
-    for (let i = 0; i < p.count; i++) {
-      const x = base[i * 3], z = base[i * 3 + 2];
-      p.setY(i, Math.sin(x * 0.35 + t * 1.3) * 0.08 + Math.cos(z * 0.4 + t * 1.1) * 0.08);
-    }
-    p.needsUpdate = true;
-    waterGeo.computeVertexNormals();
-  });
 
   // --- decorado ---
   const place = (minD, maxD, tries, fn) => {
-    for (let i = 0; i < tries; i++) {
+    for (let i = 0; i < Math.round(tries * q.decor); i++) {
       const x = (bounds.minX + bounds.maxX) / 2 + (rng() - 0.5) * 2 * (maxD + 8);
       const z = (bounds.minZ + bounds.maxZ) / 2 + (rng() - 0.5) * 2 * (maxD + 12);
       const d = distToBounds(bounds, x, z);
@@ -141,30 +143,26 @@ export function buildEnvironment(scene, course, theme, rng) {
       fn(x, y, z, d);
     }
   };
-  const leaves = theme.leaves?.map((color) => new THREE.MeshLambertMaterial({ color, flatShading: true }));
-  const trees = [];
+  const leaves = theme.leaves?.map((color) => addWind(new THREE.MeshLambertMaterial({ color, flatShading: true }), windUniforms, WIND));
   place(2.2, 40, 140, (x, y, z) => {
     const tree = makeTree(theme.trees[Math.floor(rng() * theme.trees.length)], rng, x, y, z, leaves);
-    tree.userData.phase = rng() * 6.28;
-    trees.push(tree);
-    scene.add(tree);
+    // los árboles se mecen con el viento (en el sombreador, ver addWind)
+    tree.userData.swayRoot = true;
+    decor.add(tree);
   });
-  // los árboles se mecen un poco con el viento
-  animated.push((t) => {
-    for (const tr of trees) tr.rotation.z = Math.sin(t * 1.1 + tr.userData.phase) * 0.025;
-  });
-  place(1.8, 30, 40, (x, y, z) => scene.add(makeRock(rng, x, y, z)));
-  if (theme.flowers) place(1.2, 12, 70, (x, y, z) => scene.add(makeFlower(rng, x, y, z)));
+  place(1.8, 30, 40, (x, y, z) => decor.add(makeRock(rng, x, y, z)));
+  if (theme.flowers) place(1.2, 12, 110, (x, y, z) => decor.add(makeFlower(rng, x, y, z)));
+  place(1, 14, 90, (x, y, z) => decor.add(makeTuft(rng, x, y, z, theme)));
   if (theme.lanterns) {
     // farolillos alrededor de la pista; solo unos pocos llevan luz real (cada luz cuesta en el móvil)
     const spots = theme.lanterns === 'many' ? perimeterSpots(course, 1.3, 3.2) : [];
     if (!spots.length) place(1.2, 3, 30, (x, y, z) => spots.length < 4 && spots.push([x, z]));
     const lamps = spots.map(([x, z], i) => {
       const lamp = theme.torches && i % 2 ? makeTorch(x, heightAt(x, z), z, i < 6) : makeLantern(x, heightAt(x, z), z, i, i < 6);
-      scene.add(lamp);
+      decor.add(lamp);
       return lamp;
     });
-    if (theme.festoon) scene.add(festoon(lamps));
+    if (theme.festoon) decor.add(festoon(lamps));
     animated.push((t) => {
       for (const l of lamps) {
         const f = 1 + Math.sin(t * 9 + l.userData.phase) * 0.06 + Math.sin(t * 23 + l.userData.phase * 3) * 0.04;
@@ -177,17 +175,21 @@ export function buildEnvironment(scene, course, theme, rng) {
   if (theme.lava) volcanoBackdrop(scene, course, bounds, heightAt, animated, rng);
 
   // --- nubes ---
-  const cloudMat = new THREE.MeshLambertMaterial({ color: theme.clouds, flatShading: true, emissive: theme.clouds, emissiveIntensity: 0.25 });
+  // nubes de algodón: varias bolas redondas juntadas en una sola malla por nube
+  const cloudMat = new THREE.MeshLambertMaterial({ color: theme.clouds, emissive: theme.clouds, emissiveIntensity: 0.3 });
   const clouds = [];
   for (let i = 0; i < 12; i++) {
-    const g = new THREE.Group();
     const n = 3 + Math.floor(rng() * 4);
+    const parts = [];
     for (let k = 0; k < n; k++) {
-      const m = new THREE.Mesh(new THREE.IcosahedronGeometry(1.5 + rng() * 2, 0), cloudMat);
-      m.position.set(k * 2 - n, rng() * 1, rng() * 1.5);
-      m.scale.y = 0.6;
-      g.add(m);
+      const r = 1.5 + rng() * 2;
+      const geo = new THREE.IcosahedronGeometry(r, 2);
+      geo.scale(1, 0.62, 1);
+      // la parte central más alta: forma de cúmulo
+      geo.translate(k * 2 - n, rng() * 1 + (k > 0 && k < n - 1 ? 0.6 : 0), rng() * 1.5);
+      parts.push(geo);
     }
+    const g = new THREE.Mesh(mergeGeometries(parts), cloudMat);
     const a = rng() * Math.PI * 2, r = 50 + rng() * 60;
     g.position.set(Math.cos(a) * r, 18 + rng() * 22, Math.sin(a) * r);
     g.userData.speed = 0.4 + rng() * 0.6;
@@ -246,12 +248,48 @@ export function buildEnvironment(scene, course, theme, rng) {
     });
   }
 
+  bakeStatic(decor, scene);
   return { sun, sunDir, update: (t, dt) => animated.forEach((f) => f(t, dt)) };
 }
 
-const leafMats = [0x2f9e44, 0x3bb54a, 0x25803a, 0x4cc25a].map((color) => new THREE.MeshLambertMaterial({ color, flatShading: true }));
+const WIND = 0.025;
+
+/**
+ * Olas en el sombreador: el agua sube y baja con dos ondas cruzadas y una
+ * franja de espuma clara donde toca la orilla (agua poco profunda = cerca de
+ * la costa, que aquí se aproxima con el ruido de las olas).
+ */
+function waterShader(material, theme) {
+  material.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = windUniforms.uTime;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform float uTime;\nvarying float vWave;')
+      .replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        float w1 = sin(position.x * 0.35 + uTime * 1.3) * 0.08;
+        float w2 = cos(position.z * 0.4 + uTime * 1.1) * 0.08;
+        float w3 = sin((position.x + position.z) * 0.9 + uTime * 2.1) * 0.025;
+        transformed.y += w1 + w2 + w3;
+        vWave = (w1 + w2 + w3) * 5.0;`,
+      );
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vWave;')
+      .replace(
+        '#include <dithering_fragment>',
+        `#include <dithering_fragment>
+        // crestas más claras
+        gl_FragColor.rgb += vec3(${theme.lava ? '0.25, 0.08, 0.0' : '0.12, 0.16, 0.18'}) * smoothstep(0.35, 0.8, vWave);`,
+      );
+  };
+  material.customProgramCacheKey = () => 'water' + (theme.lava ? 'lava' : '');
+}
+
+const leafMats = [0x2f9e44, 0x3bb54a, 0x25803a, 0x4cc25a].map((color) => addWind(new THREE.MeshLambertMaterial({ color, flatShading: true }), windUniforms, WIND));
 const trunkMat = new THREE.MeshLambertMaterial({ color: 0x8b5a2b, flatShading: true });
-const snowMat = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true });
+const snowMat = addWind(new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }), windUniforms, WIND);
+const frondMat = addWind(new THREE.MeshLambertMaterial({ color: 0x3bb54a, side: THREE.DoubleSide, flatShading: true }), windUniforms, WIND * 1.6);
+const cocoMat = new THREE.MeshLambertMaterial({ color: 0x6b4423, flatShading: true });
 const cactusMat = new THREE.MeshLambertMaterial({ color: 0x4f9e3c, flatShading: true });
 const deadMat = new THREE.MeshLambertMaterial({ color: 0x3a2a26, flatShading: true });
 const mesaMat = new THREE.MeshLambertMaterial({ color: 0xb8653a, flatShading: true });
@@ -268,61 +306,64 @@ function makeTree(kind, rng, x, y, z, leaves = leafMats) {
   const s = 0.8 + rng() * 0.9;
   const leaf = leaves[Math.floor(rng() * leaves.length)];
   if (kind === 'pine') {
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 0.8, 6), trunkMat);
-    trunk.position.y = 0.4;
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.18, 0.9, 8), trunkMat);
+    trunk.position.y = 0.45;
     g.add(trunk);
-    for (let i = 0; i < 3; i++) {
-      const cone = new THREE.Mesh(new THREE.ConeGeometry(1 - i * 0.25, 1.1, 7), leaf);
-      cone.position.y = 1 + i * 0.6;
+    // cuatro pisos de ramas con el borde dentado
+    for (let i = 0; i < 4; i++) {
+      const cone = new THREE.Mesh(jaggedCone(1.05 - i * 0.22, 0.95, 12, rng), leaf);
+      cone.position.y = 0.95 + i * 0.48;
+      cone.rotation.y = rng() * 6;
       g.add(cone);
     }
   } else if (kind === 'palm') {
     let py = 0, px = 0;
     const lean = (rng() - 0.5) * 0.25;
     for (let i = 0; i < 6; i++) {
-      const seg = new THREE.Mesh(new THREE.CylinderGeometry(0.11 - i * 0.008, 0.14 - i * 0.008, 0.5, 6), trunkMat);
+      const seg = new THREE.Mesh(new THREE.CylinderGeometry(0.11 - i * 0.008, 0.14 - i * 0.008, 0.5, 8), trunkMat);
       seg.position.set(px, py + 0.25, 0);
       seg.rotation.z = -lean * i * 0.4;
       g.add(seg);
       py += 0.48;
       px += lean * i * 0.2;
     }
-    const leafMat = new THREE.MeshLambertMaterial({ color: 0x3bb54a, side: THREE.DoubleSide, flatShading: true });
-    for (let i = 0; i < 7; i++) {
-      const fr = new THREE.Mesh(new THREE.ConeGeometry(0.25, 1.8, 4, 1, true), leafMat);
+    for (let i = 0; i < 8; i++) {
+      const fr = new THREE.Mesh(new THREE.ConeGeometry(0.25, 1.8, 4, 3, true), frondMat);
       fr.scale.set(1, 1, 0.25);
       const pivot = new THREE.Group();
       pivot.position.set(px, py, 0);
-      pivot.rotation.y = (i / 7) * Math.PI * 2;
+      pivot.rotation.y = (i / 8) * Math.PI * 2;
       fr.position.set(0.8, -0.25, 0);
       fr.rotation.set(0, 0, -1.9);
       pivot.add(fr);
       g.add(pivot);
     }
-    const coco = new THREE.Mesh(new THREE.IcosahedronGeometry(0.12, 0), new THREE.MeshLambertMaterial({ color: 0x6b4423, flatShading: true }));
-    coco.position.set(px + 0.1, py - 0.1, 0.05);
-    g.add(coco);
+    for (let k = 0; k < 3; k++) {
+      const coco = new THREE.Mesh(new THREE.IcosahedronGeometry(0.11, 1), cocoMat);
+      coco.position.set(px + Math.cos(k * 2.1) * 0.12, py - 0.12, Math.sin(k * 2.1) * 0.12);
+      g.add(coco);
+    }
   } else if (kind === 'snowpine') {
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 0.8, 6), trunkMat);
     trunk.position.y = 0.4;
     g.add(trunk);
     for (let i = 0; i < 3; i++) {
-      const cone = new THREE.Mesh(new THREE.ConeGeometry(1 - i * 0.25, 1.1, 7), leafMats[2]);
+      const cone = new THREE.Mesh(jaggedCone(1 - i * 0.25, 1.1, 12, rng), leafMats[2]);
       cone.position.y = 1 + i * 0.6;
-      const snow = new THREE.Mesh(new THREE.ConeGeometry(0.62 - i * 0.15, 0.55, 7), snowMat);
+      const snow = new THREE.Mesh(jaggedCone(0.62 - i * 0.15, 0.55, 12, rng), snowMat);
       snow.position.y = 1.3 + i * 0.6;
       g.add(cone, snow);
     }
   } else if (kind === 'cactus') {
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 1.4, 4, 8), cactusMat);
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 1.4, 6, 12), cactusMat);
     body.position.y = 0.9;
     g.add(body);
     for (const side of [-1, 1]) {
       if (rng() < 0.3) continue;
       const h = 0.7 + rng() * 0.5;
-      const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.14, 0.5, 4, 8), cactusMat);
+      const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.14, 0.5, 6, 10), cactusMat);
       arm.position.set(side * 0.45, h + 0.25, 0);
-      const elbow = new THREE.Mesh(new THREE.CapsuleGeometry(0.14, 0.25, 4, 8), cactusMat);
+      const elbow = new THREE.Mesh(new THREE.CapsuleGeometry(0.14, 0.25, 6, 10), cactusMat);
       elbow.rotation.z = Math.PI / 2;
       elbow.position.set(side * 0.28, h, 0);
       g.add(arm, elbow);
@@ -340,20 +381,32 @@ function makeTree(kind, rng, x, y, z, leaves = leafMats) {
     }
   } else if (kind === 'rockpile') {
     for (let i = 0; i < 3; i++) {
-      const r = new THREE.Mesh(new THREE.DodecahedronGeometry(0.6 + rng() * 0.6, 0), mesaMat);
+      const r = new THREE.Mesh(lumpy(new THREE.IcosahedronGeometry(0.6 + rng() * 0.6, 1), rng, 0.18), mesaMat);
       r.position.set((rng() - 0.5) * 1.2, 0.3 + i * 0.5, (rng() - 0.5) * 1.2);
       r.scale.y = 0.7;
       g.add(r);
     }
   } else {
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 1.1, 6), trunkMat);
-    trunk.position.y = 0.55;
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.18, 1.2, 8), trunkMat);
+    trunk.position.y = 0.6;
     g.add(trunk);
-    for (let i = 0; i < 3; i++) {
-      const blob = new THREE.Mesh(new THREE.IcosahedronGeometry(0.7 + rng() * 0.3, 0), leaf);
-      blob.position.set((rng() - 0.5) * 0.6, 1.4 + rng() * 0.5, (rng() - 0.5) * 0.6);
+    // dos ramas y una copa de varias bolas abultadas
+    for (const side of [-1, 1]) {
+      const br = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.07, 0.6, 6), trunkMat);
+      br.position.set(side * 0.18, 1.05, 0);
+      br.rotation.z = -side * 0.7;
+      g.add(br);
+    }
+    const n = 4 + Math.floor(rng() * 2);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + rng();
+      const blob = new THREE.Mesh(lumpy(new THREE.IcosahedronGeometry(0.55 + rng() * 0.3, 1), rng, 0.12), leaf);
+      blob.position.set(Math.cos(a) * 0.38, 1.45 + rng() * 0.35, Math.sin(a) * 0.38);
       g.add(blob);
     }
+    const crown = new THREE.Mesh(lumpy(new THREE.IcosahedronGeometry(0.7, 1), rng, 0.12), leaf);
+    crown.position.y = 1.95;
+    g.add(crown);
   }
   g.position.set(x, y - 0.05, z);
   g.scale.setScalar(s);
@@ -363,7 +416,7 @@ function makeTree(kind, rng, x, y, z, leaves = leafMats) {
 
 const rockMat = new THREE.MeshLambertMaterial({ color: 0x9aa3a0, flatShading: true });
 function makeRock(rng, x, y, z) {
-  const m = new THREE.Mesh(new THREE.DodecahedronGeometry(0.3 + rng() * 0.6, 0), rockMat);
+  const m = new THREE.Mesh(lumpy(new THREE.IcosahedronGeometry(0.3 + rng() * 0.6, 1), rng, 0.22), rockMat);
   m.position.set(x, y + 0.1, z);
   m.scale.set(1, 0.6 + rng() * 0.4, 1 + rng() * 0.4);
   m.rotation.set(rng(), rng() * 3, rng());
@@ -371,22 +424,88 @@ function makeRock(rng, x, y, z) {
   return m;
 }
 
-const petalColors = [0xff5e7e, 0xffd23f, 0xffffff, 0xb27cff, 0xff8a3d];
+const petalMats = [0xff5e7e, 0xffd23f, 0xffffff, 0xb27cff, 0xff8a3d].map((color) => new THREE.MeshLambertMaterial({ color, flatShading: true }));
+const stemMat = new THREE.MeshLambertMaterial({ color: 0x2f8f3a });
+const heartMat = new THREE.MeshLambertMaterial({ color: 0xffc93d });
 function makeFlower(rng, x, y, z) {
   const g = new THREE.Group();
-  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.3, 4), new THREE.MeshLambertMaterial({ color: 0x2f8f3a }));
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.3, 4), stemMat);
   stem.position.y = 0.15;
-  const head = new THREE.Mesh(
-    new THREE.IcosahedronGeometry(0.08, 0),
-    new THREE.MeshLambertMaterial({ color: petalColors[Math.floor(rng() * petalColors.length)], flatShading: true }),
-  );
-  head.position.y = 0.32;
-  g.add(stem, head);
+  g.add(stem);
+  // cinco pétalos alrededor de un botón
+  const petal = petalMats[Math.floor(rng() * petalMats.length)];
+  for (let k = 0; k < 5; k++) {
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 4), petal);
+    const a = (k / 5) * Math.PI * 2;
+    p.position.set(Math.cos(a) * 0.055, 0.31, Math.sin(a) * 0.055);
+    p.scale.set(1, 0.35, 0.7);
+    p.rotation.y = -a;
+    g.add(p);
+  }
+  const heart = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 4), heartMat);
+  heart.position.y = 0.32;
+  g.add(heart);
   g.position.set(x, y, z);
+  g.rotation.y = rng() * 6;
   return g;
 }
 
+// Matas de hierba alta alrededor de la pista: varias hojas finas
+const tuftMats = new Map();
+function makeTuft(rng, x, y, z, theme) {
+  if (!tuftMats.has(theme.groundHigh)) tuftMats.set(theme.groundHigh, addWind(new THREE.MeshLambertMaterial({ color: new THREE.Color(theme.groundHigh).multiplyScalar(0.85), flatShading: true }), windUniforms, WIND * 3));
+  const mat = tuftMats.get(theme.groundHigh);
+  const g = new THREE.Group();
+  const n = 4 + Math.floor(rng() * 4);
+  for (let k = 0; k < n; k++) {
+    const blade = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.3 + rng() * 0.25, 3), mat);
+    const a = rng() * Math.PI * 2;
+    blade.position.set(Math.cos(a) * 0.06, 0.15, Math.sin(a) * 0.06);
+    blade.rotation.set(Math.sin(a) * 0.35, 0, -Math.cos(a) * 0.35);
+    g.add(blade);
+  }
+  g.userData.swayRoot = true;
+  g.position.set(x, y - 0.02, z);
+  return g;
+}
+
+/** Cono con el borde de abajo en dientes de sierra (ramas de abeto). */
+function jaggedCone(r, h, n, rng) {
+  const geo = new THREE.ConeGeometry(r, h, n, 2);
+  const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const y = p.getY(i);
+    if (y > -h / 2 + 0.01) continue;
+    const a = Math.atan2(p.getZ(i), p.getX(i));
+    const k = Math.round((a / (Math.PI * 2)) * n) % 2 ? 1.12 : 0.9;
+    p.setX(i, p.getX(i) * k);
+    p.setZ(i, p.getZ(i) * k);
+    p.setY(i, y - (k > 1 ? 0.08 : 0) - rng() * 0.03);
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/** Abolla una esfera para que parezca roca o copa de árbol, no una pelota. */
+function lumpy(geo, rng, amount) {
+  const p = geo.attributes.position;
+  const seen = new Map();
+  for (let i = 0; i < p.count; i++) {
+    // los vértices repetidos se mueven igual para no abrir grietas
+    const key = `${p.getX(i).toFixed(3)},${p.getY(i).toFixed(3)},${p.getZ(i).toFixed(3)}`;
+    if (!seen.has(key)) seen.set(key, 1 + (rng() - 0.5) * amount * 2);
+    const k = seen.get(key);
+    p.setXYZ(i, p.getX(i) * k, p.getY(i) * k, p.getZ(i) * k);
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+
 const LANTERN_COLORS = [0xff4a3d, 0xffb020, 0xff5fb0, 0xffe066, 0x5fd8ff];
+const lampPostMat = new THREE.MeshLambertMaterial({ color: 0x2a2a33 });
+const paperMats = new Map();
+const torchPoleMat = new THREE.MeshLambertMaterial({ color: 0x7a4a24, flatShading: true });
+const torchCupMat = new THREE.MeshLambertMaterial({ color: 0x4a2c14, flatShading: true });
 
 // Puntos alrededor del contorno de la pista, separados `gap` y a `off` del borde.
 function perimeterSpots(course, off, gap) {
@@ -414,11 +533,12 @@ function haloSprite(color, size) {
 function makeLantern(x, y, z, i = 0, lit = true) {
   const g = new THREE.Group();
   const color = LANTERN_COLORS[i % LANTERN_COLORS.length];
-  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 1.5, 6), new THREE.MeshLambertMaterial({ color: 0x2a2a33 }));
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 1.5, 8), lampPostMat);
   post.position.y = 0.75;
   const arm = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.04, 0.04), post.material);
   arm.position.set(0.18, 1.48, 0);
-  const paper = new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 10), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.6, roughness: 0.6 }));
+  if (!paperMats.has(color)) paperMats.set(color, new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.6, roughness: 0.6 }));
+  const paper = new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 10), paperMats.get(color));
   paper.scale.y = 1.25;
   paper.position.set(0.34, 1.26, 0);
   const capTop = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.05, 10), post.material);
@@ -440,13 +560,14 @@ function makeLantern(x, y, z, i = 0, lit = true) {
 // Antorcha tiki con llama que parpadea
 function makeTorch(x, y, z, lit = true) {
   const g = new THREE.Group();
-  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 1.4, 6), new THREE.MeshLambertMaterial({ color: 0x7a4a24, flatShading: true }));
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 1.4, 6), torchPoleMat);
   pole.position.y = 0.7;
-  const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.07, 0.22, 8), new THREE.MeshLambertMaterial({ color: 0x4a2c14, flatShading: true }));
+  const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.07, 0.22, 8), torchCupMat);
   cup.position.y = 1.45;
   const flame = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.32, 8), new THREE.MeshBasicMaterial({ color: 0xffb030 }));
   flame.geometry.translate(0, 0.16, 0);
   flame.position.y = 1.55;
+  flame.userData.keep = true; // se anima: no se junta con el resto
   const halo = haloSprite(0xff7a20, 1.4);
   halo.position.y = 1.7;
   g.add(pole, cup, flame, halo);

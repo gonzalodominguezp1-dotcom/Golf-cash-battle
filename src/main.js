@@ -12,6 +12,7 @@ import { isMuted, setMuted, sfx, unlockAudio } from './game/audio.js';
 import { Progress } from './progress/Progress.js';
 import { CHALLENGES, RARITIES, SKINS } from './progress/skins.js';
 import { ballPreview, skinMaterial } from './game/render/ballSkins.js';
+import { QUALITY_LEVELS, QUALITY_NAMES, getQuality, setQuality } from './game/render/quality.js';
 import * as THREE from 'three';
 
 let backend, wallet, matches;
@@ -226,7 +227,7 @@ async function showLobby() {
         <div class="tier-mid">
           ${free ? '<span class="tier-prize small">Entrena sin arriesgar créditos</span>' : `<span class="tier-label">Premio Garantizado</span><span class="tier-prize">${coin(prizeFor(tier))}</span><span class="tier-pot">Bote ${fmt(potFor(tier))}</span>`}
         </div>
-        <button class="play" ${enough ? '' : 'disabled'}>${enough ? 'Jugar Torneo' : 'Saldo insuficiente'}</button>
+        <button class="play" ${enough ? '' : 'disabled'}>${!enough ? 'Saldo insuficiente' : free ? 'Practicar' : 'Jugar Torneo'}</button>
       </div>`);
     card.querySelector('.play').addEventListener('click', () => startMatch(tier));
     list.append(card);
@@ -929,7 +930,7 @@ async function startMatch(tier) {
     <main class="screen matchmaking tier--${tier.id}">
       <div class="radar"><span></span><span></span><span></span>${ball(progress.skin, 64)}</div>
       <h1>Buscando rivales…</h1>
-      <p class="sub">${tier.name} · ${tier.entryFee ? `bote ${coin(potFor(tier))}` : 'práctica'}</p>
+      <p class="sub">${tier.entryFee ? `${tier.name} · bote ${coin(potFor(tier))}` : 'Práctica contra rivales simulados'}</p>
       <div class="seats"></div>
       <button class="ghost cancel">Cancelar y recuperar entrada</button>
     </main>`);
@@ -988,7 +989,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         <span>${tiebreak ? 'Deja la bola lo más cerca de la diana' : `Par ${course.par}`}</span>
         ${course.tip && !tiebreak ? `<em>${course.tip}</em>` : ''}
       </div>
-      <div class="overview-banner">🗺️ Vista General del Mapa · Mueve el ratón para orbitar · Pulsa <kbd>Espacio</kbd> para volver</div>
+      <div class="overview-banner"><span class="ov-mouse">🗺️ Vista General del Mapa · Mueve el ratón para orbitar · Pulsa <kbd>Espacio</kbd> para volver</span><span class="ov-touch">🗺️ Vista del mapa · Desliza para girarla</span></div>
       <div class="cup-banner"></div>
       <div class="hole-timer" hidden><small>Tiempo para embocar</small><b>${timeLimit}</b></div>
       <div class="hint">
@@ -1078,6 +1079,16 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
 
               <div class="settings-row">
                 <div class="settings-label">
+                  <strong>Calidad gráfica</strong>
+                  <small>Baja si el móvil va lento o se calienta</small>
+                </div>
+                <div class="quality-picker">
+                  ${QUALITY_LEVELS.map((q) => `<button class="settings-btn quality-btn ${q === getQuality() ? 'on' : ''}" data-q="${q}">${QUALITY_NAMES[q]}</button>`).join('')}
+                </div>
+              </div>
+
+              <div class="settings-row">
+                <div class="settings-label">
                   <strong>Vista de Campo</strong>
                   <small>Ver todo el terreno en 3D</small>
                 </div>
@@ -1143,6 +1154,14 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
           fsModalBtn.querySelector('.btn-text').textContent = isFs ? 'Ventana' : 'Pantalla Completa';
         }, 100);
       });
+
+      overlay.querySelectorAll('.quality-btn').forEach((btn) =>
+        btn.addEventListener('click', () => {
+          setQuality(btn.dataset.q);
+          overlay.querySelectorAll('.quality-btn').forEach((b) => b.classList.toggle('on', b === btn));
+          game.refreshQuality?.();
+        }),
+      );
 
       const ovBtn = overlay.querySelector('.toggle-overview-btn');
       ovBtn.addEventListener('click', () => {
