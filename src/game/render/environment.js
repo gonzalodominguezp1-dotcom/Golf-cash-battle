@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { softDotTexture } from './textures.js';
 
 // Cielo, terreno, agua y decorado low-poly alrededor del hoyo.
 
@@ -68,6 +69,15 @@ export function buildEnvironment(scene, course, theme, rng) {
   sun.shadow.normalBias = 0.02;
   Object.assign(sun.shadow.camera, { left: -12, right: 12, top: 12, bottom: -12, near: 1, far: 80 });
   scene.add(sun, sun.target);
+  // contraluces de color a ambos lados: dan los bordes rosa/cian que hacen vibrar la escena
+  if (theme.rim) {
+    const night = theme.sunIntensity < 2;
+    theme.rim.forEach((color, i) => {
+      const rim = new THREE.DirectionalLight(color, night ? 1.4 : 0.8);
+      rim.position.set(i ? 12 : -12, 6, i ? 8 : -10);
+      scene.add(rim);
+    });
+  }
 
   // --- terreno low-poly ---
   const size = 220, seg = 110;
@@ -108,6 +118,7 @@ export function buildEnvironment(scene, course, theme, rng) {
   );
   water.position.y = theme.waterLevel;
   scene.add(water);
+  if (theme.lava) animated.push((t) => (water.material.emissiveIntensity = 0.9 + Math.sin(t * 1.7) * 0.25));
   const base = Float32Array.from(waterGeo.attributes.position.array);
   animated.push((t) => {
     const p = waterGeo.attributes.position;
@@ -145,10 +156,25 @@ export function buildEnvironment(scene, course, theme, rng) {
   place(1.8, 30, 40, (x, y, z) => scene.add(makeRock(rng, x, y, z)));
   if (theme.flowers) place(1.2, 12, 70, (x, y, z) => scene.add(makeFlower(rng, x, y, z)));
   if (theme.lanterns) {
-    const lamps = [];
-    place(1.2, 3, 30, (x, y, z) => lamps.length < 3 && lamps.push(makeLantern(x, y, z)));
-    lamps.forEach((l) => scene.add(l));
+    // farolillos alrededor de la pista; solo unos pocos llevan luz real (cada luz cuesta en el móvil)
+    const spots = theme.lanterns === 'many' ? perimeterSpots(course, 1.3, 3.2) : [];
+    if (!spots.length) place(1.2, 3, 30, (x, y, z) => spots.length < 4 && spots.push([x, z]));
+    const lamps = spots.map(([x, z], i) => {
+      const lamp = theme.torches && i % 2 ? makeTorch(x, heightAt(x, z), z, i < 6) : makeLantern(x, heightAt(x, z), z, i, i < 6);
+      scene.add(lamp);
+      return lamp;
+    });
+    if (theme.festoon) scene.add(festoon(lamps));
+    animated.push((t) => {
+      for (const l of lamps) {
+        const f = 1 + Math.sin(t * 9 + l.userData.phase) * 0.06 + Math.sin(t * 23 + l.userData.phase * 3) * 0.04;
+        if (l.userData.light) l.userData.light.intensity = l.userData.base * f;
+        l.userData.halo.material.opacity = 0.55 * f;
+        if (l.userData.flame) l.userData.flame.scale.set(1, f * 1.1, 1);
+      }
+    });
   }
+  if (theme.lava) volcanoBackdrop(scene, course, bounds, heightAt, animated, rng);
 
   // --- nubes ---
   const cloudMat = new THREE.MeshLambertMaterial({ color: theme.clouds, flatShading: true, emissive: theme.clouds, emissiveIntensity: 0.25 });
@@ -360,15 +386,176 @@ function makeFlower(rng, x, y, z) {
   return g;
 }
 
-function makeLantern(x, y, z) {
+const LANTERN_COLORS = [0xff4a3d, 0xffb020, 0xff5fb0, 0xffe066, 0x5fd8ff];
+
+// Puntos alrededor del contorno de la pista, separados `gap` y a `off` del borde.
+function perimeterSpots(course, off, gap) {
+  const b = courseBounds(course);
+  const pts = [];
+  const minX = b.minX - off, maxX = b.maxX + off, minZ = b.minZ - off, maxZ = b.maxZ + off;
+  const edge = (ax, az, bx, bz) => {
+    const n = Math.max(1, Math.round(Math.hypot(bx - ax, bz - az) / gap));
+    for (let i = 0; i < n; i++) pts.push([ax + ((bx - ax) * i) / n, az + ((bz - az) * i) / n]);
+  };
+  edge(minX, maxZ, maxX, maxZ);
+  edge(maxX, maxZ, maxX, minZ);
+  edge(maxX, minZ, minX, minZ);
+  edge(minX, minZ, minX, maxZ);
+  return pts;
+}
+
+function haloSprite(color, size) {
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: softDotTexture(), color, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }));
+  halo.scale.setScalar(size);
+  return halo;
+}
+
+// Farol de jardín con farolillo de papel de color colgando
+function makeLantern(x, y, z, i = 0, lit = true) {
   const g = new THREE.Group();
-  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 1.4, 6), new THREE.MeshLambertMaterial({ color: 0x333333 }));
-  post.position.y = 0.7;
-  const glow = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffd28a }));
-  glow.position.y = 1.5;
-  const light = new THREE.PointLight(0xffb060, 3, 6, 1.5);
-  light.position.y = 1.5;
-  g.add(post, glow, light);
+  const color = LANTERN_COLORS[i % LANTERN_COLORS.length];
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 1.5, 6), new THREE.MeshLambertMaterial({ color: 0x2a2a33 }));
+  post.position.y = 0.75;
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.04, 0.04), post.material);
+  arm.position.set(0.18, 1.48, 0);
+  const paper = new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 10), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.6, roughness: 0.6 }));
+  paper.scale.y = 1.25;
+  paper.position.set(0.34, 1.26, 0);
+  const capTop = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.05, 10), post.material);
+  capTop.position.set(0.34, 1.48, 0);
+  const halo = haloSprite(color, 1.3);
+  halo.position.copy(paper.position);
+  g.add(post, arm, paper, capTop, halo);
+  g.userData = { halo, phase: i * 1.7 };
+  if (lit) {
+    const light = new THREE.PointLight(color, 3.2, 6.5, 1.4);
+    light.position.copy(paper.position);
+    g.add(light);
+    Object.assign(g.userData, { light, base: light.intensity });
+  }
   g.position.set(x, y, z);
   return g;
+}
+
+// Antorcha tiki con llama que parpadea
+function makeTorch(x, y, z, lit = true) {
+  const g = new THREE.Group();
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 1.4, 6), new THREE.MeshLambertMaterial({ color: 0x7a4a24, flatShading: true }));
+  pole.position.y = 0.7;
+  const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.07, 0.22, 8), new THREE.MeshLambertMaterial({ color: 0x4a2c14, flatShading: true }));
+  cup.position.y = 1.45;
+  const flame = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.32, 8), new THREE.MeshBasicMaterial({ color: 0xffb030 }));
+  flame.geometry.translate(0, 0.16, 0);
+  flame.position.y = 1.55;
+  const halo = haloSprite(0xff7a20, 1.4);
+  halo.position.y = 1.7;
+  g.add(pole, cup, flame, halo);
+  g.userData = { halo, flame, phase: x * 3 + z };
+  if (lit) {
+    const light = new THREE.PointLight(0xff8a30, 3, 6, 1.4);
+    light.position.y = 1.7;
+    g.add(light);
+    Object.assign(g.userData, { light, base: light.intensity });
+  }
+  g.position.set(x, y, z);
+  return g;
+}
+
+// Guirnalda de bombillas colgando entre farolillo y farolillo
+function festoon(lamps) {
+  const g = new THREE.Group();
+  const bulbGeo = new THREE.SphereGeometry(0.045, 6, 4);
+  const mats = LANTERN_COLORS.map((color) => new THREE.MeshBasicMaterial({ color }));
+  const wire = [];
+  for (let i = 0; i < lamps.length; i++) {
+    const a = lamps[i].position, b = lamps[(i + 1) % lamps.length].position;
+    if (a.distanceTo(b) > 6) continue;
+    const n = 7;
+    for (let k = 0; k <= n; k++) {
+      const t = k / n;
+      const p = new THREE.Vector3().lerpVectors(a, b, t);
+      p.y += 1.5 - Math.sin(t * Math.PI) * 0.35;
+      wire.push(p);
+      if (k > 0 && k < n) {
+        const bulb = new THREE.Mesh(bulbGeo, mats[(i + k) % mats.length]);
+        bulb.position.copy(p).y -= 0.05;
+        g.add(bulb);
+      }
+    }
+  }
+  const segs = [];
+  for (let i = 0; i + 1 < wire.length; i++) if (wire[i].distanceTo(wire[i + 1]) < 1.2) segs.push(wire[i], wire[i + 1]);
+  g.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(segs), new THREE.LineBasicMaterial({ color: 0x222222 })));
+  return g;
+}
+
+// Volcán de verdad detrás del hoyo: cono de roca, cráter de lava, coladas y humo
+function volcanoBackdrop(scene, course, bounds, heightAt, animated, rng) {
+  const cx = (bounds.minX + bounds.maxX) / 2 + 4, cz = bounds.minZ - 26;
+  const H = 15, R = 17, rTop = 3;
+  const geo = new THREE.CylinderGeometry(rTop, R, H, 28, 8, true).toNonIndexed();
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const k = 1 + (noise(x * 0.5 + 9, z * 0.5 + y * 0.3) - 0.5) * 0.35;
+    if (y < H / 2 - 0.01) pos.setXYZ(i, x * k, y, z * k);
+  }
+  // coladas: franjas que bajan desde el cráter y brillan
+  const flows = [0.6, 2.2, 3.9, 4.75, 5.5];
+  const colors = new Float32Array(pos.count * 3);
+  const rock = new THREE.Color(0x2a2022), hot = new THREE.Color(0xff5a14), c = new THREE.Color();
+  for (let i = 0; i < pos.count; i += 3) {
+    const x = (pos.getX(i) + pos.getX(i + 1) + pos.getX(i + 2)) / 3, y = (pos.getY(i) + pos.getY(i + 1) + pos.getY(i + 2)) / 3, z = (pos.getZ(i) + pos.getZ(i + 1) + pos.getZ(i + 2)) / 3;
+    const a = Math.atan2(z, x) + Math.PI;
+    const h = (y + H / 2) / H;
+    const inFlow = flows.some((f) => Math.abs(((a - f + Math.PI * 3) % (Math.PI * 2)) - Math.PI) < 0.05 + (1 - h) * 0.07);
+    c.copy(rock).offsetHSL(0, 0, (hash(i, 7) - 0.5) * 0.06);
+    if (inFlow && h > 0.15) c.copy(hot).lerp(new THREE.Color(0xffc040), h * 0.6);
+    else if (h > 0.9) c.lerp(hot, (h - 0.9) * 6);
+    for (let k = 0; k < 3; k++) c.toArray(colors, (i + k) * 3);
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geo.computeVertexNormals();
+  // las coladas emiten luz propia: emisivo = color del vértice solo donde es lava
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9 });
+  mat.onBeforeCompile = (sh) => {
+    sh.fragmentShader = sh.fragmentShader.replace(
+      '#include <emissivemap_fragment>',
+      '#include <emissivemap_fragment>\n totalEmissiveRadiance += vColor * smoothstep(0.35, 0.6, vColor.r - vColor.b) * 2.2;',
+    );
+  };
+  const cone = new THREE.Mesh(geo, mat);
+  const baseY = heightAt(cx, cz) - 3;
+  cone.position.set(cx, baseY + H / 2, cz);
+  scene.add(cone);
+  // lago de lava en el cráter
+  const crater = new THREE.Mesh(new THREE.CircleGeometry(rTop * 0.95, 24), new THREE.MeshBasicMaterial({ color: 0xff6a1a }));
+  crater.rotation.x = -Math.PI / 2;
+  crater.position.set(cx, baseY + H - 0.4, cz);
+  const glow = haloSprite(0xff5a14, 12);
+  glow.position.set(cx, baseY + H + 1.5, cz);
+  glow.material.opacity = 0.5;
+  const light = new THREE.PointLight(0xff5a14, 30, 45, 1.4);
+  light.position.set(cx, baseY + H + 2, cz);
+  scene.add(crater, glow, light);
+  // humo que sale del cráter
+  const puffs = [];
+  const smokeMat = new THREE.MeshLambertMaterial({ color: 0x3a3036, transparent: true, opacity: 0.55, flatShading: true, depthWrite: false });
+  for (let i = 0; i < 9; i++) {
+    const m = new THREE.Mesh(new THREE.IcosahedronGeometry(1.6 + rng() * 1.2, 0), smokeMat);
+    m.userData.t = i / 9;
+    puffs.push(m);
+    scene.add(m);
+  }
+  animated.push((t) => {
+    light.intensity = 30 + Math.sin(t * 2.3) * 6;
+    glow.material.opacity = 0.45 + Math.sin(t * 2.3) * 0.1;
+    crater.material.color.setHSL(0.05 + Math.sin(t * 1.3) * 0.015, 1, 0.55);
+    for (const p of puffs) {
+      const k = (p.userData.t + t * 0.04) % 1;
+      p.position.set(cx + Math.sin(k * 6 + p.userData.t * 9) * 2 + k * 6, baseY + H + k * 18, cz + Math.cos(k * 5) * 1.5);
+      p.scale.setScalar(0.6 + k * 2.4);
+    }
+    smokeMat.opacity = 0.5;
+  });
 }

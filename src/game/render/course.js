@@ -70,7 +70,10 @@ export function buildCourse(scene, course, theme) {
   rim.position.set(hx, hc + 0.003, hz);
   if (!course.noCup) scene.add(cupInside, cupBottom, rim);
   else scene.add(bullseye(hx, hz));
-  if (relief && !course.noCup) scene.add(cupCollar(hx, hz, hc, grassMat));
+  // volcán: el hoyo es un cráter con lava brillante dentro y grietas incandescentes alrededor
+  const lavaCup = theme.lava && !course.noCup ? lavaCrater(scene, hx, hz, cupInside, cupBottom) : null;
+  if (lavaCup) lavaCup.group.position.y = hc;
+  else if (relief && !course.noCup) scene.add(cupCollar(hx, hz, hc, grassMat));
 
   // arena con bordes redondeados
   const sandTex = sandTexture();
@@ -90,6 +93,8 @@ export function buildCourse(scene, course, theme) {
   }
 
   // paredes de madera (en neón: oscuras con una línea de luz arriba)
+  const night = !!theme.rim && theme.sunIntensity < 2;
+  let segIndex = 0;
   const wood = woodTexture();
   const walls = [];
   segmentsOf(course).forEach(([[ax, az], [bx, bz]], i) => {
@@ -100,6 +105,8 @@ export function buildCourse(scene, course, theme) {
     const capMat = neon
       ? new THREE.MeshStandardMaterial({ color: neonColor(i), emissive: neonColor(i), emissiveIntensity: 1.8, roughness: 0.3, transparent: true })
       : new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5, transparent: true });
+    // de noche el remate de las paredes es una tira de luz del color del contraluz
+    if (night && !neon) capMat.color.setHex(0x2a2a3a), capMat.emissive.setHex(theme.rim[segIndex++ % 2]), (capMat.emissiveIntensity = 0.4);
     walls.push({ a: [ax, az], b: [bx, bz], mats: [wallMat, capMat], opacity: 1 });
     const len = Math.hypot(bx - ax, bz - az) + WALL_HALF * 2;
     const segs = relief ? Math.max(1, Math.ceil(len / 0.2)) : 1;
@@ -145,7 +152,7 @@ export function buildCourse(scene, course, theme) {
     post.castShadow = true;
     const ball = new THREE.Mesh(
       new THREE.SphereGeometry(WALL_HALF * 1.1, 12, 8),
-      neon ? glowMat(neonColor(corner++)) : new THREE.MeshStandardMaterial({ color: 0xff5a4e }),
+      neon ? glowMat(neonColor(corner++)) : new THREE.MeshStandardMaterial({ color: 0xff5a4e, emissive: 0xff3a2e, emissiveIntensity: night ? 1.4 : 0.15 }),
     );
     ball.position.set(x, h + WALL_H + 0.17, z);
     scene.add(post, ball);
@@ -160,7 +167,7 @@ export function buildCourse(scene, course, theme) {
     stem.position.y = 0.15;
     const top = new THREE.Mesh(
       new THREE.SphereGeometry(b.r * 1.25, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2),
-      neon ? new THREE.MeshStandardMaterial({ color: neonColor(i), emissive: neonColor(i), emissiveIntensity: 0.9, roughness: 0.3 }) : new THREE.MeshStandardMaterial({ color, roughness: 0.35 }),
+      neon ? new THREE.MeshStandardMaterial({ color: neonColor(i), emissive: neonColor(i), emissiveIntensity: 0.9, roughness: 0.3 }) : new THREE.MeshStandardMaterial({ color, roughness: 0.3, emissive: color, emissiveIntensity: night ? 0.45 : 0.08 }),
     );
     top.scale.y = 0.6;
     top.position.y = 0.3;
@@ -168,7 +175,7 @@ export function buildCourse(scene, course, theme) {
     outline(stem, 0.03);
     const dots = new THREE.Group();
     for (let k = 0; k < 5; k++) {
-      const d = new THREE.Mesh(new THREE.SphereGeometry(b.r * 0.18, 8, 6), new THREE.MeshStandardMaterial({ color: 0xffffff }));
+      const d = new THREE.Mesh(new THREE.SphereGeometry(b.r * 0.18, 8, 6), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: night ? 1.2 : 0.2 }));
       const a = (k / 5) * Math.PI * 2;
       d.position.set(Math.cos(a) * b.r * 0.75, 0.3 + b.r * 0.42, Math.sin(a) * b.r * 0.75);
       d.scale.y = 0.5;
@@ -193,7 +200,7 @@ export function buildCourse(scene, course, theme) {
     bar.position.y = WALL_H / 2 + 0.02;
     const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, WALL_H * 2, 16), new THREE.MeshStandardMaterial({ color: 0x3d3d5c, metalness: 0.4, roughness: 0.4 }));
     hub.position.y = WALL_H;
-    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 8), new THREE.MeshStandardMaterial({ color: 0xffc145 }));
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 8), new THREE.MeshStandardMaterial({ color: 0xffc145, emissive: 0xffa020, emissiveIntensity: night ? 1.5 : 0.25 }));
     cap.position.y = WALL_H * 2;
     bar.castShadow = hub.castShadow = true;
     outline(hub, 0.03);
@@ -290,6 +297,7 @@ export function buildCourse(scene, course, theme) {
     update(t, cameraPos, ballPos) {
       attractions.forEach((a) => a.update(t, ballPos));
       tubes.forEach((tb) => tb?.update(t));
+      lavaCup?.update(t);
       boostTextures.forEach((tex) => (tex.offset.y = -t * 1.5));
       slopeTextures.forEach((s) => (s.tex.offset.y = -t * s.speed));
       portals.forEach((p, i) => {
@@ -353,6 +361,49 @@ function portalMesh(scene, [x, z], r, css, color, y = 0) {
   g.position.set(x, y, z);
   scene.add(g);
   return { disc, ring, beam };
+}
+
+function lavaCrater(scene, hx, hz, cupInside, cupBottom) {
+  cupInside.material = new THREE.MeshStandardMaterial({ color: 0x2a1410, emissive: 0xff4a10, emissiveIntensity: 0.7, side: THREE.BackSide, roughness: 0.8 });
+  cupBottom.material = new THREE.MeshBasicMaterial({ color: 0xffa030 });
+  const g = new THREE.Group();
+  // borde de roca volcánica y anillo de magma que respira
+  const basalt = new THREE.Mesh(new THREE.RingGeometry(CUP_R + 0.03, CUP_R + 0.42, 40), new THREE.MeshStandardMaterial({ color: 0x1c1416, roughness: 1 }));
+  basalt.rotation.x = -Math.PI / 2;
+  basalt.position.y = 0.0015;
+  const magma = new THREE.Mesh(new THREE.RingGeometry(CUP_R + 0.2, CUP_R + 0.3, 48), new THREE.MeshBasicMaterial({ color: 0xff6a1a, transparent: true }));
+  magma.rotation.x = -Math.PI / 2;
+  magma.position.y = 0.002;
+  // grietas que salen del cráter
+  const crackMat = new THREE.MeshBasicMaterial({ color: 0xff5a14, transparent: true });
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 9) * Math.PI * 2 + (i % 3) * 0.2, len = 0.35 + (i % 4) * 0.18;
+    const crack = new THREE.Mesh(new THREE.PlaneGeometry(0.04, len), crackMat);
+    crack.rotation.set(-Math.PI / 2, 0, -a);
+    const r = CUP_R + 0.4 + len / 2;
+    crack.position.set(Math.cos(a) * r, 0.0025, Math.sin(a) * r);
+    g.add(crack);
+  }
+  const glow = new THREE.Mesh(
+    new THREE.CylinderGeometry(CUP_R * 0.9, CUP_R, 0.9, 24, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0xff6a1a, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }),
+  );
+  glow.position.y = 0.45;
+  const light = new THREE.PointLight(0xff5a14, 4, 4, 1.5);
+  light.position.y = 0.25;
+  g.add(basalt, magma, glow, light);
+  g.position.set(hx, 0, hz);
+  scene.add(g);
+  return {
+    group: g,
+    update(t) {
+      const k = 0.5 + Math.sin(t * 2.4) * 0.5;
+      magma.material.color.setHSL(0.04 + k * 0.03, 1, 0.5 + k * 0.1);
+      crackMat.opacity = 0.6 + k * 0.4;
+      glow.material.opacity = 0.14 + k * 0.14;
+      light.intensity = 3 + k * 2.5;
+    },
+  };
 }
 
 // Diana del desempate: anillos de colores, gana la bola que pare más cerca del centro
