@@ -235,11 +235,13 @@ export function buildWindmill(scene, wm, style, lift = 0) {
   const fadeMats = [bodyMat, roofMat];
   let opacity = 1;
   return {
-    update(t, ball) {
+    update(t, ball, cameraPos) {
       hub.rotation.z = wm.speed * t + wm.phase;
-      // la torre se transparenta cuando la bola pasa por dentro
+      // la torre se transparenta al 90% cuando la bola pasa por dentro o si tapa la cámara
       const inside = Math.abs(ball.x - wm.x) < W / 2 + 0.3 && (ball.z - wm.z) * -wm.face > -0.4 && (ball.z - wm.z) * -wm.face < wm.depth + 0.4;
-      opacity += ((inside ? 0.25 : 1) - opacity) * 0.2;
+      const nearCam = cameraPos ? (Math.hypot(cameraPos.x - wm.x, cameraPos.z - wm.z) < W + 1.2 && Math.abs(cameraPos.y - (lift + 1.2)) < 2.0) : false;
+      const shouldFade = inside || nearCam;
+      opacity += ((shouldFade ? 0.1 : 1) - opacity) * 0.2;
       for (const m of fadeMats) {
         m.opacity = opacity;
         m.depthWrite = opacity > 0.95;
@@ -321,9 +323,11 @@ export function buildTunnel(scene, tn, style, lift = 0, i = 0) {
   }
   let opacity = 1;
   return {
-    update(t, ball) {
+    update(t, ball, cameraPos) {
       const inside = Math.abs(ball.x - tn.x) < tn.w / 2 + 0.4 && Math.abs(ball.z - tn.z) < tn.d / 2 + 0.6;
-      opacity += ((inside ? 0.2 : 1) - opacity) * 0.2;
+      const nearCam = cameraPos ? (Math.hypot(cameraPos.x - tn.x, cameraPos.z - tn.z) < Math.max(tn.w, tn.d) / 2 + 0.8 && Math.abs(cameraPos.y - (lift + 0.5)) < 1.4) : false;
+      const shouldFade = inside || nearCam;
+      opacity += ((shouldFade ? 0.1 : 1) - opacity) * 0.2;
       mat.opacity = opacity;
       mat.depthWrite = opacity > 0.95;
     },

@@ -1264,9 +1264,9 @@ export class GolfGame {
     sun.target.position.set(this.ball.x, 0, this.ball.z);
 
     this.env.update(this.t, dt);
-    this.courseView.update(this.t, this.camera.position, this.ball);
-    this.trail.update(this.ballRoot.position, speed > 0.5);
     this.#placeCamera(realDt);
+    this.courseView.update(this.t, this.camera.position, this.ball, this.camLook, this.overview);
+    this.trail.update(this.ballRoot.position, speed > 0.5);
     this.particles.update(dt, this.camera);
     this.waves.update(realDt);
     this.renderPass.scene = this.scene;

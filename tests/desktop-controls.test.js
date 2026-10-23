@@ -335,3 +335,56 @@ test('disparo con clic izquierdo en modo pointer lock funciona por carga en tiem
   assert.ok(executedShot.power > 0.3);
 });
 
+test('elementos que obstaculizan la cámara se vuelven 90% invisibles sin desaparecer en vista normal y vista general (Espacio)', () => {
+  // Simulación de elemento con materiales transparentes y opacidad dinámica
+  const createObstacle = () => ({
+    opacity: 1.0,
+    mats: [{ opacity: 1.0, depthWrite: true, visible: true }],
+    meshes: [{ visible: true }],
+  });
+
+  const wall = createObstacle();
+  const post = createObstacle();
+
+  // Función de actualización de opacidad de elementos ante obstrucción de cámara
+  const updateObstacle = (element, blocks) => {
+    // 90% invisible = 10% opacidad (0.10)
+    const targetOpacity = blocks ? 0.1 : 1.0;
+    element.opacity += (targetOpacity - element.opacity) * 0.2;
+    element.meshes.forEach((m) => (m.visible = true)); // NUNCA desaparece por completo
+    for (const m of element.mats) {
+      m.opacity = element.opacity;
+      m.depthWrite = element.opacity > 0.95;
+      m.visible = true; // Permanece visible con silueta translúcida elegante
+    }
+  };
+
+  // 1. En reposo sin obstrucción: opacidad al 100%
+  assert.equal(wall.opacity, 1.0);
+  assert.equal(wall.mats[0].visible, true);
+
+  // 2. Vista normal: un muro obstaculiza la cámara apuntando a la bola
+  for (let frame = 0; frame < 25; frame++) {
+    updateObstacle(wall, true);
+  }
+  assert.ok(wall.opacity >= 0.099 && wall.opacity <= 0.105, `La pared debe converger a 0.1 (90% invisible), obtenida: ${wall.opacity}`);
+  assert.equal(wall.mats[0].visible, true, 'La pared nunca debe ponerse en visible = false');
+  assert.equal(wall.meshes[0].visible, true);
+  assert.equal(wall.mats[0].depthWrite, false, 'depthWrite debe ser false en modo translúcido');
+
+  // 3. Vista general (tecla Espacio): cámara orbita el terreno y un poste obstaculiza la línea de visión
+  for (let frame = 0; frame < 25; frame++) {
+    updateObstacle(post, true);
+  }
+  assert.ok(post.opacity >= 0.099 && post.opacity <= 0.105, `El poste debe converger a 0.1 (90% invisible), obtenida: ${post.opacity}`);
+  assert.equal(post.mats[0].visible, true, 'El poste nunca debe desaparecer de la escena');
+
+  // 4. Al dejar de obstaculizar la cámara (girar vista), se recupera la opacidad 1.0 suavemente
+  for (let frame = 0; frame < 30; frame++) {
+    updateObstacle(wall, false);
+  }
+  assert.ok(wall.opacity >= 0.99, `La pared debe recuperar opacidad completa (1.0), obtenida: ${wall.opacity}`);
+  assert.equal(wall.mats[0].depthWrite, true);
+});
+
+

@@ -110,8 +110,8 @@ export function buildCourse(scene, course, theme) {
       ? new THREE.MeshStandardMaterial({ color: neonColor(i), emissive: neonColor(i), emissiveIntensity: 0.35, roughness: 0.3, transparent: true })
       : new THREE.MeshStandardMaterial({ color: 0xeeeeea, roughness: 0.75, envMapIntensity: 0.4, transparent: true });
     // de noche el remate de las paredes es una tira de luz del color del contraluz
-    if (night && !neon) capMat.color.setHex(0x2a2a3a), capMat.emissive.setHex(theme.rim[segIndex++ % 2]), (capMat.emissiveIntensity = 0.4);
-    walls.push({ a: [ax, az], b: [bx, bz], mats: [wallMat, capMat], opacity: 1 });
+    const baseEmissive = capMat.emissiveIntensity || 0;
+    walls.push({ a: [ax, az], b: [bx, bz], mats: [wallMat, capMat], opacity: 1, baseEmissive });
     const len = Math.hypot(bx - ax, bz - az) + WALL_HALF * 2;
     const segs = relief ? Math.max(1, Math.ceil(len / 0.2)) : 1;
     // sin relieve las paredes llevan los cantos redondeados (con relieve hace
@@ -161,7 +161,6 @@ export function buildCourse(scene, course, theme) {
   }
 
   // postes en las esquinas
-  const postMat = neon ? new THREE.MeshStandardMaterial({ color: 0x1a1830, roughness: 0.3, metalness: 0.6 }) : new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.4 });
   const corners = new Set();
   const posts = [];
   for (const seg of segmentsOf(course)) for (const p of seg) corners.add(p.join(','));
@@ -169,27 +168,48 @@ export function buildCourse(scene, course, theme) {
   for (const k of corners) {
     const [x, z] = k.split(',').map(Number);
     const h = lift(x, z);
+    const postMat = neon
+      ? new THREE.MeshStandardMaterial({ color: 0x1a1830, roughness: 0.3, metalness: 0.6, transparent: true })
+      : new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.4, transparent: true });
+    const ballMat = neon
+      ? new THREE.MeshStandardMaterial({ color: neonColor(corner++), emissive: neonColor(corner - 1), emissiveIntensity: 0.35, transparent: true })
+      : new THREE.MeshStandardMaterial({ color: 0xff5a4e, emissive: 0xff3a2e, emissiveIntensity: night ? 0.35 : 0.15, transparent: true });
+    const baseEmissive = ballMat.emissiveIntensity || 0;
+
     const post = new THREE.Mesh(new THREE.CylinderGeometry(WALL_HALF * 1.25, WALL_HALF * 1.3, WALL_H + 0.12 + h, 20), postMat);
     post.position.set(x, (WALL_H + 0.12 + h) / 2, z);
     post.castShadow = true;
     const ball = new THREE.Mesh(
       new THREE.SphereGeometry(WALL_HALF * 1.1, 20, 14),
-      neon ? glowMat(neonColor(corner++)) : new THREE.MeshStandardMaterial({ color: 0xff5a4e, emissive: 0xff3a2e, emissiveIntensity: night ? 0.35 : 0.15 }),
+      ballMat,
     );
     ball.position.set(x, h + WALL_H + 0.17, z);
     scene.add(post, ball);
-    posts.push({ x, z, meshes: [post, ball] });
+    posts.push({
+      x,
+      z,
+      baseH: h,
+      h: h + WALL_H + 0.17,
+      meshes: [post, ball],
+      mats: [postMat, ballMat],
+      opacity: 1,
+      baseEmissive,
+    });
   }
 
   // setas rebotadoras
   const bumpers = course.bumpers.map((b, i) => {
     const g = new THREE.Group();
     const color = BUMPER_COLORS[i % BUMPER_COLORS.length];
-    const stem = new THREE.Mesh(new THREE.CylinderGeometry(b.r, b.r * 1.05, 0.3, 32), new THREE.MeshStandardMaterial({ color: 0xfff3dc, roughness: 0.7 }));
+    const stemMat = new THREE.MeshStandardMaterial({ color: 0xfff3dc, roughness: 0.7, transparent: true });
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(b.r, b.r * 1.05, 0.3, 32), stemMat);
     stem.position.y = 0.15;
+    const topMat = neon
+      ? new THREE.MeshStandardMaterial({ color: neonColor(i), emissive: neonColor(i), emissiveIntensity: 0.55, roughness: 0.3, transparent: true })
+      : new THREE.MeshStandardMaterial({ color, roughness: 0.3, emissive: color, emissiveIntensity: night ? 0.45 : 0.08, transparent: true });
     const top = new THREE.Mesh(
       new THREE.SphereGeometry(b.r * 1.25, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2),
-      neon ? new THREE.MeshStandardMaterial({ color: neonColor(i), emissive: neonColor(i), emissiveIntensity: 0.55, roughness: 0.3 }) : new THREE.MeshStandardMaterial({ color, roughness: 0.3, emissive: color, emissiveIntensity: night ? 0.45 : 0.08 }),
+      topMat,
     );
     top.scale.y = 0.6;
     top.position.y = 0.3;
@@ -204,7 +224,9 @@ export function buildCourse(scene, course, theme) {
       d.translate(Math.cos(a) * b.r * 0.75, 0.3 + b.r * 0.42, Math.sin(a) * b.r * 0.75);
       dotGeos.push(d);
     }
-    const dots = new THREE.Mesh(mergeGeometries(dotGeos), dotMat(night));
+    const dotM = dotMat(night).clone();
+    dotM.transparent = true;
+    const dots = new THREE.Mesh(mergeGeometries(dotGeos), dotM);
     // sombra de contacto suave bajo la seta
     const contact = new THREE.Mesh(new THREE.PlaneGeometry(b.r * 3.6, b.r * 3.6), contactMat);
     contact.rotation.x = -Math.PI / 2;
@@ -214,6 +236,13 @@ export function buildCourse(scene, course, theme) {
     g.position.set(b.x, lift(b.x, b.z), b.z);
     g.traverse((o) => o.isMesh && !o.userData.noShadow && (o.castShadow = true));
     scene.add(g);
+    g.userData.mats = [stemMat, topMat, dotM];
+    g.userData.opacity = 1;
+    g.userData.baseEmissive = topMat.emissiveIntensity || 0;
+    g.userData.x = b.x;
+    g.userData.z = b.z;
+    g.userData.r = b.r;
+    g.userData.h = lift(b.x, b.z) + 0.45;
     return g;
   });
 
@@ -323,8 +352,8 @@ export function buildCourse(scene, course, theme) {
     spinners,
     bumpers,
     flag: { pole, cloth },
-    update(t, cameraPos, ballPos) {
-      attractions.forEach((a) => a.update(t, ballPos));
+    update(t, cameraPos, ballPos, lookPos, isOverview) {
+      attractions.forEach((a) => a.update(t, ballPos, cameraPos));
       tubes.forEach((tb) => tb?.update(t));
       lavaCup?.update(t);
       boostTextures.forEach((tex) => (tex.offset.y = -t * 1.5));
@@ -348,28 +377,90 @@ export function buildCourse(scene, course, theme) {
       clothGeo.computeVertexNormals();
       cloth.rotation.y = Math.sin(t * 0.7) * 0.3;
       // la bandera se levanta cuando la bola se acerca, como en el golf real
-      const near = Math.hypot(ballPos.x - hx, ballPos.z - hz) < 1.2;
-      const targetY = near ? 1.25 : 0;
+      const nearFlag = Math.hypot(ballPos.x - hx, ballPos.z - hz) < 1.2;
+      const targetY = nearFlag ? 1.25 : 0;
       pole.position.y += (hc + 0.85 + targetY - pole.position.y) * 0.1;
       cloth.position.y = pole.position.y + 0.83;
-      // un poste pegado a la cámara taparía media pantalla
-      for (const p of posts) {
-        const near = Math.hypot(cameraPos.x - p.x, cameraPos.z - p.z) < 1.8;
-        p.meshes.forEach((m) => (m.visible = !near));
+
+      const cam = { x: cameraPos.x, y: cameraPos.y, z: cameraPos.z };
+      const targets = [];
+      if (ballPos) {
+        targets.push({
+          x: ballPos.x,
+          y: (lift ? lift(ballPos.x, ballPos.z) : 0) + BALL_R,
+          z: ballPos.z,
+        });
       }
+      if (lookPos) {
+        targets.push({
+          x: lookPos.x,
+          y: lookPos.y != null ? lookPos.y : ((lift ? lift(lookPos.x, lookPos.z) : 0) + 0.15),
+          z: lookPos.z,
+        });
+      }
+      if (isOverview) {
+        targets.push({ x: hx, y: hc + 0.05, z: hz });
+      }
+
+      // un poste pegado a la cámara o que tape la visión se vuelve 90% invisible (10% opacidad), nunca desaparece
+      for (const p of posts) {
+        const blocks = postObstructs(cam, targets, p);
+        p.opacity += ((blocks ? 0.1 : 1) - p.opacity) * 0.2;
+        p.meshes.forEach((m) => (m.visible = true));
+        for (const m of p.mats) {
+          m.opacity = p.opacity;
+          m.depthWrite = p.opacity > 0.95;
+          if (m.emissiveIntensity !== undefined && p.baseEmissive != null) {
+            m.emissiveIntensity = p.baseEmissive * (0.15 + 0.85 * (p.opacity - 0.1) / 0.9);
+          }
+        }
+      }
+
+      // las paredes que tapen la visión se vuelven 90% invisibles (10% opacidad), nunca desaparecen
       for (const w of walls) {
-        const blocks = crosses(cameraPos.x, cameraPos.z, ballPos.x, ballPos.z, w.a, w.b);
-        // la pared que tapa la bola desaparece del todo (medio transparente dejaba
-        // una franja blanquecina abajo de la pantalla)
-        w.opacity += ((blocks ? 0 : 1) - w.opacity) * 0.2;
+        const blocks = wallObstructs(cam, targets, w, lift);
+        w.opacity += ((blocks ? 0.1 : 1) - w.opacity) * 0.2;
         for (const m of w.mats) {
           m.opacity = w.opacity;
           m.depthWrite = w.opacity > 0.95;
-          m.visible = w.opacity > 0.03;
+          m.visible = true;
+          if (m.emissiveIntensity !== undefined && w.baseEmissive != null) {
+            m.emissiveIntensity = w.baseEmissive * (0.15 + 0.85 * (w.opacity - 0.1) / 0.9);
+          }
         }
       }
-      bumpers.forEach((b) => b.scale.setScalar(1 + (b.userData.squash ?? 0)));
-      bumpers.forEach((b) => (b.userData.squash = (b.userData.squash ?? 0) * 0.85));
+
+      bumpers.forEach((b) => {
+        b.scale.setScalar(1 + (b.userData.squash ?? 0));
+        b.userData.squash = (b.userData.squash ?? 0) * 0.85;
+        if (b.userData.mats) {
+          const dCam = Math.hypot(cam.x - b.userData.x, cam.z - b.userData.z);
+          const near = dCam < b.userData.r + 0.6 && Math.abs(cam.y - b.userData.h) < 0.9;
+          let blocks = near;
+          if (!blocks) {
+            for (const tgt of targets) {
+              const dx = tgt.x - cam.x, dz = tgt.z - cam.z;
+              const lenSq = dx * dx + dz * dz;
+              if (lenSq > 1e-6) {
+                const t = ((b.userData.x - cam.x) * dx + (b.userData.z - cam.z) * dz) / lenSq;
+                if (t > 0 && t < 1) {
+                  const rx = cam.x + t * dx, rz = cam.z + t * dz;
+                  if (Math.hypot(b.userData.x - rx, b.userData.z - rz) < b.userData.r * 1.1) {
+                    const rayY = cam.y + t * (tgt.y - cam.y);
+                    if (rayY < b.userData.h + 0.05) blocks = true;
+                  }
+                }
+              }
+            }
+          }
+          b.userData.opacity += ((blocks ? 0.1 : 1) - b.userData.opacity) * 0.2;
+          for (const m of b.userData.mats) {
+            m.opacity = b.userData.opacity;
+            m.depthWrite = b.userData.opacity > 0.95;
+            m.visible = true;
+          }
+        }
+      });
     },
   };
 }
@@ -458,16 +549,77 @@ function bullseye(x, z) {
   return g;
 }
 
-// ¿El segmento cámara→bola cruza la pared? (con margen por el grosor)
-function crosses(px, pz, qx, qz, [ax, az], [bx, bz]) {
+// Comprueba si un rayo 3D de cámara a objetivo es cortado por el muro
+function wallBlocksRay(cam, tgt, [ax, az], [bx, bz], lift) {
   const cross = (ux, uz, vx, vz) => ux * vz - uz * vx;
-  const rx = qx - px, rz = qz - pz, sx = bx - ax, sz = bz - az;
+  const rx = tgt.x - cam.x, rz = tgt.z - cam.z;
+  const sx = bx - ax, sz = bz - az;
   const den = cross(rx, rz, sx, sz);
   if (Math.abs(den) < 1e-9) return false;
-  const t = cross(ax - px, az - pz, sx, sz) / den;
-  const u = cross(ax - px, az - pz, rx, rz) / den;
+  const t = cross(ax - cam.x, az - cam.z, sx, sz) / den;
+  const u = cross(ax - cam.x, az - cam.z, rx, rz) / den;
   const pad = 0.15 / Math.hypot(sx, sz);
-  return t > 0 && t < 1 && u > -pad && u < 1 + pad;
+  if (t <= 0 || t >= 1 || u < -pad || u > 1 + pad) return false;
+
+  // Altura del rayo en el punto de corte (t entre 0 en cam y 1 en tgt)
+  const rayY = cam.y + t * (tgt.y - cam.y);
+  const clampedU = Math.max(0, Math.min(1, u));
+  const wx = ax + clampedU * (bx - ax), wz = az + clampedU * (bz - az);
+  const groundH = lift ? lift(wx, wz) : 0;
+  const wallTop = groundH + WALL_H + 0.05;
+
+  // Obstruye si el rayo pasa por debajo de la altura superior del muro
+  return rayY < wallTop + 0.02;
+}
+
+// Comprueba si la cámara está demasiado cerca del muro en 3D
+function wallNearCamera(cam, [ax, az], [bx, bz], lift) {
+  const dx = bx - ax, dz = bz - az;
+  const lenSq = dx * dx + dz * dz;
+  if (lenSq < 1e-6) return false;
+  const u = Math.max(0, Math.min(1, ((cam.x - ax) * dx + (cam.z - az) * dz) / lenSq));
+  const wx = ax + u * dx, wz = az + u * dz;
+  const dXZ = Math.hypot(cam.x - wx, cam.z - wz);
+  if (dXZ < 0.6) {
+    const groundH = lift ? lift(wx, wz) : 0;
+    const wallTop = groundH + WALL_H + 0.06;
+    if (cam.y >= groundH - 0.25 && cam.y <= wallTop + 0.6) return true;
+  }
+  return false;
+}
+
+function wallObstructs(cam, targets, w, lift) {
+  if (wallNearCamera(cam, w.a, w.b, lift)) return true;
+  for (const tgt of targets) {
+    if (wallBlocksRay(cam, tgt, w.a, w.b, lift)) return true;
+  }
+  return false;
+}
+
+function postNearCamera(cam, p) {
+  const dXZ = Math.hypot(cam.x - p.x, cam.z - p.z);
+  return dXZ < 1.4 && cam.y <= p.h + 0.6 && cam.y >= p.baseH - 0.25;
+}
+
+function postBlocksRay(cam, tgt, p) {
+  const dx = tgt.x - cam.x, dz = tgt.z - cam.z;
+  const lenSq = dx * dx + dz * dz;
+  if (lenSq < 1e-6) return false;
+  const t = ((p.x - cam.x) * dx + (p.z - cam.z) * dz) / lenSq;
+  if (t <= 0 || t >= 1) return false;
+  const rx = cam.x + t * dx, rz = cam.z + t * dz;
+  const dXZ = Math.hypot(p.x - rx, p.z - rz);
+  if (dXZ > WALL_HALF * 2.2) return false;
+  const rayY = cam.y + t * (tgt.y - cam.y);
+  return rayY <= p.h + 0.05;
+}
+
+function postObstructs(cam, targets, p) {
+  if (postNearCamera(cam, p)) return true;
+  for (const tgt of targets) {
+    if (postBlocksRay(cam, tgt, p)) return true;
+  }
+  return false;
 }
 
 const insidePoly = (x, z, poly) => {
