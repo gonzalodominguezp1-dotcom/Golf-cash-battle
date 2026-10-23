@@ -76,10 +76,10 @@ export class GolfGame {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(this.renderer.domElement);
     this.camera = new THREE.PerspectiveCamera(55, 1, 0.05, 400);
-    // resplandor (bloom): farolillos, lava, portales y luces de neón brillan de verdad
+    // resplandor (bloom): limitado estrictamente a un máximo del 15% (0.15)
     this.composer = new EffectComposer(this.renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 }));
     this.renderPass = new RenderPass(null, this.camera);
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.55, 0.5, 0.82);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.14, 0.4, 0.88);
     this.composer.addPass(this.renderPass);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
@@ -116,10 +116,10 @@ export class GolfGame {
     this.skin = skin;
     this.course = course;
     this.theme = THEMES[course.theme] ?? THEMES.meadow;
-    // de noche y en el volcán las luces mandan: más resplandor
+    // El bloom nunca supera el 15% (0.14 en mapas nocturnos/neón/lava, 0.08 en día)
     const glowy = this.theme.sunIntensity < 2 || this.theme.lava || this.theme.neon;
-    this.bloom.strength = glowy ? 0.38 : 0.3;
-    this.bloom.threshold = glowy ? 0.8 : 0.97;
+    this.bloom.strength = glowy ? 0.14 : 0.08;
+    this.bloom.threshold = glowy ? 0.85 : 0.95;
     this.#applyQuality();
     this.segs = segmentsOf(course);
     this.ball = { x: course.tee[0], z: course.tee[1], vx: 0, vz: 0 };

@@ -10,7 +10,7 @@ const WALL_H = 0.32;
 const PLATFORM_DEPTH = 2.4;
 const BUMPER_COLORS = [0x4b7bec, 0xff6b6b, 0xffc145, 0x9b59b6];
 const outlineMat = new THREE.MeshBasicMaterial({ color: 0x1a1a1a, side: THREE.BackSide });
-const glowMat = (color) => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.2 });
+const glowMat = (color) => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.35 });
 
 /** Contorno de dibujo animado (casco invertido) alrededor de una malla. */
 function outline(mesh, grow = 0.035) {
@@ -107,7 +107,7 @@ export function buildCourse(scene, course, theme) {
       ? new THREE.MeshStandardMaterial({ color: 0x0d0c1c, roughness: 0.4, metalness: 0.5, transparent: true })
       : new THREE.MeshStandardMaterial({ ...wood, roughness: 0.75, transparent: true });
     const capMat = neon
-      ? new THREE.MeshStandardMaterial({ color: neonColor(i), emissive: neonColor(i), emissiveIntensity: 1.1, roughness: 0.3, transparent: true })
+      ? new THREE.MeshStandardMaterial({ color: neonColor(i), emissive: neonColor(i), emissiveIntensity: 0.35, roughness: 0.3, transparent: true })
       : new THREE.MeshStandardMaterial({ color: 0xeeeeea, roughness: 0.75, envMapIntensity: 0.4, transparent: true });
     // de noche el remate de las paredes es una tira de luz del color del contraluz
     if (night && !neon) capMat.color.setHex(0x2a2a3a), capMat.emissive.setHex(theme.rim[segIndex++ % 2]), (capMat.emissiveIntensity = 0.4);
@@ -174,7 +174,7 @@ export function buildCourse(scene, course, theme) {
     post.castShadow = true;
     const ball = new THREE.Mesh(
       new THREE.SphereGeometry(WALL_HALF * 1.1, 20, 14),
-      neon ? glowMat(neonColor(corner++)) : new THREE.MeshStandardMaterial({ color: 0xff5a4e, emissive: 0xff3a2e, emissiveIntensity: night ? 1.4 : 0.15 }),
+      neon ? glowMat(neonColor(corner++)) : new THREE.MeshStandardMaterial({ color: 0xff5a4e, emissive: 0xff3a2e, emissiveIntensity: night ? 0.35 : 0.15 }),
     );
     ball.position.set(x, h + WALL_H + 0.17, z);
     scene.add(post, ball);
@@ -229,7 +229,7 @@ export function buildCourse(scene, course, theme) {
     bar.position.y = WALL_H / 2 + 0.02;
     const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, WALL_H * 2, 16), new THREE.MeshStandardMaterial({ color: 0x3d3d5c, metalness: 0.4, roughness: 0.4 }));
     hub.position.y = WALL_H;
-    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 8), new THREE.MeshStandardMaterial({ color: 0xffc145, emissive: 0xffa020, emissiveIntensity: night ? 1.5 : 0.25 }));
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 8), new THREE.MeshStandardMaterial({ color: 0xffc145, emissive: 0xffa020, emissiveIntensity: night ? 0.35 : 0.2 }));
     cap.position.y = WALL_H * 2;
     bar.castShadow = hub.castShadow = true;
     outline(hub, 0.03);
@@ -379,7 +379,7 @@ function portalMesh(scene, [x, z], r, css, color, y = 0) {
   const disc = new THREE.Mesh(new THREE.CircleGeometry(r, 40), new THREE.MeshBasicMaterial({ map: swirlTexture(css), transparent: true, depthWrite: false }));
   disc.rotation.x = -Math.PI / 2;
   disc.position.y = 0.006;
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.045, 10, 40), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.2, roughness: 0.3 }));
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.045, 10, 40), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.35, roughness: 0.3 }));
   ring.rotation.x = -Math.PI / 2;
   ring.position.y = 0.03;
   const beam = new THREE.Mesh(
@@ -587,7 +587,7 @@ function scaleUV(geo, su, sv) {
 const sandEdgeMat = new THREE.MeshStandardMaterial({ color: 0xc9a861, roughness: 1 });
 const contactMat = new THREE.MeshBasicMaterial({ map: softDotTexture(), color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false });
 const dotMats = {};
-const dotMat = (night) => (dotMats[night] ??= new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: night ? 1.2 : 0.2 }));
+const dotMat = (night) => (dotMats[night] ??= new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: night ? 0.35 : 0.15 }));
 
 /** Degradado transversal: oscuro en el centro (bajo la pared) y transparente a los lados. */
 function aoStripTexture() {

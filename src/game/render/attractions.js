@@ -12,73 +12,144 @@ export function attractionStyle(theme) {
   return { kind: 'day', colors: [0xff5a4e, 0x3d8bff, 0xffc145] };
 }
 
-// GLOW baja todos los neones a la vez (al 60 %: con el resplandor deslumbraban)
-const GLOW = 0.6;
-const glowMat = (color, intensity = 1.6) => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: intensity * GLOW, roughness: 0.35 });
+// GLOW ajustado para que los brillos nunca excedan el 15% de bloom
+const GLOW = 0.35;
+const glowMat = (color, intensity = 1.0) =>
+  new THREE.MeshStandardMaterial({
+    color,
+    emissive: color,
+    emissiveIntensity: Math.min(0.35, intensity * GLOW),
+    roughness: 0.35,
+  });
 
-/** Looping: carril que da una vuelta completa, con raíles y columnas. */
+/** Looping: carril que da una vuelta completa, con raíles y columnas perfectamente alineadas. */
 export function buildLoop(scene, loop, style, i = 0) {
   const g = new THREE.Group();
-  const N = 160, half = loop.w / 2 - 0.2, S = loopTable(loop).length;
+  const N = 180;
+  // Anchura completa del carril ajustada a la física menos un margen mínimo para los raíles
+  const half = loop.w / 2 - 0.03;
+  const S = loopTable(loop).length;
   const pos = [], idx = [];
+
   for (let k = 0; k <= N; k++) {
     const p = (k / N) * S;
     for (const side of [-half, half]) {
       const q = loopPoint(loop, p, side);
-      // el carril queda justo debajo de la bola: un pelo hacia fuera de la vuelta
-      pos.push(q.x - q.dx * q.nAlong * 0.004, q.y - q.nY * 0.004 + 0.004, q.z - q.dz * q.nAlong * 0.004);
+      // Offset perpendicular a la superficie del carril hacia afuera de la vuelta (inward normal es dx*nAlong, nY, dz*nAlong)
+      const nx = q.dx * q.nAlong, ny = q.nY, nz = q.dz * q.nAlong;
+      const off = 0.003;
+      pos.push(q.x - nx * off, q.y - ny * off, q.z - nz * off);
     }
     if (k < N) idx.push(k * 2, k * 2 + 1, k * 2 + 2, k * 2 + 1, k * 2 + 3, k * 2 + 2);
   }
+
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.setIndex(idx);
   geo.computeVertexNormals();
+
   const color = style.colors[i % style.colors.length];
+  // El carril debe ser OPACO para evitar fallos de ordenación z-buffer en giros 3D
   const trackMat =
     style.kind === 'neon'
-      ? new THREE.MeshStandardMaterial({ color: 0x10142e, emissive: color, emissiveIntensity: 0.18, roughness: 0.3, metalness: 0.4, side: THREE.DoubleSide, transparent: true, opacity: 0.85 })
-      : new THREE.MeshStandardMaterial({ color: style.kind === 'night' ? 0x2b5fd9 : 0x3d8bff, roughness: 0.45, side: THREE.DoubleSide });
+      ? new THREE.MeshStandardMaterial({
+          color: 0x0e1124,
+          roughness: 0.35,
+          metalness: 0.65,
+          emissive: color,
+          emissiveIntensity: 0.12,
+          side: THREE.DoubleSide,
+        })
+      : new THREE.MeshStandardMaterial({
+          color: style.kind === 'night' ? 0x2b5fd9 : 0x3d8bff,
+          roughness: 0.45,
+          side: THREE.DoubleSide,
+        });
   const track = new THREE.Mesh(geo, trackMat);
   track.receiveShadow = true;
   g.add(track);
 
-  // raíles en los bordes
-  const railMat = style.kind === 'day' ? new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.5 }) : glowMat(color, 2);
-  for (const side of [-half - 0.04, half + 0.04]) {
-    const pts = [];
-    for (let k = 0; k <= 70; k++) {
-      const q = loopPoint(loop, (k / 70) * S, side);
-      pts.push(new THREE.Vector3(q.x - q.dx * q.nAlong * 0.03, q.y - q.nY * 0.03 + 0.03, q.z - q.dz * q.nAlong * 0.03));
+  // Línea guía central de neón que marca la trayectoria limpia del looping
+  const cPos = [], cIdx = [];
+  const cW = 0.035;
+  for (let k = 0; k <= N; k++) {
+    const p = (k / N) * S;
+    for (const side of [-cW, cW]) {
+      const q = loopPoint(loop, p, side);
+      const nx = q.dx * q.nAlong, ny = q.nY, nz = q.dz * q.nAlong;
+      cPos.push(q.x + nx * 0.001, q.y + ny * 0.001, q.z + nz * 0.001);
     }
-    const rail = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 160, 0.045, 8), railMat);
+    if (k < N) cIdx.push(k * 2, k * 2 + 1, k * 2 + 2, k * 2 + 1, k * 2 + 3, k * 2 + 2);
+  }
+  const cGeo = new THREE.BufferGeometry();
+  cGeo.setAttribute('position', new THREE.Float32BufferAttribute(cPos, 3));
+  cGeo.setIndex(cIdx);
+  cGeo.computeVertexNormals();
+  const centerStripe = new THREE.Mesh(
+    cGeo,
+    new THREE.MeshStandardMaterial({
+      color,
+      emissive: color,
+      emissiveIntensity: style.kind === 'neon' ? 0.35 : 0.2,
+      roughness: 0.2,
+      side: THREE.DoubleSide,
+    })
+  );
+  g.add(centerStripe);
+
+  // Raíles laterales elevados uniformemente sobre el carril a lo largo de la normal interior
+  const railMat =
+    style.kind === 'day'
+      ? new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.5 })
+      : glowMat(color, 1.0);
+
+  for (const side of [-half, half]) {
+    const pts = [];
+    const railSteps = 120;
+    for (let k = 0; k <= railSteps; k++) {
+      const q = loopPoint(loop, (k / railSteps) * S, side);
+      const nx = q.dx * q.nAlong, ny = q.nY, nz = q.dz * q.nAlong;
+      // Elevado exactamente hacia el interior del carril para hacer de barandilla continua
+      pts.push(new THREE.Vector3(q.x + nx * 0.038, q.y + ny * 0.038, q.z + nz * 0.038));
+    }
+    const rail = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 160, 0.035, 8), railMat);
     rail.castShadow = true;
     g.add(rail);
   }
 
-  // dos columnas que sujetan la vuelta por arriba
+  // Estructura de soporte que sujeta la vuelta en la cima
   const top = loopPoint(loop, S / 2, 0);
-  const postMat = style.kind === 'neon' ? new THREE.MeshStandardMaterial({ color: 0x15152a, metalness: 0.6, roughness: 0.4 }) : new THREE.MeshStandardMaterial({ color: 0xe8e8e8, metalness: 0.4, roughness: 0.4 });
+  const postMat =
+    style.kind === 'neon'
+      ? new THREE.MeshStandardMaterial({ color: 0x15152a, metalness: 0.7, roughness: 0.35 })
+      : new THREE.MeshStandardMaterial({ color: 0xe8e8e8, metalness: 0.4, roughness: 0.4 });
   const sx = -loop.dir[1], sz = loop.dir[0];
   const h = top.y + 0.15;
+
   for (const s of [-1, 1]) {
-    const off = s * (loop.w / 2 + 0.25);
+    const off = s * (loop.w / 2 + 0.15);
     const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, h, 10), postMat);
     post.position.set(top.x + sx * off, h / 2, top.z + sz * off);
     post.castShadow = true;
-    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 8), style.kind === 'day' ? new THREE.MeshStandardMaterial({ color: 0xffc145 }) : glowMat(color, 2.4));
-    lamp.position.set(top.x + sx * off, h + 0.08, top.z + sz * off);
+    const lamp = new THREE.Mesh(
+      new THREE.SphereGeometry(0.09, 12, 8),
+      style.kind === 'day' ? new THREE.MeshStandardMaterial({ color: 0xffc145 }) : glowMat(color, 1.0)
+    );
+    lamp.position.set(top.x + sx * off, h + 0.06, top.z + sz * off);
     g.add(post, lamp);
   }
-  const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, loop.w + 0.5, 8), postMat);
+
+  const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, loop.w + 0.3, 8), postMat);
   bar.position.set(top.x, h, top.z);
   bar.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(sx, 0, sz));
   g.add(bar);
+
   if (style.kind !== 'day') {
-    const light = new THREE.PointLight(color, 3, 5, 1.5);
+    const light = new THREE.PointLight(color, 1.2, 5, 1.5);
     light.position.set(top.x, top.y * 0.5, top.z);
     g.add(light);
   }
+
   scene.add(g);
   return { update() {} };
 }

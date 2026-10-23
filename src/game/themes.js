@@ -167,6 +167,7 @@ export const THEMES = {
   },
   // neón: pista oscura con bordes de luz (neon son los colores de las luces)
   neon: {
+    rim: [0x00f0ff, 0xff2bd6],
     sound: 'crickets',
     skyTop: 0x05010f,
     skyHorizon: 0x34106a,
@@ -189,6 +190,7 @@ export const THEMES = {
     neon: [0x00f0ff, 0xff2bd6, 0xfff23a],
   },
   neonPink: {
+    rim: [0xff2bd6, 0x00ffa3],
     sound: 'crickets',
     skyTop: 0x0d0221,
     skyHorizon: 0x6a0f5a,
