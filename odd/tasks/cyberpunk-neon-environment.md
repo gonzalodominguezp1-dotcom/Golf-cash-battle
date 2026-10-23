@@ -12,11 +12,11 @@ Dotar a los mapas de temática neón (`neon` y `neonPink`) de un entorno 3D inme
 - Cero invasión o clipping sobre el campo de juego y preservación absoluta del determinismo físico (60/60 tests passing).
 
 ## Checklist de Tareas
-- [x] `task-1`: Diseñar y crear módulo cyberpunk liviano (`src/game/render/cyberpunkEnvironment.js`) con 12 monolitos lejanos y control estricto de emisivos para bloom <= 15%.
-- [x] `task-2`: Implementar 2 carteles holográficos flotantes de alta altitud, 2 haces láser suaves y 3 speeders en corredor superior.
-- [x] `task-3`: Terreno cyberpunk con relieve de montañas de final picudo (`sharpPeak` con ruido ridged multifractal y flatShading) y props perimetrales seguros.
-- [x] `task-4`: Corregir el modelado visual del looping en `src/game/render/attractions.js` (carril opaco, anchura calibrada, raíles normales y línea guía) y acotar el bloom en `GolfGame.js` y `course.js` al 15%.
-- [x] `task-5`: Verificación integral en código, bundle de producción (`pnpm build`) y validación de la suite completa (`pnpm test` 60/60 tests ok).
+- [x] `task-1`: Diseñar y crear módulo cyberpunk liviano (`src/game/render/cyberpunkEnvironment.js`) con 12 monolitos lejanos y control estricto de emisivos para bloom <= 15% — Commit: `9c08dcc`.
+- [x] `task-2`: Implementar 2 carteles holográficos flotantes de alta altitud, 2 haces láser suaves y 3 speeders en corredor superior — Commit: `9c08dcc`.
+- [x] `task-3`: Terreno cyberpunk con relieve de montañas de final picudo (`sharpPeak` con ruido ridged multifractal y flatShading) y props perimetrales seguros — Commit: `9c08dcc`.
+- [x] `task-4`: Corregir el modelado visual del looping en `src/game/render/attractions.js` (carril opaco, anchura calibrada, raíles normales y línea guía) y acotar el bloom en `GolfGame.js` y `course.js` al 15% — Commit: `9c08dcc`.
+- [x] `task-5`: Verificación integral en código, bundle de producción (`pnpm build`) y validación de la suite completa (`pnpm test` 60/60 tests ok) — Commit: `9c08dcc`.
 
 ## Registro de Estado y Evidencia
 - **Ruta implementada**: Directa modular por componentes.
