@@ -22,7 +22,7 @@ Añadir una opción de juego libre en solitario con selector de mapa, sin límit
 - [x] `task-4`: Tests unitarios automatizados para modo libre (`tests/freeplay.test.js`) y verificación completa de la suite (60/60 pasando).
 
 ## Registro de Estado y Evidencia
-- **Ruta implementada**: Directa con tareas desacopladas en rama `feature/solo-free-play`.
+- **Ruta implementada**: Directa con tareas desacopladas en rama `feature/solo-free-play` (Commit: `055d087`).
 - **Engram Mirror**: `odd/solo-free-play/tasks` (marcado como local/pendiente por disponibilidad de herramienta).
 - **Modo TDD**: Functional checks + suite de tests unitarios automáticos (`node --test`).
 - **task-1 completada**: `GolfGame.js` actualizado para aceptar `timeLimit: null` desactivando `deadlineTick` y descalificaciones. Implementado `game.restart()` para reiniciar al tee sin recargar toda la escena. En `main.js`, `playScreen` soporta `freePlay: true`, oculta rivales, deshabilita temporizador y cuenta máxima de golpes, añade atajo [R] y modal de fin de hoyo `showFreePlayHoleResult`.
