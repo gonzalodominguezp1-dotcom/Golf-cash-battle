@@ -198,30 +198,6 @@ async function showLobby() {
       ${backend.mode === 'local' ? '<p class="offline">Modo sin conexión: el saldo se guarda solo en este móvil</p>' : ''}
       ${backend.account?.profile?.paid_block ? `<button class="notice account-hint" data-go="account">${{ account_required: 'Guarda tu cuenta con email para jugar mesas con entrada →', kyc_required: 'Verifica tu edad e identidad para jugar mesas con entrada →', account_review: 'Tu cuenta está en revisión: de momento solo Práctica', underage: 'Mesas con entrada solo para mayores de 18' }[backend.account.profile.paid_block]}</button>` : ''}
       <div class="my-tournaments"></div>
-      <section class="freeplay-lobby-card holo">
-        <div class="shine"></div>
-        <div class="freeplay-ambient"></div>
-        <div class="freeplay-card-body">
-          <div class="freeplay-badge-line">
-            <span class="freeplay-pill-tag">⛳ MODO LIBRE</span>
-            <span class="freeplay-solo-tag">18 MAPAS · EN SOLITARIO</span>
-          </div>
-          <h2 class="freeplay-title">Juego Libre en Solitario</h2>
-          <p class="freeplay-subtitle">Elige cualquier hoyo y juega a tu ritmo: sin tiempo, sin misiones ni desafíos y sin oponentes.</p>
-          <div class="freeplay-chips">
-            <span class="spec-chip">⏱️ Sin límite de tiempo</span>
-            <span class="spec-chip">👤 Sin rivales</span>
-            <span class="spec-chip">🎯 Tiros ilimitados</span>
-            <span class="spec-chip">🔄 Reinicio instantáneo</span>
-          </div>
-        </div>
-        <div class="freeplay-card-cta">
-          <button class="primary freeplay-btn-cta" data-go="freeplay">
-            <span>Elegir Mapa</span>
-            <span class="btn-arrow">➔</span>
-          </button>
-        </div>
-      </section>
       <div class="section-head">
         <div class="section-title-row">
           <h1>Mesas de Torneo</h1>
