@@ -73,6 +73,7 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
         </div>
         <nav class="desktop-nav">
           <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}"><span>⛳</span>Jugar <kbd>1</kbd></button>
+          <button data-go="freeplay" class="${screen === 'freeplay' ? 'on' : ''}"><span>🎯</span>Juego Libre <kbd>5</kbd></button>
           <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}"><span>✨</span>Skins <kbd>2</kbd></button>
           <button data-go="wallet" class="${screen === 'wallet' ? 'on' : ''}"><span>💎</span>Wallet <kbd>3</kbd></button>
           <button data-go="account" class="${screen === 'account' ? 'on' : ''}"><span>👤</span>Cuenta <kbd>4</kbd></button>
@@ -102,6 +103,7 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
       h(`
       <nav class="tabbar">
         <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}"><span>⛳</span>Jugar</button>
+        <button data-go="freeplay" class="${screen === 'freeplay' ? 'on' : ''}"><span>🎯</span>Libre</button>
         <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}"><span>✨</span>Skins</button>
         <button data-go="wallet" class="${screen === 'wallet' ? 'on' : ''}"><span>💎</span>Wallet</button>
         <button data-go="account" class="${screen === 'account' ? 'on' : ''}"><span>👤</span>Cuenta</button>
@@ -130,6 +132,7 @@ window.addEventListener('keydown', (e) => {
   else if (e.code === 'Digit2') go('skins');
   else if (e.code === 'Digit3') go('wallet');
   else if (e.code === 'Digit4') go('account');
+  else if (e.code === 'Digit5') go('freeplay');
   else if (e.code === 'KeyM') {
     setMuted(!isMuted());
     const topMute = document.querySelector('.topbar-sound-btn');
@@ -142,6 +145,7 @@ function go(to) {
   if (to === 'wallet') return showWallet();
   if (to === 'skins') return showSkins();
   if (to === 'account') return showAccount();
+  if (to === 'freeplay') return showFreePlayCourseSelect();
   return showLobby();
 }
 
@@ -194,6 +198,30 @@ async function showLobby() {
       ${backend.mode === 'local' ? '<p class="offline">Modo sin conexión: el saldo se guarda solo en este móvil</p>' : ''}
       ${backend.account?.profile?.paid_block ? `<button class="notice account-hint" data-go="account">${{ account_required: 'Guarda tu cuenta con email para jugar mesas con entrada →', kyc_required: 'Verifica tu edad e identidad para jugar mesas con entrada →', account_review: 'Tu cuenta está en revisión: de momento solo Práctica', underage: 'Mesas con entrada solo para mayores de 18' }[backend.account.profile.paid_block]}</button>` : ''}
       <div class="my-tournaments"></div>
+      <section class="freeplay-lobby-card holo">
+        <div class="shine"></div>
+        <div class="freeplay-ambient"></div>
+        <div class="freeplay-card-body">
+          <div class="freeplay-badge-line">
+            <span class="freeplay-pill-tag">⛳ MODO LIBRE</span>
+            <span class="freeplay-solo-tag">18 MAPAS · EN SOLITARIO</span>
+          </div>
+          <h2 class="freeplay-title">Juego Libre en Solitario</h2>
+          <p class="freeplay-subtitle">Elige cualquier hoyo y juega a tu ritmo: sin tiempo, sin misiones ni desafíos y sin oponentes.</p>
+          <div class="freeplay-chips">
+            <span class="spec-chip">⏱️ Sin límite de tiempo</span>
+            <span class="spec-chip">👤 Sin rivales</span>
+            <span class="spec-chip">🎯 Tiros ilimitados</span>
+            <span class="spec-chip">🔄 Reinicio instantáneo</span>
+          </div>
+        </div>
+        <div class="freeplay-card-cta">
+          <button class="primary freeplay-btn-cta" data-go="freeplay">
+            <span>Elegir Mapa</span>
+            <span class="btn-arrow">➔</span>
+          </button>
+        </div>
+      </section>
       <div class="section-head">
         <div class="section-title-row">
           <h1>Mesas de Torneo</h1>
@@ -963,35 +991,40 @@ async function startMatch(tier) {
  * Pantalla de juego. mode 'hole' es un hoyo normal; 'tiebreak' es el hoyo
  * sin agujero del desempate (un tiro, gana el más cercano).
  */
-function playScreen(match, { course, title, subtitle, players, onDone, firstSunkTick = null, timeLimit = HOLE_TIME_LIMIT }) {
+function playScreen(match, { course, title, subtitle, players, onDone, firstSunkTick = null, timeLimit = HOLE_TIME_LIMIT, freePlay = false, onRestartHole = null, onSelectMap = null }) {
   const tiebreak = !!course.noCup;
   const view = h(`
-    <main class="play-screen ${tiebreak ? 'is-tiebreak' : ''}">
+    <main class="play-screen ${tiebreak ? 'is-tiebreak' : ''} ${freePlay ? 'is-freeplay' : ''}">
       <div class="stage"></div>
       <div class="vignette"></div>
-      <div class="hud">
-        <div class="pill hl">${title}</div>
-        <div class="pill">${tiebreak ? '1 tiro' : `Par ${course.par}`}</div>
+      <div class="hud ${freePlay ? 'hud-freeplay' : ''}">
+        ${freePlay ? '<div class="pill hl freeplay-pill">⛳ Modo Libre</div>' : `<div class="pill hl">${title}</div>`}
+        <div class="pill">${freePlay ? course.name : tiebreak ? '1 tiro' : `Par ${course.par}`}</div>
+        ${freePlay ? `<div class="pill">Par ${course.par}</div>` : ''}
         ${tiebreak ? '' : '<div class="pill strokes">Golpes <b>0</b></div>'}
         <div class="pill dist">— m</div>
+        ${freePlay ? `
+        <button class="pill restart-btn hud-freeplay-btn" aria-label="Reiniciar hoyo" title="Reiniciar hoyo al tee (R)">🔄 Reiniciar <kbd class="kbd-hint">R</kbd></button>
+        <button class="pill map-select-btn hud-freeplay-btn" aria-label="Elegir otro mapa" title="Elegir otro mapa">🗺️ Mapas</button>
+        ` : ''}
         <button class="pill mute mobile-only" aria-label="Sonido">${isMuted() ? '🔇' : '🔊'}</button>
         <button class="pill fullscreen mobile-only" aria-label="Pantalla completa" title="Pantalla completa (F11)">⛶</button>
         <button class="pill settings-btn-hud mobile-only" aria-label="Ajustes" title="Ajustes (Esc)">⚙️</button>
         <button class="pill desktop-esc-hint" aria-label="Ajustes">⚙️ Ajustes <kbd class="kbd-hint">Esc</kbd></button>
       </div>
-      <div class="rivals">${players
+      <div class="rivals ${freePlay ? 'rivals-hidden' : ''}">${freePlay ? '' : players
         .map((p) => `<div class="chip ${p.id === 'me' ? 'me' : ''}" data-id="${p.id}" style="--c:${p.color}"><i>${p.name[0]}</i><b>${tiebreak ? '·' : 0}</b></div>`)
         .join('')}</div>
       <div class="toasts"></div>
       <div class="intro-banner">
         <small>${subtitle}</small>
         <strong>${course.name}</strong>
-        <span>${tiebreak ? 'Deja la bola lo más cerca de la diana' : `Par ${course.par}`}</span>
+        <span>${freePlay ? `Modo Libre · Par ${course.par} · Sin tiempo ni rivales` : tiebreak ? 'Deja la bola lo más cerca de la diana' : `Par ${course.par}`}</span>
         ${course.tip && !tiebreak ? `<em>${course.tip}</em>` : ''}
       </div>
       <div class="overview-banner"><span class="ov-mouse">🗺️ Vista General del Mapa · Mueve el ratón para orbitar · Pulsa <kbd>Espacio</kbd> para volver</span><span class="ov-touch">🗺️ Vista del mapa · Desliza para girarla</span></div>
       <div class="cup-banner"></div>
-      <div class="hole-timer" hidden><small>Tiempo para embocar</small><b>${timeLimit}</b></div>
+      <div class="hole-timer" hidden><small>Tiempo para embocar</small><b>${timeLimit ?? ''}</b></div>
       <div class="hint">
         <span class="hint-touch">↔ Desliza: cámara · Arrastra la bola hacia atrás: tiro</span>
         <span class="hint-mouse">🖱️ Ratón para apuntar · Clic Izquierdo para calcular y disparar · <kbd>Espacio</kbd> Ver mapa · <kbd>Esc</kbd> Ajustes</span>
@@ -1002,6 +1035,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         <span><kbd>Rueda</kbd> Zoom / Fuerza</span>
         <span><kbd>Espacio</kbd> Vista mapa completo</span>
         <span><kbd>Esc</kbd> Ajustes</span>
+        ${freePlay ? '<span><kbd>R</kbd> Reiniciar hoyo</span>' : ''}
       </div>
       <div class="power"><div class="fill"></div><span>0%</span></div>
       <button class="map-btn" aria-label="Ver el hoyo completo">Ver mapa <kbd class="kbd-hint">Espacio</kbd></button>
@@ -1112,6 +1146,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
 
             <div class="settings-modal-footer">
               <button class="primary resume-btn">▶ Reanudar partida</button>
+              ${freePlay ? '<button class="secondary restart-settings-btn">🔄 Reiniciar Hoyo</button><button class="secondary map-settings-btn">🗺️ Cambiar de Mapa</button>' : ''}
               <button class="danger quit-btn">🚪 Salir al Lobby</button>
             </div>
           </div>
@@ -1178,6 +1213,27 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         }
       });
 
+      if (freePlay) {
+        overlay.querySelector('.restart-settings-btn')?.addEventListener('click', () => {
+          close();
+          if (onRestartHole) {
+            onRestartHole();
+          } else if (game) {
+            game.restart();
+            if (strokesEl) strokesEl.textContent = '0';
+            showDistance();
+            toast('Hoyo reiniciado al tee', '#00f076');
+          }
+        });
+        overlay.querySelector('.map-settings-btn')?.addEventListener('click', () => {
+          overlay.remove();
+          game.setPaused?.(false);
+          game.dispose();
+          if (onSelectMap) onSelectMap();
+          else showFreePlayCourseSelect();
+        });
+      }
+
       view.append(overlay);
     }
 
@@ -1231,6 +1287,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         timerEl.classList.add('tick');
       },
       onTimeUp: () => {
+        if (freePlay) return;
         timerEl.hidden = true;
         setChip('me', '✗', true);
         banner('¡Tiempo! Descalificado');
@@ -1243,11 +1300,44 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         if (tiebreak) {
           setChip('me', `${game.distanceToCup().toFixed(2)}m`, true);
           setTimeout(() => finish(n), 900);
-        } else if (n >= MAX_STROKES_PER_HOLE) finish(n);
+        } else if (!freePlay && n >= MAX_STROKES_PER_HOLE) finish(n);
       },
     });
-    game.load(course, { bots: players.filter((p) => p.isBot), skin: progress.skin, firstSunkTick, timeLimit });
+    game.load(course, { bots: freePlay ? [] : players.filter((p) => p.isBot), skin: progress.skin, firstSunkTick, timeLimit: freePlay ? null : timeLimit });
     showDistance();
+    if (freePlay) {
+      view.querySelector('.restart-btn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (onRestartHole) onRestartHole();
+        else if (game) {
+          game.restart();
+          if (strokesEl) strokesEl.textContent = '0';
+          showDistance();
+          toast('Hoyo reiniciado al tee', '#00f076');
+        }
+      });
+      view.querySelector('.map-select-btn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        game.locked = true;
+        game.exitPointerLock?.();
+        game.dispose();
+        if (onSelectMap) onSelectMap();
+        else showFreePlayCourseSelect();
+      });
+      const onKeyR = (e) => {
+        if (e.code === 'KeyR' && !game?.paused && !view.querySelector('.in-game-settings-overlay')) {
+          e.preventDefault();
+          if (onRestartHole) onRestartHole();
+          else if (game) {
+            game.restart();
+            if (strokesEl) strokesEl.textContent = '0';
+            showDistance();
+            toast('Hoyo reiniciado al tee', '#00f076');
+          }
+        }
+      };
+      window.addEventListener('keydown', onKeyR);
+    }
     if (isMuted()) toast('🔇 Sonido silenciado · actívalo en ⚙️ Ajustes', '#ffffff');
     const muteBtn = view.querySelector('.mute');
     muteBtn.addEventListener('click', () => {
@@ -1782,6 +1872,208 @@ function alertMsg(text) {
     </div>`);
   overlay.querySelector('button').addEventListener('click', () => showLobby());
   app.append(overlay);
+}
+
+// ---------- juego libre en solitario ----------
+
+const THEME_INFO = {
+  meadow: { name: 'Pradera', icon: '🌿', color: '#5cc24a' },
+  beach: { name: 'Playa', icon: '🏖️', color: '#2fe0ff' },
+  sunset: { name: 'Atardecer', icon: '🌅', color: '#ff9a5c' },
+  snow: { name: 'Nieve', icon: '❄️', color: '#90d7ff' },
+  canyon: { name: 'Cañón', icon: '🏜️', color: '#e58f4a' },
+  autumn: { name: 'Otoño', icon: '🍂', color: '#e06b3a' },
+  night: { name: 'Noche', icon: '🌙', color: '#7a8bff' },
+  gardenNight: { name: 'Jardín Nocturno', icon: '🌸', color: '#da70d6' },
+  volcano: { name: 'Volcán', icon: '🌋', color: '#ff4d2e' },
+  beachNight: { name: 'Playa Nocturna', icon: '🌴', color: '#00d2be' },
+  neon: { name: 'Neón Cyberpunk', icon: '⚡', color: '#00e5ff' },
+  neonPink: { name: 'Neón Magenta', icon: '🎆', color: '#ff2e93' },
+};
+
+function getCourseFeatures(c) {
+  const feats = [];
+  if (c.loops?.length) feats.push('🌀 Looping');
+  if (c.windmills?.length) feats.push('⚙️ Molino');
+  if (c.portals?.length) {
+    if (c.portals.some((p) => p.tube)) feats.push('🚇 Tubos');
+    else feats.push('🌌 Portales');
+  }
+  if (c.tunnels?.length) feats.push('🚇 Pasadizo');
+  if (c.boosts?.length) feats.push('⚡ Acelerador');
+  if (c.mounds?.length) feats.push('🌋 Volcán');
+  if (c.slopes?.length) feats.push('📐 Pendiente');
+  if (c.movers?.length) feats.push('🧱 Bloques');
+  if (c.spinners?.length) feats.push('🔄 Aspas');
+  if (c.bumpers?.length) feats.push('🍄 Setas');
+  if (c.sand?.length) feats.push('🏖️ Arena');
+  return feats;
+}
+
+export async function showFreePlayCourseSelect() {
+  screen = 'freeplay';
+  const view = h(`
+    <main class="screen freeplay-select">
+      <div class="freeplay-select-hero">
+        <div class="freeplay-select-badge-row">
+          <span class="rarity-pill rarity-diamond">Modo Práctica Libre</span>
+          <span class="hero-level-tag">${COURSES.length} Hoyos</span>
+        </div>
+        <div class="section-title-row">
+          <h1>⛳ Selector de Mapas</h1>
+          <span class="live-pill solo-live-pill"><i class="pulse-dot"></i> EN SOLITARIO</span>
+        </div>
+        <p class="freeplay-desc">Elige cualquier hoyo para entrenar a tu propio ritmo. Sin límite de tiempo, sin desafíos ni misiones y sin oponentes.</p>
+        <div class="freeplay-features-bar">
+          <span class="spec-chip">⏱️ Sin límite de tiempo</span>
+          <span class="spec-chip">👤 Sin rivales</span>
+          <span class="spec-chip">🎯 Tiros ilimitados</span>
+          <span class="spec-chip">🔄 Reinicio rápido [R]</span>
+        </div>
+      </div>
+
+      <div class="courses-grid"></div>
+
+      <div class="freeplay-footer-actions">
+        <button class="ghost back-to-lobby" data-go="lobby">← Volver al Menú Principal</button>
+      </div>
+    </main>
+  `);
+
+  const grid = view.querySelector('.courses-grid');
+  COURSES.forEach((course, idx) => {
+    const theme = THEME_INFO[course.theme] || { name: course.theme, icon: '⛳', color: '#00f076' };
+    const feats = getCourseFeatures(course);
+    const card = h(`
+      <div class="course-card holo theme--${course.theme}">
+        <div class="shine"></div>
+        <div class="course-card-ambient"></div>
+        <div class="course-card-top">
+          <span class="course-num-badge">Hoyo ${idx + 1}</span>
+          <span class="course-theme-tag" style="--accent:${theme.color}">
+            <i>${theme.icon}</i> ${theme.name}
+          </span>
+          <span class="course-par-badge">Par ${course.par}</span>
+        </div>
+        <h3 class="course-name">${course.name}</h3>
+        ${course.tip ? `<p class="course-tip">💡 ${course.tip}</p>` : ''}
+        ${feats.length ? `<div class="course-feats">${feats.map((f) => `<span class="feat-tag">${f}</span>`).join('')}</div>` : ''}
+        <button class="primary play-course-btn">Jugar Hoyo ${idx + 1}</button>
+      </div>
+    `);
+    card.querySelector('.play-course-btn').addEventListener('click', () => playFreePlay(idx));
+    grid.append(card);
+  });
+
+  const tbTheme = THEME_INFO[TIEBREAK_COURSE.theme] || { name: 'Atardecer', icon: '🌅', color: '#ff9a5c' };
+  const tbCard = h(`
+    <div class="course-card holo course-card-extra theme--${TIEBREAK_COURSE.theme}">
+      <div class="shine"></div>
+      <div class="course-card-ambient"></div>
+      <div class="course-card-top">
+        <span class="course-num-badge extra">Extra</span>
+        <span class="course-theme-tag" style="--accent:${tbTheme.color}">
+          <i>${tbTheme.icon}</i> ${tbTheme.name}
+        </span>
+        <span class="course-par-badge">Diana</span>
+      </div>
+      <h3 class="course-name">Desempate: Diana</h3>
+      <p class="course-tip">🎯 Un solo tiro al objetivo: afina la precisión al centro de la diana sin agujero.</p>
+      <div class="course-feats">
+        <span class="feat-tag">🎯 Diana de precisión</span>
+        <span class="feat-tag">⚡ Muerte súbita</span>
+      </div>
+      <button class="primary play-course-btn">Jugar Desempate</button>
+    </div>
+  `);
+  tbCard.querySelector('.play-course-btn').addEventListener('click', () => playFreePlay('tiebreak'));
+  grid.append(tbCard);
+
+  await shell(view);
+}
+
+export function playFreePlay(courseIndex) {
+  screen = 'freeplay-game';
+  const isTiebreak = courseIndex === 'tiebreak';
+  const course = isTiebreak ? TIEBREAK_COURSE : COURSES[courseIndex];
+  const holeNum = isTiebreak ? 'Extra' : courseIndex + 1;
+  const totalHoles = COURSES.length;
+
+  playScreen(null, {
+    course,
+    freePlay: true,
+    title: isTiebreak ? 'Desempate' : `Hoyo ${holeNum}/${totalHoles}`,
+    subtitle: isTiebreak ? 'Práctica de Precisión' : `Modo Libre · Hoyo ${holeNum}`,
+    players: [{ id: 'me', name: 'Tú', color: '#00f076', isBot: false }],
+    timeLimit: null,
+    onRestartHole: () => playFreePlay(courseIndex),
+    onSelectMap: () => showFreePlayCourseSelect(),
+    onDone: (_g, strokes, _banner) => {
+      showFreePlayHoleResult(courseIndex, course, strokes);
+    },
+  });
+}
+
+export function showFreePlayHoleResult(courseIndex, course, strokes) {
+  const isTiebreak = courseIndex === 'tiebreak';
+  const parDiff = strokes - course.par;
+  const scoreName = scoreLabel(strokes, course.par);
+  const nextIndex = typeof courseIndex === 'number' && courseIndex + 1 < COURSES.length ? courseIndex + 1 : null;
+  const isGood = strokes <= course.par;
+
+  const overlay = h(`
+    <div class="overlay freeplay-result-overlay">
+      <div class="card freeplay-result-card ${isGood ? 'good' : ''}">
+        <div class="freeplay-result-badge">⛳ HOYO COMPLETADO · MODO LIBRE</div>
+        <h2 class="score-title">${scoreName}</h2>
+        <p class="sub">${course.name} · ${strokes} golpe${strokes === 1 ? '' : 's'} · Par ${course.par}</p>
+        
+        <div class="freeplay-stats-box">
+          <div class="stat-item">
+            <span class="stat-label">Golpes</span>
+            <strong class="stat-val">${strokes}</strong>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Par del Hoyo</span>
+            <strong class="stat-val">${course.par}</strong>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Balance</span>
+            <strong class="stat-val ${parDiff <= 0 ? 'good' : ''}">${parDiff === 0 ? 'Par (E)' : parDiff < 0 ? `${parDiff}` : `+${parDiff}`}</strong>
+          </div>
+        </div>
+
+        <div class="freeplay-actions">
+          <button class="primary retry-btn">🔄 Repetir este hoyo</button>
+          ${nextIndex != null ? `<button class="primary next-btn">Siguiente hoyo (${nextIndex + 1}) ➔</button>` : ''}
+          <button class="secondary select-map-btn">🗺️ Elegir otro mapa</button>
+          <button class="ghost to-lobby-btn">Lobby principal</button>
+        </div>
+      </div>
+    </div>
+  `);
+
+  overlay.querySelector('.retry-btn').addEventListener('click', () => {
+    overlay.remove();
+    playFreePlay(courseIndex);
+  });
+  if (nextIndex != null) {
+    overlay.querySelector('.next-btn').addEventListener('click', () => {
+      overlay.remove();
+      playFreePlay(nextIndex);
+    });
+  }
+  overlay.querySelector('.select-map-btn').addEventListener('click', () => {
+    overlay.remove();
+    showFreePlayCourseSelect();
+  });
+  overlay.querySelector('.to-lobby-btn').addEventListener('click', () => {
+    overlay.remove();
+    showLobby();
+  });
+
+  app.append(overlay);
+  sfx.cup();
 }
 
 app.innerHTML = '<main class="screen loading"><h1>⛳</h1><p class="sub">Conectando…</p></main>';

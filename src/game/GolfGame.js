@@ -128,7 +128,7 @@ export class GolfGame {
     this.timedOut = false;
     this.endTick = null; // paso en el que se acabó el tiempo (se manda al servidor)
     this.firstSunkTick = course.noCup ? null : firstSunkTick;
-    this.limitTicks = Math.round(timeLimit / DT);
+    this.limitTicks = timeLimit != null && Number.isFinite(timeLimit) && timeLimit > 0 ? Math.round(timeLimit / DT) : null;
     this.timerShown = undefined;
     this.camTurns = 0; // giros de cámara desde el último tiro, para el antibots
     this.sunkAt = 0;
@@ -246,9 +246,35 @@ export class GolfGame {
     }
   }
 
-  /** Paso en el que se acaba el tiempo del hoyo (null si nadie ha embocado aún). */
+  /** Paso en el que se acaba el tiempo del hoyo (null si nadie ha embocado aún o no hay límite). */
   get deadlineTick() {
-    return this.firstSunkTick == null ? null : this.firstSunkTick + this.limitTicks;
+    return this.firstSunkTick == null || this.limitTicks == null ? null : this.firstSunkTick + this.limitTicks;
+  }
+
+  /** Reinicia el hoyo actual devolviendo la bola al tee con marcador a cero. */
+  restart() {
+    if (!this.course) return;
+    this.ball = { x: this.course.tee[0], z: this.course.tee[1], vx: 0, vz: 0 };
+    this.strokes = 0;
+    this.sunk = false;
+    this.timedOut = false;
+    this.locked = false;
+    this.endTick = null;
+    this.firstSunkTick = null;
+    this.timerShown = undefined;
+    this.shots = [];
+    this.aim = [];
+    this.power = 0;
+    this.fullPower = false;
+    this.#cancelAim();
+    if (this.trail) this.trail.points = [];
+    this.yaw = Math.atan2(this.course.cup[0] - this.course.tee[0], -(this.course.cup[1] - this.course.tee[1]));
+    if (this.course.aimYaw !== undefined) this.yaw = this.course.aimYaw;
+    this.camYaw = this.yaw;
+    this.intro = 0;
+    this.#placeCamera(1, true);
+    this.onStroke?.(0);
+    this.onAim?.(0);
   }
 
   #noteSunk(tick) {
