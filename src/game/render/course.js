@@ -14,11 +14,12 @@ const glowMat = (color) => new THREE.MeshStandardMaterial({ color, emissive: col
 
 /** Contorno de dibujo animado (casco invertido) alrededor de una malla. */
 function outline(mesh, grow = 0.035) {
-  const o = new THREE.Mesh(mesh.geometry, outlineMat);
+  const oMat = new THREE.MeshBasicMaterial({ color: 0x1a1a1a, side: THREE.BackSide, transparent: true });
+  const o = new THREE.Mesh(mesh.geometry, oMat);
   const s = mesh.geometry.boundingSphere ?? (mesh.geometry.computeBoundingSphere(), mesh.geometry.boundingSphere);
   o.scale.setScalar(1 + grow / Math.max(0.05, s.radius));
   mesh.add(o);
-  return mesh;
+  return oMat;
 }
 
 /** Construye la pista: plataforma de césped, hoyo real, paredes de madera, obstáculos y bandera. */
@@ -213,8 +214,8 @@ export function buildCourse(scene, course, theme) {
     );
     top.scale.y = 0.6;
     top.position.y = 0.3;
-    outline(top, 0.03);
-    outline(stem, 0.03);
+    const oTop = outline(top, 0.03);
+    const oStem = outline(stem, 0.03);
     // lunares de la seta en una sola malla
     const dotGeos = [];
     for (let k = 0; k < 5; k++) {
@@ -228,7 +229,7 @@ export function buildCourse(scene, course, theme) {
     dotM.transparent = true;
     const dots = new THREE.Mesh(mergeGeometries(dotGeos), dotM);
     // sombra de contacto suave bajo la seta
-    const contact = new THREE.Mesh(new THREE.PlaneGeometry(b.r * 3.6, b.r * 3.6), contactMat);
+    const contact = new THREE.Mesh(new THREE.PlaneGeometry(b.r * 3.6, b.r * 3.6), getContactMat());
     contact.rotation.x = -Math.PI / 2;
     contact.position.y = 0.007;
     contact.userData.noShadow = true;
@@ -236,7 +237,7 @@ export function buildCourse(scene, course, theme) {
     g.position.set(b.x, lift(b.x, b.z), b.z);
     g.traverse((o) => o.isMesh && !o.userData.noShadow && (o.castShadow = true));
     scene.add(g);
-    g.userData.mats = [stemMat, topMat, dotM];
+    g.userData.mats = [stemMat, topMat, dotM, oTop, oStem];
     g.userData.opacity = 1;
     g.userData.baseEmissive = topMat.emissiveIntensity || 0;
     g.userData.x = b.x;
@@ -251,20 +252,40 @@ export function buildCourse(scene, course, theme) {
     const g = new THREE.Group();
     const tex = neon ? stripeTexture('#' + new THREE.Color(neon[1]).getHexString(), '#111122') : stripeTexture('#ff4b3e', '#ffffff');
     tex.repeat.set(sp.len * 2, 1);
+    const barMat = new THREE.MeshStandardMaterial({
+      map: tex,
+      roughness: 0.5,
+      transparent: true,
+      ...(neon ? { emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.5 } : {}),
+    });
     const bar = new THREE.Mesh(
       new THREE.BoxGeometry(sp.len, WALL_H, WALL_HALF * 2),
-      new THREE.MeshStandardMaterial({ map: tex, roughness: 0.5, ...(neon ? { emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.5 } : {}) }),
+      barMat,
     );
     bar.position.y = WALL_H / 2 + 0.02;
-    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, WALL_H * 2, 16), new THREE.MeshStandardMaterial({ color: 0x3d3d5c, metalness: 0.4, roughness: 0.4 }));
+    const hubMat = new THREE.MeshStandardMaterial({ color: 0x3d3d5c, metalness: 0.4, roughness: 0.4, transparent: true });
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, WALL_H * 2, 16), hubMat);
     hub.position.y = WALL_H;
-    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 8), new THREE.MeshStandardMaterial({ color: 0xffc145, emissive: 0xffa020, emissiveIntensity: night ? 0.35 : 0.2 }));
+    const capMat = new THREE.MeshStandardMaterial({
+      color: 0xffc145,
+      emissive: 0xffa020,
+      emissiveIntensity: night ? 0.35 : 0.2,
+      transparent: true,
+    });
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 8), capMat);
     cap.position.y = WALL_H * 2;
     bar.castShadow = hub.castShadow = true;
-    outline(hub, 0.03);
+    const oHub = outline(hub, 0.03);
     g.add(bar, hub, cap);
     g.position.set(sp.x, lift(sp.x, sp.z), sp.z);
     scene.add(g);
+    g.userData.mats = [barMat, hubMat, capMat, oHub];
+    g.userData.opacity = 1;
+    g.userData.baseEmissive = neon ? 0.5 : (night ? 0.35 : 0.2);
+    g.userData.x = sp.x;
+    g.userData.z = sp.z;
+    g.userData.r = sp.len / 2 + 0.1;
+    g.userData.h = lift(sp.x, sp.z) + WALL_H * 2 + 0.2;
     return g;
   });
 
@@ -318,11 +339,17 @@ export function buildCourse(scene, course, theme) {
   const crate = crateTexture();
   const movers = (course.movers ?? []).map((m) => {
     const geo = new THREE.BoxGeometry(m.w, 0.42, m.d);
-    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: crate, roughness: 0.6 }));
+    const moverMat = new THREE.MeshStandardMaterial({ map: crate, roughness: 0.6, transparent: true });
+    const mesh = new THREE.Mesh(geo, moverMat);
     mesh.position.y = 0.21 + lift(m.x, m.z);
     mesh.castShadow = mesh.receiveShadow = true;
-    outline(mesh, 0.03);
+    const oMover = outline(mesh, 0.03);
     scene.add(mesh);
+    mesh.userData.mats = [moverMat, oMover];
+    mesh.userData.opacity = 1;
+    mesh.userData.w = m.w;
+    mesh.userData.d = m.d;
+    mesh.userData.h = 0.42 + lift(m.x, m.z) + 0.1;
     return mesh;
   });
 
@@ -353,7 +380,14 @@ export function buildCourse(scene, course, theme) {
     bumpers,
     flag: { pole, cloth },
     update(t, cameraPos, ballPos, lookPos, isOverview) {
-      attractions.forEach((a) => a.update(t, ballPos, cameraPos));
+      const cam = { x: cameraPos.x, y: cameraPos.y, z: cameraPos.z };
+      const ball = ballPos ? {
+        x: ballPos.x,
+        y: (lift ? lift(ballPos.x, ballPos.z) : 0) + BALL_R,
+        z: ballPos.z,
+      } : null;
+
+      attractions.forEach((a) => a.update(t, ball, cam));
       tubes.forEach((tb) => tb?.update(t));
       lavaCup?.update(t);
       boostTextures.forEach((tex) => (tex.offset.y = -t * 1.5));
@@ -382,29 +416,9 @@ export function buildCourse(scene, course, theme) {
       pole.position.y += (hc + 0.85 + targetY - pole.position.y) * 0.1;
       cloth.position.y = pole.position.y + 0.83;
 
-      const cam = { x: cameraPos.x, y: cameraPos.y, z: cameraPos.z };
-      const targets = [];
-      if (ballPos) {
-        targets.push({
-          x: ballPos.x,
-          y: (lift ? lift(ballPos.x, ballPos.z) : 0) + BALL_R,
-          z: ballPos.z,
-        });
-      }
-      if (lookPos) {
-        targets.push({
-          x: lookPos.x,
-          y: lookPos.y != null ? lookPos.y : ((lift ? lift(lookPos.x, lookPos.z) : 0) + 0.15),
-          z: lookPos.z,
-        });
-      }
-      if (isOverview) {
-        targets.push({ x: hx, y: hc + 0.05, z: hz });
-      }
-
-      // un poste pegado a la cámara o que tape la visión se vuelve 90% invisible (10% opacidad), nunca desaparece
+      // un poste se vuelve 90% invisible (10% opacidad) ÚNICA Y EXCLUSIVAMENTE si tapa la pelota
       for (const p of posts) {
-        const blocks = postObstructs(cam, targets, p);
+        const blocks = ball ? postBlocksBall(cam, ball, p) : false;
         p.opacity += ((blocks ? 0.1 : 1) - p.opacity) * 0.2;
         p.meshes.forEach((m) => (m.visible = true));
         for (const m of p.mats) {
@@ -416,9 +430,9 @@ export function buildCourse(scene, course, theme) {
         }
       }
 
-      // las paredes que tapen la visión se vuelven 90% invisibles (10% opacidad), nunca desaparecen
+      // las paredes se vuelven 90% invisibles (10% opacidad) ÚNICA Y EXCLUSIVAMENTE si tapan la pelota
       for (const w of walls) {
-        const blocks = wallObstructs(cam, targets, w, lift);
+        const blocks = ball ? wallBlocksBall(cam, ball, w.a, w.b, lift) : false;
         w.opacity += ((blocks ? 0.1 : 1) - w.opacity) * 0.2;
         for (const m of w.mats) {
           m.opacity = w.opacity;
@@ -430,34 +444,43 @@ export function buildCourse(scene, course, theme) {
         }
       }
 
+      // setas rebotadoras: se transparentan al 90% ÚNICA Y EXCLUSIVAMENTE si tapan la pelota
       bumpers.forEach((b) => {
         b.scale.setScalar(1 + (b.userData.squash ?? 0));
         b.userData.squash = (b.userData.squash ?? 0) * 0.85;
         if (b.userData.mats) {
-          const dCam = Math.hypot(cam.x - b.userData.x, cam.z - b.userData.z);
-          const near = dCam < b.userData.r + 0.6 && Math.abs(cam.y - b.userData.h) < 0.9;
-          let blocks = near;
-          if (!blocks) {
-            for (const tgt of targets) {
-              const dx = tgt.x - cam.x, dz = tgt.z - cam.z;
-              const lenSq = dx * dx + dz * dz;
-              if (lenSq > 1e-6) {
-                const t = ((b.userData.x - cam.x) * dx + (b.userData.z - cam.z) * dz) / lenSq;
-                if (t > 0 && t < 1) {
-                  const rx = cam.x + t * dx, rz = cam.z + t * dz;
-                  if (Math.hypot(b.userData.x - rx, b.userData.z - rz) < b.userData.r * 1.1) {
-                    const rayY = cam.y + t * (tgt.y - cam.y);
-                    if (rayY < b.userData.h + 0.05) blocks = true;
-                  }
-                }
-              }
-            }
-          }
+          const blocks = ball ? bumperBlocksBall(cam, ball, b) : false;
           b.userData.opacity += ((blocks ? 0.1 : 1) - b.userData.opacity) * 0.2;
           for (const m of b.userData.mats) {
             m.opacity = b.userData.opacity;
             m.depthWrite = b.userData.opacity > 0.95;
             m.visible = true;
+          }
+        }
+      });
+
+      // aspas giratorias: se transparentan al 90% ÚNICA Y EXCLUSIVAMENTE si tapan la pelota
+      spinners.forEach((sp) => {
+        if (sp.userData.mats) {
+          const blocks = ball ? spinnerBlocksBall(cam, ball, sp) : false;
+          sp.userData.opacity += ((blocks ? 0.1 : 1) - sp.userData.opacity) * 0.2;
+          for (const m of sp.userData.mats) {
+            m.opacity = sp.userData.opacity;
+            m.depthWrite = sp.userData.opacity > 0.95;
+            m.visible = true;
+          }
+        }
+      });
+
+      // bloques móviles: se transparentan al 90% ÚNICA Y EXCLUSIVAMENTE si tapan la pelota
+      movers.forEach((m) => {
+        if (m.userData.mats) {
+          const blocks = ball ? moverBlocksBall(cam, ball, m) : false;
+          m.userData.opacity += ((blocks ? 0.1 : 1) - m.userData.opacity) * 0.2;
+          for (const mat of m.userData.mats) {
+            mat.opacity = m.userData.opacity;
+            mat.depthWrite = m.userData.opacity > 0.95;
+            mat.visible = true;
           }
         }
       });
@@ -549,75 +572,102 @@ function bullseye(x, z) {
   return g;
 }
 
-// Comprueba si un rayo 3D de cámara a objetivo es cortado por el muro
-function wallBlocksRay(cam, tgt, [ax, az], [bx, bz], lift) {
+// Comprueba si un muro corta la línea de visión 3D entre la cámara y la pelota
+function wallBlocksBall(cam, ball, [ax, az], [bx, bz], lift) {
   const cross = (ux, uz, vx, vz) => ux * vz - uz * vx;
-  const rx = tgt.x - cam.x, rz = tgt.z - cam.z;
+  const rx = ball.x - cam.x, rz = ball.z - cam.z;
   const sx = bx - ax, sz = bz - az;
   const den = cross(rx, rz, sx, sz);
   if (Math.abs(den) < 1e-9) return false;
   const t = cross(ax - cam.x, az - cam.z, sx, sz) / den;
   const u = cross(ax - cam.x, az - cam.z, rx, rz) / den;
   const pad = 0.15 / Math.hypot(sx, sz);
-  if (t <= 0 || t >= 1 || u < -pad || u > 1 + pad) return false;
 
-  // Altura del rayo en el punto de corte (t entre 0 en cam y 1 en tgt)
-  const rayY = cam.y + t * (tgt.y - cam.y);
+  // t debe estar estrictamente entre la cámara (0) y la pelota (1).
+  // Si t >= 0.98 el muro está DETRÁS de la pelota (como el muro de fondo), por lo que NO obstruye la visión de la pelota.
+  // Si t <= 0.02 el muro está detrás de la cámara.
+  if (t <= 0.02 || t >= 0.98 || u < -pad || u > 1 + pad) return false;
+
+  // Altura del rayo en el punto de corte entre cámara y pelota
+  const rayY = cam.y + t * (ball.y - cam.y);
   const clampedU = Math.max(0, Math.min(1, u));
   const wx = ax + clampedU * (bx - ax), wz = az + clampedU * (bz - az);
   const groundH = lift ? lift(wx, wz) : 0;
-  const wallTop = groundH + WALL_H + 0.05;
+  const wallTop = groundH + WALL_H + 0.04;
 
-  // Obstruye si el rayo pasa por debajo de la altura superior del muro
-  return rayY < wallTop + 0.02;
+  // Solo obstruye si el rayo cámara->pelota pasa por debajo de la coronación del muro
+  return rayY < wallTop;
 }
 
-// Comprueba si la cámara está demasiado cerca del muro en 3D
-function wallNearCamera(cam, [ax, az], [bx, bz], lift) {
-  const dx = bx - ax, dz = bz - az;
-  const lenSq = dx * dx + dz * dz;
-  if (lenSq < 1e-6) return false;
-  const u = Math.max(0, Math.min(1, ((cam.x - ax) * dx + (cam.z - az) * dz) / lenSq));
-  const wx = ax + u * dx, wz = az + u * dz;
-  const dXZ = Math.hypot(cam.x - wx, cam.z - wz);
-  if (dXZ < 0.6) {
-    const groundH = lift ? lift(wx, wz) : 0;
-    const wallTop = groundH + WALL_H + 0.06;
-    if (cam.y >= groundH - 0.25 && cam.y <= wallTop + 0.6) return true;
-  }
-  return false;
-}
-
-function wallObstructs(cam, targets, w, lift) {
-  if (wallNearCamera(cam, w.a, w.b, lift)) return true;
-  for (const tgt of targets) {
-    if (wallBlocksRay(cam, tgt, w.a, w.b, lift)) return true;
-  }
-  return false;
-}
-
-function postNearCamera(cam, p) {
-  const dXZ = Math.hypot(cam.x - p.x, cam.z - p.z);
-  return dXZ < 1.4 && cam.y <= p.h + 0.6 && cam.y >= p.baseH - 0.25;
-}
-
-function postBlocksRay(cam, tgt, p) {
-  const dx = tgt.x - cam.x, dz = tgt.z - cam.z;
+// Comprueba si un poste de esquina bloquea la visión de la pelota
+function postBlocksBall(cam, ball, p) {
+  const dx = ball.x - cam.x, dz = ball.z - cam.z;
   const lenSq = dx * dx + dz * dz;
   if (lenSq < 1e-6) return false;
   const t = ((p.x - cam.x) * dx + (p.z - cam.z) * dz) / lenSq;
-  if (t <= 0 || t >= 1) return false;
+
+  // El poste debe estar estrictamente entre la cámara y la pelota
+  if (t <= 0.02 || t >= 0.98) return false;
+
   const rx = cam.x + t * dx, rz = cam.z + t * dz;
   const dXZ = Math.hypot(p.x - rx, p.z - rz);
-  if (dXZ > WALL_HALF * 2.2) return false;
-  const rayY = cam.y + t * (tgt.y - cam.y);
-  return rayY <= p.h + 0.05;
+  if (dXZ > WALL_HALF * 2.0) return false;
+
+  const rayY = cam.y + t * (ball.y - cam.y);
+  return rayY <= p.h;
 }
 
-function postObstructs(cam, targets, p) {
-  if (postNearCamera(cam, p)) return true;
-  for (const tgt of targets) {
-    if (postBlocksRay(cam, tgt, p)) return true;
+// Comprueba si una seta rebotadora bloquea la visión de la pelota
+function bumperBlocksBall(cam, ball, b) {
+  const dx = ball.x - cam.x, dz = ball.z - cam.z;
+  const lenSq = dx * dx + dz * dz;
+  if (lenSq < 1e-6) return false;
+  const t = ((b.userData.x - cam.x) * dx + (b.userData.z - cam.z) * dz) / lenSq;
+
+  // La seta debe estar estrictamente entre la cámara y la pelota
+  if (t <= 0.02 || t >= 0.98) return false;
+
+  const rx = cam.x + t * dx, rz = cam.z + t * dz;
+  if (Math.hypot(b.userData.x - rx, b.userData.z - rz) < b.userData.r * 1.05) {
+    const rayY = cam.y + t * (ball.y - cam.y);
+    return rayY < b.userData.h;
+  }
+  return false;
+}
+
+// Comprueba si un aspa giratoria bloquea la visión de la pelota
+function spinnerBlocksBall(cam, ball, sp) {
+  const dx = ball.x - cam.x, dz = ball.z - cam.z;
+  const lenSq = dx * dx + dz * dz;
+  if (lenSq < 1e-6) return false;
+  const t = ((sp.userData.x - cam.x) * dx + (sp.userData.z - cam.z) * dz) / lenSq;
+
+  // El obstáculo debe estar estrictamente entre la cámara y la pelota
+  if (t <= 0.02 || t >= 0.98) return false;
+
+  const rx = cam.x + t * dx, rz = cam.z + t * dz;
+  if (Math.hypot(sp.userData.x - rx, sp.userData.z - rz) < sp.userData.r) {
+    const rayY = cam.y + t * (ball.y - cam.y);
+    return rayY < sp.userData.h;
+  }
+  return false;
+}
+
+// Comprueba si un bloque móvil bloquea la visión de la pelota
+function moverBlocksBall(cam, ball, m) {
+  const dx = ball.x - cam.x, dz = ball.z - cam.z;
+  const lenSq = dx * dx + dz * dz;
+  if (lenSq < 1e-6) return false;
+  const t = ((m.position.x - cam.x) * dx + (m.position.z - cam.z) * dz) / lenSq;
+
+  // El bloque debe estar estrictamente entre la cámara y la pelota
+  if (t <= 0.02 || t >= 0.98) return false;
+
+  const rx = cam.x + t * dx, rz = cam.z + t * dz;
+  const rad = Math.hypot(m.userData.w, m.userData.d) / 2 + 0.1;
+  if (Math.hypot(m.position.x - rx, m.position.z - rz) < rad) {
+    const rayY = cam.y + t * (ball.y - cam.y);
+    return rayY < m.userData.h;
   }
   return false;
 }
@@ -737,7 +787,8 @@ function scaleUV(geo, su, sv) {
 }
 
 const sandEdgeMat = new THREE.MeshStandardMaterial({ color: 0xc9a861, roughness: 1 });
-const contactMat = new THREE.MeshBasicMaterial({ map: softDotTexture(), color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false });
+let contactMat = null;
+const getContactMat = () => (contactMat ??= new THREE.MeshBasicMaterial({ map: softDotTexture(), color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }));
 const dotMats = {};
 const dotMat = (night) => (dotMats[night] ??= new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: night ? 0.35 : 0.15 }));
 

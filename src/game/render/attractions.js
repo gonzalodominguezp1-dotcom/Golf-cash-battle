@@ -164,7 +164,9 @@ export function buildWindmill(scene, wm, style, lift = 0) {
   const bodyMat = neon
     ? new THREE.MeshStandardMaterial({ color: 0x14122a, roughness: 0.5, metalness: 0.3, transparent: true })
     : new THREE.MeshStandardMaterial({ color: style.kind === 'night' ? 0xd9d2c5 : 0xf4efe6, roughness: 0.8, transparent: true });
-  const roofMat = neon ? new THREE.MeshStandardMaterial({ color: 0x1d0f33, emissive: style.colors[1], emissiveIntensity: 0.35, roughness: 0.4, transparent: true }) : new THREE.MeshStandardMaterial({ color: 0xd8433a, roughness: 0.7, transparent: true });
+  const roofMat = neon
+    ? new THREE.MeshStandardMaterial({ color: 0x1d0f33, emissive: style.colors[1], emissiveIntensity: 0.35, roughness: 0.4, transparent: true })
+    : new THREE.MeshStandardMaterial({ color: 0xd8433a, roughness: 0.7, transparent: true });
   const W = 1.9, H = 1.6, door = wm.w / 2 - 0.15;
   const depth = wm.depth + 0.1, cz = -wm.face * (wm.depth / 2);
   const box = (w, h, d, x, y, z, m) => {
@@ -184,7 +186,10 @@ export function buildWindmill(scene, wm, style, lift = 0) {
   roof.castShadow = true;
   g.add(roof);
   // ventanas que brillan de noche
-  const winMat = style.kind === 'day' ? new THREE.MeshStandardMaterial({ color: 0x4a6fa5, roughness: 0.2 }) : glowMat(neon ? style.colors[2] : 0xffc46b, 1.4);
+  const winMat = style.kind === 'day'
+    ? new THREE.MeshStandardMaterial({ color: 0x4a6fa5, roughness: 0.2, transparent: true })
+    : glowMat(neon ? style.colors[2] : 0xffc46b, 1.4);
+  winMat.transparent = true;
   for (const wx of [-0.55, 0.55]) {
     const win = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.32), winMat);
     win.position.set(wx, 1.15, cz + wm.face * (depth / 2 + 0.005));
@@ -192,14 +197,20 @@ export function buildWindmill(scene, wm, style, lift = 0) {
     g.add(win);
   }
   // marco de la puerta
-  const frameMat = neon ? glowMat(color, 2.2) : new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.8 });
+  const frameMat = neon
+    ? glowMat(color, 2.2)
+    : new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.8, transparent: true });
+  frameMat.transparent = true;
   const fz = wm.face * 0.06;
   box(0.08, 0.6, 0.08, -door - 0.04, 0.3, fz, frameMat);
   box(0.08, 0.6, 0.08, door + 0.04, 0.3, fz, frameMat);
   box(door * 2 + 0.16, 0.08, 0.08, 0, 0.6, fz, frameMat);
   if (neon) {
     // bordes de luz en la torre
-    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(W, H, depth)), new THREE.LineBasicMaterial({ color }));
+    const edges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.BoxGeometry(W, H, depth)),
+      new THREE.LineBasicMaterial({ color, transparent: true })
+    );
     edges.position.set(0, H / 2, cz);
     g.add(edges);
   }
@@ -208,8 +219,14 @@ export function buildWindmill(scene, wm, style, lift = 0) {
   const bladeLen = 1.3, hubY = bladeLen + 0.12;
   const hub = new THREE.Group();
   hub.position.set(0, hubY, wm.gateZ - wm.z);
-  const bladeMat = neon ? glowMat(style.colors[1], 1.4) : new THREE.MeshStandardMaterial({ color: style.kind === 'night' ? 0xc9b48a : 0xfff6e0, roughness: 0.7 });
-  const armMat = neon ? new THREE.MeshStandardMaterial({ color: 0x222244 }) : new THREE.MeshStandardMaterial({ color: 0x7a4a24, roughness: 0.8 });
+  const bladeMat = neon
+    ? glowMat(style.colors[1], 1.4)
+    : new THREE.MeshStandardMaterial({ color: style.kind === 'night' ? 0xc9b48a : 0xfff6e0, roughness: 0.7, transparent: true });
+  bladeMat.transparent = true;
+  const armMat = neon
+    ? new THREE.MeshStandardMaterial({ color: 0x222244, transparent: true })
+    : new THREE.MeshStandardMaterial({ color: 0x7a4a24, roughness: 0.8, transparent: true });
+  armMat.transparent = true;
   for (let k = 0; k < wm.blades; k++) {
     const arm = new THREE.Group();
     arm.rotation.z = (k * TAU) / wm.blades;
@@ -221,30 +238,81 @@ export function buildWindmill(scene, wm, style, lift = 0) {
     arm.add(stick, sail);
     hub.add(arm);
   }
-  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.16, 16), neon ? glowMat(color, 2) : new THREE.MeshStandardMaterial({ color: 0x3d3d5c }));
+  const capMat = neon
+    ? glowMat(color, 2)
+    : new THREE.MeshStandardMaterial({ color: 0x3d3d5c, transparent: true });
+  capMat.transparent = true;
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.16, 16), capMat);
   cap.rotation.x = Math.PI / 2;
   hub.add(cap);
   g.add(hub);
+
+  let light = null;
+  const baseLightIntensity = 2.5;
   if (style.kind !== 'day') {
-    const light = new THREE.PointLight(neon ? color : 0xffb060, 2.5, 5, 1.5);
+    light = new THREE.PointLight(neon ? color : 0xffb060, baseLightIntensity, 5, 1.5);
     light.position.set(0, 1.2, wm.face * 0.8);
     g.add(light);
   }
   g.position.set(wm.x, lift, wm.z);
   scene.add(g);
-  const fadeMats = [bodyMat, roofMat];
+
+  // Recopilar todos los materiales del molino para que todas sus capas se desvanezcan al unísono
+  const fadeEntries = [];
+  g.traverse((o) => {
+    if (o.material) {
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      for (const m of mats) {
+        if (m && !fadeEntries.some((e) => e.mat === m)) {
+          m.transparent = true;
+          fadeEntries.push({
+            mat: m,
+            baseEmissive: m.emissiveIntensity != null ? m.emissiveIntensity : (m.isLineBasicMaterial ? 1 : 0),
+          });
+        }
+      }
+    }
+  });
+
   let opacity = 1;
   return {
     update(t, ball, cameraPos) {
       hub.rotation.z = wm.speed * t + wm.phase;
-      // la torre se transparenta al 90% cuando la bola pasa por dentro o si tapa la cámara
+      // la torre y todas sus capas se transparentan al 90% SOLO si la bola está dentro o si el molino tapa la visión de la pelota
       const inside = Math.abs(ball.x - wm.x) < W / 2 + 0.3 && (ball.z - wm.z) * -wm.face > -0.4 && (ball.z - wm.z) * -wm.face < wm.depth + 0.4;
-      const nearCam = cameraPos ? (Math.hypot(cameraPos.x - wm.x, cameraPos.z - wm.z) < W + 1.2 && Math.abs(cameraPos.y - (lift + 1.2)) < 2.0) : false;
-      const shouldFade = inside || nearCam;
+      let blocksBall = false;
+      if (cameraPos && !inside) {
+        const dx = ball.x - cameraPos.x, dz = ball.z - cameraPos.z;
+        const lenSq = dx * dx + dz * dz;
+        if (lenSq > 1e-4) {
+          // Centro del molino considerando torre y aspas
+          const midZ = (wm.z + cz + wm.gateZ) / 2;
+          const tRay = ((wm.x - cameraPos.x) * dx + (midZ - cameraPos.z) * dz) / lenSq;
+          if (tRay > 0.02 && tRay < 0.98) {
+            const rx = cameraPos.x + tRay * dx, rz = cameraPos.z + tRay * dz;
+            const reach = Math.max(W * 0.75, bladeLen + 0.25);
+            if (Math.hypot(wm.x - rx, midZ - rz) < reach) {
+              const ballY = ball.y != null ? ball.y : (lift + 0.05);
+              const rayY = cameraPos.y + tRay * (ballY - cameraPos.y);
+              if (rayY >= lift - 0.1 && rayY < lift + H + 1.7) {
+                blocksBall = true;
+              }
+            }
+          }
+        }
+      }
+      const shouldFade = inside || blocksBall;
       opacity += ((shouldFade ? 0.1 : 1) - opacity) * 0.2;
-      for (const m of fadeMats) {
+      for (const entry of fadeEntries) {
+        const m = entry.mat;
         m.opacity = opacity;
         m.depthWrite = opacity > 0.95;
+        if (m.emissiveIntensity !== undefined && entry.baseEmissive > 0) {
+          m.emissiveIntensity = entry.baseEmissive * (0.15 + 0.85 * (opacity - 0.1) / 0.9);
+        }
+      }
+      if (light) {
+        light.intensity = baseLightIntensity * (0.1 + 0.9 * (opacity - 0.1) / 0.9);
       }
     },
   };
@@ -310,7 +378,11 @@ export function buildTunnel(scene, tn, style, lift = 0, i = 0) {
   arch.position.set(tn.x, lift, tn.z);
   scene.add(arch);
   // aros de luz en las dos bocas
-  const ringMat = style.kind === 'day' ? new THREE.MeshStandardMaterial({ color: 0xffc145, roughness: 0.5 }) : glowMat(color, 2.2);
+  const ringMat = style.kind === 'day'
+    ? new THREE.MeshStandardMaterial({ color: 0xffc145, roughness: 0.5, transparent: true })
+    : glowMat(color, 2.2);
+  ringMat.transparent = true;
+  const lights = [];
   for (const s of [-1, 1]) {
     const ring = new THREE.Mesh(new THREE.TorusGeometry(ro, 0.04, 8, 32, Math.PI), ringMat);
     ring.position.set(tn.x, lift + 0.12, tn.z + (s * tn.d) / 2);
@@ -319,17 +391,45 @@ export function buildTunnel(scene, tn, style, lift = 0, i = 0) {
       const light = new THREE.PointLight(color, 1.5, 3, 1.5);
       light.position.set(tn.x, lift + 0.6, tn.z + s * (tn.d / 2 + 0.2));
       scene.add(light);
+      lights.push(light);
     }
   }
+  const fadeMats = [
+    { mat, baseEmissive: mat.emissiveIntensity || 0 },
+    { mat: ringMat, baseEmissive: ringMat.emissiveIntensity || 0 },
+  ];
   let opacity = 1;
   return {
     update(t, ball, cameraPos) {
       const inside = Math.abs(ball.x - tn.x) < tn.w / 2 + 0.4 && Math.abs(ball.z - tn.z) < tn.d / 2 + 0.6;
-      const nearCam = cameraPos ? (Math.hypot(cameraPos.x - tn.x, cameraPos.z - tn.z) < Math.max(tn.w, tn.d) / 2 + 0.8 && Math.abs(cameraPos.y - (lift + 0.5)) < 1.4) : false;
-      const shouldFade = inside || nearCam;
+      let blocksBall = false;
+      if (cameraPos && !inside) {
+        const dx = ball.x - cameraPos.x, dz = ball.z - cameraPos.z;
+        const lenSq = dx * dx + dz * dz;
+        if (lenSq > 1e-4) {
+          const tRay = ((tn.x - cameraPos.x) * dx + (tn.z - cameraPos.z) * dz) / lenSq;
+          if (tRay > 0.02 && tRay < 0.98) {
+            const rx = cameraPos.x + tRay * dx, rz = cameraPos.z + tRay * dz;
+            if (Math.hypot(tn.x - rx, tn.z - rz) < Math.max(tn.w, tn.d) / 2) {
+              const ballY = ball.y != null ? ball.y : (lift + 0.05);
+              const rayY = cameraPos.y + tRay * (ballY - cameraPos.y);
+              if (rayY >= lift - 0.1 && rayY < lift + ro) blocksBall = true;
+            }
+          }
+        }
+      }
+      const shouldFade = inside || blocksBall;
       opacity += ((shouldFade ? 0.1 : 1) - opacity) * 0.2;
-      mat.opacity = opacity;
-      mat.depthWrite = opacity > 0.95;
+      for (const entry of fadeMats) {
+        entry.mat.opacity = opacity;
+        entry.mat.depthWrite = opacity > 0.95;
+        if (entry.mat.emissiveIntensity !== undefined && entry.baseEmissive > 0) {
+          entry.mat.emissiveIntensity = entry.baseEmissive * (0.15 + 0.85 * (opacity - 0.1) / 0.9);
+        }
+      }
+      for (const l of lights) {
+        l.intensity = 1.5 * (0.1 + 0.9 * (opacity - 0.1) / 0.9);
+      }
     },
   };
 }
