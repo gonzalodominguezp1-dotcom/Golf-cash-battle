@@ -1216,6 +1216,7 @@ export class GolfGame {
       const axis = new THREE.Vector3(-this.ball.vz, 0, this.ball.vx).normalize();
       this.ballMesh.rotateOnWorldAxis(axis, (speed * dt) / BALL_R);
     }
+    this.ballMesh.material.userData?.update?.(this.t, dt);
     // aplastamiento elástico al golpear o chocar
     this.squash *= Math.exp(-realDt * 9);
     const wob = this.squash * Math.cos(this.t * 40);

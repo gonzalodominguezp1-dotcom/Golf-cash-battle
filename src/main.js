@@ -364,6 +364,8 @@ function createSkinInspector(container, initialSkin) {
     }
     rotX = Math.max(-1.1, Math.min(1.1, rotX));
     ballMesh.rotation.set(rotX, rotY, 0);
+    const now = performance.now() * 0.001;
+    ballMesh.material.userData?.update?.(now, 0.016);
     renderer.render(scene, camera);
   }
   requestAnimationFrame(animate);

@@ -2000,7 +2000,7 @@
       function createBallMaterial(opt) {
         const texture = new THREE.CanvasTexture(generateProceduralTexture(opt));
         texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.ClampToEdgeWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
         texture.anisotropy = 8;
 
         const m = opt.material || {};
@@ -2017,6 +2017,38 @@
           normalMap: dimplesEnabled ? generateDimplesNormalMap() : null,
           normalScale: new THREE.Vector2(0.35, 0.35),
         });
+
+        // Efectos dinámicos en texturas
+        mat.userData.update = (t, dt) => {
+          const id = opt.id || '';
+          if (id.includes('supernova') || id.includes('solar')) {
+            texture.offset.x = (texture.offset.x + dt * 0.045) % 1;
+            texture.offset.y = Math.cos(t * 0.6) * 0.025;
+            mat.emissiveIntensity = 0.42 + Math.sin(t * 3.2) * 0.22;
+          } else if (id.includes('dragon')) {
+            const beat = Math.pow(Math.max(0, Math.sin(t * 2.4)), 4);
+            mat.emissiveIntensity = 0.15 + beat * 0.45;
+            texture.offset.y = Math.sin(t * 1.1) * 0.012;
+          } else if (id.includes('inferno') || id.includes('flame')) {
+            texture.offset.y = (texture.offset.y + dt * 0.065) % 1;
+            texture.offset.x = Math.sin(t * 4.0) * 0.012;
+            mat.emissiveIntensity = 0.28 + Math.sin(t * 5.0) * 0.18;
+          } else if (id.includes('kintsugi')) {
+            texture.offset.x = (texture.offset.x + dt * 0.015) % 1;
+          } else if (id.includes('cryo') || id.includes('ice') || id.includes('blizzard')) {
+            mat.iridescence = 0.8 + Math.sin(t * 1.5) * 0.2;
+            mat.roughness = 0.12 + Math.sin(t * 0.9) * 0.04;
+          } else if (id.includes('damascus')) {
+            mat.emissiveIntensity = 0.14 + Math.sin(t * 2.0) * 0.1;
+            mat.iridescence = 0.45 + Math.sin(t * 1.5) * 0.15;
+          } else if (id.includes('zephyr')) {
+            mat.iridescence = 0.88 + Math.sin(t * 1.5) * 0.12;
+            texture.offset.y = Math.sin(t * 0.8) * 0.015;
+          } else if (id.includes('astrolabe') || id.includes('pulsar')) {
+            texture.offset.x = (texture.offset.x + dt * 0.035) % 1;
+            mat.emissiveIntensity = 0.35 + Math.sin(t * 2.5) * 0.2;
+          }
+        };
 
         return mat;
       }
@@ -2044,12 +2076,15 @@
         requestAnimationFrame(animate);
 
         const dt = clock.getDelta();
+        const elapsed = clock.getElapsedTime();
         if (controls) controls.update();
 
         if (ballMesh && isAutoSpin) {
           ballMesh.rotation.y += 0.45 * dt;
-          ballMesh.rotation.x = Math.sin(clock.getElapsedTime() * 0.7) * 0.1;
+          ballMesh.rotation.x = Math.sin(elapsed * 0.7) * 0.1;
         }
+
+        ballMesh?.material?.userData?.update?.(elapsed, dt);
 
         if (!isQuadMode && renderer && scene && camera) {
           renderer.render(scene, camera);
@@ -2136,8 +2171,12 @@
         if (!isQuadMode) return;
         requestAnimationFrame(renderQuadLoop);
 
+        const elapsed = clock.getElapsedTime();
         quadBalls.forEach((b) => {
-          if (b) b.rotation.y += 0.015;
+          if (b) {
+            b.rotation.y += 0.015;
+            b.material?.userData?.update?.(elapsed, 0.016);
+          }
         });
 
         for (let i = 0; i < 4; i++) {
