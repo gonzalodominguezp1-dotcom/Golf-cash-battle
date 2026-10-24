@@ -1,0 +1,2623 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Atelier de Skins de Desafío · Golf Cash Battle</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <style>
+      :root {
+        --bg-void: #08070d;
+        --surface-1: #12101a;
+        --surface-2: #1a1726;
+        --surface-3: #221e33;
+        --border: #2b253d;
+        --border-gold: rgba(255, 210, 63, 0.32);
+        --gold: #ffd23f;
+        --gold-glow: #ffe37a;
+        --gold-deep: #c99700;
+        --emerald: #38ef7d;
+        --emerald-glow: #7dffd8;
+        --coral: #ff5e62;
+        --cyan: #4fb8ff;
+        --purple: #b26bff;
+        --text-primary: #f8f9fa;
+        --text-secondary: #9e9aa8;
+        --text-muted: #686475;
+        --radius-sm: 8px;
+        --radius-md: 12px;
+        --radius-lg: 16px;
+        --radius-xl: 24px;
+        --font-display: 'Outfit', sans-serif;
+        --font-body: 'Plus Jakarta Sans', sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      body {
+        background-color: var(--bg-void);
+        color: var(--text-primary);
+        font-family: var(--font-body);
+        min-height: 100vh;
+        overflow-x: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* Scrollbar */
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: var(--bg-void);
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--surface-3);
+        border-radius: 999px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: var(--border-gold);
+      }
+
+      /* Header */
+      header {
+        background: rgba(18, 16, 26, 0.85);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-bottom: 1px solid var(--border);
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        padding: 12px 24px;
+      }
+      .header-inner {
+        max-width: 1540px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        text-decoration: none;
+        color: inherit;
+      }
+      .brand-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, var(--gold), var(--gold-deep));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--bg-void);
+        font-weight: 900;
+        font-size: 18px;
+        box-shadow: 0 0 16px rgba(255, 210, 63, 0.35);
+      }
+      .brand-text h1 {
+        font-family: var(--font-display);
+        font-size: 1.15rem;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+        line-height: 1.1;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .brand-text h1 span.pill {
+        font-size: 0.65rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        background: rgba(255, 210, 63, 0.15);
+        color: var(--gold);
+        border: 1px solid var(--border-gold);
+        padding: 2px 8px;
+        border-radius: 999px;
+        text-transform: uppercase;
+      }
+      .brand-text p {
+        font-size: 0.78rem;
+        color: var(--text-secondary);
+      }
+
+      .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 0.85rem;
+        padding: 9px 18px;
+        border-radius: var(--radius-md);
+        border: 1px solid transparent;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        text-decoration: none;
+        user-select: none;
+      }
+      .btn-gold {
+        background: linear-gradient(180deg, var(--gold) 0%, #e5b31f 100%);
+        color: var(--bg-void);
+        box-shadow: 0 4px 14px rgba(255, 210, 63, 0.25);
+      }
+      .btn-gold:hover {
+        background: var(--gold-glow);
+        transform: translateY(-1px);
+        box-shadow: 0 6px 20px rgba(255, 210, 63, 0.45);
+      }
+      .btn-ghost {
+        background: var(--surface-2);
+        color: var(--text-primary);
+        border: 1px solid var(--border);
+      }
+      .btn-ghost:hover {
+        background: var(--surface-3);
+        border-color: var(--border-gold);
+        color: var(--gold);
+      }
+      .btn-active {
+        background: rgba(255, 210, 63, 0.15) !important;
+        border-color: var(--gold) !important;
+        color: var(--gold) !important;
+      }
+
+      /* Main Layout */
+      .app-layout {
+        max-width: 1540px;
+        margin: 0 auto;
+        padding: 20px 24px 40px;
+        display: grid;
+        grid-template-columns: 310px 1fr;
+        gap: 24px;
+        width: 100%;
+        flex: 1;
+      }
+      @media (max-width: 1100px) {
+        .app-layout {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      /* Sidebar - Challenge Balls */
+      .sidebar {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .section-label {
+        font-family: var(--font-display);
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .ball-nav-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .ball-nav-card {
+        background: var(--surface-1);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 12px 14px;
+        cursor: pointer;
+        transition: all 0.18s ease;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        position: relative;
+        overflow: hidden;
+      }
+      .ball-nav-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 3px;
+        height: 100%;
+        background: transparent;
+        transition: all 0.18s ease;
+      }
+      .ball-nav-card:hover {
+        background: var(--surface-2);
+        border-color: rgba(255, 255, 255, 0.15);
+        transform: translateX(2px);
+      }
+      .ball-nav-card.active {
+        background: var(--surface-2);
+        border-color: var(--gold);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 16px rgba(255, 210, 63, 0.12);
+      }
+      .ball-nav-card.active::before {
+        background: var(--gold);
+      }
+      .ball-nav-thumb {
+        width: 46px;
+        height: 46px;
+        border-radius: 50%;
+        background: #000;
+        flex-shrink: 0;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+        position: relative;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .ball-nav-thumb canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .ball-nav-info {
+        flex: 1;
+        min-width: 0;
+      }
+      .ball-nav-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 2px;
+      }
+      .ball-nav-name {
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 0.95rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .ball-nav-req {
+        font-size: 0.73rem;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .badge-rarity {
+        font-family: var(--font-display);
+        font-size: 0.62rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 2px 6px;
+        border-radius: 999px;
+      }
+      .rarity-bronze {
+        background: rgba(196, 106, 43, 0.2);
+        color: #ffaa6b;
+        border: 1px solid rgba(196, 106, 43, 0.4);
+      }
+      .rarity-silver {
+        background: rgba(226, 232, 240, 0.15);
+        color: #e2e8f0;
+        border: 1px solid rgba(226, 232, 240, 0.35);
+      }
+      .rarity-gold {
+        background: rgba(255, 210, 63, 0.15);
+        color: var(--gold);
+        border: 1px solid var(--border-gold);
+      }
+      .rarity-diamond {
+        background: rgba(79, 184, 255, 0.15);
+        color: var(--cyan);
+        border: 1px solid rgba(79, 184, 255, 0.35);
+      }
+
+      /* Main Stage Area */
+      .stage-area {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      /* Viewport 3D Card */
+      .viewport-card {
+        background: var(--surface-1);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+      }
+      .viewport-header {
+        position: absolute;
+        top: 16px;
+        left: 20px;
+        right: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        pointer-events: none;
+        z-index: 10;
+      }
+      .viewport-badge {
+        pointer-events: auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(18, 16, 26, 0.75);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--border);
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-size: 0.78rem;
+        color: var(--text-secondary);
+      }
+      .viewport-badge strong {
+        color: var(--text-primary);
+        font-family: var(--font-display);
+      }
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--emerald);
+        box-shadow: 0 0 8px var(--emerald);
+      }
+
+      .viewport-canvas-container {
+        width: 100%;
+        height: 480px;
+        position: relative;
+        cursor: grab;
+        background: radial-gradient(circle at 50% 45%, #181429 0%, #08070d 75%);
+      }
+      .viewport-canvas-container:active {
+        cursor: grabbing;
+      }
+      .viewport-canvas-container canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      /* Quad Viewport Container (for side-by-side 4-option comparison) */
+      .quad-canvas-grid {
+        display: none;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 240px 240px;
+        gap: 2px;
+        background: var(--border);
+        width: 100%;
+        height: 480px;
+      }
+      .quad-canvas-cell {
+        position: relative;
+        background: radial-gradient(circle at 50% 50%, #171328 0%, #08070d 80%);
+        overflow: hidden;
+      }
+      .quad-cell-label {
+        position: absolute;
+        top: 10px;
+        left: 12px;
+        font-family: var(--font-display);
+        font-size: 0.7rem;
+        font-weight: 800;
+        background: rgba(18, 16, 26, 0.85);
+        padding: 4px 8px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        color: var(--gold);
+        pointer-events: none;
+      }
+
+      /* Viewport Interactive Controls Bar */
+      .viewport-controls-bar {
+        background: rgba(26, 23, 38, 0.95);
+        border-top: 1px solid var(--border);
+        padding: 14px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+        z-index: 10;
+      }
+      .controls-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .btn-fx {
+        padding: 8px 14px;
+        font-size: 0.8rem;
+        border-radius: var(--radius-sm);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .btn-hole {
+        background: linear-gradient(135deg, #11998e, var(--emerald));
+        color: var(--bg-void);
+        font-weight: 800;
+        border: none;
+        box-shadow: 0 4px 12px rgba(56, 239, 125, 0.25);
+      }
+      .btn-hole:hover {
+        filter: brightness(1.15);
+        transform: translateY(-1px);
+        box-shadow: 0 6px 18px rgba(56, 239, 125, 0.45);
+      }
+      .btn-roll {
+        background: var(--surface-3);
+        color: var(--text-primary);
+        border: 1px solid var(--border);
+      }
+      .btn-roll:hover,
+      .btn-roll.active {
+        background: rgba(255, 210, 63, 0.15);
+        border-color: var(--gold);
+        color: var(--gold);
+      }
+
+      .slider-control {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        background: var(--surface-1);
+        padding: 6px 12px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border);
+      }
+      .slider-control input[type='range'] {
+        accent-color: var(--gold);
+        width: 80px;
+        cursor: pointer;
+      }
+
+      /* 4 Options Grid */
+      .options-section {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .options-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+      }
+      @media (max-width: 900px) {
+        .options-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+      @media (max-width: 600px) {
+        .options-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .option-card {
+        background: var(--surface-1);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 16px;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        position: relative;
+        overflow: hidden;
+      }
+      .option-card:hover {
+        background: var(--surface-2);
+        border-color: rgba(255, 210, 63, 0.4);
+        transform: translateY(-3px);
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4);
+      }
+      .option-card.active {
+        background: var(--surface-2);
+        border-color: var(--gold);
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5), 0 0 18px rgba(255, 210, 63, 0.18);
+      }
+      .option-badge-num {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        font-family: var(--font-display);
+        font-size: 0.68rem;
+        font-weight: 800;
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--text-muted);
+        padding: 2px 7px;
+        border-radius: 999px;
+      }
+      .option-card.active .option-badge-num {
+        background: var(--gold);
+        color: var(--bg-void);
+      }
+
+      .option-preview-box {
+        width: 100%;
+        height: 110px;
+        border-radius: var(--radius-md);
+        background: #090710;
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .option-preview-box canvas {
+        width: 100%;
+        height: 100%;
+      }
+
+      .option-meta h3 {
+        font-family: var(--font-display);
+        font-size: 0.96rem;
+        font-weight: 700;
+        line-height: 1.2;
+        margin-bottom: 4px;
+      }
+      .option-meta p {
+        font-size: 0.77rem;
+        color: var(--text-secondary);
+        line-height: 1.4;
+      }
+
+      .option-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: auto;
+      }
+      .chip-fx {
+        font-size: 0.65rem;
+        font-weight: 700;
+        padding: 3px 8px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text-secondary);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .chip-trail {
+        color: var(--gold);
+        border-color: rgba(255, 210, 63, 0.25);
+        background: rgba(255, 210, 63, 0.08);
+      }
+      .chip-hole {
+        color: var(--emerald);
+        border-color: rgba(56, 239, 125, 0.25);
+        background: rgba(56, 239, 125, 0.08);
+      }
+
+      /* Technical Details & Integration Section */
+      .spec-drawer {
+        background: var(--surface-1);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        padding: 20px 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .spec-drawer-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .spec-drawer-header h3 {
+        font-family: var(--font-display);
+        font-size: 1.05rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .spec-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 14px;
+      }
+      .spec-item {
+        background: var(--surface-2);
+        padding: 12px 14px;
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      .spec-item-key {
+        font-size: 0.68rem;
+        font-weight: 800;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-bottom: 4px;
+      }
+      .spec-item-val {
+        font-family: var(--font-display);
+        font-size: 0.92rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .color-dot {
+        width: 14px;
+        height: 14px;
+        border-radius: 4px;
+        display: inline-block;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .code-box {
+        background: #090710;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        padding: 14px 18px;
+        font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+        font-size: 0.78rem;
+        color: #cfcbe0;
+        overflow-x: auto;
+        position: relative;
+      }
+      .btn-copy-code {
+        position: absolute;
+        top: 10px;
+        right: 12px;
+        padding: 4px 10px;
+        font-size: 0.72rem;
+      }
+
+      /* Hole In One Toast / Banner */
+      .hole-celebration-toast {
+        position: fixed;
+        bottom: 30px;
+        left: 50%;
+        transform: translateX(-50%) translateY(100px);
+        background: rgba(18, 16, 26, 0.95);
+        backdrop-filter: blur(20px);
+        border: 2px solid var(--emerald);
+        border-radius: var(--radius-xl);
+        padding: 16px 28px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), 0 0 30px rgba(56, 239, 125, 0.4);
+        opacity: 0;
+        pointer-events: none;
+        transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+        z-index: 100;
+      }
+      .hole-celebration-toast.show {
+        transform: translateX(-50%) translateY(0);
+        opacity: 1;
+      }
+      .toast-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: var(--emerald);
+        color: var(--bg-void);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+        font-weight: 900;
+        box-shadow: 0 0 16px var(--emerald);
+      }
+      .toast-text h4 {
+        font-family: var(--font-display);
+        font-size: 1.15rem;
+        font-weight: 800;
+        color: #fff;
+      }
+      .toast-text p {
+        font-size: 0.82rem;
+        color: var(--emerald);
+      }
+
+      /* Audio Mute Indicator */
+      .audio-pill {
+        cursor: pointer;
+        user-select: none;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Header -->
+    <header>
+      <div class="header-inner">
+        <a href="/" class="brand">
+          <div class="brand-icon">⛳</div>
+          <div class="brand-text">
+            <h1>Golf Cash Battle <span class="pill">Challenge Atelier</span></h1>
+            <p>Rediseño de skins por desafío · 4 variantes por bola · Efectos 3D y partículas</p>
+          </div>
+        </a>
+
+        <div class="header-actions">
+          <button id="btn-toggle-quad" class="btn btn-ghost">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="7" height="7"></rect>
+              <rect x="14" y="3" width="7" height="7"></rect>
+              <rect x="14" y="14" width="7" height="7"></rect>
+              <rect x="3" y="14" width="7" height="7"></rect>
+            </svg>
+            <span id="quad-btn-text">Comparar 4 Opciones</span>
+          </button>
+          <button id="btn-sound-toggle" class="btn btn-ghost audio-pill" title="Activar / Desactivar Efectos de Audio">
+            <svg id="icon-sound-on" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            </svg>
+            <svg id="icon-sound-off" style="display:none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+              <line x1="23" y1="9" x2="17" y2="15"></line>
+              <line x1="17" y1="9" x2="23" y2="15"></line>
+            </svg>
+            <span id="sound-status-text">Audio FX</span>
+          </button>
+          <a href="/" class="btn btn-gold">Volver al Juego</a>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="app-layout">
+      <!-- Sidebar / Challenge Ball Selector -->
+      <aside class="sidebar">
+        <div class="section-label">
+          <span>Bolas de Desafío (6)</span>
+          <span id="active-skin-count">6 desbloqueables</span>
+        </div>
+
+        <nav class="ball-nav-list" id="ball-nav-container">
+          <!-- Dynamically populated via JS -->
+        </nav>
+      </aside>
+
+      <!-- Stage & Options -->
+      <section class="stage-area">
+        <!-- 3D Viewport Card -->
+        <div class="viewport-card">
+          <div class="viewport-header">
+            <div class="viewport-badge">
+              <span class="status-dot"></span>
+              <span id="viewport-skin-label">Cargando skin...</span>
+            </div>
+            <div class="viewport-badge" style="gap:12px;">
+              <span>Rotación libre: <strong>Arrastra ratón / dedo</strong></span>
+              <span>Zoom: <strong>Rueda</strong></span>
+            </div>
+          </div>
+
+          <!-- Single 3D Viewport -->
+          <div class="viewport-canvas-container" id="single-viewport">
+            <!-- Three.js Canvas injected here -->
+          </div>
+
+          <!-- Quad 4-Up Grid Comparison -->
+          <div class="quad-canvas-grid" id="quad-viewport">
+            <div class="quad-canvas-cell" id="quad-cell-0">
+              <div class="quad-cell-label" id="quad-label-0">Opción 1</div>
+            </div>
+            <div class="quad-canvas-cell" id="quad-cell-1">
+              <div class="quad-cell-label" id="quad-label-1">Opción 2</div>
+            </div>
+            <div class="quad-canvas-cell" id="quad-cell-2">
+              <div class="quad-cell-label" id="quad-label-2">Opción 3</div>
+            </div>
+            <div class="quad-canvas-cell" id="quad-cell-3">
+              <div class="quad-cell-label" id="quad-label-3">Opción 4</div>
+            </div>
+          </div>
+
+          <!-- Viewport Interactive Action Bar -->
+          <div class="viewport-controls-bar">
+            <div class="controls-group">
+              <button id="btn-hole-celebrate" class="btn btn-hole btn-fx">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>
+                  <line x1="4" y1="22" x2="4" y2="15"></line>
+                </svg>
+                ¡Acierto en Hoyo! (Test FX)
+              </button>
+              <button id="btn-toggle-roll" class="btn btn-roll btn-fx">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <polygon points="10 8 16 12 10 16 10 8"></polygon>
+                </svg>
+                <span id="roll-btn-label">Simular Rodada & Estela</span>
+              </button>
+              <button id="btn-spin-toggle" class="btn btn-ghost btn-fx">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="23 4 23 10 17 10"></polyline>
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                </svg>
+                Giro Auto
+              </button>
+            </div>
+
+            <div class="controls-group">
+              <div class="slider-control">
+                <span>Velocidad Estela:</span>
+                <input type="range" id="slider-speed" min="1" max="10" value="5" />
+                <span id="speed-label" style="font-weight:700; color:var(--gold);">5 m/s</span>
+              </div>
+              <div class="slider-control">
+                <span>Entorno:</span>
+                <select id="select-env" style="background:transparent; border:none; color:var(--text-primary); font-family:var(--font-display); font-size:0.75rem; outline:none; cursor:pointer;">
+                  <option value="studio" style="background:#12101a;">Estudio VIP</option>
+                  <option value="cyberpunk" style="background:#12101a;">Nocturno Neón</option>
+                  <option value="championship" style="background:#12101a;">Fairway Dorado</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4 Options Selector -->
+        <div class="options-section">
+          <div class="section-label">
+            <span id="options-title-label">4 Diseños Rediseñados para Veterana</span>
+            <span>Haz clic para equipar e inspeccionar en 3D</span>
+          </div>
+
+          <div class="options-grid" id="options-cards-container">
+            <!-- 4 Option cards injected dynamically via JS -->
+          </div>
+        </div>
+
+        <!-- Technical Specification Drawer & Preset Integration -->
+        <div class="spec-drawer">
+          <div class="spec-drawer-header">
+            <div>
+              <h3 id="spec-title">Especificación Técnica del Diseño</h3>
+              <p style="font-size:0.78rem; color:var(--text-secondary); margin-top:2px;">Parámetros listos para integración directa en <code>skins.js</code> y <code>ballSkins.js</code></p>
+            </div>
+            <button id="btn-copy-json" class="btn btn-ghost btn-copy-code">Copiar JSON de Configuración</button>
+          </div>
+
+          <div class="spec-grid" id="spec-grid-container">
+            <!-- Specs injected dynamically -->
+          </div>
+
+          <div class="code-box">
+            <pre><code id="json-code-block">// Código de configuración JSON de la skin seleccionada</code></pre>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Hole-in Celebration Toast -->
+    <div class="hole-celebration-toast" id="hole-toast">
+      <div class="toast-icon">🎯</div>
+      <div class="toast-text">
+        <h4 id="toast-title">¡HOYO EN UNO ESPECTACULAR!</h4>
+        <p id="toast-desc">Efecto Supernova Activado · Fanfarria Sonora Ejecutada</p>
+      </div>
+    </div>
+
+    <!-- Importmap for Three.js -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.169.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.169.0/examples/jsm/"
+        }
+      }
+    </script>
+
+    <!-- Main Showcase Logic -->
+    <script type="module">
+      import * as THREE from 'three';
+      import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+      // ==========================================
+      // BASE DE DATOS DE SKINS Y 24 VARIANTES
+      // ==========================================
+      const CHALLENGE_SKINS_DATA = [
+        {
+          id: 'veteran',
+          name: 'Veterana',
+          rarity: 'bronze',
+          challenge: 'matches10',
+          challengeName: 'Juega 10 partidas',
+          options: [
+            {
+              id: 'veteran_opt1',
+              title: 'Damascus Steel & Sparks',
+              desc: 'Acero de Damasco forjado a mano con vetas onduladas de cobre oscuro y micro-chispas incandescentes.',
+              pattern: 'damascus',
+              base: '#1f2026',
+              accent: '#d4883b',
+              secondary: '#e8b87d',
+              trail: '#ff9436',
+              trailType: 'sparks',
+              trailName: 'Chispas de Forja & Brasas',
+              holeFx: 'anvil_burst',
+              holeName: 'Impacto de Yunque & Chispas',
+              material: { roughness: 0.22, metalness: 0.88, clearcoat: 0.8, iridescence: 0.3 },
+            },
+            {
+              id: 'veteran_opt2',
+              title: 'Artisan Leather & Brass',
+              desc: 'Cuero noble con costuras de latón bruñido y escudo de honor grabado en calor con vapor templado.',
+              pattern: 'leather_stitch',
+              base: '#3d2417',
+              accent: '#d1a153',
+              secondary: '#f0d297',
+              trail: '#e0b86c',
+              trailType: 'brass_dust',
+              trailName: 'Polvo de Latón & Vapor Cálido',
+              holeFx: 'vintage_crest',
+              holeName: 'Sello Conmemorativo Imperial',
+              material: { roughness: 0.38, metalness: 0.15, clearcoat: 0.45, iridescence: 0.0 },
+            },
+            {
+              id: 'veteran_opt3',
+              title: 'Bronze Cyber-Relic',
+              desc: 'Bronce antiguo con pátina de cardenillo y circuitos de cobre pulsantes activados por veteranos.',
+              pattern: 'cyber_relic',
+              base: '#1b2e28',
+              accent: '#ff6f3c',
+              secondary: '#3ee8b5',
+              trail: '#ff7733',
+              trailType: 'copper_surge',
+              trailName: 'Descargas de Cobre Ionizado',
+              holeFx: 'emp_shock',
+              holeName: 'Descarga EMP de Reliquia',
+              material: { roughness: 0.32, metalness: 0.75, clearcoat: 0.6, iridescence: 0.5, emissive: '#ff5500', emissiveIntensity: 0.35 },
+            },
+            {
+              id: 'veteran_opt4',
+              title: 'Kintsugi Carbon Matrix',
+              desc: 'Fibra de carbono aeroespacial con cicatrices de oro puro de 24K que celebran las batallas superadas.',
+              pattern: 'kintsugi',
+              base: '#111215',
+              accent: '#ffd23f',
+              secondary: '#ffffff',
+              trail: '#ffd700',
+              trailType: 'gold_smoke',
+              trailName: 'Humo de Carbono & Hojuelas de Oro',
+              holeFx: 'kintsugi_ascend',
+              holeName: 'Ascensión Kintsugi Dorada',
+              material: { roughness: 0.18, metalness: 0.65, clearcoat: 1.0, iridescence: 0.4 },
+            },
+          ],
+        },
+        {
+          id: 'birdie',
+          name: 'Pajarito',
+          rarity: 'silver',
+          challenge: 'birdies5',
+          challengeName: 'Consigue 5 birdies',
+          options: [
+            {
+              id: 'birdie_opt1',
+              title: 'Zephyr Aero-Feather',
+              desc: 'Nácar eólico ultraligero con filamentos de plumas cinéticas holográficas que ondean al vuelo.',
+              pattern: 'feather_aero',
+              base: '#ebf4fa',
+              accent: '#00c3ff',
+              secondary: '#ffffff',
+              trail: '#73e2ff',
+              trailType: 'feather_vortex',
+              trailName: 'Vórtice de Plumas & Ráfaga Eólica',
+              holeFx: 'zephyr_cyclone',
+              holeName: 'Ciclón Ascendente de Céfiro',
+              material: { roughness: 0.12, metalness: 0.1, clearcoat: 1.0, iridescence: 0.95 },
+            },
+            {
+              id: 'birdie_opt2',
+              title: 'Hydro-Aero Splash',
+              desc: 'Cristal aguamarina con cáusticas de agua viva, gotas de rocío en suspensión y estela hidrodinámica.',
+              pattern: 'hydro_caustics',
+              base: '#083344',
+              accent: '#22d3ee',
+              secondary: '#a5f3fc',
+              trail: '#38bdf8',
+              trailType: 'water_splash',
+              trailName: 'Espuma Oceánica & Rocío Vivo',
+              holeFx: 'water_geyser',
+              holeName: 'Géiser de Agua Cristalina',
+              material: { roughness: 0.08, metalness: 0.05, clearcoat: 1.0, iridescence: 0.8 },
+            },
+            {
+              id: 'birdie_opt3',
+              title: 'Sonic Mach-1 Wing',
+              desc: 'Titanio aeroespacial pulido con alas delta vectoriales grabadas con láser y estelas de condensación jet.',
+              pattern: 'supersonic_wing',
+              base: '#cbd5e1',
+              accent: '#2563eb',
+              secondary: '#93c5fd',
+              trail: '#60a5fa',
+              trailType: 'sonic_vapor',
+              trailName: 'Conos de Condensación Sónicos',
+              holeFx: 'sonic_boom',
+              holeName: 'Onda Expansiva Mach-1',
+              material: { roughness: 0.1, metalness: 0.92, clearcoat: 0.9, iridescence: 0.2 },
+            },
+            {
+              id: 'birdie_opt4',
+              title: 'Thunderbird Celestial',
+              desc: 'Ópalo azul cielo con silueta de ave fénix celeste y micro-relámpagos electrostáticos internos.',
+              pattern: 'thunderbird',
+              base: '#1e293b',
+              accent: '#38bdf8',
+              secondary: '#818cf8',
+              trail: '#00f0ff',
+              trailType: 'cyan_static',
+              trailName: 'Relámpagos Electrostáticos Cian',
+              holeFx: 'thunder_strike',
+              holeName: 'Rayo Cenital & Orbe de Plasma',
+              material: { roughness: 0.14, metalness: 0.35, clearcoat: 1.0, iridescence: 0.7, emissive: '#00b4d8', emissiveIntensity: 0.4 },
+            },
+          ],
+        },
+        {
+          id: 'star',
+          name: 'Estrella',
+          rarity: 'gold',
+          challenge: 'ace',
+          challengeName: 'Haz un hoyo en uno',
+          options: [
+            {
+              id: 'star_opt1',
+              title: 'Solar Supernova Core',
+              desc: 'Corona solar ardiente con llamaradas dinámicas de plasma, células de convección y calor estelar cegador.',
+              pattern: 'solar_supernova',
+              base: '#7c2d12',
+              accent: '#ffb703',
+              secondary: '#fffbeb',
+              trail: '#ffaa00',
+              trailType: 'solar_flare',
+              trailName: 'Fuego Solar & Ondas de Plasma',
+              holeFx: 'supernova_burst',
+              holeName: 'Estallido Supernova & Anillo Fotónico',
+              material: { roughness: 0.15, metalness: 0.4, clearcoat: 0.9, emissive: '#ff8800', emissiveIntensity: 0.6 },
+            },
+            {
+              id: 'star_opt2',
+              title: 'Starlight Astrolabe',
+              desc: 'Oro celestial macizo con coordenadas de astrolabio grabadas y red de constelaciones con gemas engastadas.',
+              pattern: 'astrolabe',
+              base: '#996515',
+              accent: '#ffd23f',
+              secondary: '#ffffff',
+              trail: '#ffe066',
+              trailType: 'stardust',
+              trailName: 'Polvo de Estrellas & Constelaciones',
+              holeFx: 'astrolabe_align',
+              holeName: 'Alineación Zodiacal de Campeón',
+              material: { roughness: 0.18, metalness: 0.85, clearcoat: 1.0, iridescence: 0.4 },
+            },
+            {
+              id: 'star_opt3',
+              title: 'Pulsar Chronos',
+              desc: 'Estrella de neutrones ultra-densa de rotación rápida con haces de rayos gamma polares y pulso rítmico.',
+              pattern: 'pulsar',
+              base: '#1a1005',
+              accent: '#ffd700',
+              secondary: '#ffffff',
+              trail: '#ffea75',
+              trailType: 'gamma_beams',
+              trailName: 'Anillos de Pulso Gamma',
+              holeFx: 'pulsar_collapse',
+              holeName: 'Colapso de Gravedad & Flash Dorado',
+              material: { roughness: 0.1, metalness: 0.8, clearcoat: 1.0, emissive: '#ffd700', emissiveIntensity: 0.5 },
+            },
+            {
+              id: 'star_opt4',
+              title: 'Ace of Midas Bullion',
+              desc: 'Oro puro de 24 quilates facetado en corte marquesa con el As de Diamantes grabado en microrrelieve.',
+              pattern: 'midas_bullion',
+              base: '#b48a04',
+              accent: '#ffd23f',
+              secondary: '#fff3b0',
+              trail: '#ffd84d',
+              trailType: 'gold_coins',
+              trailName: 'Monedas de Oro & Lluvia de Lingotes',
+              holeFx: 'jackpot_fountain',
+              holeName: 'Cascada de Fichas & Champagne VIP',
+              material: { roughness: 0.1, metalness: 0.96, clearcoat: 1.0, iridescence: 0.5 },
+            },
+          ],
+        },
+        {
+          id: 'streak',
+          name: 'Racha',
+          rarity: 'gold',
+          challenge: 'streak3',
+          challengeName: 'Gana 3 partidas seguidas',
+          options: [
+            {
+              id: 'streak_opt1',
+              title: 'Blazing Inferno On-Fire',
+              desc: 'Llamas vivas volumétricas que emergen de un núcleo de magma burbujeante a más de 1200°C.',
+              pattern: 'inferno_flame',
+              base: '#1c0502',
+              accent: '#ff3700',
+              secondary: '#ffcc00',
+              trail: '#ff5500',
+              trailType: 'fire_trail',
+              trailName: 'Llamaradas Continuas & Ascuas',
+              holeFx: 'volcano_eruption',
+              holeName: 'Erupción Volcánica Vertical',
+              material: { roughness: 0.25, metalness: 0.3, clearcoat: 0.7, emissive: '#ff3700', emissiveIntensity: 0.75 },
+            },
+            {
+              id: 'streak_opt2',
+              title: 'Cyan Nitro Velocity',
+              desc: 'Combustión perfecta de óxido nitroso azul cobalto y cian con estela de turbina supersónica.',
+              pattern: 'nitro_velocity',
+              base: '#031726',
+              accent: '#00d2ff',
+              secondary: '#99f6ff',
+              trail: '#00b4d8',
+              trailType: 'nitro_flame',
+              trailName: 'Llama Azul Nitro & Ondas Térmicas',
+              holeFx: 'nitro_detonation',
+              holeName: 'Detonación de Nitro Supersónica',
+              material: { roughness: 0.12, metalness: 0.65, clearcoat: 1.0, emissive: '#00c0ff', emissiveIntensity: 0.6 },
+            },
+            {
+              id: 'streak_opt3',
+              title: 'Dragon’s Crimson Scale',
+              desc: 'Escamas de dragón ancestral de obsidiana y carmesí con grietas de azufre y brasas en el intersticio.',
+              pattern: 'dragon_scales',
+              base: '#190408',
+              accent: '#e11d48',
+              secondary: '#fca5a5',
+              trail: '#ff1e56',
+              trailType: 'crimson_smoke',
+              trailName: 'Ascuas de Azufre & Humo Carmesí',
+              holeFx: 'dragon_spiral',
+              holeName: 'Espiral Doble de Fuego de Dragón',
+              material: { roughness: 0.22, metalness: 0.45, clearcoat: 0.85, iridescence: 0.6, emissive: '#e11d48', emissiveIntensity: 0.4 },
+            },
+            {
+              id: 'streak_opt4',
+              title: 'Overclocked Plasma Surge',
+              desc: 'Circuitería en sobrecalentamiento crítico de alta potencia que emite arcos voltaicos de plasma incandescente.',
+              pattern: 'overclocked',
+              base: '#1a0b10',
+              accent: '#ff0055',
+              secondary: '#ffdd00',
+              trail: '#ff3366',
+              trailType: 'plasma_arcs',
+              trailName: 'Arcos Voltaicos de Plasma',
+              holeFx: 'plasma_overload',
+              holeName: 'Sobrecarga de Alto Voltaje & Anillo',
+              material: { roughness: 0.18, metalness: 0.82, clearcoat: 0.9, emissive: '#ff0055', emissiveIntensity: 0.55 },
+            },
+          ],
+        },
+        {
+          id: 'ice',
+          name: 'Sangre fría',
+          rarity: 'diamond',
+          challenge: 'tiebreak',
+          challengeName: 'Gana un desempate',
+          options: [
+            {
+              id: 'ice_opt1',
+              title: 'Zero-Kelvin Cryo-Nova',
+              desc: 'Hielo glaciar hiper-denso de 32 facetas talladas con escarcha fractal animada que congela el suelo.',
+              pattern: 'glacial_facets',
+              base: '#0c2738',
+              accent: '#67e8f9',
+              secondary: '#ffffff',
+              trail: '#a5f3fc',
+              trailType: 'cryo_frost',
+              trailName: 'Cristales de Hielo & Vaho Subcero',
+              holeFx: 'cryo_nova',
+              holeName: 'Cryo-Nova & Pilares de Hielo',
+              material: { roughness: 0.06, metalness: 0.1, clearcoat: 1.0, iridescence: 1.0 },
+            },
+            {
+              id: 'ice_opt2',
+              title: 'Arctic Blizzard Prism',
+              desc: 'Prisma de cuarzo gélido con ventisca polar interior atrapada y dispersión de luz cian.',
+              pattern: 'blizzard_prism',
+              base: '#164e63',
+              accent: '#38bdf8',
+              secondary: '#e0f2fe',
+              trail: '#7dd3fc',
+              trailType: 'blizzard_drift',
+              trailName: 'Copos Fractales en Gravedad Cero',
+              holeFx: 'blizzard_vortex',
+              holeName: 'Ventisca Polar Envolvente',
+              material: { roughness: 0.1, metalness: 0.2, clearcoat: 1.0, iridescence: 0.9 },
+            },
+            {
+              id: 'ice_opt3',
+              title: 'Liquid Nitrogen Flow',
+              desc: 'Cromo espejo a -196°C con evaporación continua de niebla criogénica densa arrastrándose en el suelo.',
+              pattern: 'liquid_nitrogen',
+              base: '#94a3b8',
+              accent: '#e2e8f0',
+              secondary: '#ffffff',
+              trail: '#e2e8f0',
+              trailType: 'nitrogen_fog',
+              trailName: 'Niebla Densa de Nitrógeno Líquido',
+              holeFx: 'nitrogen_flash',
+              holeName: 'Expansión de Gas Blanco Criogénico',
+              material: { roughness: 0.04, metalness: 0.98, clearcoat: 1.0, iridescence: 0.2 },
+            },
+            {
+              id: 'ice_opt4',
+              title: 'Shattered Glacial Diamond',
+              desc: 'Diamante azul ártico con líneas de fractura internas que laten con pulsaciones de sangre fría.',
+              pattern: 'shattered_diamond',
+              base: '#0f172a',
+              accent: '#38bdf8',
+              secondary: '#f0f9ff',
+              trail: '#bae6fd',
+              trailType: 'diamond_shards',
+              trailName: 'Esquirlas de Diamante Helado',
+              holeFx: 'diamond_shatter',
+              holeName: 'Estallido de Cristales de Diamante',
+              material: { roughness: 0.05, metalness: 0.15, clearcoat: 1.0, iridescence: 1.0, emissive: '#0284c7', emissiveIntensity: 0.35 },
+            },
+          ],
+        },
+        {
+          id: 'highroller',
+          name: 'High Roller',
+          rarity: 'diamond',
+          challenge: 'bigwin',
+          challengeName: 'Gana una mesa de Oro o superior',
+          options: [
+            {
+              id: 'highroller_opt1',
+              title: 'Crown Jewel Brilliant Cut',
+              desc: 'Diamante corte brillante de 58 facetas con fuego óptico prismático y destellos multicolores.',
+              pattern: 'crown_brilliant',
+              base: '#f8fafc',
+              accent: '#a855f7',
+              secondary: '#38bdf8',
+              trail: '#c084fc',
+              trailType: 'prismatic_fire',
+              trailName: 'Cáusticas Prismáticas & Destellos',
+              holeFx: 'crown_shower',
+              holeName: 'Lluvia Real de Diamantes & Prismas',
+              material: { roughness: 0.02, metalness: 0.1, clearcoat: 1.0, iridescence: 1.0 },
+            },
+            {
+              id: 'highroller_opt2',
+              title: 'Royal Amethyst & Platinum',
+              desc: 'Platino cepillado de salón privado con incrustaciones de amatista púrpura real y números de ruleta dorados.',
+              pattern: 'royal_amethyst',
+              base: '#1a0b2e',
+              accent: '#9333ea',
+              secondary: '#ffd23f',
+              trail: '#c084fc',
+              trailType: 'amethyst_dust',
+              trailName: 'Polvo de Amatista & Oro Imperial',
+              holeFx: 'coronation_halo',
+              holeName: 'Coronación Real & Fuegos Púrpuras',
+              material: { roughness: 0.18, metalness: 0.78, clearcoat: 0.95, iridescence: 0.6 },
+            },
+            {
+              id: 'highroller_opt3',
+              title: 'Black Card Titanium Carbon',
+              desc: 'Titanio negro satinado con bisel de oro rosa y chip holográfico de miembros VIP multimillonarios.',
+              pattern: 'black_card',
+              base: '#0c0a12',
+              accent: '#f43f5e',
+              secondary: '#fbcfe8',
+              trail: '#fda4af',
+              trailType: 'holo_circuit',
+              trailName: 'Láseres Geométricos & Microchips',
+              holeFx: 'vault_unlock',
+              holeName: 'Apertura de Bóveda & Haces de Platino',
+              material: { roughness: 0.15, metalness: 0.85, clearcoat: 0.9, iridescence: 0.8 },
+            },
+            {
+              id: 'highroller_opt4',
+              title: 'Baccarat Emerald & Gold Velvet',
+              desc: 'Esmeralda imperial corte cojín con filigrana dorada barroca y confeti de fichas VIP de 10.000$.',
+              pattern: 'baccarat_emerald',
+              base: '#022c22',
+              accent: '#10b981',
+              secondary: '#ffd23f',
+              trail: '#34d399',
+              trailType: 'casino_chips',
+              trailName: 'Fichas VIP de $10K & Polvo Esmeralda',
+              holeFx: 'baccarat_jackpot',
+              holeName: 'Fuente de Fichas de Montecarlo',
+              material: { roughness: 0.12, metalness: 0.6, clearcoat: 1.0, iridescence: 0.7, emissive: '#059669', emissiveIntensity: 0.25 },
+            },
+          ],
+        },
+      ];
+
+      // ==========================================
+      // GENERADOR PROCEDURAL DE TEXTURAS 3D (CANVAS)
+      // ==========================================
+      const textureCache = new Map();
+
+      function generateProceduralTexture(opt) {
+        const key = opt.id;
+        if (textureCache.has(key)) return textureCache.get(key);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = 1024;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width, h = canvas.height;
+
+        // Base fill
+        ctx.fillStyle = opt.base;
+        ctx.fillRect(0, 0, w, h);
+
+        const { pattern, accent, secondary } = opt;
+
+        switch (pattern) {
+          case 'damascus': {
+            // Wavy flowing damascus steel layers
+            for (let y = 0; y < h; y += 4) {
+              const wave = Math.sin(y * 0.05) * 40 + Math.cos(y * 0.12) * 20;
+              ctx.strokeStyle = y % 8 === 0 ? accent : y % 16 === 0 ? secondary : 'rgba(255,255,255,0.08)';
+              ctx.lineWidth = 2.5;
+              ctx.beginPath();
+              ctx.moveTo(0, y + wave * 0.2);
+              for (let x = 0; x <= w; x += 16) {
+                const py = y + Math.sin((x + wave) * 0.02) * 16 + Math.cos((x - wave) * 0.04) * 8;
+                ctx.lineTo(x, py);
+              }
+              ctx.stroke();
+            }
+            break;
+          }
+
+          case 'leather_stitch': {
+            // Leather pebble noise and brass cross stitches
+            for (let i = 0; i < 4000; i++) {
+              ctx.fillStyle = Math.random() > 0.5 ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.08)';
+              ctx.fillRect(Math.random() * w, Math.random() * h, 2, 2);
+            }
+            // Brass seams
+            ctx.strokeStyle = accent;
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(0, h * 0.5);
+            ctx.lineTo(w, h * 0.5);
+            ctx.stroke();
+            // Stitch marks
+            ctx.strokeStyle = secondary;
+            ctx.lineWidth = 2.5;
+            for (let x = 0; x < w; x += 18) {
+              ctx.beginPath();
+              ctx.moveTo(x, h * 0.44);
+              ctx.lineTo(x + 10, h * 0.56);
+              ctx.stroke();
+              ctx.beginPath();
+              ctx.moveTo(x + 10, h * 0.44);
+              ctx.lineTo(x, h * 0.56);
+              ctx.stroke();
+            }
+            break;
+          }
+
+          case 'cyber_relic': {
+            // Oxidized patina with glowing copper circuit lines
+            ctx.fillStyle = 'rgba(0, 180, 140, 0.2)';
+            for (let i = 0; i < 30; i++) {
+              ctx.beginPath();
+              ctx.arc(Math.random() * w, Math.random() * h, 20 + Math.random() * 80, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            // Circuits
+            ctx.strokeStyle = accent;
+            ctx.lineWidth = 3;
+            ctx.shadowColor = accent;
+            ctx.shadowBlur = 10;
+            for (let i = 0; i < 14; i++) {
+              let cx = (i * w) / 14, cy = (h * 0.2) + ((i * 37) % (h * 0.6));
+              ctx.beginPath();
+              ctx.moveTo(cx, cy);
+              ctx.lineTo(cx + 40, cy);
+              ctx.lineTo(cx + 80, cy + (i % 2 ? 40 : -40));
+              ctx.lineTo(cx + 140, cy + (i % 2 ? 40 : -40));
+              ctx.stroke();
+              ctx.fillStyle = secondary;
+              ctx.beginPath();
+              ctx.arc(cx + 140, cy + (i % 2 ? 40 : -40), 4, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            ctx.shadowBlur = 0;
+            break;
+          }
+
+          case 'kintsugi': {
+            // Carbon fiber diagonal weave
+            ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+            ctx.lineWidth = 2;
+            for (let x = -h; x < w + h; x += 8) {
+              ctx.beginPath();
+              ctx.moveTo(x, 0);
+              ctx.lineTo(x + h, h);
+              ctx.stroke();
+              ctx.beginPath();
+              ctx.moveTo(x + h, 0);
+              ctx.lineTo(x, h);
+              ctx.stroke();
+            }
+            // Golden kintsugi fractures
+            ctx.strokeStyle = accent;
+            ctx.lineWidth = 4;
+            ctx.shadowColor = accent;
+            ctx.shadowBlur = 12;
+            for (let f = 0; f < 5; f++) {
+              let fx = (f * w) / 5 + 40, fy = 20;
+              ctx.beginPath();
+              ctx.moveTo(fx, fy);
+              while (fy < h - 20) {
+                fx += (Math.random() - 0.5) * 60;
+                fy += 30 + Math.random() * 40;
+                ctx.lineTo(fx, fy);
+              }
+              ctx.stroke();
+            }
+            ctx.shadowBlur = 0;
+            break;
+          }
+
+          case 'feather_aero': {
+            // Ethereal wings and feather layers
+            for (let f = 0; f < 18; f++) {
+              const fx = (f * w) / 18, fy = h * 0.5 + Math.sin(f) * 60;
+              const grad = ctx.createLinearGradient(fx, fy - 60, fx + 80, fy + 60);
+              grad.addColorStop(0, accent + 'cc');
+              grad.addColorStop(1, 'rgba(255,255,255,0)');
+              ctx.fillStyle = grad;
+              ctx.beginPath();
+              ctx.ellipse(fx + 40, fy, 70, 24, Math.PI / 4, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            break;
+          }
+
+          case 'hydro_caustics': {
+            // Water caustics
+            for (let i = 0; i < 40; i++) {
+              const x = Math.random() * w, y = Math.random() * h;
+              const r = 25 + Math.random() * 45;
+              ctx.strokeStyle = secondary + 'aa';
+              ctx.lineWidth = 3;
+              ctx.beginPath();
+              for (let a = 0; a < Math.PI * 2; a += 0.4) {
+                const rad = r + Math.sin(a * 4 + i) * 12;
+                const px = x + Math.cos(a) * rad, py = y + Math.sin(a) * rad;
+                if (a === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+              }
+              ctx.closePath();
+              ctx.stroke();
+            }
+            break;
+          }
+
+          case 'supersonic_wing': {
+            // Swept wings and jet velocity markers
+            ctx.fillStyle = accent;
+            for (let i = 0; i < 8; i++) {
+              const sx = (i * w) / 8;
+              ctx.beginPath();
+              ctx.moveTo(sx, h * 0.3);
+              ctx.lineTo(sx + 70, h * 0.5);
+              ctx.lineTo(sx, h * 0.7);
+              ctx.lineTo(sx + 20, h * 0.5);
+              ctx.closePath();
+              ctx.fill();
+            }
+            ctx.fillStyle = secondary;
+            ctx.fillRect(0, h * 0.49, w, h * 0.02);
+            break;
+          }
+
+          case 'thunderbird': {
+            // Thunderbird constellation with cyan lightning streaks
+            ctx.fillStyle = '#ffffff';
+            for (let i = 0; i < 100; i++) {
+              ctx.fillRect(Math.random() * w, Math.random() * h, 2, 2);
+            }
+            ctx.strokeStyle = accent;
+            ctx.lineWidth = 3.5;
+            ctx.shadowColor = accent;
+            ctx.shadowBlur = 14;
+            // Lightning zigzag
+            for (let z = 0; z < 4; z++) {
+              let zx = (z * w) / 4 + 50, zy = h * 0.1;
+              ctx.beginPath();
+              ctx.moveTo(zx, zy);
+              while (zy < h * 0.9) {
+                zx += (Math.random() - 0.5) * 80;
+                zy += 40;
+                ctx.lineTo(zx, zy);
+              }
+              ctx.stroke();
+            }
+            ctx.shadowBlur = 0;
+            break;
+          }
+
+          case 'solar_supernova': {
+            // Solar flares and granulations
+            const grad = ctx.createRadialGradient(w * 0.5, h * 0.5, 40, w * 0.5, h * 0.5, w * 0.6);
+            grad.addColorStop(0, '#ffffff');
+            grad.addColorStop(0.2, accent);
+            grad.addColorStop(0.7, opt.base);
+            grad.addColorStop(1, '#000000');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, w, h);
+            // Solar prominence arcs
+            ctx.strokeStyle = secondary;
+            ctx.lineWidth = 4;
+            ctx.shadowColor = accent;
+            ctx.shadowBlur = 20;
+            for (let a = 0; a < 12; a++) {
+              const ax = (a * w) / 12, ay = h * 0.5;
+              ctx.beginPath();
+              ctx.arc(ax, ay, 50 + (a % 3) * 20, 0, Math.PI);
+              ctx.stroke();
+            }
+            ctx.shadowBlur = 0;
+            break;
+          }
+
+          case 'astrolabe': {
+            // Concentric astronomical astrolabe rings and stars
+            ctx.strokeStyle = accent;
+            ctx.lineWidth = 3;
+            for (let c = 0; c < 3; c++) {
+              const cx = (c + 0.5) * (w / 3), cy = h * 0.5;
+              for (let r = 30; r < 140; r += 26) {
+                ctx.beginPath();
+                ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                ctx.stroke();
+              }
+              // Rays
+              for (let deg = 0; deg < 360; deg += 30) {
+                const rad = (deg * Math.PI) / 180;
+                ctx.beginPath();
+                ctx.moveTo(cx + Math.cos(rad) * 30, cy + Math.sin(rad) * 30);
+                ctx.lineTo(cx + Math.cos(rad) * 140, cy + Math.sin(rad) * 140);
+                ctx.stroke();
+              }
+            }
+            break;
+          }
+
+          case 'pulsar': {
+            // Pulsar spiral magnetic field
+            ctx.fillStyle = secondary;
+            for (let i = 0; i < 200; i++) {
+              const theta = i * 0.15;
+              const rad = i * 1.8;
+              const px = w * 0.5 + Math.cos(theta) * rad * 2;
+              const py = h * 0.5 + Math.sin(theta) * rad;
+              ctx.beginPath();
+              ctx.arc(px % w, py % h, 3, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            break;
+          }
+
+          case 'midas_bullion': {
+            // Cut marquise facets and gold bullion sheen
+            for (let y = 0; y < 4; y++) {
+              for (let x = 0; x < 10; x++) {
+                ctx.fillStyle = (x + y) % 2 ? accent : secondary;
+                ctx.beginPath();
+                ctx.moveTo((x * w) / 10, ((y + 0.5) * h) / 4);
+                ctx.lineTo(((x + 0.5) * w) / 10, (y * h) / 4);
+                ctx.lineTo(((x + 1) * w) / 10, ((y + 0.5) * h) / 4);
+                ctx.lineTo(((x + 0.5) * w) / 10, ((y + 1) * h) / 4);
+                ctx.closePath();
+                ctx.fill();
+              }
+            }
+            break;
+          }
+
+          case 'inferno_flame': {
+            // Intense vertical inferno flame tongues
+            for (let k = 0; k < 4; k++) {
+              ctx.fillStyle = k === 0 ? accent : k === 1 ? '#ff7700' : k === 2 ? secondary : '#ffffff';
+              ctx.beginPath();
+              ctx.moveTo(0, h);
+              for (let x = 0; x <= w; x += 12) {
+                const wave = Math.sin((x / w) * Math.PI * 14 + k) * h * 0.22;
+                ctx.lineTo(x, h * (0.6 - k * 0.12) - Math.abs(wave));
+              }
+              ctx.lineTo(w, h);
+              ctx.fill();
+            }
+            break;
+          }
+
+          case 'nitro_velocity': {
+            // Cyan & deep cobalt nitro flame jet
+            for (let k = 0; k < 3; k++) {
+              ctx.fillStyle = k === 0 ? '#0033aa' : k === 1 ? accent : secondary;
+              ctx.beginPath();
+              ctx.moveTo(0, h);
+              for (let x = 0; x <= w; x += 10) {
+                const wave = Math.sin((x / w) * Math.PI * 18 + k) * h * 0.26;
+                ctx.lineTo(x, h * (0.55 - k * 0.14) - Math.abs(wave));
+              }
+              ctx.lineTo(w, h);
+              ctx.fill();
+            }
+            break;
+          }
+
+          case 'dragon_scales': {
+            // Overlapping dragon scales with glowing red embers
+            for (let y = 0; y < h; y += 32) {
+              for (let x = (y / 32) % 2 ? 24 : 0; x < w; x += 48) {
+                ctx.fillStyle = accent;
+                ctx.beginPath();
+                ctx.arc(x, y, 20, 0, Math.PI);
+                ctx.fill();
+                ctx.strokeStyle = secondary;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+              }
+            }
+            break;
+          }
+
+          case 'overclocked': {
+            // Heat-sink fins and red-hot circuit grid
+            for (let x = 0; x < w; x += 30) {
+              ctx.fillStyle = accent;
+              ctx.fillRect(x, 0, 14, h);
+              ctx.fillStyle = secondary;
+              ctx.fillRect(x + 4, h * 0.35, 6, h * 0.3);
+            }
+            break;
+          }
+
+          case 'glacial_facets': {
+            // 32-faceted diamond ice crystals
+            for (let y = 0; y < 4; y++) {
+              for (let x = 0; x < 8; x++) {
+                ctx.fillStyle = (x + y) % 2 ? accent : secondary;
+                ctx.globalAlpha = 0.6 + ((x + y) % 3) * 0.15;
+                ctx.beginPath();
+                ctx.moveTo((x * w) / 8, (y * h) / 4);
+                ctx.lineTo(((x + 1) * w) / 8, (y * h) / 4);
+                ctx.lineTo(((x + 0.5) * w) / 8, ((y + 1) * h) / 4);
+                ctx.closePath();
+                ctx.fill();
+              }
+            }
+            ctx.globalAlpha = 1.0;
+            break;
+          }
+
+          case 'blizzard_prism': {
+            // Snowflakes and frost fractal drift
+            for (let i = 0; i < 70; i++) {
+              const sx = Math.random() * w, sy = Math.random() * h;
+              ctx.strokeStyle = secondary;
+              ctx.lineWidth = 1.8;
+              for (let a = 0; a < 6; a++) {
+                const rad = (a * Math.PI) / 3;
+                ctx.beginPath();
+                ctx.moveTo(sx, sy);
+                ctx.lineTo(sx + Math.cos(rad) * 14, sy + Math.sin(rad) * 14);
+                ctx.stroke();
+              }
+            }
+            break;
+          }
+
+          case 'liquid_nitrogen': {
+            // Liquid mercury swirls and frost mist
+            for (let i = 0; i < 15; i++) {
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+              ctx.beginPath();
+              ctx.ellipse(Math.random() * w, Math.random() * h, 120, 30, Math.random() * Math.PI, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            break;
+          }
+
+          case 'shattered_diamond': {
+            // Cracked ice cleavage planes
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 3;
+            for (let c = 0; c < 8; c++) {
+              let cx = Math.random() * w, cy = Math.random() * h;
+              ctx.beginPath();
+              ctx.moveTo(cx, cy);
+              for (let s = 0; s < 5; s++) {
+                cx += (Math.random() - 0.5) * 100;
+                cy += (Math.random() - 0.5) * 80;
+                ctx.lineTo(cx, cy);
+              }
+              ctx.stroke();
+            }
+            break;
+          }
+
+          case 'crown_brilliant': {
+            // Brilliant cut gemstone triangular & kite facets
+            for (let y = 0; y < 6; y++) {
+              for (let x = 0; x < 12; x++) {
+                const colors = [accent, secondary, '#ffffff', '#ffd23f', '#38ef7d'];
+                ctx.fillStyle = colors[(x * 3 + y * 7) % colors.length];
+                ctx.globalAlpha = 0.55 + ((x + y) % 4) * 0.12;
+                ctx.beginPath();
+                ctx.moveTo((x * w) / 12, (y * h) / 6);
+                ctx.lineTo(((x + 1) * w) / 12, ((y + 0.5) * h) / 6);
+                ctx.lineTo((x * w) / 12, ((y + 1) * h) / 6);
+                ctx.closePath();
+                ctx.fill();
+              }
+            }
+            ctx.globalAlpha = 1.0;
+            break;
+          }
+
+          case 'royal_amethyst': {
+            // Deep amethyst with gold roulette numbers
+            ctx.fillStyle = secondary;
+            ctx.font = 'bold 22px Outfit, sans-serif';
+            ctx.textAlign = 'center';
+            for (let i = 0; i < 16; i++) {
+              const rx = (i * w) / 16 + 20, ry = h * 0.5;
+              ctx.fillText(`${(i * 7) % 36}`, rx, ry);
+            }
+            break;
+          }
+
+          case 'black_card': {
+            // Matte carbon titanium with rose gold chamfer & holo chip
+            ctx.strokeStyle = secondary;
+            ctx.lineWidth = 4;
+            ctx.strokeRect(w * 0.1, h * 0.2, w * 0.8, h * 0.6);
+            // Chip
+            ctx.fillStyle = accent;
+            ctx.fillRect(w * 0.4, h * 0.4, w * 0.2, h * 0.2);
+            break;
+          }
+
+          case 'baccarat_emerald': {
+            // Emerald cushion cut with gold baroque filigree
+            ctx.strokeStyle = secondary;
+            ctx.lineWidth = 3;
+            for (let f = 0; f < 8; f++) {
+              const fx = (f * w) / 8 + 40, fy = h * 0.5;
+              ctx.beginPath();
+              ctx.arc(fx, fy, 45, 0, Math.PI * 2);
+              ctx.stroke();
+              ctx.beginPath();
+              ctx.arc(fx, fy, 25, 0, Math.PI * 2);
+              ctx.stroke();
+            }
+            break;
+          }
+
+          default:
+            break;
+        }
+
+        // Real golf ball dimples overlay (hoyuelos realistas)
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
+        for (let y = 8; y < h; y += 16) {
+          for (let x = (y / 16) % 2 ? 8 : 0; x < w; x += 16) {
+            ctx.beginPath();
+            ctx.arc(x, y, 4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        textureCache.set(key, canvas);
+        return canvas;
+      }
+
+      // ==========================================
+      // WEB AUDIO API SYNTHESIZER (SONIDOS PROCEDURALES)
+      // ==========================================
+      let audioCtx = null;
+      let soundEnabled = true;
+
+      function initAudio() {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+      }
+
+      function playRollSound(speedRatio = 1) {
+        if (!soundEnabled) return;
+        try {
+          initAudio();
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          const filter = audioCtx.createBiquadFilter();
+
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(80 * speedRatio, audioCtx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(140 * speedRatio, audioCtx.currentTime + 0.35);
+
+          filter.type = 'lowpass';
+          filter.frequency.setValueAtTime(450, audioCtx.currentTime);
+
+          gain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+
+          osc.connect(filter);
+          filter.connect(gain);
+          gain.connect(audioCtx.destination);
+
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.45);
+        } catch (e) {}
+      }
+
+      function playHoleCelebrationSound(holeFx) {
+        if (!soundEnabled) return;
+        try {
+          initAudio();
+          const now = audioCtx.currentTime;
+
+          // 1. Ball drop thunk in cup
+          const oscDrop = audioCtx.createOscillator();
+          const gainDrop = audioCtx.createGain();
+          oscDrop.type = 'sine';
+          oscDrop.frequency.setValueAtTime(240, now);
+          oscDrop.frequency.exponentialRampToValueAtTime(80, now + 0.12);
+          gainDrop.gain.setValueAtTime(0.25, now);
+          gainDrop.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+          oscDrop.connect(gainDrop);
+          gainDrop.connect(audioCtx.destination);
+          oscDrop.start(now);
+          oscDrop.stop(now + 0.16);
+
+          // 2. Triumphant Fanfare Chord
+          const chordFreqs = [523.25, 659.25, 783.99, 1046.5]; // C Major high-stakes chord
+          chordFreqs.forEach((freq, idx) => {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, now + 0.1 + idx * 0.04);
+            gain.gain.setValueAtTime(0.08, now + 0.1 + idx * 0.04);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(now + 0.1 + idx * 0.04);
+            osc.stop(now + 1.3);
+          });
+        } catch (e) {}
+      }
+
+      // ==========================================
+      // ESCENA 3D PRINCIPAL (THREE.JS)
+      // ==========================================
+      let activeSkinIndex = 0;
+      let activeOptionIndex = 0;
+      let isRolling = false;
+      let isAutoSpin = true;
+      let rollSpeed = 5;
+      let isQuadMode = false;
+
+      const viewportContainer = document.getElementById('single-viewport');
+      let renderer, scene, camera, controls;
+      let ballMesh, pedestalMesh, fairwayMesh;
+      let trailParticles = [];
+      let celebrationParticles = [];
+
+      function initMain3D() {
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x08070d);
+
+        camera = new THREE.PerspectiveCamera(40, viewportContainer.clientWidth / viewportContainer.clientHeight, 0.1, 100);
+        camera.position.set(0, 1.8, 4.2);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+        renderer.setSize(viewportContainer.clientWidth, viewportContainer.clientHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        viewportContainer.appendChild(renderer.domElement);
+
+        controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.06;
+        controls.minDistance = 2.0;
+        controls.maxDistance = 7.5;
+        controls.maxPolarAngle = Math.PI / 2 + 0.1;
+
+        // Lights
+        const ambLight = new THREE.AmbientLight(0xffffff, 0.9);
+        scene.add(ambLight);
+
+        const keyLight = new THREE.DirectionalLight(0xfff2d4, 2.8);
+        keyLight.position.set(4, 8, 5);
+        keyLight.castShadow = true;
+        keyLight.shadow.mapSize.width = 1024;
+        keyLight.shadow.mapSize.height = 1024;
+        scene.add(keyLight);
+
+        const fillLight = new THREE.DirectionalLight(0x4fb8ff, 1.4);
+        fillLight.position.set(-5, 3, -3);
+        scene.add(fillLight);
+
+        const rimLight = new THREE.PointLight(0xffd23f, 2.2, 8);
+        rimLight.position.set(0, 3, -3);
+        scene.add(rimLight);
+
+        // Pedestal de Obsidiana con Anillo Dorado
+        const pedGeo = new THREE.CylinderGeometry(1.6, 1.7, 0.16, 64);
+        const pedMat = new THREE.MeshPhysicalMaterial({
+          color: 0x12101a,
+          roughness: 0.18,
+          metalness: 0.85,
+          clearcoat: 1.0,
+        });
+        pedestalMesh = new THREE.Mesh(pedGeo, pedMat);
+        pedestalMesh.position.y = -0.58;
+        pedestalMesh.receiveShadow = true;
+        scene.add(pedestalMesh);
+
+        // Anillo de oro del pedestal
+        const ringGeo = new THREE.TorusGeometry(1.62, 0.025, 16, 64);
+        const ringMat = new THREE.MeshBasicMaterial({ color: 0xffd23f });
+        const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+        ringMesh.rotation.x = Math.PI / 2;
+        ringMesh.position.y = -0.5;
+        scene.add(ringMesh);
+
+        // Fairway turf strip (para la simulación de rodada)
+        const fairwayGeo = new THREE.BoxGeometry(2.4, 0.05, 12);
+        const fairwayMat = new THREE.MeshStandardMaterial({
+          color: 0x0f2b1d,
+          roughness: 0.85,
+          metalness: 0.05,
+        });
+        fairwayMesh = new THREE.Mesh(fairwayGeo, fairwayMat);
+        fairwayMesh.position.set(0, -0.6, -3);
+        fairwayMesh.receiveShadow = true;
+        fairwayMesh.visible = false;
+        scene.add(fairwayMesh);
+
+        // Bola de golf 3D
+        const ballGeo = new THREE.SphereGeometry(0.5, 64, 64);
+        ballMesh = new THREE.Mesh(ballGeo, createBallMaterial(getCurrentOption()));
+        ballMesh.castShadow = true;
+        ballMesh.receiveShadow = true;
+        scene.add(ballMesh);
+
+        // Resize handler
+        window.addEventListener('resize', onWindowResize);
+
+        // Start render loop
+        animate();
+      }
+
+      function createBallMaterial(opt) {
+        const texture = new THREE.CanvasTexture(generateProceduralTexture(opt));
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.ClampToEdgeWrapping;
+        texture.anisotropy = 8;
+
+        const m = opt.material || {};
+        const mat = new THREE.MeshPhysicalMaterial({
+          map: texture,
+          roughness: m.roughness ?? 0.15,
+          metalness: m.metalness ?? 0.4,
+          clearcoat: m.clearcoat ?? 1.0,
+          clearcoatRoughness: 0.08,
+          iridescence: m.iridescence ?? 0.0,
+          iridescenceIOR: 1.6,
+          emissive: m.emissive ? new THREE.Color(m.emissive) : new THREE.Color(0x000000),
+          emissiveIntensity: m.emissiveIntensity ?? 0.0,
+        });
+
+        return mat;
+      }
+
+      function updateBallSkin() {
+        const opt = getCurrentOption();
+        if (ballMesh) {
+          ballMesh.material.dispose();
+          ballMesh.material = createBallMaterial(opt);
+        }
+        updateUI();
+      }
+
+      function getCurrentSkin() {
+        return CHALLENGE_SKINS_DATA[activeSkinIndex];
+      }
+
+      function getCurrentOption() {
+        return getCurrentSkin().options[activeOptionIndex];
+      }
+
+      // ==========================================
+      // SISTEMA DE PARTÍCULAS (RODADA Y HOYO)
+      // ==========================================
+      class ParticleEmitter {
+        constructor() {
+          this.particles = [];
+        }
+
+        emitTrail(origin, opt, count = 3) {
+          const trailColors = {
+            sparks: [0xffaa00, 0xff5500, 0xffdd44],
+            brass_dust: [0xd4af37, 0xf3e5ab, 0xc5a059],
+            copper_surge: [0xff7733, 0x00ffff, 0xffaa44],
+            gold_smoke: [0xffd700, 0x555555, 0xffe680],
+            feather_vortex: [0x73e2ff, 0xffffff, 0x00c3ff],
+            water_splash: [0x22d3ee, 0xa5f3fc, 0x38bdf8],
+            sonic_vapor: [0x60a5fa, 0xffffff, 0x93c5fd],
+            cyan_static: [0x00f0ff, 0x38bdf8, 0xffffff],
+            solar_flare: [0xffbb00, 0xff4400, 0xffffaa],
+            stardust: [0xffd23f, 0xffffff, 0xffe066],
+            gamma_beams: [0xffd700, 0xffffff, 0xffea75],
+            gold_coins: [0xffd700, 0xffae00, 0xfffae0],
+            fire_trail: [0xff3700, 0xff7700, 0xffcc00],
+            nitro_flame: [0x00d2ff, 0x0055ff, 0xa5f3fc],
+            crimson_smoke: [0xe11d48, 0x4c0519, 0xff4d6d],
+            plasma_arcs: [0xff0055, 0xffdd00, 0xff3366],
+            cryo_frost: [0xa5f3fc, 0xffffff, 0x67e8f9],
+            blizzard_drift: [0xe0f2fe, 0xffffff, 0x7dd3fc],
+            nitrogen_fog: [0xf8fafc, 0xe2e8f0, 0xffffff],
+            diamond_shards: [0x38bdf8, 0xffffff, 0xbae6fd],
+            prismatic_fire: [0xc084fc, 0x38bdf8, 0xffd23f],
+            amethyst_dust: [0x9333ea, 0xc084fc, 0xffd23f],
+            holo_circuit: [0xf43f5e, 0x38bdf8, 0xfbcfe8],
+            casino_chips: [0x10b981, 0xffd23f, 0x34d399],
+          };
+
+          const colors = trailColors[opt.trailType] || [0xffffff, 0xffd23f];
+
+          for (let i = 0; i < count; i++) {
+            const geo = new THREE.SphereGeometry(0.04 + Math.random() * 0.04, 8, 8);
+            const col = colors[Math.floor(Math.random() * colors.length)];
+            const mat = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.85 });
+            const mesh = new THREE.Mesh(geo, mat);
+
+            // Jitter around back of ball
+            mesh.position.copy(origin).add(new THREE.Vector3(
+              (Math.random() - 0.5) * 0.2,
+              (Math.random() - 0.5) * 0.15,
+              0.25 + Math.random() * 0.15
+            ));
+
+            scene.add(mesh);
+
+            this.particles.push({
+              mesh,
+              vel: new THREE.Vector3((Math.random() - 0.5) * 0.4, 0.2 + Math.random() * 0.5, 0.8 + Math.random() * 0.6),
+              life: 1.0,
+              decay: 1.6 + Math.random() * 0.8,
+            });
+          }
+        }
+
+        emitHoleCelebration(origin, opt) {
+          playHoleCelebrationSound(opt.holeFx);
+
+          const count = 120;
+          const colors = [
+            new THREE.Color(opt.accent),
+            new THREE.Color(opt.secondary),
+            new THREE.Color(opt.trail),
+            new THREE.Color(0xffffff),
+            new THREE.Color(0xffd23f),
+          ];
+
+          for (let i = 0; i < count; i++) {
+            const size = 0.05 + Math.random() * 0.08;
+            const geo = opt.trailType.includes('diamond') || opt.trailType.includes('frost')
+              ? new THREE.TetrahedronGeometry(size)
+              : new THREE.SphereGeometry(size, 8, 8);
+
+            const mat = new THREE.MeshBasicMaterial({
+              color: colors[i % colors.length],
+              transparent: true,
+              opacity: 1.0,
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.copy(origin);
+            scene.add(mesh);
+
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.random() * Math.PI * 0.45;
+            const speed = 2.5 + Math.random() * 4.5;
+
+            const vel = new THREE.Vector3(
+              Math.sin(phi) * Math.cos(theta) * speed,
+              Math.cos(phi) * (speed + 2),
+              Math.sin(phi) * Math.sin(theta) * speed
+            );
+
+            this.particles.push({
+              mesh,
+              vel,
+              gravity: -4.5,
+              rotSpeed: new THREE.Vector3(Math.random() * 6, Math.random() * 6, Math.random() * 6),
+              life: 1.0,
+              decay: 0.6 + Math.random() * 0.4,
+            });
+          }
+        }
+
+        update(dt) {
+          for (let i = this.particles.length - 1; i >= 0; i--) {
+            const p = this.particles[i];
+            p.life -= dt * p.decay;
+
+            if (p.life <= 0) {
+              scene.remove(p.mesh);
+              p.mesh.geometry.dispose();
+              p.mesh.material.dispose();
+              this.particles.splice(i, 1);
+              continue;
+            }
+
+            if (p.gravity) {
+              p.vel.y += p.gravity * dt;
+            }
+
+            p.mesh.position.addScaledVector(p.vel, dt);
+            if (p.rotSpeed) {
+              p.mesh.rotation.x += p.rotSpeed.x * dt;
+              p.mesh.rotation.y += p.rotSpeed.y * dt;
+            }
+
+            p.mesh.material.opacity = Math.max(0, p.life);
+            const scale = Math.max(0.01, p.life);
+            p.mesh.scale.set(scale, scale, scale);
+          }
+        }
+      }
+
+      const particleSystem = new ParticleEmitter();
+
+      // ==========================================
+      // LOOP DE ANIMACIÓN Y RENDER
+      // ==========================================
+      let clock = new THREE.Clock();
+      let rollAngle = 0;
+
+      function animate() {
+        requestAnimationFrame(animate);
+
+        const dt = clock.getDelta();
+
+        if (controls) controls.update();
+
+        // Auto spin on pedestal
+        if (ballMesh && !isRolling && isAutoSpin) {
+          ballMesh.rotation.y += 0.45 * dt;
+          ballMesh.rotation.x = Math.sin(clock.getElapsedTime() * 0.8) * 0.12;
+        }
+
+        // Rolling simulation
+        if (ballMesh && isRolling) {
+          rollAngle += dt * rollSpeed * 3;
+          ballMesh.rotation.x = rollAngle;
+          ballMesh.position.y = -0.1 + Math.sin(rollAngle * 2) * 0.02;
+
+          // Emit trail particles
+          particleSystem.emitTrail(ballMesh.position, getCurrentOption(), 2);
+          playRollSound(rollSpeed / 5);
+        }
+
+        // Update particle physics
+        particleSystem.update(dt);
+
+        if (!isQuadMode && renderer && scene && camera) {
+          renderer.render(scene, camera);
+        }
+      }
+
+      function onWindowResize() {
+        if (!viewportContainer) return;
+        camera.aspect = viewportContainer.clientWidth / viewportContainer.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(viewportContainer.clientWidth, viewportContainer.clientHeight);
+      }
+
+      // ==========================================
+      // MODO CUÁDRUPLE (COMPARACIÓN 4-UP)
+      // ==========================================
+      let quadRenderers = [];
+      let quadScenes = [];
+      let quadCameras = [];
+      let quadBalls = [];
+
+      function toggleQuadMode() {
+        isQuadMode = !isQuadMode;
+        const singleVp = document.getElementById('single-viewport');
+        const quadVp = document.getElementById('quad-viewport');
+        const btnQuad = document.getElementById('btn-toggle-quad');
+        const btnText = document.getElementById('quad-btn-text');
+
+        if (isQuadMode) {
+          singleVp.style.display = 'none';
+          quadVp.style.display = 'grid';
+          btnQuad.classList.add('btn-active');
+          btnText.textContent = 'Salir de Comparador';
+          initQuadViewports();
+        } else {
+          singleVp.style.display = 'block';
+          quadVp.style.display = 'none';
+          btnQuad.classList.remove('btn-active');
+          btnText.textContent = 'Comparar 4 Opciones';
+          destroyQuadViewports();
+          onWindowResize();
+        }
+      }
+
+      function initQuadViewports() {
+        destroyQuadViewports();
+        const skin = getCurrentSkin();
+
+        for (let i = 0; i < 4; i++) {
+          const cell = document.getElementById(`quad-cell-${i}`);
+          const label = document.getElementById(`quad-label-${i}`);
+          const opt = skin.options[i];
+          label.textContent = `Opción ${i + 1}: ${opt.title}`;
+
+          const qScene = new THREE.Scene();
+          qScene.background = new THREE.Color(0x0a0812);
+
+          const qCam = new THREE.PerspectiveCamera(40, cell.clientWidth / cell.clientHeight, 0.1, 50);
+          qCam.position.set(0, 0.6, 2.5);
+
+          const qRend = new THREE.WebGLRenderer({ antialias: true });
+          qRend.setSize(cell.clientWidth, cell.clientHeight);
+          qRend.toneMapping = THREE.ACESFilmicToneMapping;
+          cell.appendChild(qRend.domElement);
+
+          // Lights
+          qScene.add(new THREE.AmbientLight(0xffffff, 1.0));
+          const qLight = new THREE.DirectionalLight(0xffeedd, 2.5);
+          qLight.position.set(3, 5, 4);
+          qScene.add(qLight);
+
+          // Ball Mesh
+          const qBall = new THREE.Mesh(new THREE.SphereGeometry(0.52, 48, 48), createBallMaterial(opt));
+          qScene.add(qBall);
+
+          quadRenderers.push(qRend);
+          quadScenes.push(qScene);
+          quadCameras.push(qCam);
+          quadBalls.push(qBall);
+        }
+
+        renderQuadLoop();
+      }
+
+      function renderQuadLoop() {
+        if (!isQuadMode) return;
+        requestAnimationFrame(renderQuadLoop);
+
+        quadBalls.forEach((b) => {
+          if (b) b.rotation.y += 0.015;
+        });
+
+        for (let i = 0; i < 4; i++) {
+          if (quadRenderers[i] && quadScenes[i] && quadCameras[i]) {
+            quadRenderers[i].render(quadScenes[i], quadCameras[i]);
+          }
+        }
+      }
+
+      function destroyQuadViewports() {
+        quadRenderers.forEach((r, idx) => {
+          const cell = document.getElementById(`quad-cell-${idx}`);
+          if (cell && r.domElement) {
+            cell.removeChild(r.domElement);
+          }
+          r.dispose();
+        });
+        quadRenderers = [];
+        quadScenes = [];
+        quadCameras = [];
+        quadBalls = [];
+      }
+
+      // ==========================================
+      // INTERFAZ DE USUARIO (UI CONTROLLER)
+      // ==========================================
+      function renderSidebar() {
+        const container = document.getElementById('ball-nav-container');
+        container.innerHTML = '';
+
+        CHALLENGE_SKINS_DATA.forEach((skin, idx) => {
+          const card = document.createElement('div');
+          card.className = `ball-nav-card ${idx === activeSkinIndex ? 'active' : ''}`;
+          card.onclick = () => selectSkin(idx);
+
+          // Mini preview canvas
+          const thumbBox = document.createElement('div');
+          thumbBox.className = 'ball-nav-thumb';
+          const canvas = generateProceduralTexture(skin.options[0]);
+          const thumbCanvas = document.createElement('canvas');
+          thumbCanvas.width = 46;
+          thumbCanvas.height = 46;
+          const tCtx = thumbCanvas.getContext('2d');
+          tCtx.arc(23, 23, 22, 0, Math.PI * 2);
+          tCtx.clip();
+          tCtx.drawImage(canvas, 100, 0, 300, 300, 0, 0, 46, 46);
+          thumbBox.appendChild(thumbCanvas);
+
+          const infoBox = document.createElement('div');
+          infoBox.className = 'ball-nav-info';
+          infoBox.innerHTML = `
+            <div class="ball-nav-top">
+              <span class="ball-nav-name">${skin.name}</span>
+              <span class="badge-rarity rarity-${skin.rarity}">${skin.rarity}</span>
+            </div>
+            <div class="ball-nav-req">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>
+              <span>${skin.challengeName}</span>
+            </div>
+          `;
+
+          card.appendChild(thumbBox);
+          card.appendChild(infoBox);
+          container.appendChild(card);
+        });
+      }
+
+      function renderOptionsGrid() {
+        const container = document.getElementById('options-cards-container');
+        container.innerHTML = '';
+        const skin = getCurrentSkin();
+
+        document.getElementById('options-title-label').textContent = `4 Diseños Rediseñados para ${skin.name} (${skin.challengeName})`;
+
+        skin.options.forEach((opt, idx) => {
+          const card = document.createElement('div');
+          card.className = `option-card ${idx === activeOptionIndex ? 'active' : ''}`;
+          card.onclick = () => selectOption(idx);
+
+          // Mini preview box
+          const prevBox = document.createElement('div');
+          prevBox.className = 'option-preview-box';
+          const pCanvas = document.createElement('canvas');
+          pCanvas.width = 180;
+          pCanvas.height = 100;
+          const pCtx = pCanvas.getContext('2d');
+          const tex = generateProceduralTexture(opt);
+          pCtx.drawImage(tex, 0, 0, 1024, 512, 0, 0, 180, 100);
+          prevBox.appendChild(pCanvas);
+
+          card.innerHTML = `
+            <span class="option-badge-num">Opción ${idx + 1}</span>
+          `;
+          card.appendChild(prevBox);
+
+          const meta = document.createElement('div');
+          meta.className = 'option-meta';
+          meta.innerHTML = `
+            <h3>${opt.title}</h3>
+            <p>${opt.desc}</p>
+          `;
+          card.appendChild(meta);
+
+          const tags = document.createElement('div');
+          tags.className = 'option-tags';
+          tags.innerHTML = `
+            <span class="chip-fx chip-trail">Estela: ${opt.trailName}</span>
+            <span class="chip-fx chip-hole">Hoyo: ${opt.holeName}</span>
+          `;
+          card.appendChild(tags);
+
+          container.appendChild(card);
+        });
+      }
+
+      function updateSpecsAndJSON() {
+        const skin = getCurrentSkin();
+        const opt = getCurrentOption();
+
+        document.getElementById('viewport-skin-label').innerHTML = `
+          <strong>${skin.name}</strong> · ${opt.title} <span class="badge-rarity rarity-${skin.rarity}" style="margin-left:6px;">${skin.rarity}</span>
+        `;
+
+        document.getElementById('spec-title').textContent = `Especificación Técnica: ${opt.title}`;
+
+        const grid = document.getElementById('spec-grid-container');
+        grid.innerHTML = `
+          <div class="spec-item">
+            <div class="spec-item-key">Patrón & Shader</div>
+            <div class="spec-item-val">${opt.pattern}</div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-item-key">Colores Primarios</div>
+            <div class="spec-item-val">
+              <span class="color-dot" style="background:${opt.base};"></span> Base
+              <span class="color-dot" style="background:${opt.accent};"></span> Acento
+            </div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-item-key">Efecto de Rodada</div>
+            <div class="spec-item-val">
+              <span class="color-dot" style="background:${opt.trail};"></span> ${opt.trailName}
+            </div>
+          </div>
+          <div class="spec-item">
+            <div class="spec-item-key">Efecto Acierto en Hoyo</div>
+            <div class="spec-item-val" style="color:var(--emerald);">${opt.holeName}</div>
+          </div>
+        `;
+
+        // JSON block
+        const exportConfig = {
+          id: `${skin.id}_${opt.id}`,
+          name: `${skin.name} - ${opt.title}`,
+          rarity: skin.rarity,
+          pattern: opt.pattern,
+          base: opt.base,
+          accent: opt.accent,
+          secondary: opt.secondary,
+          trail: opt.trail,
+          trailType: opt.trailType,
+          holeFx: opt.holeFx,
+          material: opt.material,
+          unlock: { challenge: skin.challenge },
+        };
+
+        document.getElementById('json-code-block').textContent = JSON.stringify(exportConfig, null, 2);
+      }
+
+      function updateUI() {
+        renderSidebar();
+        renderOptionsGrid();
+        updateSpecsAndJSON();
+      }
+
+      function selectSkin(idx) {
+        activeSkinIndex = idx;
+        activeOptionIndex = 0;
+        updateBallSkin();
+        if (isQuadMode) initQuadViewports();
+      }
+
+      function selectOption(idx) {
+        activeOptionIndex = idx;
+        updateBallSkin();
+      }
+
+      function triggerHoleCelebration() {
+        const opt = getCurrentOption();
+        const toast = document.getElementById('hole-toast');
+        document.getElementById('toast-title').textContent = `¡ACIERTO EN HOYO! · ${opt.title}`;
+        document.getElementById('toast-desc').textContent = `${opt.holeName} · Estela ${opt.trailName}`;
+
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 3800);
+
+        if (ballMesh) {
+          particleSystem.emitHoleCelebration(ballMesh.position, opt);
+        }
+      }
+
+      // ==========================================
+      // EVENT LISTENERS
+      // ==========================================
+      document.getElementById('btn-hole-celebrate').onclick = () => triggerHoleCelebration();
+
+      const btnRoll = document.getElementById('btn-toggle-roll');
+      btnRoll.onclick = () => {
+        isRolling = !isRolling;
+        fairwayMesh.visible = isRolling;
+        pedestalMesh.visible = !isRolling;
+
+        if (isRolling) {
+          btnRoll.classList.add('active');
+          document.getElementById('roll-btn-label').textContent = 'Detener Rodada';
+          camera.position.set(0, 1.2, 3.2);
+        } else {
+          btnRoll.classList.remove('active');
+          document.getElementById('roll-btn-label').textContent = 'Simular Rodada & Estela';
+          camera.position.set(0, 1.8, 4.2);
+          ballMesh.position.set(0, 0, 0);
+          ballMesh.rotation.set(0, 0, 0);
+        }
+      };
+
+      const btnSpin = document.getElementById('btn-spin-toggle');
+      btnSpin.onclick = () => {
+        isAutoSpin = !isAutoSpin;
+        btnSpin.classList.toggle('btn-active', isAutoSpin);
+      };
+      btnSpin.classList.add('btn-active');
+
+      document.getElementById('slider-speed').oninput = (e) => {
+        rollSpeed = parseFloat(e.target.value);
+        document.getElementById('speed-label').textContent = `${rollSpeed} m/s`;
+      };
+
+      document.getElementById('select-env').onchange = (e) => {
+        const val = e.target.value;
+        if (val === 'studio') {
+          scene.background.setHex(0x08070d);
+          renderer.toneMappingExposure = 1.2;
+        } else if (val === 'cyberpunk') {
+          scene.background.setHex(0x04030a);
+          renderer.toneMappingExposure = 1.5;
+        } else if (val === 'championship') {
+          scene.background.setHex(0x0c0914);
+          renderer.toneMappingExposure = 1.35;
+        }
+      };
+
+      document.getElementById('btn-toggle-quad').onclick = () => toggleQuadMode();
+
+      document.getElementById('btn-sound-toggle').onclick = () => {
+        soundEnabled = !soundEnabled;
+        document.getElementById('icon-sound-on').style.display = soundEnabled ? 'block' : 'none';
+        document.getElementById('icon-sound-off').style.display = soundEnabled ? 'none' : 'block';
+        document.getElementById('sound-status-text').textContent = soundEnabled ? 'Audio FX' : 'Mute';
+      };
+
+      document.getElementById('btn-copy-json').onclick = () => {
+        const code = document.getElementById('json-code-block').textContent;
+        navigator.clipboard.writeText(code).then(() => {
+          const btn = document.getElementById('btn-copy-json');
+          const original = btn.textContent;
+          btn.textContent = '¡Copiado con Éxito!';
+          btn.style.color = 'var(--emerald)';
+          setTimeout(() => {
+            btn.textContent = original;
+            btn.style.color = '';
+          }, 2000);
+        });
+      };
+
+      // User gesture activates audio context
+      window.addEventListener('click', () => initAudio(), { once: true });
+
+      // Initialize
+      initMain3D();
+      updateUI();
+    </script>
+  </body>
+</html>

@@ -8,7 +8,10 @@ export default defineConfig({
       input: {
         main: resolve(import.meta.dirname, 'index.html'),
         admin: resolve(import.meta.dirname, 'admin.html'),
+        challengeSkins: resolve(import.meta.dirname, 'challenge-skins.html'),
       },
     },
   },
 });
+
+
