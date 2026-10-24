@@ -415,13 +415,7 @@ async function showSkins() {
       <div class="skins-content-layout">
         <div class="skins-left-col">
           <div class="skin-grid"></div>
-          <div style="display:flex; align-items:center; justify-content:space-between; margin-top:20px; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
-            <h2 style="margin:0;">Desafíos</h2>
-            <a href="/challenge-skins.html" target="_blank" class="chip-btn" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px; font-size:0.75rem; padding:5px 12px;">
-              <span style="color:var(--text-primary); font-weight:700;">Atelier 3D (24 Diseños)</span>
-              <span style="font-size:9px; font-weight:800; color:var(--gold); background:rgba(255,210,63,0.15); border:1px solid var(--border-gold); padding:1px 6px; border-radius:999px; letter-spacing:0.05em;">PRO</span>
-            </a>
-          </div>
+          <h2>Desafíos</h2>
           <ul class="challenges">
             ${CHALLENGES.map((c) => {
     const st = progress.challenge(c.id);
