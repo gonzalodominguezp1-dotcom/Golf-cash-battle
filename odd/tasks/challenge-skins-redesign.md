@@ -57,7 +57,7 @@ Rediseñar integralmente todas las skins de bola que se consiguen mediante desaf
 
 ## Registro de Estado y Evidencia
 - **Ruta implementada**: Directa con orquestador y tareas desacopladas.
-- **Commit**: `3c5656a`, `7357a30` (feat(skins): seamless 3D spherical patterns, dimple normal maps, and focus on ball material showcase).
+- **Commit**: `3c5656a`, `7357a30`, `4342bc2` (feat(skins): add real-time color customizer with hex pickers and luxury palette presets).
 - **Engram Mirror**: `odd/challenge-skins-redesign/tasks` (marcado local).
 - **Modo TDD**: Functional checks + validación interactiva visual en navegador + 68/68 unit tests pasando + build de producción Vite exitoso.
 - **task-1 completada**: Definición estructurada de `CHALLENGE_SKINS_DATA` con 24 variantes de skins, metadatos de rareza, requisito de desafío, parámetros de material 3D (roughness, metalness, clearcoat, iridescence, emissive), tipo de estela de rodada y efecto de acierto en hoyo.
