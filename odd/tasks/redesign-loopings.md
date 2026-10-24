@@ -29,6 +29,7 @@ Rediseñar y corregir por completo los loopings de minigolf en todos los mapas d
 - **task-3 completada**: Diseñada estructura portante de ingeniería realista: columnas de soporte en "A" con zapatas de acero empernadas al suelo, costillas de refuerzo transversales que abrazan el carril, pórtico de entrada con dintel y panel señalizador, y balizas superiores.
 - **task-4 completada**: Animación de cheurones de avance (`chevronTex.offset.y = -t * 1.6`), luz puntual en el interior de la vuelta que resalta la bola boca abajo, y desvanecimiento suave al 90% de invisibilidad ante obstrucción de la cámara (`update(t, ball, cameraPos)`).
 - **task-5 completada**:
+  - Commit de unidad de trabajo: `fcb15e2` (`feat(render): redesign minigolf loopings with realistic 3D structure, smooth helical trajectory, and animated lighting`).
   - Suite completa de 68 tests superada con éxito (`68/68 pass`, 0 fallos).
   - Verificación visual directa en navegador en `Looping Neón`, `Doble Looping` y `Looping Nocturno`.
   - Capturadas imágenes de alta fidelidad desde la perspectiva del jugador y vista aérea en modo libre.
