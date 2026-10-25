@@ -338,7 +338,7 @@ async function showSkins() {
     const req = progress.requirement(skin);
     const rare = open && inst ? rarePatternOf(skin, inst.seed) : null;
     const card = h(`
-      <button type="button" class="sk-card holo rarity-${skin.tier} ${open ? '' : 'locked'}" data-skin-id="${skin.id}" style="--sk-a:${skin.palette.base};--sk-b:${skin.palette.accent}">
+      <button type="button" class="sk-card rarity-${skin.tier} ${open ? '' : 'locked'}" data-skin-id="${skin.id}" style="--sk-a:${skin.palette.base};--sk-b:${skin.palette.accent}">
         <div class="shine"></div>
         <div class="sk-scene">
           <span class="sk-ico" title="${tier.name}">${tier.icon}</span>

@@ -781,8 +781,10 @@ body.sk-noscroll { overflow: hidden; }
 .sk-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
 .sk-empty { text-align: center; color: var(--muted); padding: 24px 0; }
 
-/* marco = lámina del tier; dentro, la «escena» de la skin con su paleta */
+/* marco = lámina del tier; dentro, la «escena» de la skin con su paleta. Hover plano: solo borde y brillo
+   (sin inclinación 3D, perspectiva ni giro de la bola) */
 .sk-card {
+  position: relative; overflow: hidden; isolation: isolate;
   appearance: none; display: flex; flex-direction: column; padding: 4px; margin: 0; min-width: 0; text-align: left;
   border-radius: var(--radius-lg); border: 1.5px solid var(--edge); color: #fff; font: inherit; cursor: pointer;
   background: var(--foil); background-size: 220% 220%;
@@ -790,7 +792,8 @@ body.sk-noscroll { overflow: hidden; }
   transition: box-shadow 0.2s, border-color 0.2s;
 }
 .sk-card[hidden] { display: none; }
-.sk-card:hover { border-color: #fff; box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5), 0 0 28px var(--glow), inset 0 1px 0 rgba(255, 255, 255, 0.7); }
+.sk-card:hover { border-color: #fff; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45), 0 0 26px var(--glow), inset 0 1px 0 rgba(255, 255, 255, 0.7); }
+.sk-card > *:not(.shine) { position: relative; z-index: 2; }
 .sk-card:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
 .sk-card .shine {
   opacity: var(--holo);
@@ -811,10 +814,9 @@ body.sk-noscroll { overflow: hidden; }
 }
 .sk-thumb {
   width: 76%; height: auto; aspect-ratio: 1; object-fit: contain; border-radius: 50%;
-  filter: drop-shadow(0 8px 10px rgba(0, 0, 0, 0.5)); transition: transform 0.25s var(--ease-out, ease-out);
+  filter: drop-shadow(0 8px 10px rgba(0, 0, 0, 0.5));
   user-select: none; -webkit-user-drag: none;
 }
-.sk-card:hover .sk-thumb { transform: scale(1.06); }
 .sk-ico {
   position: absolute; top: 6px; left: 6px; z-index: 4; width: 24px; height: 24px; display: grid; place-items: center;
   border-radius: 50%; background: rgba(8, 10, 16, 0.78); color: var(--edge); font-size: 13px; border: 1px solid var(--edge);
@@ -879,7 +881,6 @@ body.sk-noscroll { overflow: hidden; }
 }
 @media (min-width: 900px) {
   .sk-filters { grid-template-columns: 1fr auto; align-items: center; }
-  .sk-card { transition: transform 0.2s, box-shadow 0.2s; }
 }
 @media (prefers-reduced-motion: reduce) {
   .sk-card, .sk-thumb, .sk-view { transition: none; animation: none; }
