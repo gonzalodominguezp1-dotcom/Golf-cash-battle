@@ -224,6 +224,381 @@ function play(name, { vol = 1, rate = 1, wet = true, pan = 0 } = {}) {
 
 const vary = (a = 0.06) => 1 + (Math.random() - 0.5) * a;
 
+// ---- sonido por skin (P7): síntesis en tiempo real, nada descargado ----
+// Cada set es una capa encima del sonido base. Todo pasa por un bus con
+// nivel máximo 0.6, un compresor (evita clipping al encadenar golpes) y un
+// límite de llamadas simultáneas. Las voces devuelven su duración en segundos.
+
+const SKIN_VOL = 0.6;
+const SKIN_MAX_ACTIVE = 12;
+let skinBus = null;
+let skinNoise = null;
+let skinActive = 0;
+
+function skinOut() {
+  if (!skinBus) {
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -16;
+    comp.knee.value = 6;
+    comp.ratio.value = 6;
+    comp.attack.value = 0.003;
+    comp.release.value = 0.12;
+    skinBus = ctx.createGain();
+    skinBus.gain.value = SKIN_VOL;
+    skinBus.connect(comp).connect(master);
+    const send = ctx.createGain();
+    send.gain.value = 0.3;
+    skinBus.connect(send).connect(reverb);
+  }
+  return skinBus;
+}
+
+// ruido blanco generado una vez en memoria (no es una descarga)
+function noiseSrc() {
+  if (!skinNoise) {
+    skinNoise = ctx.createBuffer(1, SR * 2, SR);
+    const d = skinNoise.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  return skinNoise;
+}
+
+// envolvente (ataque lineal, caída exponencial) y filtro opcional; devuelve la entrada
+function strip(t, dur, vol, { filter, attack = 0.003 } = {}) {
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(vol, t + attack);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  g.connect(skinOut());
+  if (!filter) return g;
+  const f = ctx.createBiquadFilter();
+  f.type = filter.type;
+  f.frequency.setValueAtTime(filter.f, t);
+  if (filter.to) f.frequency.exponentialRampToValueAtTime(filter.to, t + dur);
+  f.Q.value = filter.q ?? 0.7;
+  f.connect(g);
+  return f;
+}
+
+function tone(t, dur, vol, f, { type = 'sine', attack, filter, to, toT, detune = 0 } = {}) {
+  const input = strip(t, dur, vol, { filter, attack });
+  const o = ctx.createOscillator();
+  o.type = type;
+  o.frequency.setValueAtTime(f, t);
+  if (to) o.frequency.exponentialRampToValueAtTime(to, t + (toT ?? dur));
+  o.detune.value = detune;
+  o.connect(input);
+  o.start(t);
+  o.stop(t + dur + 0.05);
+}
+
+function air(t, dur, vol, filter, attack) {
+  const input = strip(t, dur, vol, { filter, attack });
+  const s = ctx.createBufferSource();
+  s.buffer = noiseSrc();
+  s.loop = true;
+  s.connect(input);
+  s.start(t, Math.random() * 1.5);
+  s.stop(t + dur + 0.05);
+}
+
+function crackle(t, n, span, vol, filter) {
+  for (let i = 0; i < n; i++) {
+    air(t + Math.random() * span, 0.008 + Math.random() * 0.012, vol * (0.4 + Math.random() * 0.6), filter, 0.001);
+  }
+}
+
+// campanita de cristal: fundamental + parciales inarmónicos
+function glass(t, f, dur, vol) {
+  tone(t, dur, vol, f);
+  tone(t, dur * 0.45, vol * 0.4, f * 2.4);
+  tone(t, dur * 0.18, vol * 0.15, f * 5.1);
+}
+
+// clic metálico de moneda
+function clink(t, f, vol) {
+  tone(t, 0.09, vol, f);
+  tone(t, 0.04, vol * 0.5, f * 2.1);
+}
+
+const sv = (p) => 0.4 + 0.6 * p; // volumen según potencia
+const sk = (p) => 0.97 + 0.06 * p; // subida leve de tono con la potencia
+
+const SKIN_SETS = {
+  // Kintsugi Neón: zumbido de alta frecuencia y cristal + campana
+  neon: {
+    hit: (t, p) => {
+      const v = sv(p);
+      const k = sk(p);
+      tone(t, 0.22, 0.28 * v, 2400 * k, { type: 'square', filter: { type: 'lowpass', f: 5200 } });
+      tone(t, 0.22, 0.28 * v, 2412 * k, { type: 'square', filter: { type: 'lowpass', f: 5200 } });
+      air(t, 0.05, 0.25 * v, { type: 'bandpass', f: 6000, q: 3 });
+      return 0.25;
+    },
+    wall: (t, p) => {
+      const v = sv(p);
+      tone(t, 0.12, 0.5 * v, 3200 * sk(p));
+      air(t, 0.03, 0.4 * v, { type: 'bandpass', f: 4000, q: 6 });
+      return 0.15;
+    },
+    sink: (t, p) => {
+      const v = sv(p);
+      const f0 = 1568 * sk(p);
+      tone(t, 1.1, 0.55 * v, f0);
+      tone(t, 0.5, 0.25 * v, f0 * 2.756);
+      tone(t, 0.25, 0.12 * v, f0 * 5.4);
+      tone(t + 0.09, 0.9, 0.4 * v, 2352 * sk(p));
+      air(t, 0.03, 0.3 * v, { type: 'bandpass', f: 7000, q: 2 });
+      return 1.2;
+    },
+    roll: (t, p) => {
+      crackle(t, 6, 0.3, 0.25 * sv(p), { type: 'highpass', f: 5000 });
+      return 0.35;
+    },
+  },
+  // Damasco Imperial: ting de acero templado, yunque y vapor
+  steel: {
+    hit: (t, p) => {
+      const v = sv(p);
+      const f = 2093 * sk(p);
+      tone(t, 0.9, 0.6 * v, f);
+      tone(t, 0.35, 0.3 * v, f * 2.76);
+      tone(t, 0.15, 0.18 * v, f * 5.4);
+      air(t, 0.008, 0.5 * v, { type: 'bandpass', f: 3500, q: 1 });
+      return 0.9;
+    },
+    wall: (t, p) => {
+      const v = sv(p);
+      const f = 1174 * sk(p);
+      tone(t, 0.2, 0.4 * v, f);
+      tone(t, 0.1, 0.25 * v, f * 2.76);
+      air(t, 0.06, 0.6 * v, { type: 'bandpass', f: 1400, q: 4 });
+      return 0.2;
+    },
+    sink: (t, p) => {
+      const v = sv(p);
+      const k = sk(p);
+      // martillo sobre yunque, campana corta y vapor que sube
+      tone(t, 0.12, 0.8 * v, 180 * k, { to: 90, toT: 0.1 });
+      air(t, 0.03, 0.6 * v, { type: 'lowpass', f: 900 });
+      tone(t + 0.03, 1.2, 0.4 * v, 523 * k);
+      tone(t + 0.03, 0.5, 0.15 * v, 523 * k * 2.76);
+      air(t + 0.1, 0.9, 0.3 * v, { type: 'highpass', f: 2500 }, 0.25);
+      return 1.2;
+    },
+    roll: (t, p) => {
+      air(t, 0.5, 0.3 * sv(p), { type: 'bandpass', f: 6000, q: 2, to: 4000 }, 0.12);
+      return 0.5;
+    },
+  },
+  // Supernova Solar: whoomp grave y crepitar
+  solar: {
+    hit: (t, p) => {
+      const v = sv(p);
+      const k = sk(p);
+      tone(t, 0.25, 0.9 * v, 110 * k, { to: 50, toT: 0.22 });
+      air(t, 0.2, 0.4 * v, { type: 'lowpass', f: 900, to: 300, q: 0.8 }, 0.01);
+      crackle(t + 0.03, 6, 0.2, 0.3 * v, { type: 'bandpass', f: 2500, q: 1.5 });
+      return 0.3;
+    },
+    wall: (t, p) => {
+      const v = sv(p);
+      air(t, 0.25, 0.6 * v, { type: 'bandpass', f: 900, to: 2200, q: 1 }, 0.01);
+      tone(t, 0.25, 0.3 * v, 300 * sk(p), { to: 180, toT: 0.25 });
+      return 0.3;
+    },
+    sink: (t, p) => {
+      const v = sv(p);
+      const k = sk(p);
+      tone(t, 0.9, 1.0 * v, 90 * k, { to: 35, toT: 0.8 });
+      air(t, 0.9, 0.5 * v, { type: 'lowpass', f: 1200, to: 200 }, 0.01);
+      crackle(t + 0.1, 10, 0.7, 0.3 * v, { type: 'bandpass', f: 3000, q: 1.2 });
+      air(t + 0.02, 0.5, 0.25 * v, { type: 'highpass', f: 3000 });
+      return 1.0;
+    },
+    roll: (t, p) => {
+      crackle(t, 6, 0.4, 0.2 * sv(p), { type: 'lowpass', f: 2000 });
+      return 0.45;
+    },
+  },
+  // Dragón Carmesí: gruñido grave filtrado y rugido corto
+  dragon: {
+    hit: (t, p) => {
+      const v = sv(p);
+      const k = sk(p);
+      tone(t, 0.42, 0.8 * v, 72 * k, {
+        type: 'sawtooth',
+        to: 58,
+        toT: 0.4,
+        attack: 0.02,
+        filter: { type: 'lowpass', f: 320, to: 180, q: 4 },
+      });
+      air(t, 0.3, 0.25 * v, { type: 'lowpass', f: 400, q: 1 }, 0.03);
+      return 0.45;
+    },
+    wall: (t, p) => {
+      const v = sv(p);
+      air(t, 0.04, 0.4 * v, { type: 'bandpass', f: 2600, q: 4 });
+      tone(t, 0.08, 0.25 * v, 900 * sk(p), { to: 620, toT: 0.07 });
+      return 0.12;
+    },
+    sink: (t, p) => {
+      const v = sv(p);
+      const k = sk(p);
+      tone(t, 0.9, 0.9 * v, 110 * k, {
+        type: 'sawtooth',
+        to: 78,
+        toT: 0.85,
+        attack: 0.08,
+        filter: { type: 'lowpass', f: 800, to: 260, q: 3 },
+      });
+      tone(t, 0.9, 0.3 * v, 55 * k);
+      air(t, 0.9, 0.4 * v, { type: 'bandpass', f: 500, to: 250, q: 1.2 }, 0.06);
+      return 1.0;
+    },
+    roll: (t, p) => {
+      air(t, 0.5, 0.2 * sv(p), { type: 'lowpass', f: 180 }, 0.2);
+      return 0.5;
+    },
+  },
+  // Criónova: campanilla cristalina y crujido de hielo
+  ice: {
+    hit: (t, p) => {
+      const v = sv(p);
+      glass(t, 1760 * sk(p), 0.7, 0.5 * v);
+      air(t, 0.02, 0.3 * v, { type: 'highpass', f: 6000 });
+      return 0.7;
+    },
+    wall: (t, p) => {
+      const v = sv(p);
+      air(t, 0.018, 0.5 * v, { type: 'highpass', f: 5000 });
+      tone(t, 0.06, 0.25 * v, 3000 * sk(p));
+      return 0.1;
+    },
+    sink: (t, p) => {
+      const v = sv(p);
+      crackle(t, 8, 0.25, 0.35 * v, { type: 'bandpass', f: 3000, q: 3 });
+      glass(t + 0.15, 1046 * sk(p), 1.4, 0.4 * v);
+      return 1.5;
+    },
+    roll: (t, p) => {
+      air(t, 0.35, 0.12 * sv(p), { type: 'highpass', f: 8000 }, 0.1);
+      return 0.4;
+    },
+  },
+  // Horizonte de Sucesos: implosión y sub-bajo descendente con whoosh invertido
+  void: {
+    hit: (t, p) => {
+      const v = sv(p);
+      tone(t, 0.3, 0.9 * v, 90 * sk(p), { to: 40, toT: 0.28 });
+      air(t, 0.3, 0.45 * v, { type: 'bandpass', f: 2800, to: 200, q: 0.8 });
+      return 0.3;
+    },
+    wall: (t, p) => {
+      const v = sv(p);
+      tone(t, 0.35, 0.55 * v, 220 * sk(p), { type: 'triangle', to: 110, toT: 0.3 });
+      air(t, 0.25, 0.3 * v, { type: 'bandpass', f: 600, q: 0.7 });
+      return 0.35;
+    },
+    sink: (t, p) => {
+      const v = sv(p);
+      tone(t, 1.3, 1.0 * v, 60 * sk(p), { to: 30, toT: 1.2, attack: 0.02 });
+      // whoosh invertido: sube durante 0.75 s y corta de golpe
+      air(t, 0.8, 0.5 * v, { type: 'bandpass', f: 200, to: 2500, q: 0.8 }, 0.75);
+      return 1.3;
+    },
+    roll: (t, p) => {
+      const v = sv(p);
+      tone(t, 0.5, 0.15 * v, 55 * sk(p), { attack: 0.15 });
+      air(t, 0.5, 0.06 * v, { type: 'lowpass', f: 300 }, 0.15);
+      return 0.5;
+    },
+  },
+  // Prisma Holo: prisma de rayos, ting brillante y arpegio corto
+  holo: {
+    hit: (t, p) => {
+      const v = sv(p);
+      const k = sk(p);
+      for (let i = 0; i < 6; i++) tone(t + i * 0.018, 0.07, 0.35 * v, (2000 + i * 420) * k);
+      air(t, 0.2, 0.15 * v, { type: 'highpass', f: 5000 });
+      return 0.2;
+    },
+    wall: (t, p) => {
+      const v = sv(p);
+      const k = sk(p);
+      tone(t, 0.25, 0.4 * v, 2349 * k);
+      tone(t + 0.03, 0.25, 0.25 * v, 3136 * k);
+      return 0.3;
+    },
+    sink: (t, p) => {
+      const v = sv(p);
+      const k = sk(p);
+      [1047, 1319, 1568, 2093].forEach((f, i) =>
+        tone(t + i * 0.07, 0.5, 0.35 * v, f * k, { type: 'triangle', filter: { type: 'lowpass', f: 6000 } }),
+      );
+      air(t + 0.28, 0.4, 0.12 * v, { type: 'highpass', f: 7000 });
+      return 0.9;
+    },
+    roll: (t, p) => {
+      const v = sv(p);
+      for (let i = 0; i < 4; i++) tone(t + Math.random() * 0.4, 0.08, 0.12 * v, 3000 + Math.random() * 3000);
+      return 0.45;
+    },
+  },
+  // Toque de Midas: pepitas, clink de monedas y coro corto
+  gold: {
+    hit: (t, p) => {
+      const v = sv(p);
+      for (let i = 0; i < 5; i++) {
+        clink(t + i * 0.025 + Math.random() * 0.01, 3200 + Math.random() * 1000, (0.4 + Math.random() * 0.3) * v);
+      }
+      return 0.25;
+    },
+    wall: (t, p) => {
+      clink(t, 2600 * sk(p), 0.6 * sv(p));
+      return 0.12;
+    },
+    sink: (t, p) => {
+      const v = sv(p);
+      const k = sk(p);
+      for (let i = 0; i < 6; i++) clink(t + i * 0.06, 2900 + Math.random() * 900, 0.5 * v);
+      [261.6, 329.6, 392].forEach((f) => {
+        for (const detune of [-7, 7]) {
+          tone(t + 0.2, 1.2, 0.25 * v, f * k, {
+            type: 'sawtooth',
+            detune,
+            attack: 0.35,
+            filter: { type: 'lowpass', f: 1400, to: 900, q: 0.5 },
+          });
+        }
+      });
+      return 1.5;
+    },
+    roll: (t, p) => {
+      for (let i = 0; i < 4; i++) clink(t + i * 0.14, 2200 * sk(p), 0.25 * sv(p));
+      return 0.5;
+    },
+  },
+};
+
+/** Sonido de skin: sfx.skin('neon', 'hit', { power: 0.8 }). Eventos: hit, wall, sink, roll. */
+function playSkin(set, event, { power = 0.5 } = {}) {
+  if (!ctx || isMuted()) return;
+  const voice = SKIN_SETS[set]?.[event];
+  if (typeof voice !== 'function' || skinActive >= SKIN_MAX_ACTIVE) return;
+  const p = Number.isFinite(power) ? Math.min(1, Math.max(0, power)) : 0.5;
+  let dur;
+  try {
+    dur = voice(ctx.currentTime + 0.005, p);
+  } catch {
+    return;
+  }
+  skinActive++;
+  setTimeout(() => {
+    skinActive--;
+  }, (dur + 0.3) * 1000);
+}
+
 export const sfx = {
   hit: (power) => play('putt', { vol: 0.35 + power * 0.65, rate: vary() * (0.94 + power * 0.12) }),
   wall: (strength) => play('wall', { vol: Math.min(1, 0.15 + strength / 9), rate: vary(0.1) }),
@@ -239,6 +614,7 @@ export const sfx = {
   coins: () => play('coins', { vol: 0.8 }),
   rivalCup: (pan) => play('rivalCup', { vol: 0.5, pan }),
   rivalHit: (dist, pan) => play('putt', { vol: Math.max(0.05, 0.25 - dist * 0.02), rate: vary(0.1), pan }),
+  skin: playSkin,
 };
 
 /** Rodar de la bola: ruido grave cuyo volumen sigue a la velocidad. */
