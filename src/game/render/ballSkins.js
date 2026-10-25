@@ -1,7 +1,9 @@
 import * as THREE from 'three';
+import { createSkinMaterial as buildSkinMaterial } from './skins/skinMaterial.js';
 
 // Dibuja la textura de una skin (proyección esférica: x = longitud, y = latitud).
-export function paintBall(g, n, skin) {
+// `opts.dimples === false` omite los hoyuelos pintados (Media/Alta usan el normal map horneado).
+export function paintBall(g, n, skin, opts = {}) {
   const { base, accent, pattern } = skin;
   const w = n * 2, h = n;
 
@@ -81,6 +83,7 @@ export function paintBall(g, n, skin) {
     default:
       break;
   }
+  if (opts.dimples === false) return;
   // hoyuelos
   g.fillStyle = 'rgba(0,0,0,0.07)';
   for (let y = 6; y < h; y += 12) for (let x = (y / 12) % 2 ? 6 : 0; x < w; x += 12) g.fillRect(x, y, 3, 3);
@@ -309,15 +312,16 @@ function mix(a, b, t) {
 }
 
 const cache = new Map();
-function skinCanvas(skin) {
-  if (!cache.has(skin.id)) {
+function skinCanvas(skin, dimples = true) {
+  const key = dimples ? skin.id : `${skin.id}#flat`;
+  if (!cache.has(key)) {
     const c = document.createElement('canvas');
     c.width = 512;
     c.height = 256;
-    paintBall(c.getContext('2d'), 256, skin);
-    cache.set(skin.id, c);
+    paintBall(c.getContext('2d'), 256, skin, { dimples });
+    cache.set(key, c);
   }
-  return cache.get(skin.id);
+  return cache.get(key);
 }
 
 function kintsugiEmissiveCanvas(skin) {
@@ -361,13 +365,15 @@ function kintsugiEmissiveCanvas(skin) {
   return c;
 }
 
-function setupSkinAnimation(material, skin, map) {
+/** Animación heredada por skin (hasta que cada una tenga su patrón de shader, P3). Devuelve update(t, dt) o null. */
+function setupSkinAnimation(material, skin, map, disposables = []) {
   const id = skin.id;
+  let update = null;
 
   switch (id) {
     case 'galaxy': {
       material.emissive = new THREE.Color(skin.accent || '#b26bff');
-      material.userData.update = (t, dt) => {
+      update = (t, dt) => {
         map.offset.x = (map.offset.x + dt * 0.035) % 1;
         map.offset.y = Math.sin(t * 0.5) * 0.02;
         material.emissiveIntensity = 0.25 + Math.sin(t * 2.2) * 0.18;
@@ -377,7 +383,7 @@ function setupSkinAnimation(material, skin, map) {
 
     case 'supernova_solar': {
       material.emissive = new THREE.Color(skin.base || '#ed450c');
-      material.userData.update = (t, dt) => {
+      update = (t, dt) => {
         map.offset.x = (map.offset.x + dt * 0.045) % 1;
         map.offset.y = Math.cos(t * 0.6) * 0.025;
         material.emissiveIntensity = 0.42 + Math.sin(t * 3.2) * 0.22;
@@ -387,7 +393,7 @@ function setupSkinAnimation(material, skin, map) {
 
     case 'crimson_dragon': {
       material.emissive = new THREE.Color(skin.accent || '#e11d48');
-      material.userData.update = (t, dt) => {
+      update = (t, dt) => {
         const beat = Math.pow(Math.max(0, Math.sin(t * 2.4)), 4);
         material.emissiveIntensity = 0.15 + beat * 0.45;
         map.offset.y = Math.sin(t * 1.1) * 0.012;
@@ -403,9 +409,10 @@ function setupSkinAnimation(material, skin, map) {
       const emTex = new THREE.CanvasTexture(emCanvas);
       emTex.wrapS = THREE.RepeatWrapping;
       emTex.wrapT = THREE.RepeatWrapping;
+      disposables.push(emTex);
       material.emissiveMap = emTex;
       material.emissive = new THREE.Color(0xffffff);
-      material.userData.update = (t, dt) => {
+      update = (t, dt) => {
         const surge = Math.sin(t * 3.5) * 0.35 + (Math.sin(t * 14.0) > 0.82 ? 0.3 : 0);
         material.emissiveIntensity = 0.5 + surge;
       };
@@ -414,7 +421,7 @@ function setupSkinAnimation(material, skin, map) {
 
     case 'lava': {
       material.emissive = new THREE.Color(skin.accent || '#ff5a1f');
-      material.userData.update = (t, dt) => {
+      update = (t, dt) => {
         map.offset.y = (map.offset.y + dt * 0.038) % 1;
         map.offset.x = Math.sin(t * 0.5) * 0.015;
         material.emissiveIntensity = 0.32 + Math.sin(t * 2.1) * 0.18;
@@ -424,7 +431,7 @@ function setupSkinAnimation(material, skin, map) {
 
     case 'streak': {
       material.emissive = new THREE.Color(skin.accent || '#ff3d00');
-      material.userData.update = (t, dt) => {
+      update = (t, dt) => {
         map.offset.y = (map.offset.y + dt * 0.065) % 1;
         map.offset.x = Math.sin(t * 4.0) * 0.012;
         material.emissiveIntensity = 0.25 + Math.sin(t * 6.0) * 0.16;
@@ -433,7 +440,7 @@ function setupSkinAnimation(material, skin, map) {
     }
 
     case 'holo': {
-      material.userData.update = (t, dt) => {
+      update = (t, dt) => {
         map.offset.x = (map.offset.x + dt * 0.035) % 1;
         material.iridescence = 0.8 + Math.sin(t * 1.6) * 0.2;
         material.iridescenceIOR = 1.35 + Math.sin(t * 1.1) * 0.28;
@@ -443,7 +450,7 @@ function setupSkinAnimation(material, skin, map) {
 
     case 'damascus_imperial': {
       material.emissive = new THREE.Color(skin.accent || '#10b981');
-      material.userData.update = (t, dt) => {
+      update = (t, dt) => {
         material.emissiveIntensity = 0.14 + Math.sin(t * 2.0) * 0.1;
         material.iridescence = 0.45 + Math.sin(t * 1.5) * 0.15;
       };
@@ -451,7 +458,7 @@ function setupSkinAnimation(material, skin, map) {
     }
 
     case 'zephyr_nacre': {
-      material.userData.update = (t, dt) => {
+      update = (t, dt) => {
         material.iridescence = 0.88 + Math.sin(t * 1.5) * 0.12;
         map.offset.y = Math.sin(t * 0.8) * 0.015;
       };
@@ -459,34 +466,33 @@ function setupSkinAnimation(material, skin, map) {
     }
 
     default: {
-      material.userData.update = null;
+      update = null;
       break;
     }
-  }
+  }  return update;
 }
 
-/** Material 3D: cuanto más rara la skin, más brillo (metal, iridiscencia). */
-export function skinMaterial(skin) {
-  const map = new THREE.CanvasTexture(skinCanvas(skin));
-  map.colorSpace = THREE.SRGBColorSpace;
-  map.wrapS = THREE.RepeatWrapping;
-  map.wrapT = THREE.RepeatWrapping;
-  map.anisotropy = 4;
-  const r = skin.rarity;
-  const mat = skin.material || {};
-  const material = new THREE.MeshPhysicalMaterial({
-    map,
-    roughness: mat.roughness ?? (r === 'bronze' ? 0.35 : r === 'silver' ? 0.25 : 0.15),
-    metalness: mat.metalness ?? (r === 'gold' ? 0.45 : 0),
-    clearcoat: mat.clearcoat ?? 1,
-    clearcoatRoughness: mat.clearcoatRoughness ?? 0.1,
-    iridescence: mat.iridescence ?? (r === 'diamond' || r === 'emerald' ? 1 : 0),
-    iridescenceIOR: mat.iridescenceIOR ?? 1.6,
-    emissive: mat.emissive ? new THREE.Color(mat.emissive) : (r === 'emerald' ? new THREE.Color(skin.accent) : new THREE.Color(0)),
-    emissiveIntensity: mat.emissiveIntensity ?? (r === 'emerald' ? 0.25 : 0),
-  });
+const deps = { canvas: skinCanvas, legacy: setupSkinAnimation };
 
-  setupSkinAnimation(material, skin, map);
+/**
+ * Material premium de bola: `{ material, update(t, dt, { speed, impact, state }), dispose(), ... }`.
+ * Opciones: `quality` ('low'|'medium'|'high', por defecto la guardada), `instance` ({ seed, wear }),
+ * `theme` (para elegir el env de estudio claro u oscuro).
+ */
+export function createSkinMaterial(skin, opts = {}) {
+  return buildSkinMaterial(skin, opts, deps);
+}
+
+/**
+ * Compatibilidad: devuelve solo el material (con `userData.update(t, dt, ctx)` y `userData.handle`).
+ * `material.dispose()` libera también mapas propios; el normal de hoyuelos y los env son compartidos.
+ */
+export function skinMaterial(skin, opts = {}) {
+  const handle = createSkinMaterial(skin, opts);
+  const { material } = handle;
+  material.userData.handle = handle;
+  material.userData.update = handle.update;
+  material.dispose = handle.dispose;
   return material;
 }
 
