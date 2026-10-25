@@ -87,3 +87,16 @@ test('attach: seed y float del servidor mandan sobre los locales', () => {
   assert.equal(p.instance('classic').seed, 7);
   assert.equal(p.instance('classic').float, 0.5);
 });
+
+test('sinks cuenta solo embocadas reales, no hoyos con el máximo de golpes', () => {
+  const p = new Progress(mem());
+  p.state.wins = 15;
+  p.state.xp = 1e6;
+  p.recordMatch({ position: 1, won: false, entryFee: 0, holes: [] });
+  p.equip('diamond');
+  p.recordMatch({
+    position: 1, won: false, entryFee: 0,
+    holes: [{ strokes: 2, par: 3 }, { strokes: 8, par: 3 }, { strokes: 7, par: 3 }, { strokes: 0, par: 3 }],
+  });
+  assert.equal(p.instance('diamond').counter.sinks, 2);
+});

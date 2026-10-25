@@ -1,5 +1,6 @@
 import { CHALLENGES, SKINS, skinById } from './skins.js';
 import { bumpCounter, ensureInstances, sanitizeInventory } from './inventory.js';
+import { MAX_STROKES_PER_HOLE } from '../config.js';
 
 const KEY = 'gcb.progress.v1';
 const EMPTY = { xp: 0, matches: 0, wins: 0, streak: 0, bestStreak: 0, birdies: 0, aces: 0, tiebreakWins: 0, bigWins: 0, equipped: 'classic' };
@@ -134,7 +135,7 @@ export class Progress {
     s.xp += xp;
     s.matches++;
     // contadores de la skin equipada (solo si tiene marcador activo)
-    bumpCounter(s.inventory[this.skin.id], { aces, sinks: holes.filter((h) => h.strokes > 0).length, birdies });
+    bumpCounter(s.inventory[this.skin.id], { aces, sinks: holes.filter(isSunk).length, birdies });
     s.birdies += birdies;
     s.aces += aces;
     if (won) {
@@ -166,6 +167,13 @@ export class Progress {
     this.remote?.(this.state)?.catch?.(() => {});
   }
 }
+
+/**
+ * Embocada real: hoyo terminado metiendo la bola, con 1..MAX_STROKES_PER_HOLE-1 golpes.
+ * Quien no emboca (límite de golpes o tiempo) se anota el máximo, así que strokes >= máximo
+ * no cuenta (un hoyo embocado justo en el golpe 8 es indistinguible y se descarta).
+ */
+export const isSunk = (h) => h.strokes > 0 && h.strokes < MAX_STROKES_PER_HOLE;
 
 function newDeviceId() {
   const c = globalThis.crypto;
