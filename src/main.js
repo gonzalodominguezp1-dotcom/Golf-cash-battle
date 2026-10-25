@@ -12,6 +12,7 @@ import { isMuted, setMuted, sfx, unlockAudio } from './game/audio.js';
 import { Progress } from './progress/Progress.js';
 import { CHALLENGES, RARITIES, SKINS } from './progress/skins.js';
 import { ballPreview, skinMaterial } from './game/render/ballSkins.js';
+import { getCoursePreview, getCourseDistance } from './game/render/coursePreview.js';
 import { QUALITY_LEVELS, QUALITY_NAMES, getQuality, setQuality } from './game/render/quality.js';
 import * as THREE from 'three';
 
@@ -24,7 +25,7 @@ const progress = new Progress();
 const MUTE_KEY = 'gcb.muted.v2';
 try {
   setMuted(localStorage.getItem(MUTE_KEY) === '1');
-} catch {}
+} catch { }
 
 // el audio solo puede arrancar con un gesto: cualquier toque o tecla vale
 for (const ev of ['pointerdown', 'touchend', 'keydown']) document.addEventListener(ev, unlockAudio, { capture: true, passive: true });
@@ -54,7 +55,7 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
   game?.dispose();
   game = null;
   if (activeSkinInspector) {
-    try { activeSkinInspector.destroy(); } catch {}
+    try { activeSkinInspector.destroy(); } catch { }
     activeSkinInspector = null;
   }
   const balance = await wallet.getBalance();
@@ -64,27 +65,31 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
     const { level, into, need } = progress.level;
     app.append(
       h(`
-      <header class="topbar">
-        <div class="topbar-brand">
-          <button class="brand-btn" data-go="lobby">
-            <span class="brand-icon">⛳</span>
-            <span class="brand-name">Golf Cash Battle</span>
+      <header class="topbar game-hud-topbar">
+        <div class="topbar-left">
+          <button class="brand-btn desktop-brand-btn" data-go="lobby" aria-label="Golf Cash Battle">
+            <img src="/logo-header.png" alt="Golf Cash Battle" class="brand-logo" />
           </button>
-        </div>
-        <nav class="desktop-nav">
-          <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}"><span>⛳</span>Jugar <kbd>1</kbd></button>
-          <button data-go="freeplay" class="${screen === 'freeplay' ? 'on' : ''}"><span>🎯</span>Juego Libre <kbd>5</kbd></button>
-          <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}"><span>✨</span>Skins <kbd>2</kbd></button>
-          <button data-go="wallet" class="${screen === 'wallet' ? 'on' : ''}"><span>💎</span>Wallet <kbd>3</kbd></button>
-          <button data-go="account" class="${screen === 'account' ? 'on' : ''}"><span>👤</span>Cuenta <kbd>4</kbd></button>
-        </nav>
-        <div class="topbar-right">
           <button class="level" data-go="skins" style="--p:${(into / need) * 100}%" title="Nivel ${level} · ${(into / need * 100).toFixed(0)}%">
             <span class="level-ring"><b>${level}</b></span>
             <span class="level-text"><small>Nivel</small><span class="xpbar"><i></i></span></span>
           </button>
+        </div>
+        <div class="topbar-center">
+          <button class="brand-btn mobile-brand-btn" data-go="lobby" aria-label="Golf Cash Battle">
+            <img src="/logo-header.png" alt="Golf Cash Battle" class="brand-logo" />
+          </button>
+          <nav class="desktop-nav">
+            <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}">Jugar <kbd>1</kbd></button>
+            <button data-go="freeplay" class="${screen === 'freeplay' ? 'on' : ''}">Juego Libre <kbd>2</kbd></button>
+            <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}">Skins <kbd>3</kbd></button>
+            <button data-go="wallet" class="${screen === 'wallet' ? 'on' : ''}">Wallet <kbd>4</kbd></button>
+            <button data-go="account" class="${screen === 'account' ? 'on' : ''}">Cuenta <kbd>5</kbd></button>
+          </nav>
+        </div>
+        <div class="topbar-right">
           <button class="balance" data-go="wallet" title="Tu saldo">${coin(balance)}<span class="plus">+</span></button>
-          <button class="pill mute topbar-sound-btn" aria-label="Sonido" title="Silenciar / Activar sonido (M)">${isMuted() ? '🔇' : '🔊'}</button>
+          <button class="pill mute topbar-sound-btn" aria-label="Sonido" title="Silenciar / Activar sonido (M)">${isMuted() ? 'Mudo' : 'Sonido'}</button>
         </div>
       </header>`),
     );
@@ -92,8 +97,8 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
     if (topMute) {
       topMute.addEventListener('click', () => {
         setMuted(!isMuted());
-        topMute.textContent = isMuted() ? '🔇' : '🔊';
-        try { localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0'); } catch {}
+        topMute.textContent = isMuted() ? 'Mudo' : 'Sonido';
+        try { localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0'); } catch { }
       });
     }
   }
@@ -102,11 +107,11 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
     app.append(
       h(`
       <nav class="tabbar">
-        <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}"><span>⛳</span>Jugar</button>
-        <button data-go="freeplay" class="${screen === 'freeplay' ? 'on' : ''}"><span>🎯</span>Libre</button>
-        <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}"><span>✨</span>Skins</button>
-        <button data-go="wallet" class="${screen === 'wallet' ? 'on' : ''}"><span>💎</span>Wallet</button>
-        <button data-go="account" class="${screen === 'account' ? 'on' : ''}"><span>👤</span>Cuenta</button>
+        <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}">Jugar</button>
+        <button data-go="freeplay" class="${screen === 'freeplay' ? 'on' : ''}">Libre</button>
+        <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}">Skins</button>
+        <button data-go="wallet" class="${screen === 'wallet' ? 'on' : ''}">Wallet</button>
+        <button data-go="account" class="${screen === 'account' ? 'on' : ''}">Cuenta</button>
       </nav>`),
     );
   }
@@ -128,16 +133,36 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (game || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-  if (e.code === 'Digit1') go('lobby');
-  else if (e.code === 'Digit2') go('skins');
-  else if (e.code === 'Digit3') go('wallet');
-  else if (e.code === 'Digit4') go('account');
-  else if (e.code === 'Digit5') go('freeplay');
+
+  const isNum = (n) => e.key === String(n) || e.code === `Digit${n}` || e.code === `Numpad${n}`;
+
+  const triggerNav = (dest) => {
+    e.preventDefault();
+    unlockAudio();
+    sfx.tap();
+    const navBtn = document.querySelector(`.desktop-nav button[data-go="${dest}"]`);
+    if (navBtn) {
+      navBtn.classList.add('nav-key-active');
+      setTimeout(() => navBtn.classList.remove('nav-key-active'), 220);
+    }
+    const tabBtn = document.querySelector(`.tabbar button[data-go="${dest}"]`);
+    if (tabBtn) {
+      tabBtn.classList.add('tab-key-active');
+      setTimeout(() => tabBtn.classList.remove('tab-key-active'), 220);
+    }
+    go(dest);
+  };
+
+  if (isNum(1)) triggerNav('lobby');
+  else if (isNum(2)) triggerNav('freeplay');
+  else if (isNum(3)) triggerNav('skins');
+  else if (isNum(4)) triggerNav('wallet');
+  else if (isNum(5)) triggerNav('account');
   else if (e.code === 'KeyM') {
     setMuted(!isMuted());
     const topMute = document.querySelector('.topbar-sound-btn');
-    if (topMute) topMute.textContent = isMuted() ? '🔇' : '🔊';
-    try { localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0'); } catch {}
+    if (topMute) topMute.textContent = isMuted() ? 'Mudo' : 'Sonido';
+    try { localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0'); } catch { }
   }
 });
 
@@ -204,9 +229,9 @@ async function showLobby() {
           <span class="live-pill"><i class="pulse-dot"></i> EN VIVO</span>
         </div>
         <div class="lobby-specs">
-          <span class="spec-chip">⚔️ ${PLAYERS_PER_MATCH} Jugadores</span>
-          <span class="spec-chip">⛳ ${HOLES_PER_MATCH} Hoyos</span>
-          <span class="spec-chip">🎯 Determinista</span>
+          <span class="spec-chip">${PLAYERS_PER_MATCH} Jugadores</span>
+          <span class="spec-chip">${HOLES_PER_MATCH} Hoyos</span>
+          <span class="spec-chip">Determinista</span>
         </div>
       </div>
       <div class="tiers"></div>
@@ -339,6 +364,8 @@ function createSkinInspector(container, initialSkin) {
     }
     rotX = Math.max(-1.1, Math.min(1.1, rotX));
     ballMesh.rotation.set(rotX, rotY, 0);
+    const now = performance.now() * 0.001;
+    ballMesh.material.userData?.update?.(now, 0.016);
     renderer.render(scene, camera);
   }
   requestAnimationFrame(animate);
@@ -391,20 +418,20 @@ async function showSkins() {
           <h2>Desafíos</h2>
           <ul class="challenges">
             ${CHALLENGES.map((c) => {
-              const st = progress.challenge(c.id);
-              const reward = SKINS.find((s) => s.unlock?.challenge === c.id);
-              return `<li class="${st.done ? 'done' : ''}">
+    const st = progress.challenge(c.id);
+    const reward = SKINS.find((s) => s.unlock?.challenge === c.id);
+    return `<li class="${st.done ? 'done' : ''}">
                 ${ball(reward, 34)}
                 <div><b>${c.name}</b><span class="bar"><i style="width:${(st.value / st.goal) * 100}%"></i></span></div>
-                <small>${st.done ? '✓' : `${st.value}/${st.goal}`}</small>
+                <small>${st.done ? 'Completado' : `${st.value}/${st.goal}`}</small>
               </li>`;
-            }).join('')}
+  }).join('')}
           </ul>
         </div>
         <aside class="skin-inspector-panel">
           <span class="rarity badge-rarity rarity-${selectedSkin.rarity}">${RARITIES[selectedSkin.rarity].name}</span>
           <div class="skin-inspector-canvas"></div>
-          <p class="skin-inspector-hint">🖱️ Arrastra para girar 360° · Rueda para zoom</p>
+          <p class="skin-inspector-hint">Arrastra para girar 360° · Rueda para zoom</p>
           <h3 class="skin-inspector-name">${selectedSkin.name}</h3>
           <p class="skin-inspector-desc">Materiales 3D con brillo físico e iridiscencia</p>
           <button class="primary skin-inspector-btn" disabled>Equipada</button>
@@ -476,11 +503,10 @@ async function showSkins() {
         <span class="rarity">${RARITIES[skin.rarity].name}</span>
         ${ball(skin, 76, open ? 'float' : '')}
         <b>${skin.name}</b>
-        ${
-          open
-            ? `<small>${equipped ? 'Equipada' : 'Toca para equipar'}</small>`
-            : `<small class="req">🔒 ${req.text}</small><span class="bar"><i style="width:${req.ratio * 100}%"></i></span>`
-        }
+        ${open
+        ? `<small>${equipped ? 'Equipada' : 'Toca para equipar'}</small>`
+        : `<small class="req">${req.text}</small><span class="bar"><i style="width:${req.ratio * 100}%"></i></span>`
+      }
       </button>`);
     card.addEventListener('click', () => {
       updateInspector(skin);
@@ -538,7 +564,7 @@ const BLOCK_TEXT = {
 const KYC_TEXT = {
   none: 'Sin verificar',
   pending: 'En curso',
-  verified: 'Verificada ✓',
+  verified: 'Verificada',
   rejected: 'Rechazada',
 };
 
@@ -651,7 +677,7 @@ async function showAccount(note = '') {
 
   const emailBox = view.querySelector('.email-box');
   if (!guest) {
-    emailBox.innerHTML = `<p class="field-ok">${esc(p.email)} ✓</p>`;
+    emailBox.innerHTML = `<p class="field-ok">${esc(p.email)}</p>`;
   } else {
     emailBox.append(
       emailForm({
@@ -681,7 +707,7 @@ async function showAccount(note = '') {
   if (guest) {
     kycBox.innerHTML = '<p class="sub">Primero guarda tu cuenta con email.</p>';
   } else if (kyc === 'verified') {
-    kycBox.innerHTML = `<p class="field-ok">Identidad verificada${p.adult ? ' · mayor de 18' : ''} ✓</p>`;
+    kycBox.innerHTML = `<p class="field-ok">Identidad verificada${p.adult ? ' · mayor de 18' : ''}</p>`;
   } else {
     kycBox.innerHTML = `
       ${kyc === 'rejected' ? `<p class="sub">${KYC_REASON[p.kyc_reason] ?? KYC_REASON.provider_declined}</p>` : ''}
@@ -726,7 +752,7 @@ function emailForm({ intro, button, send, codeType }) {
       try {
         await backend.account.verifyCode(sentTo, box.code.value.trim(), codeType);
         // si cambia de usuario la app se recarga sola; si es el mismo, se refresca
-        showAccount('Cuenta guardada ✓');
+        showAccount('Cuenta guardada');
       } catch {
         btn.disabled = false;
         alertMsg('El código no es válido o ha caducado.');
@@ -765,7 +791,7 @@ function renameForm(view, current) {
     e.preventDefault();
     try {
       await backend.account.setUsername(form.name.value.trim());
-      showAccount('Nombre guardado ✓');
+      showAccount('Nombre guardado');
     } catch (err) {
       alertMsg(err.code === 'username_taken' ? 'Ese nombre ya está cogido.' : 'Usa de 3 a 16 letras, números o _.');
     }
@@ -842,9 +868,8 @@ async function showWallet() {
             <button class="primary deposit-btn" data-add="200"><span>+200</span> Créditos</button>
           </div>
         </div>
-        ${
-          wallet.depositCrypto
-            ? `<div class="crypto-section">
+        ${wallet.depositCrypto
+      ? `<div class="crypto-section">
           <h3>Depositar en Cripto <small class="tag">pruebas</small></h3>
           <div class="row">
             <button class="secondary" data-crypto="10">10 USD</button>
@@ -853,33 +878,28 @@ async function showWallet() {
           </div>
           <p class="legal">Pago con NOWPayments (USDT, BTC, ETH…). Modo de pruebas: no se cobra dinero real.</p>
         </div>`
-            : ''
-        }
+      : ''
+    }
       </div>
       <div class="txs-container">
         <h3>Historial de Movimientos</h3>
         <ul class="txs">
-          ${
-            txs.length
-              ? txs
-                  .map(
-                    (t) => {
-                      const icon = t.type === 'prize' ? '🏆' : t.type === 'entry' ? '⚔️' : t.type === 'bonus' ? '🎁' : '💎';
-                      return `<li>
+          ${txs.length
+      ? txs
+        .map(
+          (t) => `<li>
                         <div class="tx-info">
-                          <span class="tx-icon">${icon}</span>
                           <div class="tx-text">
                             <b>${TX_LABEL[t.type] ?? t.type}</b>
                             <small>${t.note} · ${new Date(t.at).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}</small>
                           </div>
                         </div>
                         <span class="${t.amount >= 0 ? 'pos' : 'neg'}">${t.amount >= 0 ? '+' : ''}${fmt(t.amount)}</span>
-                      </li>`;
-                    },
-                  )
-                  .join('')
-              : '<li class="empty"><span class="empty-icon">🪙</span><p>Sin movimientos todavía</p></li>'
-          }
+                      </li>`,
+        )
+        .join('')
+      : '<li class="empty"><p>Sin movimientos todavía</p></li>'
+    }
         </ul>
       </div>
     </main>`);
@@ -974,23 +994,23 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       <div class="stage"></div>
       <div class="vignette"></div>
       <div class="hud ${freePlay ? 'hud-freeplay' : ''}">
-        ${freePlay ? '<div class="pill hl freeplay-pill">⛳ Modo Libre</div>' : `<div class="pill hl">${title}</div>`}
+        ${freePlay ? '<div class="pill hl freeplay-pill">Modo Libre</div>' : `<div class="pill hl">${title}</div>`}
         <div class="pill">${freePlay ? course.name : tiebreak ? '1 tiro' : `Par ${course.par}`}</div>
         ${freePlay ? `<div class="pill">Par ${course.par}</div>` : ''}
         ${tiebreak ? '' : '<div class="pill strokes">Golpes <b>0</b></div>'}
         <div class="pill dist">— m</div>
         ${freePlay ? `
-        <button class="pill restart-btn hud-freeplay-btn" aria-label="Reiniciar hoyo" title="Reiniciar hoyo al tee (R)">🔄 Reiniciar <kbd class="kbd-hint">R</kbd></button>
-        <button class="pill map-select-btn hud-freeplay-btn" aria-label="Elegir otro mapa" title="Elegir otro mapa">🗺️ Mapas</button>
+        <button class="pill restart-btn hud-freeplay-btn" aria-label="Reiniciar hoyo" title="Reiniciar hoyo al tee (R)">Reiniciar <kbd class="kbd-hint">R</kbd></button>
+        <button class="pill map-select-btn hud-freeplay-btn" aria-label="Elegir otro mapa" title="Elegir otro mapa">Mapas</button>
         ` : ''}
-        <button class="pill mute mobile-only" aria-label="Sonido">${isMuted() ? '🔇' : '🔊'}</button>
-        <button class="pill fullscreen mobile-only" aria-label="Pantalla completa" title="Pantalla completa (F11)">⛶</button>
-        <button class="pill settings-btn-hud mobile-only" aria-label="Ajustes" title="Ajustes (Esc)">⚙️</button>
-        <button class="pill desktop-esc-hint" aria-label="Ajustes">⚙️ Ajustes <kbd class="kbd-hint">Esc</kbd></button>
+        <button class="pill mute mobile-only" aria-label="Sonido">${isMuted() ? 'Mudo' : 'Sonido'}</button>
+        <button class="pill fullscreen mobile-only" aria-label="Pantalla completa" title="Pantalla completa (F11)">Pantalla</button>
+        <button class="pill settings-btn-hud mobile-only" aria-label="Ajustes" title="Ajustes (Esc)">Ajustes</button>
+        <button class="pill desktop-esc-hint" aria-label="Ajustes">Ajustes <kbd class="kbd-hint">Esc</kbd></button>
       </div>
       <div class="rivals ${freePlay ? 'rivals-hidden' : ''}">${freePlay ? '' : players
-        .map((p) => `<div class="chip ${p.id === 'me' ? 'me' : ''}" data-id="${p.id}" style="--c:${p.color}"><i>${p.name[0]}</i><b>${tiebreak ? '·' : 0}</b></div>`)
-        .join('')}</div>
+      .map((p) => `<div class="chip ${p.id === 'me' ? 'me' : ''}" data-id="${p.id}" style="--c:${p.color}"><i>${p.name[0]}</i><b>${tiebreak ? '·' : 0}</b></div>`)
+      .join('')}</div>
       <div class="toasts"></div>
       <div class="intro-banner">
         <small>${subtitle}</small>
@@ -998,12 +1018,12 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         <span>${freePlay ? `Modo Libre · Par ${course.par} · Sin tiempo ni rivales` : tiebreak ? 'Deja la bola lo más cerca de la diana' : `Par ${course.par}`}</span>
         ${course.tip && !tiebreak ? `<em>${course.tip}</em>` : ''}
       </div>
-      <div class="overview-banner"><span class="ov-mouse">🗺️ Vista General del Mapa · Mueve el ratón para orbitar · Pulsa <kbd>Espacio</kbd> para volver</span><span class="ov-touch">🗺️ Vista del mapa · Desliza para girarla</span></div>
+      <div class="overview-banner"><span class="ov-mouse">Vista General del Mapa · Mueve el ratón para orbitar · Pulsa <kbd>Espacio</kbd> para volver</span><span class="ov-touch">Vista del mapa · Desliza para girarla</span></div>
       <div class="cup-banner"></div>
       <div class="hole-timer" hidden><small>Tiempo para embocar</small><b>${timeLimit ?? ''}</b></div>
       <div class="hint">
-        <span class="hint-touch">↔ Desliza: cámara · Arrastra la bola hacia atrás: tiro</span>
-        <span class="hint-mouse">🖱️ Ratón para apuntar · Clic Izquierdo para calcular y disparar · <kbd>Espacio</kbd> Ver mapa · <kbd>Esc</kbd> Ajustes</span>
+        <span class="hint-touch">Desliza: cámara · Arrastra la bola hacia atrás: tiro</span>
+        <span class="hint-mouse">Ratón para apuntar · Clic Izquierdo para calcular y disparar · <kbd>Espacio</kbd> Ver mapa · <kbd>Esc</kbd> Ajustes</span>
       </div>
       <div class="desktop-controls-bar">
         <span><kbd>Ratón</kbd> Apuntar y Disparar</span>
@@ -1059,9 +1079,9 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
           <div class="in-game-settings-modal">
             <div class="settings-modal-header">
               <div class="settings-title">
-                <h3>⚙️ Ajustes de Partida</h3>
+                <h3>Ajustes de Partida</h3>
               </div>
-              <button class="close-settings-btn" aria-label="Cerrar ajustes">✕</button>
+              <button class="close-settings-btn" aria-label="Cerrar ajustes">Cerrar</button>
             </div>
 
             <div class="settings-modal-body">
@@ -1071,7 +1091,6 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
                   <small>Efectos ambientales y de golpe</small>
                 </div>
                 <button class="settings-btn toggle-sound-btn ${isMuted() ? 'muted' : ''}">
-                  <span class="btn-icon">${isMuted() ? '🔇' : '🔊'}</span>
                   <span class="btn-text">${isMuted() ? 'Silenciado' : 'Activado'}</span>
                 </button>
               </div>
@@ -1082,7 +1101,6 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
                   <small>Modo inmersivo de pantalla completa</small>
                 </div>
                 <button class="settings-btn toggle-fs-btn">
-                  <span class="btn-icon">${document.fullscreenElement ? '🗗' : '⛶'}</span>
                   <span class="btn-text">${document.fullscreenElement ? 'Ventana' : 'Pantalla Completa'}</span>
                 </button>
               </div>
@@ -1103,13 +1121,12 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
                   <small>Ver todo el terreno en 3D</small>
                 </div>
                 <button class="settings-btn toggle-overview-btn">
-                  <span class="btn-icon">🗺️</span>
                   <span class="btn-text">${game.overview ? 'Volver a la bola' : 'Ver todo el terreno'}</span>
                 </button>
               </div>
 
               <div class="settings-controls-card">
-                <div class="card-title">🎮 Controles Activos</div>
+                <div class="card-title">Controles Activos</div>
                 <div class="controls-grid">
                   <div class="c-item"><kbd>Ratón</kbd><span>Apuntar y calcular fuerza (pulsar/arrastrar y soltar)</span></div>
                   <div class="c-item"><kbd>Clic Der</kbd><span>Rotar cámara alrededor de la bola</span></div>
@@ -1121,9 +1138,9 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
             </div>
 
             <div class="settings-modal-footer">
-              <button class="primary resume-btn">▶ Reanudar partida</button>
-              ${freePlay ? '<button class="secondary restart-settings-btn">🔄 Reiniciar Hoyo</button><button class="secondary map-settings-btn">🗺️ Cambiar de Mapa</button>' : ''}
-              <button class="danger quit-btn">🚪 Salir al Lobby</button>
+              <button class="primary resume-btn">Reanudar partida</button>
+              ${freePlay ? '<button class="secondary restart-settings-btn">Reiniciar Hoyo</button><button class="secondary map-settings-btn">Cambiar de Mapa</button>' : ''}
+              <button class="danger quit-btn">Salir al Lobby</button>
             </div>
           </div>
         </div>
@@ -1146,22 +1163,20 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         setMuted(!isMuted());
         const muted = isMuted();
         soundBtn.classList.toggle('muted', muted);
-        soundBtn.querySelector('.btn-icon').textContent = muted ? '🔇' : '🔊';
         soundBtn.querySelector('.btn-text').textContent = muted ? 'Silenciado' : 'Activado';
-        muteBtn.textContent = muted ? '🔇' : '🔊';
-        try { localStorage.setItem(MUTE_KEY, muted ? '1' : '0'); } catch {}
+        muteBtn.textContent = muted ? 'Mudo' : 'Sonido';
+        try { localStorage.setItem(MUTE_KEY, muted ? '1' : '0'); } catch { }
       });
 
       const fsModalBtn = overlay.querySelector('.toggle-fs-btn');
       fsModalBtn.addEventListener('click', () => {
         if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen().catch(() => {});
+          document.documentElement.requestFullscreen().catch(() => { });
         } else {
-          document.exitFullscreen().catch(() => {});
+          document.exitFullscreen().catch(() => { });
         }
         setTimeout(() => {
           const isFs = !!document.fullscreenElement;
-          fsModalBtn.querySelector('.btn-icon').textContent = isFs ? '🗗' : '⛶';
           fsModalBtn.querySelector('.btn-text').textContent = isFs ? 'Ventana' : 'Pantalla Completa';
         }, 100);
       });
@@ -1230,11 +1245,11 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       },
       onRival: (p, st) => {
         if (tiebreak) {
-          if (st.done) setChip(p.id, '✓', true);
+          if (st.done) setChip(p.id, 'OK', true);
           return;
         }
         if (st.dq) {
-          setChip(p.id, '✗', true);
+          setChip(p.id, 'DQ', true);
           return;
         }
         setChip(p.id, st.strokes, st.sunk);
@@ -1254,7 +1269,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       onSunk: finish,
       onTimer: (left) => {
         if (left == null) return (timerEl.hidden = true);
-        if (timerEl.hidden) toast(`⏱ ¡${left} s para embocar o quedas descalificado!`, '#ff5a5a');
+        if (timerEl.hidden) toast(`¡${left} s para embocar o quedas descalificado!`, '#ff5a5a');
         timerEl.hidden = false;
         timerEl.querySelector('b').textContent = left;
         timerEl.classList.toggle('urgent', left <= 5);
@@ -1265,7 +1280,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       onTimeUp: () => {
         if (freePlay) return;
         timerEl.hidden = true;
-        setChip('me', '✗', true);
+        setChip('me', 'DQ', true);
         banner('¡Tiempo! Descalificado');
         cupBanner.classList.add('dq');
         setTimeout(() => finish(MAX_STROKES_PER_HOLE), 1600);
@@ -1314,26 +1329,26 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       };
       window.addEventListener('keydown', onKeyR);
     }
-    if (isMuted()) toast('🔇 Sonido silenciado · actívalo en ⚙️ Ajustes', '#ffffff');
+    if (isMuted()) toast('Sonido silenciado · actívalo en Ajustes', '#ffffff');
     const muteBtn = view.querySelector('.mute');
     muteBtn.addEventListener('click', () => {
       setMuted(!isMuted());
-      muteBtn.textContent = isMuted() ? '🔇' : '🔊';
+      muteBtn.textContent = isMuted() ? 'Mudo' : 'Sonido';
       try {
         localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0');
-      } catch {}
+      } catch { }
     });
     const fsBtn = view.querySelector('.fullscreen');
     if (fsBtn) {
       fsBtn.addEventListener('click', () => {
         if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen().catch(() => {});
+          document.documentElement.requestFullscreen().catch(() => { });
         } else {
-          document.exitFullscreen().catch(() => {});
+          document.exitFullscreen().catch(() => { });
         }
       });
       document.addEventListener('fullscreenchange', () => {
-        fsBtn.textContent = document.fullscreenElement ? '🗗' : '⛶';
+        fsBtn.textContent = document.fullscreenElement ? 'Ventana' : 'Pantalla';
       });
     }
     view.querySelector('.settings-btn-hud')?.addEventListener('click', openSettingsMenu);
@@ -1341,7 +1356,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
     function setChip(id, text, done) {
       const chip = view.querySelector(`.chip[data-id="${id}"]`);
       if (!chip) return;
-      chip.querySelector('b').textContent = done && typeof text === 'number' ? `✓${text}` : text;
+      chip.querySelector('b').textContent = text;
       chip.classList.toggle('sunk', done);
       chip.classList.remove('bump');
       void chip.offsetWidth;
@@ -1390,7 +1405,7 @@ function standingsTable(players, highlightPayout) {
       (p, i) => `<li class="${p.id === 'me' ? 'me' : ''} ${(p.position ?? i + 1) === 1 ? 'first' : ''}" style="--c:${p.color}">
         <span class="pos">${p.position ?? i + 1}</span>
         <span class="name"><i></i>${p.name}</span>
-        <span class="scores">${p.scores ? p.scores.join(' · ') : p.finished ? 'Terminado' : `Jugando · ${p.holesPlayed} hoyo${p.holesPlayed === 1 ? '' : 's'}`}${p.tiebreak !== undefined ? ` · 🎯${p.tiebreak.toFixed(2)}m` : ''}</span>
+        <span class="scores">${p.scores ? p.scores.join(' · ') : p.finished ? 'Terminado' : `Jugando · ${p.holesPlayed} hoyo${p.holesPlayed === 1 ? '' : 's'}`}${p.tiebreak !== undefined ? ` · ${p.tiebreak.toFixed(2)}m` : ''}</span>
         <b>${p.total ?? '—'}</b>
         ${highlightPayout && p.payout ? `<span class="payout">+${fmt(p.payout)}</span>` : ''}
       </li>`,
@@ -1479,8 +1494,8 @@ function showTiebreakResult(match, tied, distances) {
       <div class="card tiebreak-card">
         <h2 class="score-title">Desempate</h2>
         <ol class="standings">${rows
-          .map((p, i) => `<li class="${p.id === 'me' ? 'me' : ''} ${i === 0 ? 'first' : ''}" style="--c:${p.color}"><span class="pos">${i + 1}</span><span class="name"><i></i>${p.name}</span><span></span><b>${distances[p.id].toFixed(2)} m</b></li>`)
-          .join('')}</ol>
+      .map((p, i) => `<li class="${p.id === 'me' ? 'me' : ''} ${i === 0 ? 'first' : ''}" style="--c:${p.color}"><span class="pos">${i + 1}</span><span class="name"><i></i>${p.name}</span><span></span><b>${distances[p.id].toFixed(2)} m</b></li>`)
+      .join('')}</ol>
         <button class="primary next">Ver resultado</button>
       </div>
     </div>`);
@@ -1505,22 +1520,21 @@ async function showResults(match, tiebreak = {}) {
   const view = h(`
     <main class="screen results ${won ? 'won' : ''}">
       ${won ? '<div class="rays"></div>' : ''}
-      <div class="trophy">${won ? '🏆' : result.me.position <= 3 ? '🥈' : '⛳'}</div>
+      <div class="trophy">${won ? 'Victoria' : `Puesto #${result.me.position}`}</div>
       <h1 class="score-title">${won ? '¡Has ganado!' : `Posición ${result.me.position} de ${PLAYERS_PER_MATCH}`}</h1>
       <p class="sub">${match.tier.entryFee ? (won ? `Premio ${coin(result.me.payout)}` : `Bote ${coin(result.pot)} para el ganador`) : 'Partida de práctica'}</p>
       <div class="xp-card">
         <div class="xp-head"><b>+${gained.xp} XP</b><span>${levelUp ? `¡Nivel ${gained.level.level}!` : `Nivel ${gained.level.level}`}</span></div>
         <span class="bar"><i style="--to:${(gained.level.into / gained.level.need) * 100}%"></i></span>
       </div>
-      ${
-        gained.newSkins.length
-          ? `<h2 class="unlock-title">¡Skin desbloqueada!</h2><div class="unlocks">${gained.newSkins
-              .map(
-                (s) => `<div class="skin-card holo reveal rarity-${s.rarity}"><div class="shine"></div><span class="rarity">${RARITIES[s.rarity].name}</span>${ball(s, 76, 'float')}<b>${s.name}</b></div>`,
-              )
-              .join('')}</div>`
-          : ''
-      }
+      ${gained.newSkins.length
+      ? `<h2 class="unlock-title">¡Skin desbloqueada!</h2><div class="unlocks">${gained.newSkins
+        .map(
+          (s) => `<div class="skin-card holo reveal rarity-${s.rarity}"><div class="shine"></div><span class="rarity">${RARITIES[s.rarity].name}</span>${ball(s, 76, 'float')}<b>${s.name}</b></div>`,
+        )
+        .join('')}</div>`
+      : ''
+    }
       ${standingsTable(result.ranking, true)}
       ${match.tier.entryFee ? `<p class="legal">Bote ${fmt(result.pot)} · comisión ${fmt(result.commission)} · premio ${fmt(result.prize)}</p>` : ''}
       <div class="row">
@@ -1547,7 +1561,7 @@ async function startTournament(tier) {
   } catch (e) {
     if (e instanceof InsufficientFundsError) return showWallet();
     if (e.blocked) {
-      backend.account?.load().catch(() => {});
+      backend.account?.load().catch(() => { });
       return showBlocked(e.code);
     }
     return alertMsg('No se ha podido entrar en el torneo. Prueba otra vez.');
@@ -1600,7 +1614,7 @@ function showTournamentLobby(match) {
       await backend.tournaments.status(match);
       if (match.players.length > before) sfx.tick();
       if (view.isConnected) render();
-    } catch {}
+    } catch { }
     setTimeout(poll, POLL_MS);
   };
   setTimeout(poll, POLL_MS);
@@ -1615,7 +1629,7 @@ function showTournamentLobby(match) {
   });
   view.querySelector('.cancel').addEventListener('click', async (e) => {
     e.target.disabled = true;
-    await backend.tournaments.leave(match).catch(() => {});
+    await backend.tournaments.leave(match).catch(() => { });
     showLobby();
   });
   shell(view, { nav: false });
@@ -1677,7 +1691,7 @@ function offerTiebreak(match) {
   overlay.querySelector('.next').addEventListener('click', () => playOnlineTiebreak(match));
   overlay.querySelector('.skip').addEventListener('click', async (e) => {
     e.target.disabled = true;
-    await backend.tournaments.leave(match).catch(() => {});
+    await backend.tournaments.leave(match).catch(() => { });
     showOnlineResults(match);
   });
   app.append(overlay);
@@ -1702,11 +1716,11 @@ function recordOnce(match) {
   let seen = [];
   try {
     seen = JSON.parse(localStorage.getItem(KEY) ?? '[]');
-  } catch {}
+  } catch { }
   if (seen.includes(match.id)) return null;
   try {
     localStorage.setItem(KEY, JSON.stringify([match.id, ...seen].slice(0, 50)));
-  } catch {}
+  } catch { }
   const me = match.me;
   const won = me.position === 1 || me.payout > 0;
   const leaders = match.players.filter((p) => p.total === me.total).length;
@@ -1723,7 +1737,7 @@ async function showOnlineResults(match) {
   app.querySelector('.overlay')?.remove();
   try {
     await backend.tournaments.status(match);
-  } catch {}
+  } catch { }
   screen = 'lobby';
   const { me, tier } = match;
   const open = match.status === 'open';
@@ -1746,24 +1760,22 @@ async function showOnlineResults(match) {
   const view = h(`
     <main class="screen results ${won ? 'won' : ''}">
       ${won ? '<div class="rays"></div>' : ''}
-      <div class="trophy">${open ? '⏳' : won ? '🏆' : cancelled ? '↩️' : me.position <= 3 ? '🥈' : '⛳'}</div>
+      <div class="trophy">${open ? 'En espera' : won ? 'Victoria' : cancelled ? 'Cancelado' : `Puesto #${me.position}`}</div>
       <h1 class="score-title">${title}</h1>
       <p class="sub">${sub}</p>
-      ${
-        gained
-          ? `<div class="xp-card">
+      ${gained
+      ? `<div class="xp-card">
         <div class="xp-head"><b>+${gained.xp} XP</b><span>${gained.level.level > gained.levelBefore ? `¡Nivel ${gained.level.level}!` : `Nivel ${gained.level.level}`}</span></div>
         <span class="bar"><i style="--to:${(gained.level.into / gained.level.need) * 100}%"></i></span>
       </div>`
-          : ''
-      }
-      ${
-        gained?.newSkins.length
-          ? `<h2 class="unlock-title">¡Skin desbloqueada!</h2><div class="unlocks">${gained.newSkins
-              .map((s) => `<div class="skin-card holo reveal rarity-${s.rarity}"><div class="shine"></div><span class="rarity">${RARITIES[s.rarity].name}</span>${ball(s, 76, 'float')}<b>${s.name}</b></div>`)
-              .join('')}</div>`
-          : ''
-      }
+      : ''
+    }
+      ${gained?.newSkins.length
+      ? `<h2 class="unlock-title">¡Skin desbloqueada!</h2><div class="unlocks">${gained.newSkins
+        .map((s) => `<div class="skin-card holo reveal rarity-${s.rarity}"><div class="shine"></div><span class="rarity">${RARITIES[s.rarity].name}</span>${ball(s, 76, 'float')}<b>${s.name}</b></div>`)
+        .join('')}</div>`
+      : ''
+    }
       ${standingsTable(ranking, !open)}
       ${match.status === 'settled' ? `<p class="legal">Bote ${fmt(match.pot)} · comisión ${fmt(match.commission)} · premio ${fmt(match.prize)}</p>` : ''}
       ${open ? '<p class="legal">Puedes salir: el resultado y el premio aparecerán en el lobby, en «Tus torneos».</p>' : ''}
@@ -1781,7 +1793,7 @@ async function showOnlineResults(match) {
       if (!view.isConnected) return;
       try {
         await backend.tournaments.status(match);
-      } catch {}
+      } catch { }
       if (!view.isConnected) return;
       if (`${match.status}:${match.players.filter((p) => !p.finished).length}` !== key) showOnlineResults(match);
       else setTimeout(poll, POLL_MS);
@@ -1800,7 +1812,7 @@ async function showMyTournaments(box) {
   if (!list.length || !box.isConnected) return;
   const label = (m) => {
     if (m.status === 'cancelled') return 'Sin rivales · entrada devuelta';
-    if (m.status === 'settled') return m.me.payout > 0 ? `🏆 Ganaste ${coin(m.me.payout)}` : `Posición ${m.me.position} de ${m.players.length}`;
+    if (m.status === 'settled') return m.me.payout > 0 ? `Ganaste ${coin(m.me.payout)}` : `Posición ${m.me.position} de ${m.players.length}`;
     if (!m.me.finished) return `Sin terminar · ${m.me.holesPlayed}/${m.holes} hoyos`;
     return `Esperando · ${m.players.filter((p) => p.finished).length}/${m.players.length} han terminado`;
   };
@@ -1853,36 +1865,36 @@ function alertMsg(text) {
 // ---------- juego libre en solitario ----------
 
 const THEME_INFO = {
-  meadow: { name: 'Pradera', icon: '🌿', color: '#5cc24a' },
-  beach: { name: 'Playa', icon: '🏖️', color: '#2fe0ff' },
-  sunset: { name: 'Atardecer', icon: '🌅', color: '#ff9a5c' },
-  snow: { name: 'Nieve', icon: '❄️', color: '#90d7ff' },
-  canyon: { name: 'Cañón', icon: '🏜️', color: '#e58f4a' },
-  autumn: { name: 'Otoño', icon: '🍂', color: '#e06b3a' },
-  night: { name: 'Noche', icon: '🌙', color: '#7a8bff' },
-  gardenNight: { name: 'Jardín Nocturno', icon: '🌸', color: '#da70d6' },
-  volcano: { name: 'Volcán', icon: '🌋', color: '#ff4d2e' },
-  beachNight: { name: 'Playa Nocturna', icon: '🌴', color: '#00d2be' },
-  neon: { name: 'Neón Cyberpunk', icon: '⚡', color: '#00e5ff' },
-  neonPink: { name: 'Neón Magenta', icon: '🎆', color: '#ff2e93' },
+  meadow: { name: 'Pradera', icon: '', color: '#5cc24a' },
+  beach: { name: 'Playa', icon: '', color: '#2fe0ff' },
+  sunset: { name: 'Atardecer', icon: '', color: '#ff9a5c' },
+  snow: { name: 'Nieve', icon: '', color: '#90d7ff' },
+  canyon: { name: 'Cañón', icon: '', color: '#e58f4a' },
+  autumn: { name: 'Otoño', icon: '', color: '#e06b3a' },
+  night: { name: 'Noche', icon: '', color: '#7a8bff' },
+  gardenNight: { name: 'Jardín Nocturno', icon: '', color: '#da70d6' },
+  volcano: { name: 'Volcán', icon: '', color: '#ff4d2e' },
+  beachNight: { name: 'Playa Nocturna', icon: '', color: '#00d2be' },
+  neon: { name: 'Neón Cyberpunk', icon: '', color: '#00e5ff' },
+  neonPink: { name: 'Neón Magenta', icon: '', color: '#ff2e93' },
 };
 
 function getCourseFeatures(c) {
   const feats = [];
-  if (c.loops?.length) feats.push('🌀 Looping');
-  if (c.windmills?.length) feats.push('⚙️ Molino');
+  if (c.loops?.length) feats.push('Looping');
+  if (c.windmills?.length) feats.push('Molino');
   if (c.portals?.length) {
-    if (c.portals.some((p) => p.tube)) feats.push('🚇 Tubos');
-    else feats.push('🌌 Portales');
+    if (c.portals.some((p) => p.tube)) feats.push('Tubos');
+    else feats.push('Portales');
   }
-  if (c.tunnels?.length) feats.push('🚇 Pasadizo');
-  if (c.boosts?.length) feats.push('⚡ Acelerador');
-  if (c.mounds?.length) feats.push('🌋 Volcán');
-  if (c.slopes?.length) feats.push('📐 Pendiente');
-  if (c.movers?.length) feats.push('🧱 Bloques');
-  if (c.spinners?.length) feats.push('🔄 Aspas');
-  if (c.bumpers?.length) feats.push('🍄 Setas');
-  if (c.sand?.length) feats.push('🏖️ Arena');
+  if (c.tunnels?.length) feats.push('Pasadizo');
+  if (c.boosts?.length) feats.push('Acelerador');
+  if (c.mounds?.length) feats.push('Volcán');
+  if (c.slopes?.length) feats.push('Pendiente');
+  if (c.movers?.length) feats.push('Bloques');
+  if (c.spinners?.length) feats.push('Aspas');
+  if (c.bumpers?.length) feats.push('Setas');
+  if (c.sand?.length) feats.push('Arena');
   return feats;
 }
 
@@ -1896,15 +1908,15 @@ export async function showFreePlayCourseSelect() {
           <span class="hero-level-tag">${COURSES.length} Hoyos</span>
         </div>
         <div class="section-title-row">
-          <h1>⛳ Selector de Mapas</h1>
+          <h1>Selector de Mapas</h1>
           <span class="live-pill solo-live-pill"><i class="pulse-dot"></i> EN SOLITARIO</span>
         </div>
         <p class="freeplay-desc">Elige cualquier hoyo para entrenar a tu propio ritmo. Sin límite de tiempo, sin desafíos ni misiones y sin oponentes.</p>
         <div class="freeplay-features-bar">
-          <span class="spec-chip">⏱️ Sin límite de tiempo</span>
-          <span class="spec-chip">👤 Sin rivales</span>
-          <span class="spec-chip">🎯 Tiros ilimitados</span>
-          <span class="spec-chip">🔄 Reinicio rápido [R]</span>
+          <span class="spec-chip">Sin límite de tiempo</span>
+          <span class="spec-chip">Sin rivales</span>
+          <span class="spec-chip">Tiros ilimitados</span>
+          <span class="spec-chip">Reinicio rápido [R]</span>
         </div>
       </div>
 
@@ -1918,51 +1930,85 @@ export async function showFreePlayCourseSelect() {
 
   const grid = view.querySelector('.courses-grid');
   COURSES.forEach((course, idx) => {
-    const theme = THEME_INFO[course.theme] || { name: course.theme, icon: '⛳', color: '#00f076' };
+    const theme = THEME_INFO[course.theme] || { name: course.theme, icon: '', color: '#00f076' };
     const feats = getCourseFeatures(course);
+    const dist = getCourseDistance(course);
     const card = h(`
       <div class="course-card holo theme--${course.theme}">
-        <div class="shine"></div>
-        <div class="course-card-ambient"></div>
         <div class="course-card-top">
           <span class="course-num-badge">Hoyo ${idx + 1}</span>
           <span class="course-theme-tag" style="--accent:${theme.color}">
-            <i>${theme.icon}</i> ${theme.name}
+            ${theme.name}
           </span>
           <span class="course-par-badge">Par ${course.par}</span>
         </div>
-        <h3 class="course-name">${course.name}</h3>
-        ${course.tip ? `<p class="course-tip">💡 ${course.tip}</p>` : ''}
-        ${feats.length ? `<div class="course-feats">${feats.map((f) => `<span class="feat-tag">${f}</span>`).join('')}</div>` : ''}
+        <div class="course-card-preview-wrap" style="--accent:${theme.color}" title="Haga clic para jugar el Hoyo ${idx + 1}">
+          <div class="course-preview-media">
+            <img class="course-preview-img" src="${getCoursePreview(course)}" alt="Vista previa de ${course.name}" loading="lazy" />
+            <div class="course-preview-glow"></div>
+            <div class="course-preview-badges">
+              <span class="preview-badge dist-badge">~${dist}m</span>
+              ${feats[0] ? `<span class="preview-badge feat-badge">${feats[0]}</span>` : ''}
+            </div>
+            <div class="course-preview-action-overlay">
+              <span class="preview-play-icon"></span>
+              <span class="preview-play-text">Entrenar Hoyo ${idx + 1}</span>
+            </div>
+          </div>
+        </div>
+        <div class="course-card-body">
+          <h3 class="course-name">${course.name}</h3>
+          ${course.tip ? `<p class="course-tip">${course.tip}</p>` : ''}
+          ${feats.length ? `<div class="course-feats">${feats.map((f) => `<span class="feat-tag">${f}</span>`).join('')}</div>` : ''}
+        </div>
         <button class="primary play-course-btn">Jugar Hoyo ${idx + 1}</button>
       </div>
     `);
-    card.querySelector('.play-course-btn').addEventListener('click', () => playFreePlay(idx));
+    const launchPlay = () => playFreePlay(idx);
+    card.querySelector('.play-course-btn').addEventListener('click', launchPlay);
+    card.querySelector('.course-card-preview-wrap').addEventListener('click', launchPlay);
     grid.append(card);
   });
 
-  const tbTheme = THEME_INFO[TIEBREAK_COURSE.theme] || { name: 'Atardecer', icon: '🌅', color: '#ff9a5c' };
+  const tbTheme = THEME_INFO[TIEBREAK_COURSE.theme] || { name: 'Atardecer', icon: '', color: '#ff9a5c' };
+  const tbDist = getCourseDistance(TIEBREAK_COURSE);
   const tbCard = h(`
     <div class="course-card holo course-card-extra theme--${TIEBREAK_COURSE.theme}">
-      <div class="shine"></div>
-      <div class="course-card-ambient"></div>
       <div class="course-card-top">
         <span class="course-num-badge extra">Extra</span>
         <span class="course-theme-tag" style="--accent:${tbTheme.color}">
-          <i>${tbTheme.icon}</i> ${tbTheme.name}
+          ${tbTheme.name}
         </span>
         <span class="course-par-badge">Diana</span>
       </div>
-      <h3 class="course-name">Desempate: Diana</h3>
-      <p class="course-tip">🎯 Un solo tiro al objetivo: afina la precisión al centro de la diana sin agujero.</p>
-      <div class="course-feats">
-        <span class="feat-tag">🎯 Diana de precisión</span>
-        <span class="feat-tag">⚡ Muerte súbita</span>
+      <div class="course-card-preview-wrap" style="--accent:${tbTheme.color}" title="Haga clic para jugar el Desempate">
+        <div class="course-preview-media">
+          <img class="course-preview-img" src="${getCoursePreview(TIEBREAK_COURSE)}" alt="Vista previa de Desempate" loading="lazy" />
+          <div class="course-preview-glow"></div>
+          <div class="course-preview-badges">
+            <span class="preview-badge dist-badge">~${tbDist}m</span>
+            <span class="preview-badge feat-badge">Diana</span>
+          </div>
+          <div class="course-preview-action-overlay">
+            <span class="preview-play-icon"></span>
+            <span class="preview-play-text">Entrenar Desempate</span>
+          </div>
+        </div>
+      </div>
+      <div class="course-card-body">
+        <h3 class="course-name">Desempate: Diana</h3>
+        <p class="course-tip">Un solo tiro al objetivo: afina la precisión al centro de la diana sin agujero.</p>
+        <div class="course-feats">
+          <span class="feat-tag">Diana de precisión</span>
+          <span class="feat-tag">Muerte súbita</span>
+        </div>
       </div>
       <button class="primary play-course-btn">Jugar Desempate</button>
     </div>
   `);
-  tbCard.querySelector('.play-course-btn').addEventListener('click', () => playFreePlay('tiebreak'));
+  const launchTbPlay = () => playFreePlay('tiebreak');
+  tbCard.querySelector('.play-course-btn').addEventListener('click', launchTbPlay);
+  tbCard.querySelector('.course-card-preview-wrap').addEventListener('click', launchTbPlay);
   grid.append(tbCard);
 
   await shell(view);
@@ -2000,7 +2046,7 @@ export function showFreePlayHoleResult(courseIndex, course, strokes) {
   const overlay = h(`
     <div class="overlay freeplay-result-overlay">
       <div class="card freeplay-result-card ${isGood ? 'good' : ''}">
-        <div class="freeplay-result-badge">⛳ HOYO COMPLETADO · MODO LIBRE</div>
+        <div class="freeplay-result-badge">HOYO COMPLETADO · MODO LIBRE</div>
         <h2 class="score-title">${scoreName}</h2>
         <p class="sub">${course.name} · ${strokes} golpe${strokes === 1 ? '' : 's'} · Par ${course.par}</p>
         
@@ -2020,9 +2066,9 @@ export function showFreePlayHoleResult(courseIndex, course, strokes) {
         </div>
 
         <div class="freeplay-actions">
-          <button class="primary retry-btn">🔄 Repetir este hoyo</button>
-          ${nextIndex != null ? `<button class="primary next-btn">Siguiente hoyo (${nextIndex + 1}) ➔</button>` : ''}
-          <button class="secondary select-map-btn">🗺️ Elegir otro mapa</button>
+          <button class="primary retry-btn">Repetir este hoyo</button>
+          ${nextIndex != null ? `<button class="primary next-btn">Siguiente hoyo (${nextIndex + 1})</button>` : ''}
+          <button class="secondary select-map-btn">Elegir otro mapa</button>
           <button class="ghost to-lobby-btn">Lobby principal</button>
         </div>
       </div>
@@ -2052,7 +2098,7 @@ export function showFreePlayHoleResult(courseIndex, course, strokes) {
   sfx.cup();
 }
 
-app.innerHTML = '<main class="screen loading"><h1>⛳</h1><p class="sub">Conectando…</p></main>';
+app.innerHTML = '<main class="screen loading"><h1>Golf Cash Battle</h1><p class="sub">Conectando…</p></main>';
 createBackend().then((b) => {
   backend = b;
   ({ wallet, matches } = b);
