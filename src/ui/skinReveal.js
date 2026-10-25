@@ -179,7 +179,7 @@ export function showSkinReveal(skins, { progress = null } = {}) {
           <p class="sr-kicker">¡Skin desbloqueada!</p>
           <div class="sr-seal"><span class="sr-seal-ico">${tier.icon}</span>${esc(tier.name)}</div>
           <div class="sr-ball">
-            <img src="${ballPreview(skin, 288)}" width="144" height="144" alt="" draggable="false">
+            <img src="${ballPreview(skin, 288)}" width="384" height="384" alt="" draggable="false">
             <span class="sr-scan"></span>
           </div>
           <div class="sr-info">
@@ -200,9 +200,9 @@ export function showSkinReveal(skins, { progress = null } = {}) {
       const equipBtn = root.querySelector('.sr-equip');
       const nextBtn = root.querySelector('.sr-next');
 
-      upgradeImg(img, skin, inst, { size: 144, priority: true });
+      upgradeImg(img, skin, inst, { size: 144, priority: true, hi: true });
       if (!calm) {
-        thumbFrames(skin, inst).then((frames) => {
+        thumbFrames(skin, inst, { hi: true }).then((frames) => {
           if (!frames?.length || !img.isConnected || done) return;
           let f = 0;
           spin = setInterval(() => {

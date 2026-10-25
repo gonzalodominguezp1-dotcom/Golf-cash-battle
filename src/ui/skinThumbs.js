@@ -9,10 +9,13 @@ import { skinById, TIERS } from '../progress/skins.js';
 //   upgradeImg(img, skin, instance, o)  -> pone el placeholder `ballPreview` y lo cambia por el render 3D
 //   installThumbObserver(root, instOf)  -> mejora solo cualquier <img data-skin-id> que entre en `root`
 //   hoverLoop(el, img, skin, instance)  -> bucle de giro al pasar el ratón (Legendaria+)
+// Opción `hi: true` (solo el reveal de desbloqueo): render a HI_SIZE px en vez de SIZE. Tiene caché y
+// clave propias, así que las tarjetas de la pantalla de skins siguen usando 144 px y no cambian de coste.
 // Un único WebGLRenderer compartido, un render por fotograma de animación (no bloquea la primera
 // pintura) y se libera si la cola lleva un rato vacía.
 
 const SIZE = 144;
+const HI_SIZE = 384; // 220 px CSS máx. del reveal a DPR ~1,75; tope fijo: el DPR del dispositivo no multiplica el coste
 const R = 0.38;
 const FRAMES = 12;
 const IDLE_MS = 4000;
@@ -47,7 +50,8 @@ const thumbQuality = () => {
   return q === 'high' ? 'medium' : q;
 };
 const instKey = (inst) => `${inst?.seed ?? 0}.${Math.round((inst?.float ?? DEFAULT_INSTANCE.float) * 50)}`;
-const keyOf = (skin, inst, extra = '') => `${skin.id}|${instKey(inst)}|${thumbQuality()}${extra}`;
+const keyOf = (skin, inst, { hi = false, frames = false } = {}) =>
+  `${skin.id}|${instKey(inst)}|${thumbQuality()}${hi ? `|h${HI_SIZE}` : ''}${frames ? '|f' : ''}`;
 
 function ensureGL() {
   if (gl) return gl;
@@ -75,7 +79,7 @@ function ensureGL() {
     const mesh = new THREE.Mesh(geo);
     scene.add(mesh);
     canvas.addEventListener('webglcontextlost', () => dropGL(), { once: true });
-    gl = { renderer, scene, camera, geo, mesh };
+    gl = { renderer, scene, camera, geo, mesh, px: SIZE };
   } catch {
     failed = true;
     gl = null;
@@ -98,6 +102,11 @@ const pose = (mesh, yaw) => mesh.quaternion.setFromEuler(new THREE.Euler(0.18, -
 function renderJob(job) {
   const g = ensureGL();
   if (!g) return null;
+  const px = job.hi ? HI_SIZE : SIZE;
+  if (g.px !== px) {
+    g.renderer.setSize(px, px, false);
+    g.px = px;
+  }
   const handle = createSkinMaterial(job.skin, { quality: thumbQuality(), instance: { seed: job.inst?.seed ?? 0, wear: job.inst?.float ?? DEFAULT_INSTANCE.float } });
   try {
     g.mesh.material = handle.material;
@@ -134,8 +143,8 @@ function pump() {
   else idleTimer = setTimeout(dropGL, IDLE_MS);
 }
 
-function enqueue(skin, inst, { frames = false, priority = false } = {}) {
-  const key = keyOf(skin, inst, frames ? '|f' : '');
+function enqueue(skin, inst, { frames = false, priority = false, hi = false } = {}) {
+  const key = keyOf(skin, inst, { hi, frames });
   if (cache.has(key)) return Promise.resolve(cache.get(key));
   if (inflight.has(key)) {
     if (priority) {
@@ -146,7 +155,7 @@ function enqueue(skin, inst, { frames = false, priority = false } = {}) {
   }
   if (!ensureGL()) return Promise.resolve(null);
   const p = new Promise((resolve) => {
-    const job = { key, skin, inst, frames, resolve };
+    const job = { key, skin, inst, frames, hi, resolve };
     if (priority) queue.unshift(job);
     else queue.push(job);
   });
@@ -158,18 +167,18 @@ function enqueue(skin, inst, { frames = false, priority = false } = {}) {
 export const thumbUrl = (skin, instance, o) => enqueue(skin, instance, o);
 export const thumbFrames = (skin, instance, o) => enqueue(skin, instance, { ...o, frames: true, priority: true });
 /** Miniatura ya renderizada (sin esperar) o null. */
-export const thumbCached = (skin, instance) => cache.get(keyOf(skin, instance)) ?? null;
+export const thumbCached = (skin, instance, { hi = false } = {}) => cache.get(keyOf(skin, instance, { hi })) ?? null;
 
-/** Muestra `ballPreview` al instante y cambia a la miniatura 3D cuando está lista. */
-export function upgradeImg(img, skin, instance, { size = 76, priority = false } = {}) {
-  const hit = thumbCached(skin, instance);
+/** Muestra `ballPreview` al instante y cambia a la miniatura 3D cuando está lista. `hi` pide HI_SIZE px. */
+export function upgradeImg(img, skin, instance, { size = 76, priority = false, hi = false } = {}) {
+  const hit = thumbCached(skin, instance, { hi });
   if (hit) {
     img.src = hit;
     img.dataset.hd = '1';
     return Promise.resolve(true);
   }
   if (!img.getAttribute('src')) img.src = ballPreview(skin, size * 2);
-  return enqueue(skin, instance, { priority }).then((url) => {
+  return enqueue(skin, instance, { priority, hi }).then((url) => {
     if (url && img.isConnected !== false) {
       img.src = url;
       img.dataset.hd = '1';
