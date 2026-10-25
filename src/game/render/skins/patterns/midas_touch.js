@@ -17,7 +17,7 @@ void skinPattern(vec3 p, inout vec4 diffuse) {
 
   // Pátina: manchas de bronce, visibles solo en estados bajos.
   float mott = smoothstep(0.38, 0.72, sk_fbm3(p * 3.0 + uSeed * 1.9, SK_OCT));
-  float patina = mott * (1.0 - g) * 0.75;
+  float patina = mott * (1.0 - g) * 0.4;
 
   // Hoyuelos: AO de cavidad en el centro de cada celda voronoi (en unidades de celda).
   vec3 vc = sk_voronoi3(p * SK_DIM_F);
@@ -38,6 +38,11 @@ void skinPattern(vec3 p, inout vec4 diffuse) {
   // Relieve de la filigrana: la normal sigue el gradiente de la red (signo alterno en los surcos).
   vec3 gq = vec3(cos(q.x), cos(q.y), cos(q.z));
   sk_nPert += -sign(f) * groove * (gq / (length(gq) + 1e-4)) * 0.35;
+
+  // Oro lleno de luz propia: un metal pulido en un entorno oscuro se vería oliváceo, así que el color base
+  // aporta un resplandor cálido que sube hacia el borde (fresnel) y se atenúa con la pátina.
+  float ndvM = clamp(dot(normalize(p), vec3(dot(normalize(vViewPosition), vObjX), dot(normalize(vViewPosition), vObjY), dot(normalize(vViewPosition), vObjZ))), 0.0, 1.0);
+  sk_emis += diffuse.rgb * (0.1 + 0.3 * pow(1.0 - ndvM, 2.0)) * (1.0 - groove * 0.7);
 
   // Emisión HDR: brillo dorado tenue en los surcos (crece con el estado) y destello al golpear.
   float flick = 0.7 + 0.3 * sin(uTime * 1.7 + f);

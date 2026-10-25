@@ -55,7 +55,8 @@ void skinPattern(vec3 p, inout vec4 diffuse) {
   h = mix(h, 0.05, spot * 0.85);
 
   // brillo sube con la velocidad y con el impacto
-  float heat = clamp(uSpeed * 0.06, 0.0, 0.5) + uImpact * 0.6 + uHeat;
+  float heat = clamp(uSpeed, 0.0, 1.0) * 0.35   // uSpeed en 0..1
+     + uImpact * 0.6 + uHeat;
   h = clamp(h + heat * 0.25, 0.0, 1.0);
 
   vec3 col = snRamp(h);
@@ -103,7 +104,7 @@ export default {
   },
   // uHeat: calor suavizado (sube al rodar rápido, decae al parar)
   update(u, t, dt, ctx) {
-    const target = Math.min(1, (ctx.speed ?? 0) * 0.05) * 0.6 + (ctx.impact ?? 0) * 0.4;
+    const target = Math.min(1, ctx.speed ?? 0) * 0.6 + (ctx.impact ?? 0) * 0.4;
     const k = 1 - Math.exp(-(dt || 0.016) * (target > u.uHeat.value ? 8 : 2.5));
     u.uHeat.value += (target - u.uHeat.value) * k;
   },

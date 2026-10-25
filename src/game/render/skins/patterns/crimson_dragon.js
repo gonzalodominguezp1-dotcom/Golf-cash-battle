@@ -4,7 +4,7 @@
 // Calidad: baja (sin shader, no se usa), media (escamas + normal + ojo), alta (más densidad + micrograno).
 
 const STILL_AFTER = 3.0; // s parada antes de abrir el ojo
-const STILL_SPEED = 0.15; // por debajo de esta velocidad cuenta como parada
+const STILL_SPEED = 0.02; // (uSpeed 0..1) por debajo de esta velocidad cuenta como parada
 
 const glsl = /* glsl */ `
 // Voronoi propio: devuelve d1 (a la semilla), d2-d1 (a la arista), id y el vector hacia el centro de la escama.
@@ -31,54 +31,62 @@ void dr_voronoi(vec3 p, out float d1o, out float edge, out float id, out vec3 to
 }
 
 void skinPattern(vec3 p, inout vec4 diffuse) {
-  const vec3 OBSIDIAN = vec3(0.012, 0.0013, 0.0033);
-  const vec3 SCALE = vec3(0.2, 0.006, 0.016);
-  const vec3 EMBER = vec3(1.0, 0.43, 0.04);
+  const vec3 OBSIDIAN = vec3(0.010, 0.0012, 0.003);
+  const vec3 EMBER = vec3(1.0, 0.36, 0.03);
   float breath = 0.5 + 0.5 * sin(uTime * 1.5707963); // ciclo de 4 s
-  float live = clamp(uSpeed * 0.35, 0.0, 1.0);
+  float live = clamp(uSpeed, 0.0, 1.0);               // uSpeed llega en 0..1
 
-  vec3 q = p * SK_SCALE_F + vec3(uSeed * 0.731, uSeed * 0.377, uSeed * 0.529);
+  // Escamas alargadas en el eje del objeto (filas escalonadas): se estira Y y se desplaza cada fila
+  vec3 q = vec3(p.x, p.y * 0.78, p.z) * SK_SCALE_F + vec3(uSeed * 0.731, uSeed * 0.377, uSeed * 0.529);
   float d1, edge, id;
   vec3 toC;
   dr_voronoi(q, d1, edge, id, toC);
 
-  // Escama abombada: 1 en el centro, 0 en la junta
-  float dome = 1.0 - smoothstep(0.0, 0.62, d1);
-  float groove = 1.0 - smoothstep(0.0, 0.13, edge);
-  float rim = smoothstep(0.03, 0.2, edge) * (1.0 - smoothstep(0.2, 0.42, edge));
+  // Abombada: 1 en el centro, 0 en la junta. «Cola» de la escama = dirección hacia abajo (-Y del objeto)
+  float dome = 1.0 - smoothstep(0.0, 0.6, d1);
+  float groove = 1.0 - smoothstep(0.0, 0.07, edge);
+  vec3 down = normalize(vec3(0.0, -1.0, 0.0) - p * (-p.y));
+  vec3 tangC = -toC - dot(-toC, p) * p;                      // desde el centro hacia el borde (tangente)
+  float tl = length(tangC);
+  float facing = tl > 1e-4 ? dot(tangC / tl, down) : 0.0;     // +1 en el borde inferior (punta), -1 en la raíz
+  float edgeNear = smoothstep(0.18, 0.55, d1);
+  float tip = max(facing, 0.0) * edgeNear;                    // punta: asoma por encima de la fila de abajo
+  float root = max(-facing, 0.0) * edgeNear;                  // raíz: tapada por la fila de arriba
 
-  // Color: obsidiana -> escama carmesí oscura con variación por id, borde luminoso del acento
-  vec3 sc = mix(SCALE * 0.55, SCALE * 1.45, id);
-  vec3 col = mix(OBSIDIAN, sc, dome * (0.6 + 0.4 * id));
-  col = mix(col, uPalAccent * 0.55, rim * 0.5 * (0.5 + 0.5 * id));
-  col = mix(col, OBSIDIAN * 0.4, groove);
+  // Color: gradiente carmesí raíz oscura -> punta viva; varía por escama
+  vec3 crim = mix(vec3(0.16, 0.004, 0.02), vec3(0.62, 0.02, 0.06), id);
+  vec3 col = mix(OBSIDIAN * 1.5, crim, 0.35 + 0.65 * dome);
+  col = mix(col, crim * 1.4 + uPalAccent * 0.2, tip * 0.8);       // punta brillante
+  col = mix(col, OBSIDIAN * 0.35, clamp(root * 0.85 + groove, 0.0, 1.0));
 
 #if SK_FINE == 1
   // micrograno de cada escama (alta)
   float g = sk_noise3(p * 90.0 + id * 13.0);
-  col *= 0.82 + 0.36 * g;
+  col *= 0.8 + 0.4 * g;
   sk_dRough += (g - 0.5) * 0.08;
 #endif
   diffuse.rgb = col;
 
-  // Material: más metálico en la escama, más áspero en la junta
-  sk_dMetal += 0.45 * dome - 0.1 * groove;
-  sk_dRough += 0.1 * groove - 0.02 * dome;
+  // Material: escama metálica y pulida, junta áspera y oscura
+  sk_dMetal += 0.4 * dome + 0.2 * tip - 0.2 * groove;
+  sk_dRough += 0.14 * groove + 0.1 * root - 0.05 * dome - 0.05 * tip;
 
-  // Brasa entre escamas: late con la respiración, más viva con la velocidad / impacto; el desgaste la apaga
-  float emberAmt = (0.45 + 0.55 * breath) * (0.65 + 0.7 * live) * (1.0 - 0.6 * uWear);
-  float flicker = 0.75 + 0.25 * sk_noise3(q * 2.3 + vec3(uTime * 0.6, 0.0, -uTime * 0.4));
-  sk_emis += mix(EMBER, uPalAccent * 1.6, 0.25 + 0.3 * (1.0 - breath)) * groove * emberAmt * flicker * 1.0;
-  sk_emis += uPalAccent * rim * 0.08 * emberAmt;
+  // Brasa: sólo en las juntas finas, latiendo; más viva con velocidad / impacto; el desgaste la apaga.
+  // Algunas escamas (id alto) respiran más fuerte: se lee como piel viva, no como lava.
+  float vein = step(0.62, id) * (0.5 + 0.5 * sin(uTime * 1.9 + id * 40.0));
+  float emberAmt = (0.18 + 0.38 * breath + 0.35 * vein) * (0.7 + 0.8 * live) * (1.0 - 0.6 * uWear);
+  float flicker = 0.7 + 0.3 * sk_noise3(q * 2.3 + vec3(uTime * 0.6, 0.0, -uTime * 0.4));
+  sk_emis += EMBER * groove * emberAmt * flicker * 1.1;
+  sk_emis += EMBER * root * 0.12 * emberAmt;                 // resplandor bajo la escama de arriba
+  sk_emis += uPalAccent * tip * 0.05;
   sk_emis += EMBER * groove * uImpact * 2.5;
 
 #if SK_NRM == 1
-  // Normal: cada escama abombada; se «eriza» al acelerar
-  vec3 tang = -toC - dot(-toC, p) * p;
-  float k = (0.55 + 0.9 * live) * (SK_Q == 2 ? 1.0 : 0.85);
-  sk_nPert += tang * k * (1.0 - groove * 0.6);
-  // la junta se hunde (empuja la normal hacia fuera de la ranura)
-  sk_nPert += tang * groove * 0.35;
+  // Normal: cada escama es una placa abombada con la punta alzada; se «eriza» al acelerar
+  float k = (1.1 + 1.0 * live) * (SK_Q == 2 ? 1.0 : 0.85);
+  sk_nPert += tangC * k * (1.0 - groove);
+  sk_nPert += down * (tip * 0.55 + 0.1) * (0.6 + 0.6 * live);   // la punta se levanta y recoge la luz
+  sk_nPert -= tangC * groove * 0.5;                              // la junta se hunde
 #endif
 
 #if SK_EYE == 1

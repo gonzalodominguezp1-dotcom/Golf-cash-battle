@@ -25,43 +25,53 @@ float ice_crack(vec3 p, vec3 vt, float depth, float scale, float width, float se
 void skinPattern(vec3 p, inout vec4 diffuse) {
   vec3 V = ice_viewObj();
   float ndv = clamp(dot(V, p), 0.0, 1.0);
-  float fres = pow(1.0 - ndv, 3.0);
+  float fres = pow(1.0 - ndv, 2.5);
 
   // componente tangente de la vista: base del parallax
   vec3 vt = V - p * dot(V, p);
 
   float wearW = 1.0 + uWear * 0.6;
 
-  // --- translucidez simulada: más profundo/azul al centro, claro y lechoso en el borde ---
-  vec3 cDeep = vec3(0.118, 0.435, 0.659);   // #1E6FA8
-  vec3 cMid  = vec3(0.498, 0.839, 1.0);     // #7FD6FF
-  vec3 cPale = vec3(0.910, 0.984, 1.0);     // #E8FBFF
+  // --- facetas de cristal: celdas grandes con inclinación propia (reflejos quebrados, con forma) ---
+  vec3 fq = p * 2.1 * SK_SCALE_F + vec3(uSeed * 0.53);
+  vec3 fv = sk_voronoi3(fq);
+  vec3 tilt = sin(fv.z * vec3(37.0, 91.0, 53.0) + vec3(1.0, 2.0, 3.0));
+  tilt -= p * dot(tilt, p);
+  float facetEdge = 1.0 - smoothstep(0.0, 0.05, fv.y);   // arista entre facetas
+
+  // --- translucidez simulada: profundidad azul intensa al centro, borde lechoso ---
+  vec3 cDeep = vec3(0.050, 0.340, 0.800);
+  vec3 cMid  = vec3(0.300, 0.780, 1.000);
+  vec3 cPale = vec3(0.880, 0.975, 1.000);
   float milk = sk_fbm3(p * 2.3 + uSeed, SK_MILK);
-  vec3 body = mix(cDeep, cMid, smoothstep(0.0, 0.85, ndv * 0.55 + milk * 0.75));
-  body = mix(body, cPale, fres * 0.85 + milk * 0.12);
-  body = mix(body, uPalBase, 0.25);
+  float depthT = clamp(ndv * 0.9 + (milk - 0.5) * 0.7 + (fv.z - 0.5) * 0.3, 0.0, 1.0);
+  vec3 body = mix(cDeep * 0.35, cMid * 0.8, smoothstep(0.15, 0.95, depthT));
+  body = mix(body, cPale, fres * 0.7);
   diffuse.rgb = body;
 
   // --- grietas internas: 2 capas a distinta profundidad (parallax) ---
-  float c1 = ice_crack(p, vt, 0.10, 3.2 * SK_SCALE_F, 0.055 * wearW, uSeed);
+  float c1 = ice_crack(p, vt, 0.10, 2.3 * SK_SCALE_F, 0.050 * wearW, uSeed);
   float c2 = 0.0;
 #if SK_LAYERS > 1
-  c2 = ice_crack(p, vt, 0.34, 5.6 * SK_SCALE_F, 0.075 * wearW, uSeed * 1.7 + 11.0);
+  c2 = ice_crack(p, vt, 0.38, 4.0 * SK_SCALE_F, 0.075 * wearW, uSeed * 1.7 + 11.0);
 #endif
-  // la capa profunda se atenúa (más azul), la superficial es blanca
   float cr = clamp(c1 + c2 * 0.7, 0.0, 1.0);
-  diffuse.rgb = mix(diffuse.rgb, cDeep * 0.8, c2 * 0.5);
-  diffuse.rgb = mix(diffuse.rgb, vec3(1.0), c1 * 0.9);
-  // brillo interno de las grietas; el golpe las enciende
-  sk_emis += vec3(0.75, 0.93, 1.0) * (c1 * 0.22 + c2 * 0.12) * (1.0 + uImpact * 5.0);
+  // la capa profunda se ve azul oscuro (hundida), la superficial blanca y brillante
+  diffuse.rgb = mix(diffuse.rgb, cDeep * 0.35, c2 * 0.65);
+  diffuse.rgb = mix(diffuse.rgb, vec3(1.0), c1 * 0.95);
+  diffuse.rgb = mix(diffuse.rgb, cPale, facetEdge * 0.35);
+  // brillo interno: la luz «atrapada» en las grietas y en el corazón del hielo; el golpe lo enciende
+  sk_emis += vec3(0.55, 0.88, 1.0) * (c1 * 0.8 + c2 * 0.12 + facetEdge * 0.3) * (1.0 + uImpact * 5.0);
+  sk_emis += cDeep * (0.18 + 0.5 * milk) * smoothstep(0.0, 0.8, ndv) + cMid * 0.18 * fres + cPale * 0.3 * pow(1.0 - ndv, 4.0);
 
-  // --- acabado: superficie casi espejo, grietas algo más rugosas ---
-  sk_dRough += -0.25 + cr * 0.18;
-  sk_dMetal += 0.0;
+  // --- acabado: casi espejo; grietas más rugosas ---
+  sk_dRough += -0.2 + cr * 0.2;
+  sk_dMetal += 0.15;
 
+  // facetas inclinadas: rompen los reflejos en esquirlas (todas las calidades; en alta además relieve fino)
+  sk_nPert += tilt * 0.26 * (1.0 - facetEdge);
 #if SK_NORMAL > 0
-  // facetas suaves de hielo
-  vec3 g = sk_noiseGrad(p * 6.0 + uSeed, 0.05);
+  vec3 g = sk_noiseGrad(p * 7.0 + uSeed, 0.05);
   sk_nPert += g * 0.045;
 #endif
 
@@ -87,7 +97,7 @@ export default {
   },
   // Escarcha: crece lenta con la bola parada (~3 s) y se derrite rápido al rodar (~0.6 s).
   update(u, t, dt, ctx) {
-    const moving = (ctx?.speed ?? 0) > 0.25;
+    const moving = (ctx?.speed ?? 0) > 0.03; // ctx.speed en 0..1
     const rate = moving ? -1.6 : 0.33;
     u.uFrost.value = Math.min(1, Math.max(0, u.uFrost.value + rate * (dt || 0)));
   },
