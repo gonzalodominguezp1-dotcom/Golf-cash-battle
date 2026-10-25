@@ -88,7 +88,7 @@ export function createSkinMaterial(skin, opts = {}, deps) {
     roughness: legacy.roughness ?? finish.roughness ?? 0.4,
     metalness: legacy.metalness ?? finish.metalness ?? 0,
     envMap,
-    envMapIntensity: preset.envMapIntensity,
+    envMapIntensity: legacy.envMapIntensity ?? finish.envMapIntensity ?? preset.envMapIntensity,
   };
 
   let material;
@@ -121,10 +121,10 @@ export function createSkinMaterial(skin, opts = {}, deps) {
       ...base,
       map,
       normalMap: dimpleNormal(level),
-      normalScale: new THREE.Vector2(0.8, 0.8),
+      normalScale: new THREE.Vector2(finish.dimples ?? 0.8, finish.dimples ?? 0.8),
       clearcoat: legacy.clearcoat ?? finish.clearcoat ?? 0,
-      clearcoatRoughness: legacy.clearcoatRoughness ?? preset.clearcoatRoughness,
-      iridescence: legacy.iridescence ?? preset.iridescence,
+      clearcoatRoughness: legacy.clearcoatRoughness ?? finish.clearcoatRoughness ?? preset.clearcoatRoughness,
+      iridescence: legacy.iridescence ?? finish.iridescence ?? preset.iridescence,
       iridescenceIOR: legacy.iridescenceIOR ?? 1.6,
       sheen: preset.sheen,
       sheenColor: new THREE.Color(pal.accent ?? '#ffffff'),
