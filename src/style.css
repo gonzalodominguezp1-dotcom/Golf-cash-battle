@@ -863,6 +863,8 @@ body.sk-noscroll { overflow: hidden; }
 .sk-view-title { font: 800 17px/1.1 var(--display); color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sk-view-stage { position: relative; flex: 1 1 auto; min-height: 0; display: flex; }
 .sk-view-stage > .sk-insp { flex: 1 1 auto; min-width: 0; border-radius: 0; }
+/* imagen estática mientras se descarga el visor 3D */
+.sk-view-poster { margin: auto; width: min(56vmin, 300px); aspect-ratio: 1; object-fit: contain; border-radius: 50%; filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.55)); }
 .sk-view-actions {
   flex: none; display: flex; align-items: center; gap: 14px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0));
   border-top: 1px solid var(--line); background: rgba(14, 19, 28, 0.97);

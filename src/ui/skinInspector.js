@@ -10,7 +10,10 @@ import { rarePatternOf } from '../progress/inventory.js';
 // Inspector 360° de skins v2 (docs/skins-premium-plan.md, (c), (e) y P8).
 //   createSkinInspector(container, { skin, instance, mode: 'panel'|'fullscreen', quality? })
 //     -> { setSkin(skin, instance?, { quality }?), playFx(on?), destroy(), ... }
-// Un único WebGLRenderer por inspector: se pausa si no es visible y se libera todo en destroy().
+// Un único WebGLRenderer por inspector. Render bajo demanda: solo hay bucle mientras hay interacción o
+// una animación en curso (entrada, giro con inercia, zoom, barrido, efectos); en reposo no se dibuja nada.
+// Pixel ratio ≤ 1,5 (1 en Baja), reflejo de suelo solo en Alta, pausa si no es visible y en destroy()
+// se libera todo (dispose + forceContextLoss). Este módulo se carga con import() al abrir el visor.
 
 const TAU = Math.PI * 2;
 const R = 0.38; // radio de la bola en la escena del inspector
@@ -18,7 +21,9 @@ const FLOOR_Y = -R - 0.02;
 const ZOOM_MIN = 0.6;
 const ZOOM_MAX = 2;
 const FX_K = R / BALL_R; // unidades de juego -> unidades del inspector
-const SPHERE = { low: [24, 16], medium: [48, 32], high: [128, 96] };
+const SPHERE = { low: [32, 20], medium: [48, 32], high: [64, 48] };
+const MAX_DPR = { low: 1, medium: 1.5, high: 1.5 };
+const EPS = 0.02; // rad/s de inercia por debajo de los cuales la bola se considera parada
 const FX_LOOP = 6;
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -73,8 +78,8 @@ function addStudioLights(scene, tierColor) {
   return { key, rim, fill, hemi };
 }
 
-function makeRenderer(canvas) {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
+function makeRenderer(canvas, antialias = true) {
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias, alpha: true, powerPreference: 'high-performance' });
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.1;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -115,7 +120,7 @@ export function createSkinInspector(container, opts = {}) {
   // ---------------------------------------------------------------- WebGL
   let renderer;
   try {
-    renderer = makeRenderer(canvas);
+    renderer = makeRenderer(canvas, level !== 'low');
   } catch (err) {
     stage.replaceChildren(el('p', 'sk-hint', 'No se pudo iniciar WebGL en este dispositivo.'));
     renderPanel();
@@ -127,7 +132,7 @@ export function createSkinInspector(container, opts = {}) {
   const tierColor = new THREE.Color(tierOf(skin).color);
   const lights = addStudioLights(scene, tierColor);
 
-  // bola + reflejo falso (copia espejada bajo el suelo, con un disco degradado encima)
+  // bola + reflejo falso (copia espejada bajo el suelo, con un disco degradado encima; solo en Alta)
   let geo = null;
   let handle = null;
   const ball = new THREE.Mesh(undefined, undefined);
@@ -219,15 +224,18 @@ export function createSkinInspector(container, opts = {}) {
     if (reducedMotion()) {
       q.copy(goodQ);
       tween = null;
+      invalidate();
       return;
     }
     tween = { kind: 'enter', t0: time, dur: 1.9 };
     vx = vy = 0;
+    invalidate();
   }
 
   function gotoQ(to, dur = 0.7) {
     tween = { kind: 'goto', t0: time, dur, from: q.clone(), to: to.clone() };
     vx = vy = 0;
+    invalidate();
   }
 
   function stepRotation(dt) {
@@ -243,7 +251,7 @@ export function createSkinInspector(container, opts = {}) {
       const decay = Math.exp(-3.4 * dt);
       vx *= decay;
       vy *= decay;
-      if (!dragging && !reducedMotion() && !fxMode) vy += (0.32 - vy) * (1 - Math.exp(-0.8 * dt)) * (Math.abs(vy) < 0.5 ? 1 : 0);
+      if (!dragging && Math.abs(vx) < EPS && Math.abs(vy) < EPS) vx = vy = 0;
       if (!dragging) {
         qTmp.setFromAxisAngle(AY, vy * dt);
         q.premultiply(qTmp);
@@ -273,6 +281,7 @@ export function createSkinInspector(container, opts = {}) {
       tapMoved = false;
       vx = vy = 0;
       canvas.classList.add('sk-grabbing');
+      invalidate();
     } else if (pointers.size === 2) {
       dragging = false;
       const [a, b] = [...pointers.values()];
@@ -282,6 +291,7 @@ export function createSkinInspector(container, opts = {}) {
   const onMove = (e) => {
     const p = pointers.get(e.pointerId);
     if (!p) return;
+    invalidate();
     const dx = e.clientX - p.x, dy = e.clientY - p.y;
     p.x = e.clientX;
     p.y = e.clientY;
@@ -309,6 +319,7 @@ export function createSkinInspector(container, opts = {}) {
   const onUp = (e) => {
     const had = pointers.delete(e.pointerId);
     if (!had) return;
+    invalidate();
     canvas.releasePointerCapture?.(e.pointerId);
     if (pointers.size === 0) {
       dragging = false;
@@ -330,6 +341,7 @@ export function createSkinInspector(container, opts = {}) {
   const onWheel = (e) => {
     e.preventDefault();
     zoomT = clamp(zoomT * Math.exp(-e.deltaY * 0.0014), ZOOM_MIN, ZOOM_MAX);
+    invalidate();
   };
   const onDbl = () => {}; // el doble toque se resuelve en onUp (también en ratón)
 
@@ -354,6 +366,7 @@ export function createSkinInspector(container, opts = {}) {
   btnSweep.addEventListener('click', () => {
     sweep = 0;
     btnSweep.classList.add('sk-on');
+    invalidate();
   });
   btnFx.addEventListener('click', () => api.playFx(!fxMode));
 
@@ -439,17 +452,27 @@ export function createSkinInspector(container, opts = {}) {
     ball.visible = s > 0.01;
   }
 
-  // ---------------------------------------------------------------- bucle
+  // ---------------------------------------------------------------- bucle (bajo demanda)
   let raf = 0;
   let last = 0;
   let intersecting = true;
   let destroyed = false;
+  let dirty = true; // hace falta al menos un fotograma más
+  let camGoalY = camY, lookGoalY = lookY;
   const visibleNow = () => intersecting && !document.hidden && root.isConnected && !destroyed;
+  /** ¿Sigue moviéndose algo? Si no, el bucle se detiene hasta la próxima interacción. */
+  const animating = () =>
+    !!tween || dragging || pointers.size > 0 || fxMode || sweep >= 0 || Math.abs(vx) >= EPS || Math.abs(vy) >= EPS ||
+    Math.abs(zoomT - zoom) > 0.001 || Math.abs(camGoalY - camY) > 0.001 || Math.abs(lookGoalY - lookY) > 0.001;
+  function invalidate() {
+    dirty = true;
+    sync();
+  }
 
   function frame(now) {
     raf = 0;
     if (!visibleNow()) return;
-    raf = requestAnimationFrame(frame);
+    dirty = false;
     const dt = clamp((now - last) / 1000, 0, 0.05);
     last = now;
     time += dt;
@@ -460,9 +483,10 @@ export function createSkinInspector(container, opts = {}) {
     stepCamera(dt);
     handle.update(time, dt, matCtx);
     renderer.render(scene, camera);
+    if (animating() || dirty) raf = requestAnimationFrame(frame);
   }
   function sync() {
-    if (visibleNow()) {
+    if (visibleNow() && (dirty || animating())) {
       if (!raf) {
         last = performance.now();
         raf = requestAnimationFrame(frame);
@@ -479,12 +503,15 @@ export function createSkinInspector(container, opts = {}) {
     const d = baseDist / zoom;
     const targetCamY = fxMode ? d * 0.3 : d * 0.07;
     const targetLook = fxMode ? -0.18 : -0.04;
+    camGoalY = targetCamY;
+    lookGoalY = targetLook;
     camY += (targetCamY - camY) * f;
     lookY += (targetLook - lookY) * f;
     camera.position.set(0, camY, d);
     camera.lookAt(0, lookY, 0);
     const show = !fxMode;
-    mirror.visible = floor.visible = show;
+    floor.visible = show;
+    mirror.visible = show && level === 'high';
     glow.visible = show;
     fxStage.visible = fxMode;
     if (!fxMode) {
@@ -496,7 +523,7 @@ export function createSkinInspector(container, opts = {}) {
 
   const resize = () => {
     const w = Math.max(1, stage.clientWidth), h = Math.max(1, stage.clientHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_DPR[level] ?? 1.5));
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     const t = Math.tan((camera.fov * Math.PI) / 360);
@@ -510,10 +537,10 @@ export function createSkinInspector(container, opts = {}) {
   ro.observe(stage);
   const io = new IntersectionObserver((entries) => {
     intersecting = entries[entries.length - 1].isIntersecting;
-    sync();
+    invalidate();
   });
   io.observe(root);
-  const onVis = () => sync();
+  const onVis = () => invalidate();
   document.addEventListener('visibilitychange', onVis);
 
   grab.addEventListener('click', () => root.classList.toggle('sk-open'));
@@ -570,6 +597,7 @@ export function createSkinInspector(container, opts = {}) {
       renderPanel();
       if (same) {
         handle.setInstance({ seed: instance.seed });
+        invalidate();
         return;
       }
       buildBall();

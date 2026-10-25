@@ -5,24 +5,27 @@ import { InsufficientFundsError } from './wallet/WalletService.js';
 import { MatchService, leaders } from './match/MatchService.js';
 import { createBackend } from './backend/index.js';
 import { COURSES, TIEBREAK_COURSE } from './game/courses.js';
-import { GolfGame } from './game/GolfGame.js';
 import { Bot } from './game/bots.js';
 import { segmentsOf } from './game/physics.js';
 import { isMuted, setMuted, sfx, unlockAudio } from './game/audio.js';
 import { Progress } from './progress/Progress.js';
 import { CHALLENGES, TIERS as SKIN_TIERS, SKINS } from './progress/skins.js';
-import { ballPreview } from './game/render/ballSkins.js';
-import { createSkinInspector, isSkinLabRequested, mountSkinLab } from './ui/skinInspector.js';
+import { ballPreview } from './game/render/ballPaint.js';
 import { showSkinReveal } from './ui/skinReveal.js';
-import { hoverLoop,installThumbObserver, upgradeImg } from './ui/skinThumbs.js';
+import { installThumbObserver, thumbCached, upgradeImg, warmThumbs } from './ui/skinThumbs.js';
 import { rarePatternOf } from './progress/inventory.js';
-import { getCoursePreview, getCourseDistance } from './game/render/coursePreview.js';
+import { getCourseDistance, staticCoursePreview } from './game/render/coursePreviewStatic.js';
 import { QUALITY_LEVELS, QUALITY_NAMES, getQuality, setQuality } from './game/render/quality.js';
 
 let backend, wallet, matches;
 // práctica forzada con #hoyoN: siempre local, no toca el servidor
 const practice = new MatchService(new LocalWallet(), Math.random, COURSES.length);
 const progress = new Progress();
+// miniaturas de skins guardadas (IndexedDB) a memoria cuanto antes: las <img> salen ya con su imagen
+warmThumbs();
+// three.js (partida, inspector 3D) se carga solo cuando hace falta: lobby y pantalla de skins no lo pagan
+const loadGolfGame = () => import('./game/GolfGame.js').then((m) => m.GolfGame);
+const loadSkinInspector = () => import('./ui/skinInspector.js');
 
 // clave nueva: quien silenció sin querer cuando no se oía nada vuelve a tener sonido
 const MUTE_KEY = 'gcb.muted.v2';
@@ -48,8 +51,11 @@ const h = (html) => {
   t.innerHTML = html.trim();
   return t.content.firstElementChild;
 };
-// placeholder 2D al instante; installThumbObserver lo cambia por la miniatura 3D (data-skin-id)
-const ball = (skin, size = 96, cls = '') => `<img class="ball-img ${cls}" src="${ballPreview(skin, size * 2)}" data-skin-id="${skin.id}" width="${size}" height="${size}" alt="">`;
+// miniatura estática si ya está en caché; si no, marcador 2D que installThumbObserver cambia por ella (data-skin-id)
+const ball = (skin, size = 96, cls = '') => {
+  const cached = thumbCached(skin, progress.instance(skin.id));
+  return `<img class="ball-img ${cls}" src="${cached ?? ballPreview(skin, size * 2)}" data-skin-id="${skin.id}"${cached ? ' data-hd="1"' : ''} width="${size}" height="${size}" alt="">`;
+};
 
 let game = null;
 let screen = 'lobby';
@@ -337,7 +343,7 @@ async function showSkins() {
         <div class="sk-scene">
           <span class="sk-ico" title="${tier.name}">${tier.icon}</span>
           <span class="sk-eq">Equipada</span>
-          <img class="sk-thumb" src="${ballPreview(skin, 152)}" width="76" height="76" alt="" draggable="false">
+          <img class="sk-thumb" src="${(open && thumbCached(skin, inst)) || ballPreview(skin, 152)}" width="76" height="76" alt="" draggable="false">
           ${open && inst?.counter?.enabled ? '<span class="sk-chip">Marcador</span>' : ''}
           ${rare ? '<span class="sk-chip sk-chip-rare">✦ Patrón raro</span>' : ''}
         </div>
@@ -349,9 +355,9 @@ async function showSkins() {
       </button>`);
     const img = card.querySelector('.sk-thumb');
     img.dataset.thumb = '1';
-    jobs.push({ img, skin, inst, open });
+    // bloqueadas: silueta con el marcador 2D (no se renderiza nada en 3D)
+    if (open) jobs.push({ img, skin, inst });
     card.addEventListener('click', () => openInspect(skin, card));
-    if (open) hoverLoop(card, img, skin, inst);
     cards.set(skin.id, { card, skin, open });
     grid.append(card);
   }
@@ -389,7 +395,8 @@ async function showSkins() {
   let view3d = null;
   const closeInspect = () => {
     if (!view3d) return;
-    const { overlay, inspector, onKey, from } = view3d;
+    const { overlay, onKey, from } = view3d;
+    const inspector = view3d.inspector;
     view3d = null;
     document.removeEventListener('keydown', onKey, true);
     try { inspector?.destroy(); } catch { }
@@ -406,7 +413,7 @@ async function showSkins() {
           <button type="button" class="sk-view-back" aria-label="Cerrar inspección">‹ Skins</button>
           <span class="sk-view-title">${tier.icon} ${skin.name}</span>
         </div>
-        <div class="sk-view-stage"></div>
+        <div class="sk-view-stage"><img class="sk-view-poster" src="${thumbCached(skin, progress.instance(skin.id)) ?? ballPreview(skin, 288)}" alt="" draggable="false"></div>
         <div class="sk-view-actions">
           <div class="sk-view-req"></div>
           <button type="button" class="primary sk-equip"></button>
@@ -439,14 +446,14 @@ async function showSkins() {
       closeInspect();
     };
     document.addEventListener('keydown', onKey, true);
-    let inspector = null;
-    try {
-      inspector = createSkinInspector(overlay.querySelector('.sk-view-stage'), { skin, instance: progress.instance(skin.id) ?? undefined, mode: 'fullscreen' });
-    } catch (err) {
-      console.warn('inspector no disponible', err);
-    }
-    view3d = { overlay, inspector, onKey, from };
+    const mine = { overlay, inspector: null, onKey, from };
+    view3d = mine;
     overlay.querySelector('.sk-view-back').focus({ preventScroll: true });
+    // el visor 3D (three.js + materiales) se descarga y crea solo ahora, al abrir
+    loadSkinInspector().then(({ createSkinInspector }) => {
+      if (view3d !== mine) return; // cerrado mientras cargaba
+      mine.inspector = createSkinInspector(overlay.querySelector('.sk-view-stage'), { skin, instance: progress.instance(skin.id) ?? undefined, mode: 'fullscreen' });
+    }).catch((err) => console.warn('inspector no disponible', err));
   }
 
   refreshEquipped();
@@ -455,9 +462,9 @@ async function showSkins() {
   // shell() destruye el inspector anterior: el nuevo se registra después
   activeSkinInspector = { destroy: closeInspect };
 
-  // miniaturas 3D progresivas: primero lo desbloqueado (la equipada, la primera), luego lo bloqueado
+  // miniaturas estáticas (caché); las que falten se renderizan una vez, en cola, la equipada primero
   const eqId = progress.skin.id;
-  jobs.sort((a, b) => (b.open - a.open) || ((b.skin.id === eqId) - (a.skin.id === eqId)));
+  jobs.sort((a, b) => (b.skin.id === eqId) - (a.skin.id === eqId));
   for (const j of jobs) upgradeImg(j.img, j.skin, j.inst, { size: 76, priority: j.skin.id === eqId });
 }
 
@@ -947,7 +954,9 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       <div class="power"><div class="fill"></div><span>0%</span></div>
       <button class="map-btn" aria-label="Ver el hoyo completo">Ver mapa <kbd class="kbd-hint">Espacio</kbd></button>
     </main>`);
-  shell(view, { hideHeader: true }).then(() => {
+  const gameClass = loadGolfGame();
+  Promise.all([gameClass, shell(view, { hideHeader: true })]).then(([GolfGame]) => {
+    if (!view.isConnected) return; // se salió de la pantalla mientras cargaba el motor
     const strokesEl = view.querySelector('.strokes b');
     const distEl = view.querySelector('.dist');
     const power = view.querySelector('.power');
@@ -1843,7 +1852,7 @@ export async function showFreePlayCourseSelect() {
         </div>
         <div class="course-card-preview-wrap" style="--accent:${theme.color}" title="Haga clic para jugar el Hoyo ${idx + 1}">
           <div class="course-preview-media">
-            <img class="course-preview-img" src="${getCoursePreview(course)}" alt="Vista previa de ${course.name}" loading="lazy" />
+            <img class="course-preview-img" src="${staticCoursePreview(course) ?? ''}" alt="Vista previa de ${course.name}" loading="lazy" />
             <div class="course-preview-glow"></div>
             <div class="course-preview-badges">
               <span class="preview-badge dist-badge">~${dist}m</span>
@@ -1882,7 +1891,7 @@ export async function showFreePlayCourseSelect() {
       </div>
       <div class="course-card-preview-wrap" style="--accent:${tbTheme.color}" title="Haga clic para jugar el Desempate">
         <div class="course-preview-media">
-          <img class="course-preview-img" src="${getCoursePreview(TIEBREAK_COURSE)}" alt="Vista previa de Desempate" loading="lazy" />
+          <img class="course-preview-img" src="${staticCoursePreview(TIEBREAK_COURSE) ?? ''}" alt="Vista previa de Desempate" loading="lazy" />
           <div class="course-preview-glow"></div>
           <div class="course-preview-badges">
             <span class="preview-badge dist-badge">~${tbDist}m</span>
@@ -1909,6 +1918,16 @@ export async function showFreePlayCourseSelect() {
   tbCard.querySelector('.play-course-btn').addEventListener('click', launchTbPlay);
   tbCard.querySelector('.course-card-preview-wrap').addEventListener('click', launchTbPlay);
   grid.append(tbCard);
+  // mapas sin WebP pre-renderizado: se renderizan con three.js (import() solo si hace falta)
+  const missing = [...COURSES, TIEBREAK_COURSE].filter((c) => !staticCoursePreview(c));
+  if (missing.length) {
+    import('./game/render/coursePreview.js').then(({ getCoursePreview }) => {
+      const imgs = view.querySelectorAll('.course-preview-img');
+      [...COURSES, TIEBREAK_COURSE].forEach((c, i) => {
+        if (!staticCoursePreview(c) && imgs[i]) imgs[i].src = getCoursePreview(c);
+      });
+    });
+  }
 
   await shell(view);
 }
@@ -1998,9 +2017,13 @@ export function showFreePlayHoleResult(courseIndex, course, strokes) {
 }
 
 installThumbObserver(app, (id) => progress.instance(id));
-if (isSkinLabRequested()) {
+let skinLab = false;
+try {
+  skinLab = new URLSearchParams(location.search).get('skinlab') === '1';
+} catch { }
+if (skinLab) {
   app.innerHTML = '';
-  mountSkinLab(app);
+  loadSkinInspector().then(({ mountSkinLab }) => mountSkinLab(app));
 } else {
   app.innerHTML = '<main class="screen loading"><h1>Golf Cash Battle</h1><p class="sub">Conectando…</p></main>';
   createBackend().then((b) => {

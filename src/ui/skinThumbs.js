@@ -1,150 +1,140 @@
-import * as THREE from 'three';
-import { createSkinMaterial, ballPreview } from '../game/render/ballSkins.js';
+import { ballPreview } from '../game/render/ballPaint.js';
 import { getQuality } from '../game/render/quality.js';
-import { skinById, TIERS } from '../progress/skins.js';
+import { skinById } from '../progress/skins.js';
 
-// Miniaturas 3D de skins (docs/skins-premium-plan.md, (e) «Tarjetas de skin» y P9).
-//   thumbUrl(skin, instance)            -> Promise<dataURL|null>   (cola + caché; null si no hay WebGL)
-//   thumbFrames(skin, instance)         -> Promise<dataURL[]|null> (12 frames girando, para el hover)
-//   upgradeImg(img, skin, instance, o)  -> pone el placeholder `ballPreview` y lo cambia por el render 3D
-//   installThumbObserver(root, instOf)  -> mejora solo cualquier <img data-skin-id> que entre en `root`
-//   hoverLoop(el, img, skin, instance)  -> bucle de giro al pasar el ratón (Legendaria+)
-// Opción `hi: true` (solo el reveal de desbloqueo): render a HI_SIZE px en vez de SIZE. Tiene caché y
-// clave propias, así que las tarjetas de la pantalla de skins siguen usando 144 px y no cambian de coste.
-// Un único WebGLRenderer compartido, un render por fotograma de animación (no bloquea la primera
-// pintura) y se libera si la cola lleva un rato vacía.
+// Miniaturas estáticas de skins (tarjetas, lobby, desafíos, resultados y reveal), como las vistas
+// previas WebP del selector de mapas: la interfaz solo pinta <img>. Este módulo NO importa three.js.
+//   warmThumbs()                        -> carga la caché persistente (IndexedDB) en memoria, una vez
+//   thumbCached(skin, instance, o)      -> URL ya disponible (síncrono) o null
+//   thumbUrl(skin, instance, o)         -> Promise<URL|null>
+//   upgradeImg(img, skin, instance, o)  -> pone el marcador 2D `ballPreview` y lo cambia por la miniatura
+//   installThumbObserver(root, instOf)  -> mejora cualquier <img data-skin-id> de una skin desbloqueada
+// Si falta una miniatura, se renderiza UNA vez en 3D fuera de pantalla (skinThumbRender.js, importado con
+// import() solo entonces), en cola de una en una, y se guarda como WebP (PNG si no hay WebP) en memoria y en
+// IndexedDB. Al vaciarse la cola se libera el renderer y su contexto WebGL. Desde la segunda visita no se
+// renderiza nada ni se carga three.js. Opción `hi: true` (solo el reveal): HI_SIZE px en vez de SIZE.
 
+const VERSION = 1; // súbelo si cambian materiales, shaders o luces de las miniaturas
 const SIZE = 144;
-const HI_SIZE = 384; // 220 px CSS máx. del reveal a DPR ~1,75; tope fijo: el DPR del dispositivo no multiplica el coste
-const R = 0.38;
-const FRAMES = 12;
-const IDLE_MS = 4000;
-const FRAME_BUDGET_MS = 7;
+const HI_SIZE = 384;
+const DB_NAME = 'gcb-skin-thumbs';
+const STORE = 'thumbs';
+const PREFIX = `v${VERSION}|`;
 
-const cache = new Map(); // key -> dataURL | dataURL[]
-const inflight = new Map(); // key -> Promise
+const mem = new Map(); // clave -> object URL
+const inflight = new Map(); // clave -> Promise<URL|null>
 const queue = [];
-let gl = null;
+let pumping = false;
 let failed = false;
-let raf = 0;
-let idleTimer = 0;
-
-// rAF mantiene el ritmo, pero una pestaña en segundo plano no lo dispara: el temporizador lo releva
-function later(fn) {
-  let done = false;
-  const run = () => {
-    if (done) return;
-    done = true;
-    cancelAnimationFrame(r);
-    clearTimeout(t);
-    fn();
-  };
-  const r = requestAnimationFrame(run);
-  const t = setTimeout(run, 120);
-  return { r, t, cancel() { done = true; cancelAnimationFrame(r); clearTimeout(t); } };
-}
+let renderMod = null;
 
 const thumbQuality = () => {
   const q = getQuality();
   return q === 'high' ? 'medium' : q;
 };
-const instKey = (inst) => `${inst?.seed ?? 0}`;
-const keyOf = (skin, inst, { hi = false, frames = false } = {}) =>
-  `${skin.id}|${instKey(inst)}|${thumbQuality()}${hi ? `|h${HI_SIZE}` : ''}${frames ? '|f' : ''}`;
 
-function ensureGL() {
-  if (gl) return gl;
-  if (failed) return null;
-  try {
-    const canvas = document.createElement('canvas');
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.1;
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.setPixelRatio(1);
-    renderer.setSize(SIZE, SIZE, false);
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 20);
-    camera.position.set(0, 0.1, 2.9);
-    camera.lookAt(0, 0, 0);
-    const key = new THREE.DirectionalLight(0xfff1de, 2.6);
-    key.position.set(2.2, 3, 3);
-    const rim = new THREE.DirectionalLight(0xbfd8ff, 2.2);
-    rim.position.set(-2.5, 2, -3);
-    const fill = new THREE.DirectionalLight(0xffffff, 0.45);
-    fill.position.set(-3, -0.5, 2.5);
-    scene.add(key, rim, fill, new THREE.HemisphereLight(0xffffff, 0x202530, 0.18));
-    const geo = new THREE.SphereGeometry(R, 64, 48);
-    const mesh = new THREE.Mesh(geo);
-    scene.add(mesh);
-    canvas.addEventListener('webglcontextlost', () => dropGL(), { once: true });
-    gl = { renderer, scene, camera, geo, mesh, px: SIZE };
-  } catch {
-    failed = true;
-    gl = null;
-  }
-  return gl;
+// Firma de los datos de la skin: si cambian colores, patrón o acabado, la clave cambia sola.
+const sigs = new Map();
+function sigOf(skin) {
+  let s = sigs.get(skin.id);
+  if (s) return s;
+  const str = JSON.stringify([skin.pattern, skin.shader, skin.base, skin.accent, skin.palette, skin.finish]);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 0x01000193);
+  s = (h >>> 0).toString(36);
+  sigs.set(skin.id, s);
+  return s;
 }
+const keyOf = (skin, inst, hi) => `${PREFIX}${skin.id}.${sigOf(skin)}|s${inst?.seed ?? 0}|${thumbQuality()}|${hi ? HI_SIZE : SIZE}`;
 
-function dropGL() {
-  if (!gl) return;
-  try {
-    gl.geo.dispose();
-    gl.renderer.dispose();
-    gl.renderer.forceContextLoss();
-  } catch { }
-  gl = null;
-}
-
-const pose = (mesh, yaw) => mesh.quaternion.setFromEuler(new THREE.Euler(0.18, -Math.PI / 2 + yaw, 0, 'YXZ'));
-
-function renderJob(job) {
-  const g = ensureGL();
-  if (!g) return null;
-  const px = job.hi ? HI_SIZE : SIZE;
-  if (g.px !== px) {
-    g.renderer.setSize(px, px, false);
-    g.px = px;
-  }
-  const handle = createSkinMaterial(job.skin, { quality: thumbQuality(), instance: { seed: job.inst?.seed ?? 0 } });
-  try {
-    g.mesh.material = handle.material;
-    handle.update(1.2, 0.016, { speed: 0, impact: 0, state: 0 });
-    const shot = (yaw) => {
-      pose(g.mesh, yaw);
-      g.renderer.render(g.scene, g.camera);
-      return g.renderer.domElement.toDataURL('image/png');
-    };
-    return job.frames ? Array.from({ length: FRAMES }, (_, i) => shot((i / FRAMES) * Math.PI * 2)) : shot(0);
-  } finally {
-    handle.dispose();
-  }
-}
-
-function pump() {
-  raf = 0;
-  clearTimeout(idleTimer);
-  const t0 = performance.now();
-  while (queue.length) {
-    const job = queue.shift();
-    let out = null;
+// ---------------------------------------------------------------- caché persistente (IndexedDB)
+let dbP = null;
+function openDb() {
+  if (dbP) return dbP;
+  dbP = new Promise((resolve) => {
     try {
-      out = renderJob(job);
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = () => req.result.createObjectStore(STORE);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = req.onblocked = () => resolve(null);
     } catch {
-      out = null;
+      resolve(null);
     }
-    if (out) cache.set(job.key, out);
-    inflight.delete(job.key);
-    job.resolve(out);
-    if (performance.now() - t0 > FRAME_BUDGET_MS) break;
-  }
-  if (queue.length) raf = later(pump);
-  else idleTimer = setTimeout(dropGL, IDLE_MS);
+  });
+  return dbP;
 }
 
-function enqueue(skin, inst, { frames = false, priority = false, hi = false } = {}) {
-  const key = keyOf(skin, inst, { hi, frames });
-  if (cache.has(key)) return Promise.resolve(cache.get(key));
+let warmP = null;
+/** Lee las miniaturas guardadas (y borra las de versiones antiguas). Se llama al arrancar. */
+export function warmThumbs() {
+  if (warmP) return warmP;
+  warmP = openDb().then((db) => new Promise((resolve) => {
+    if (!db) return resolve();
+    try {
+      const tx = db.transaction(STORE, 'readwrite');
+      const req = tx.objectStore(STORE).openCursor();
+      req.onsuccess = () => {
+        const c = req.result;
+        if (!c) return;
+        const k = String(c.key);
+        if (!k.startsWith(PREFIX)) c.delete();
+        else if (!mem.has(k) && c.value instanceof Blob) mem.set(k, URL.createObjectURL(c.value));
+        c.continue();
+      };
+      tx.oncomplete = tx.onerror = tx.onabort = () => resolve();
+    } catch {
+      resolve();
+    }
+  })).catch(() => { });
+  return warmP;
+}
+
+function persist(key, blob) {
+  openDb().then((db) => {
+    if (!db) return;
+    try {
+      db.transaction(STORE, 'readwrite').objectStore(STORE).put(blob, key);
+    } catch { }
+  });
+}
+
+// ---------------------------------------------------------------- cola de render (de una en una)
+const yieldFrame = () => new Promise((r) => setTimeout(r, 16));
+
+async function pump() {
+  if (pumping) return;
+  pumping = true;
+  try {
+    while (queue.length) {
+      const job = queue.shift();
+      let url = null;
+      if (!failed) {
+        try {
+          renderMod ??= await import('./skinThumbRender.js');
+          const blob = await renderMod.renderThumb(job.skin, { seed: job.seed, quality: job.quality, px: job.px });
+          if (blob) {
+            url = URL.createObjectURL(blob);
+            mem.set(job.key, url);
+            persist(job.key, blob);
+          }
+        } catch (err) {
+          // sin WebGL (o contexto perdido): nos quedamos con el marcador 2D
+          if (!renderMod || /webgl|context/i.test(String(err?.message))) failed = true;
+        }
+      }
+      job.resolve(url);
+      await yieldFrame();
+    }
+  } finally {
+    renderMod?.releaseThumbRenderer();
+    pumping = false;
+  }
+  if (queue.length) pump();
+}
+
+function enqueue(skin, inst, { priority = false, hi = false } = {}) {
+  const key = keyOf(skin, inst, hi);
+  if (mem.has(key)) return Promise.resolve(mem.get(key));
   if (inflight.has(key)) {
     if (priority) {
       const i = queue.findIndex((j) => j.key === key);
@@ -152,33 +142,33 @@ function enqueue(skin, inst, { frames = false, priority = false, hi = false } = 
     }
     return inflight.get(key);
   }
-  if (!ensureGL()) return Promise.resolve(null);
-  const p = new Promise((resolve) => {
-    const job = { key, skin, inst, frames, hi, resolve };
-    if (priority) queue.unshift(job);
-    else queue.push(job);
-  });
+  const p = warmThumbs()
+    .then(() => mem.get(key) ?? (failed ? null : new Promise((resolve) => {
+      const job = { key, skin, seed: inst?.seed ?? 0, quality: thumbQuality(), px: hi ? HI_SIZE : SIZE, resolve };
+      if (priority) queue.unshift(job);
+      else queue.push(job);
+      pump();
+    })))
+    .finally(() => inflight.delete(key));
   inflight.set(key, p);
-  if (!raf) raf = later(pump);
   return p;
 }
 
 export const thumbUrl = (skin, instance, o) => enqueue(skin, instance, o);
-export const thumbFrames = (skin, instance, o) => enqueue(skin, instance, { ...o, frames: true, priority: true });
-/** Miniatura ya renderizada (sin esperar) o null. */
-export const thumbCached = (skin, instance, { hi = false } = {}) => cache.get(keyOf(skin, instance, { hi })) ?? null;
+/** Miniatura ya disponible (sin esperar) o null. */
+export const thumbCached = (skin, instance, { hi = false } = {}) => mem.get(keyOf(skin, instance, hi)) ?? null;
 
-/** Muestra `ballPreview` al instante y cambia a la miniatura 3D cuando está lista. `hi` pide HI_SIZE px. */
+/** Muestra `ballPreview` al instante y la cambia por la miniatura cuando está lista. `hi` pide HI_SIZE px. */
 export function upgradeImg(img, skin, instance, { size = 76, priority = false, hi = false } = {}) {
   const hit = thumbCached(skin, instance, { hi });
   if (hit) {
-    img.src = hit;
+    if (img.getAttribute('src') !== hit) img.src = hit;
     img.dataset.hd = '1';
     return Promise.resolve(true);
   }
   if (!img.getAttribute('src')) img.src = ballPreview(skin, size * 2);
   return enqueue(skin, instance, { priority, hi }).then((url) => {
-    if (url && img.isConnected !== false) {
+    if (url) {
       img.src = url;
       img.dataset.hd = '1';
     }
@@ -186,12 +176,17 @@ export function upgradeImg(img, skin, instance, { size = 76, priority = false, h
   });
 }
 
-/** Mejora a 3D cualquier `<img data-skin-id>` que se añada bajo `root` (lobby, desafíos, resultados...). */
+/**
+ * Mejora cualquier `<img data-skin-id>` que se añada bajo `root` (lobby, desafíos, resultados...).
+ * Solo las skins con instancia (desbloqueadas): las bloqueadas se quedan con el marcador 2D.
+ */
 export function installThumbObserver(root, instOf = () => null) {
   const up = (img) => {
     if (img.dataset.hd || img.dataset.thumb) return;
     img.dataset.thumb = '1';
-    upgradeImg(img, skinById(img.dataset.skinId), instOf(img.dataset.skinId), { size: Number(img.width) || 76 });
+    const inst = instOf(img.dataset.skinId);
+    if (!inst) return;
+    upgradeImg(img, skinById(img.dataset.skinId), inst, { size: Number(img.width) || 76 });
   };
   const scan = (node) => {
     if (node.nodeType !== 1) return;
@@ -204,34 +199,4 @@ export function installThumbObserver(root, instOf = () => null) {
   mo.observe(root, { childList: true, subtree: true });
   scan(root);
   return () => mo.disconnect();
-}
-
-/** Giro corto al pasar el ratón por la tarjeta (solo Legendaria+; en táctil, tocar abre la inspección). */
-export function hoverLoop(el, img, skin, instance) {
-  if (TIERS[skin.tier ?? skin.rarity]?.order < 4) return;
-  if (globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
-  let timer = 0;
-  let frames = null;
-  let idle = null;
-  const stop = () => {
-    clearInterval(timer);
-    timer = 0;
-    if (idle) img.src = idle;
-  };
-  el.addEventListener('pointerenter', (e) => {
-    if (e.pointerType !== 'mouse') return;
-    idle = img.src;
-    thumbFrames(skin, instance).then((f) => {
-      frames = f;
-      if (!frames || !el.matches(':hover') || timer) return;
-      let i = 0;
-      timer = setInterval(() => { img.src = frames[(i = (i + 1) % FRAMES)]; }, 1000 / 12);
-    });
-    if (frames && !timer) {
-      let i = 0;
-      timer = setInterval(() => { img.src = frames[(i = (i + 1) % FRAMES)]; }, 1000 / 12);
-    }
-  });
-  el.addEventListener('pointerleave', stop);
-  el.addEventListener('pointercancel', stop);
 }

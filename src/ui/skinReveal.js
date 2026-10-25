@@ -1,15 +1,15 @@
 import './skinReveal.css';
 import { sfx } from '../game/audio.js';
-import { ballPreview } from '../game/render/ballSkins.js';
+import { ballPreview } from '../game/render/ballPaint.js';
 import { TIERS } from '../progress/skins.js';
 import { rarePatternOf } from '../progress/inventory.js';
-import { createSkinInspector } from './skinInspector.js';
-import { thumbFrames, upgradeImg } from './skinThumbs.js';
+import { upgradeImg } from './skinThumbs.js';
 
 // Animación de reveal/desbloqueo de skins (docs/skins-premium-plan.md, (d) y P10).
 //   await showSkinReveal(skins, { progress })
 // Una secuencia por skin, de menor a mayor tier (la mejor al final). Un toque (o Esc) salta al final
 // de la skin actual; después, «Siguiente»/«Continuar» avanza. La promesa se resuelve al cerrar la cola.
+// La bola es una imagen estática (skinThumbs); el inspector 3D solo se carga (import()) al pulsar «Inspeccionar».
 //
 // Fases (ms): 1 oscurece · 2 haz de luz · 3 la bola se materializa · 4 estallido + sello · 5 datos y botones.
 // Los totales salen de (d): Común 1,5 s · Legendaria 3,2 s · Mítica 4,2 s; el resto, interpolados.
@@ -113,7 +113,6 @@ export function showSkinReveal(skins, { progress = null } = {}) {
     let idx = 0;
     let timers = [];
     let stopBurst = () => { };
-    let spin = 0;
     let inspector = null;
     let skipFn = null;
     let done = false;
@@ -123,8 +122,6 @@ export function showSkinReveal(skins, { progress = null } = {}) {
       timers = [];
       stopBurst();
       stopBurst = () => { };
-      clearInterval(spin);
-      spin = 0;
     };
     const closeInspector = () => {
       if (!inspector) return;
@@ -199,16 +196,6 @@ export function showSkinReveal(skins, { progress = null } = {}) {
       const nextBtn = root.querySelector('.sr-next');
 
       upgradeImg(img, skin, inst, { size: 144, priority: true, hi: true });
-      if (!calm) {
-        thumbFrames(skin, inst, { hi: true }).then((frames) => {
-          if (!frames?.length || !img.isConnected || done) return;
-          let f = 0;
-          spin = setInterval(() => {
-            f = (f + 1) % frames.length;
-            img.src = frames[f];
-          }, 90);
-        });
-      }
 
       const syncEquip = () => {
         if (!equipBtn) return;
@@ -226,18 +213,16 @@ export function showSkinReveal(skins, { progress = null } = {}) {
       nextBtn.addEventListener('click', () => (last ? finish() : play(i + 1)));
       root.querySelector('.sr-inspect').addEventListener('click', () => {
         if (inspector) return;
-        clearInterval(spin);
         const el = document.createElement('div');
         el.className = 'sr-insp';
         el.innerHTML = `<div class="sr-insp-bar"><button type="button" class="ghost sr-insp-back" aria-label="Volver">‹ Volver</button><span>${esc(tier.icon)} ${esc(skin.name)}</span></div><div class="sr-insp-stage"></div>`;
         root.append(el);
-        let api = null;
-        try {
-          api = createSkinInspector(el.querySelector('.sr-insp-stage'), { skin, instance: inst ?? undefined, mode: 'fullscreen' });
-        } catch (err) {
-          console.warn('inspector no disponible', err);
-        }
-        inspector = { el, api };
+        const mine = { el, api: null };
+        inspector = mine;
+        import('./skinInspector.js').then(({ createSkinInspector }) => {
+          if (inspector !== mine) return; // cerrado mientras cargaba
+          mine.api = createSkinInspector(el.querySelector('.sr-insp-stage'), { skin, instance: inst ?? undefined, mode: 'fullscreen' });
+        }).catch((err) => console.warn('inspector no disponible', err));
         const back = el.querySelector('.sr-insp-back');
         back.addEventListener('click', () => {
           closeInspector();
@@ -249,8 +234,6 @@ export function showSkinReveal(skins, { progress = null } = {}) {
       const settle = () => {
         done = true;
         stage.classList.add('sr-done');
-        clearInterval(spin);
-        spin = 0;
         (list.length > 1 && !last ? nextBtn : equipBtn && !equipBtn.disabled ? equipBtn : nextBtn).focus({ preventScroll: true });
       };
 
