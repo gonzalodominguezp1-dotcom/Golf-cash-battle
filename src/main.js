@@ -10,7 +10,7 @@ import { Bot } from './game/bots.js';
 import { segmentsOf } from './game/physics.js';
 import { isMuted, setMuted, sfx, unlockAudio } from './game/audio.js';
 import { Progress } from './progress/Progress.js';
-import { CHALLENGES, RARITIES, SKINS } from './progress/skins.js';
+import { CHALLENGES, TIERS as SKIN_TIERS, SKINS } from './progress/skins.js';
 import { ballPreview, skinMaterial } from './game/render/ballSkins.js';
 import { getCoursePreview, getCourseDistance } from './game/render/coursePreview.js';
 import { QUALITY_LEVELS, QUALITY_NAMES, getQuality, setQuality } from './game/render/quality.js';
@@ -213,7 +213,7 @@ async function showLobby() {
         </div>
         <div class="hero-text">
           <div class="hero-badge-row">
-            <span class="rarity-pill rarity-${skin.rarity}">${RARITIES[skin.rarity].name}</span>
+            <span class="rarity-pill rarity-${skin.rarity}">${SKIN_TIERS[skin.rarity].name}</span>
             <span class="hero-level-tag">Nivel ${progress.level.level}</span>
           </div>
           <strong>${skin.name}</strong>
@@ -267,13 +267,7 @@ async function showLobby() {
 
 // ---------- inspector 3D de skins para escritorio ----------
 
-const RARITY_HEX = {
-  bronze: 0xc87a38,
-  silver: 0x94a3b8,
-  gold: 0xffd23f,
-  diamond: 0x00e5ff,
-  emerald: 0x00f076,
-};
+const RARITY_HEX = Object.fromEntries(Object.entries(SKIN_TIERS).map(([id, t]) => [id, parseInt(t.color.slice(1), 16)]));
 
 function createSkinInspector(container, initialSkin) {
   const w = 280, h = 280;
@@ -429,7 +423,7 @@ async function showSkins() {
           </ul>
         </div>
         <aside class="skin-inspector-panel">
-          <span class="rarity badge-rarity rarity-${selectedSkin.rarity}">${RARITIES[selectedSkin.rarity].name}</span>
+          <span class="rarity badge-rarity rarity-${selectedSkin.rarity}">${SKIN_TIERS[selectedSkin.rarity].name}</span>
           <div class="skin-inspector-canvas"></div>
           <p class="skin-inspector-hint">Arrastra para girar 360° · Rueda para zoom</p>
           <h3 class="skin-inspector-name">${selectedSkin.name}</h3>
@@ -466,7 +460,7 @@ async function showSkins() {
     updateSelectedCardUI(s.id);
     if (activeSkinInspector) activeSkinInspector.setSkin(s);
     inspectorName.textContent = s.name;
-    inspectorRarity.textContent = RARITIES[s.rarity].name;
+    inspectorRarity.textContent = SKIN_TIERS[s.rarity].name;
     inspectorRarity.className = `rarity badge-rarity rarity-${s.rarity}`;
     const req = progress.requirement(s);
     const open = req.ratio >= 1;
@@ -491,7 +485,7 @@ async function showSkins() {
     }
   });
 
-  const order = [...SKINS].sort((a, b) => RARITIES[a.rarity].order - RARITIES[b.rarity].order);
+  const order = [...SKINS].sort((a, b) => SKIN_TIERS[a.rarity].order - SKIN_TIERS[b.rarity].order);
   for (const skin of order) {
     const req = progress.requirement(skin);
     const open = req.ratio >= 1;
@@ -500,7 +494,7 @@ async function showSkins() {
     const card = h(`
       <button class="skin-card holo rarity-${skin.rarity} ${open ? '' : 'locked'} ${equipped ? 'equipped' : ''} ${isSelected ? 'selected' : ''}" data-skin-id="${skin.id}">
         <div class="shine"></div>
-        <span class="rarity">${RARITIES[skin.rarity].name}</span>
+        <span class="rarity">${SKIN_TIERS[skin.rarity].name}</span>
         ${ball(skin, 76, open ? 'float' : '')}
         <b>${skin.name}</b>
         ${open
@@ -1530,7 +1524,7 @@ async function showResults(match, tiebreak = {}) {
       ${gained.newSkins.length
       ? `<h2 class="unlock-title">¡Skin desbloqueada!</h2><div class="unlocks">${gained.newSkins
         .map(
-          (s) => `<div class="skin-card holo reveal rarity-${s.rarity}"><div class="shine"></div><span class="rarity">${RARITIES[s.rarity].name}</span>${ball(s, 76, 'float')}<b>${s.name}</b></div>`,
+          (s) => `<div class="skin-card holo reveal rarity-${s.rarity}"><div class="shine"></div><span class="rarity">${SKIN_TIERS[s.rarity].name}</span>${ball(s, 76, 'float')}<b>${s.name}</b></div>`,
         )
         .join('')}</div>`
       : ''
@@ -1772,7 +1766,7 @@ async function showOnlineResults(match) {
     }
       ${gained?.newSkins.length
       ? `<h2 class="unlock-title">¡Skin desbloqueada!</h2><div class="unlocks">${gained.newSkins
-        .map((s) => `<div class="skin-card holo reveal rarity-${s.rarity}"><div class="shine"></div><span class="rarity">${RARITIES[s.rarity].name}</span>${ball(s, 76, 'float')}<b>${s.name}</b></div>`)
+        .map((s) => `<div class="skin-card holo reveal rarity-${s.rarity}"><div class="shine"></div><span class="rarity">${SKIN_TIERS[s.rarity].name}</span>${ball(s, 76, 'float')}<b>${s.name}</b></div>`)
         .join('')}</div>`
       : ''
     }
@@ -1904,7 +1898,7 @@ export async function showFreePlayCourseSelect() {
     <main class="screen freeplay-select">
       <div class="freeplay-select-hero">
         <div class="freeplay-select-badge-row">
-          <span class="rarity-pill rarity-diamond">Modo Práctica Libre</span>
+          <span class="rarity-pill rarity-epic">Modo Práctica Libre</span>
           <span class="hero-level-tag">${COURSES.length} Hoyos</span>
         </div>
         <div class="section-title-row">
