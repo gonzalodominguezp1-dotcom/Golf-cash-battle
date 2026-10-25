@@ -11,6 +11,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { getQuality, quality } from './render/quality.js';
+import { PerfGovernor } from './render/perfGovernor.js';
 import { AimDots, Particles, Shockwaves } from './render/effects.js';
 import { labelTexture, softDotTexture } from './render/textures.js';
 import { createSkinMaterial } from './render/ballSkins.js';
@@ -108,6 +109,11 @@ export class GolfGame {
     this.aimStartTick = 0;
     this.lastMouseX = null;
     this.lastMouseTick = 0;
+    // gobernador de los FX de skin: baja el nivel si el frame va lento (no toca física ni calidad global)
+    this.perf = new PerfGovernor({
+      getSkinFx: () => this.skinFx,
+      busy: () => !!this.ball && isMoving(this.ball),
+    });
     this.#bindInput();
     this.resizeObserver = new ResizeObserver(() => this.#resize());
     this.resizeObserver.observe(container);
@@ -174,6 +180,7 @@ export class GolfGame {
     if (course.aimYaw !== undefined) this.yaw = course.aimYaw;
     this.camYaw = this.yaw;
     this.#buildScene();
+    this.perf.reset();
     this.#resize();
     this.intro = 0;
     this.#placeCamera(1, true);
@@ -388,6 +395,7 @@ export class GolfGame {
     this.resizeObserver.disconnect();
     this.#unbindInput?.();
     this.#disposeFx();
+    this.perf = null;
     this.composer.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
@@ -422,7 +430,7 @@ export class GolfGame {
     const skinOpts = { quality: fxLevel, instance: this.instance ?? {}, theme: this.theme };
     this.skinHandle = createSkinMaterial(this.skin, skinOpts);
     this.ballMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(BALL_R, 32, 24),
+      new THREE.SphereGeometry(BALL_R, q.ballSegments.w, q.ballSegments.h),
       this.skinHandle.material,
     );
     this.ballMesh.castShadow = true;
@@ -1141,6 +1149,7 @@ export class GolfGame {
   // ---------- bucle ----------
 
   #frame() {
+    this.perf?.tick(performance.now());
     const realDt = Math.min(this.clock.getDelta(), 0.1);
     if (this.intro < 1) this.intro = Math.min(1, this.intro + realDt / INTRO_SECONDS);
     this.timeScale += ((this.#willSinkSoon() ? SLOWMO : 1) - this.timeScale) * damp(this.timeScale > 0.6 ? 14 : 5, realDt);
