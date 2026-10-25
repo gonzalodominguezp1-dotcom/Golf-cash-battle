@@ -112,13 +112,3 @@ test('el progreso de la cuenta gana si lleva más XP o el móvil era de otra cue
   assert.equal(p.state.xp, 0);
   assert.equal(p.state.owner, 'u2');
 });
-
-test('las míticas se desbloquean con wins50 y aces5', () => {
-  const p = new Progress(null);
-  assert.equal(p.equip('event_horizon'), false);
-  assert.equal(p.equip('midas_touch'), false);
-  p.state.wins = 50;
-  p.state.aces = 5;
-  assert.equal(p.equip('event_horizon'), true);
-  assert.equal(p.equip('midas_touch'), true);
-});

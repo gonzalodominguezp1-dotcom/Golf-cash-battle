@@ -10,12 +10,10 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { getQuality, quality } from './render/quality.js';
-import { PerfGovernor } from './render/perfGovernor.js';
-import { AimDots, Particles, Shockwaves } from './render/effects.js';
-import { labelTexture, softDotTexture } from './render/textures.js';
-import { createSkinMaterial } from './render/ballSkins.js';
-import { SkinFX } from './render/skins/skinFx.js';
+import { quality } from './render/quality.js';
+import { AimDots, Particles, Shockwaves, Trail } from './render/effects.js';
+import { ballTexture, labelTexture, softDotTexture } from './render/textures.js';
+import { skinMaterial } from './render/ballSkins.js';
 import { SKINS } from '../progress/skins.js';
 import { HOLE_TIME_LIMIT, MAX_STROKES_PER_HOLE } from '../config.js';
 import { setAmbient, setCharge, setRolling, sfx, stopAmbient, stopRolling, unlockAudio } from './audio.js';
@@ -55,14 +53,6 @@ export class GolfGame {
   #onPointerLockError = null;
   #onClickCanvas = null;
   #onBlur = null;
-  // vectores reutilizados por los efectos de skin (sin asignar en cada golpe o choque)
-  #fxPos = new THREE.Vector3();
-  #fxDir = new THREE.Vector3();
-  #fxCup = new THREE.Vector3();
-  #fxNormal = new THREE.Vector3();
-  #axis = new THREE.Vector3();
-  #pos = new THREE.Vector3();
-  #aimColor = new THREE.Color();
 
   constructor(container, { onStroke, onSunk, onAim, onRest, onCup, onRival, onLip, onOpenSettings, onOverviewChange, onTimer, onTimeUp } = {}) {
     this.container = container;
@@ -112,11 +102,6 @@ export class GolfGame {
     this.aimStartTick = 0;
     this.lastMouseX = null;
     this.lastMouseTick = 0;
-    // gobernador de los FX de skin: baja el nivel si el frame va lento (no toca física ni calidad global)
-    this.perf = new PerfGovernor({
-      getSkinFx: () => this.skinFx,
-      busy: () => !!this.ball && isMoving(this.ball),
-    });
     this.#bindInput();
     this.resizeObserver = new ResizeObserver(() => this.#resize());
     this.resizeObserver.observe(container);
@@ -126,14 +111,9 @@ export class GolfGame {
    * firstSunkTick: en torneos, el paso en el que embocó el más rápido de los
    * que ya han jugado este hoyo (arranca el contador desde ese momento).
    */
-  load(course, { bots = [], skin = SKINS[0], instance = null, firstSunkTick = null, timeLimit = HOLE_TIME_LIMIT } = {}) {
+  load(course, { bots = [], skin = SKINS[0], firstSunkTick = null, timeLimit = HOLE_TIME_LIMIT } = {}) {
     this.botPlayers = bots;
     this.skin = skin;
-    // instance: { seed, wear, ... } de la skin equipada (progress.instance(id)); sin ella, el acabado base
-    this.instance = instance;
-    // puff, onda, borde y confeti genéricos: solo para las skins que no tienen sus propios efectos
-    const fx = skin.fx ?? {};
-    this.genericFx = { hit: fx.hit === 'generic', wall: fx.wall === 'generic', lip: !fx.lip, sink: fx.sink === 'generic' };
     this.course = course;
     this.theme = THEMES[course.theme] ?? THEMES.meadow;
     // El bloom nunca supera el 15% (0.14 en mapas nocturnos/neón/lava, 0.08 en día)
@@ -183,7 +163,6 @@ export class GolfGame {
     if (course.aimYaw !== undefined) this.yaw = course.aimYaw;
     this.camYaw = this.yaw;
     this.#buildScene();
-    this.perf.reset();
     this.#resize();
     this.intro = 0;
     this.#placeCamera(1, true);
@@ -247,15 +226,15 @@ export class GolfGame {
     const el = this.renderer?.domElement;
     if (!el || typeof document === 'undefined') return;
     if (document.pointerLockElement === el || this.isPointerLocked) return;
-    if (!el.isConnected) return;
-    const retry = () => {
-      try { el.requestPointerLock?.()?.catch?.(() => {}); } catch {}
-    };
     try {
       const p = el.requestPointerLock?.({ unadjustedMovement: true });
-      if (p && typeof p.catch === 'function') p.catch(retry);
+      if (p && typeof p.catch === 'function') {
+        p.catch(() => {
+          try { el.requestPointerLock?.(); } catch {}
+        });
+      }
     } catch {
-      retry();
+      try { el.requestPointerLock?.(); } catch {}
     }
   }
 
@@ -288,7 +267,7 @@ export class GolfGame {
     this.power = 0;
     this.fullPower = false;
     this.#cancelAim();
-    this.#resetFx();
+    if (this.trail) this.trail.points = [];
     this.yaw = Math.atan2(this.course.cup[0] - this.course.tee[0], -(this.course.cup[1] - this.course.tee[1]));
     if (this.course.aimYaw !== undefined) this.yaw = this.course.aimYaw;
     this.camYaw = this.yaw;
@@ -397,8 +376,6 @@ export class GolfGame {
     this.renderer.setAnimationLoop(null);
     this.resizeObserver.disconnect();
     this.#unbindInput?.();
-    this.#disposeFx();
-    this.perf = null;
     this.composer.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
@@ -407,9 +384,6 @@ export class GolfGame {
   // ---------- escena ----------
 
   #buildScene() {
-    this.#disposeFx();
-    // la escena del hoyo anterior: se liberan sus geometrías (three las vuelve a subir si algo las reutiliza)
-    this.scene?.traverse((o) => o.geometry?.dispose());
     const scene = new THREE.Scene();
     this.scene = scene;
     let seed = [...this.course.name].reduce((a, c) => a * 31 + c.charCodeAt(0), 7) % 2147483647;
@@ -431,12 +405,9 @@ export class GolfGame {
     points.sort((a, b) => b.intensity * b.distance - a.intensity * a.distance);
     points.forEach((l, i) => (l.visible = i < q.maxLights));
 
-    const fxLevel = getQuality();
-    const skinOpts = { quality: fxLevel, instance: this.instance ?? {}, theme: this.theme };
-    this.skinHandle = createSkinMaterial(this.skin, skinOpts);
     this.ballMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(BALL_R, q.ballSegments.w, q.ballSegments.h),
-      this.skinHandle.material,
+      new THREE.SphereGeometry(BALL_R, 32, 24),
+      skinMaterial(this.skin),
     );
     this.ballMesh.castShadow = true;
     // la bola va dentro de un grupo para poder aplastarla sin que gire el aplastamiento
@@ -458,15 +429,14 @@ export class GolfGame {
     this.ballGlow.rotation.x = -Math.PI / 2;
     scene.add(this.ballGlow);
 
-    // rivales: réplicas fantasma con la skin del jugador (los rivales no tienen skin propia) y su nombre encima.
-    // Solo el acabado: material 'low' compartido (mapa horneado, sin shader ni update) y sin SkinFX.
-    this.ghostGeo = new THREE.SphereGeometry(BALL_R, 20, 14);
-    this.ghostHandle = createSkinMaterial(this.skin, { ...skinOpts, quality: 'low' });
-    this.ghostHandle.material.transparent = true;
-    this.ghostHandle.material.opacity = 0.75;
+    // rivales: bolas fantasma con su nombre encima
+    const ghostGeo = new THREE.SphereGeometry(BALL_R, 20, 14);
     this.bots = this.botPlayers.map((p) => {
       const bot = new Bot(p, this.course, this.segs, Math.random);
-      const mesh = new THREE.Mesh(this.ghostGeo, this.ghostHandle.material);
+      const mesh = new THREE.Mesh(
+        ghostGeo,
+        new THREE.MeshStandardMaterial({ map: ballTexture(p.color), emissive: p.color, emissiveIntensity: 0.25, transparent: true, opacity: 0.75, roughness: 0.4 }),
+      );
       const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTexture(p.name, p.color), transparent: true, depthWrite: false }));
       label.scale.set(0.9, 0.225, 1);
       label.renderOrder = 10;
@@ -476,80 +446,12 @@ export class GolfGame {
     });
 
     this.particles = new Particles(scene);
-    // efectos de la skin: estela, impactos, aura y embocada (sustituyen al Trail genérico)
-    this.skinFx = new SkinFX(scene, this.skin, { quality: fxLevel });
-    this.fxCtx = { pos: this.ballRoot.position, speed: 0, moving: false, camera: this.camera };
-    this.matCtx = { speed: 0, impact: 0, state: 0 };
+    this.trail = new Trail(scene, 28, this.skin.trail);
     this.aimDots = new AimDots(scene);
     this.waves = new Shockwaves(scene);
 
     const b = courseBounds(this.course);
     this.bounds = b;
-    // compila los shaders de bola, réplicas y efectos durante la intro, para no tirar el primer golpe
-    this.renderer.compileAsync(scene, this.camera).catch(() => {});
-  }
-
-  /** Efectos de la skin al volver al tee: se vacían; la estela se recoge sola. */
-  #resetFx() {
-    if (!this.skinFx) return;
-    this.skinFx.reset();
-    if (this.skinFx.pointTrail) this.skinFx.pointTrail.count = 0;
-  }
-
-  /** Libera material, efectos y réplicas de la partida anterior (o de esta, al cerrar). */
-  #disposeFx() {
-    for (const b of this.bots ?? []) {
-      b.mesh?.removeFromParent();
-      b.label?.removeFromParent();
-      b.label?.material.map?.dispose();
-      b.label?.material.dispose();
-    }
-    this.ghostGeo?.dispose();
-    this.ghostGeo = null;
-    this.skinFx?.dispose();
-    this.skinFx = null;
-    this.skinHandle?.dispose();
-    this.skinHandle = null;
-    this.ghostHandle?.dispose();
-    this.ghostHandle = null;
-    this.ballMesh?.geometry.dispose();
-    for (const m of [this.ballShadow, this.ballGlow]) {
-      if (!m) continue;
-      m.removeFromParent();
-      m.geometry.dispose();
-      m.material.map?.dispose();
-      m.material.dispose();
-    }
-    this.ballShadow = this.ballGlow = null;
-    if (this.particles) {
-      const { mesh, soft } = this.particles;
-      for (const m of [mesh, soft]) {
-        m.removeFromParent();
-        m.material.map?.dispose();
-        m.material.dispose();
-        m.dispose();
-      }
-      mesh.geometry.dispose();
-      this.particles = null;
-    }
-    this.waves?.dispose();
-    this.waves = null;
-    if (this.aimDots) {
-      for (const o of [this.aimDots.mesh, this.aimDots.ring]) {
-        o.removeFromParent();
-        o.geometry.dispose();
-        o.material.dispose();
-      }
-      this.aimDots.mesh.dispose?.();
-      this.aimDots = null;
-    }
-  }
-
-  /** Normal de una pared: el choque solo cambia la componente normal de la velocidad, así que el cambio apunta hacia la bola. */
-  #bounceNormal(vx0, vz0, ball) {
-    const dx = ball.vx - vx0, dz = ball.vz - vz0;
-    const len = Math.hypot(dx, dz);
-    return len < 1e-6 ? null : this.#fxNormal.set(dx / len, 0, dz / len);
   }
 
   #resize() {
@@ -718,12 +620,8 @@ export class GolfGame {
     this.camTurns = 0;
     this.strokes++;
     sfx.hit(power);
-    sfx.skin(this.skin.sfx.set, 'hit', { power });
-    if (this.genericFx.hit) {
-      this.particles.puff(new THREE.Vector3(this.ball.x, 0.05, this.ball.z), 0x9be37f, 8 + Math.round(power * 10), 1 + power, 0.18);
-      this.waves.emit(this.ball.x, this.ball.z, 0xffffff, 0.5 + power * 0.9, 3);
-    }
-    this.skinFx.onHit(power, this.#fxPos.copy(this.ballRoot.position), this.#fxDir.set(v.vx, 0, v.vz).normalize());
+    this.particles.puff(new THREE.Vector3(this.ball.x, 0.05, this.ball.z), 0x9be37f, 8 + Math.round(power * 10), 1 + power, 0.18);
+    this.waves.emit(this.ball.x, this.ball.z, 0xffffff, 0.5 + power * 0.9, 3);
     this.squash = 0.2 + power * 0.25;
     this.fovKick = power * 7;
     this.#addShake(power * power * 0.45);
@@ -1155,14 +1053,8 @@ export class GolfGame {
       const dist = Math.hypot(dx, dz);
       const right = forwardOf(this.camYaw + Math.PI / 2);
       const pan = THREE.MathUtils.clamp((dx * right.x + dz * right.z) / 4, -1, 1);
-      if (r.shot) {
-        sfx.rivalHit(dist, pan);
-        if (this.genericFx.hit) this.particles.puff(new THREE.Vector3(b.ball.x, 0.05, b.ball.z), 0x9be37f, 8 + Math.round(r.shot * 10), 1 + r.shot, 0.18);
-      }
+      if (r.shot) sfx.rivalHit(dist, pan);
       if (r.portal >= 0) this.particles.puff(new THREE.Vector3(b.ball.x, 0.1, b.ball.z), 0xffb020, 8, 1.2, 0.16);
-      if (r.bumper < 0 && r.hit > 2 && !r.shot) {
-        if (this.genericFx.wall) this.particles.puff(new THREE.Vector3(b.ball.x, b.mesh.position.y, b.ball.z), 0xf3e3c3, 5, 0.8, 0.14);
-      }
       if (r.sunk) {
         b.sunk = true;
         this.#noteSunk(this.tick);
@@ -1186,7 +1078,6 @@ export class GolfGame {
   // ---------- bucle ----------
 
   #frame() {
-    this.perf?.tick(performance.now());
     const realDt = Math.min(this.clock.getDelta(), 0.1);
     if (this.intro < 1) this.intro = Math.min(1, this.intro + realDt / INTRO_SECONDS);
     this.timeScale += ((this.#willSinkSoon() ? SLOWMO : 1) - this.timeScale) * damp(this.timeScale > 0.6 ? 14 : 5, realDt);
@@ -1202,11 +1093,10 @@ export class GolfGame {
       if (!this.sunk && !this.timedOut && this.deadlineTick != null && this.tick > this.deadlineTick) this.#timeUp();
       if (this.sunk || this.paused || this.timedOut) continue;
       const wasMoving = isMoving(this.ball);
-      const vx0 = this.ball.vx, vz0 = this.ball.vz;
       // se simula también con la bola parada: un aspa puede empujarla
       const r = step(this.course, this.segs, this.ball, this.t, DT);
       const pose = ballPose(this.course, this.ball);
-      const pos = this.#pos.set(pose.x, pose.y, pose.z);
+      const pos = new THREE.Vector3(pose.x, pose.y, pose.z);
       if (r.portal >= 0 && this.course.portals[r.portal].tube) {
         // entra en un tubo: la bola viaja por dentro y la cámara la sigue
         sfx.portal();
@@ -1227,20 +1117,14 @@ export class GolfGame {
       if (r.bumper >= 0) {
         this.courseView.bumpers[r.bumper].userData.squash = 0.18;
         sfx.bumper();
-        this.skinFx.onBumper(pos);
-        if (this.genericFx.wall) {
-          this.particles.puff(pos, 0xffffff, 6, 1.2, 0.15);
-          const b = this.course.bumpers[r.bumper];
-          this.waves.emit(b.x, b.z, 0xffffff, b.r * 3, 3.5);
-        }
+        this.particles.puff(pos, 0xffffff, 6, 1.2, 0.15);
+        const b = this.course.bumpers[r.bumper];
+        this.waves.emit(b.x, b.z, 0xffffff, b.r * 3, 3.5);
         this.squash = Math.max(this.squash, 0.15);
         this.#addShake(Math.min(0.3, r.hit * 0.04));
       } else if (r.hit > 2) {
         sfx.wall(r.hit);
-        const wallPower = Math.min(1, r.hit / 8);
-        sfx.skin(this.skin.sfx.set, 'wall', { power: wallPower });
-        this.skinFx.onWall(wallPower, pos, this.#bounceNormal(vx0, vz0, this.ball) ?? this.#fxNormal.set(0, 1, 0));
-        if (this.genericFx.wall) this.particles.puff(pos, 0xf3e3c3, 5, 0.8, 0.14);
+        this.particles.puff(pos, 0xf3e3c3, 5, 0.8, 0.14);
         this.squash = Math.max(this.squash, Math.min(0.25, r.hit * 0.03));
         if (r.hit > 4) {
           navigator.vibrate?.(8);
@@ -1253,8 +1137,7 @@ export class GolfGame {
         if (!this.overCup) {
           this.overCup = true;
           sfx.lip();
-          this.skinFx.onLip(pos);
-          if (this.genericFx.lip) this.particles.puff(pos, 0xffffff, 6, 1, 0.12);
+          this.particles.puff(pos, 0xffffff, 6, 1, 0.12);
           this.#addShake(0.15);
           this.onLip?.();
         }
@@ -1277,11 +1160,8 @@ export class GolfGame {
         this.#noteSunk(this.tick);
         this.exitPointerLock();
         sfx.cup();
-        sfx.skin(this.skin.sfx.set, 'sink', { power: 1 });
-        const cupPos = this.#fxCup.set(this.course.cup[0], groundHeight(this.course, ...this.course.cup), this.course.cup[1]);
-        this.skinFx.onSink(cupPos);
         this.onCup?.(this.strokes);
-        if (this.genericFx.sink) this.particles.confetti(new THREE.Vector3().copy(cupPos));
+        this.particles.confetti(new THREE.Vector3(this.course.cup[0], groundHeight(this.course, ...this.course.cup), this.course.cup[1]));
         this.waves.emit(this.course.cup[0], this.course.cup[1], 0xffe066, 2.4, 1.4);
         this.waves.emit(this.course.cup[0], this.course.cup[1], 0xffffff, 1.4, 2);
         this.#addShake(0.3);
@@ -1333,8 +1213,10 @@ export class GolfGame {
     const pose = ballPose(this.course, this.ball);
     this.ballRoot.position.set(pose.x, pose.y - sinkT * 0.3, pose.z);
     if (speed > 0) {
-      this.ballMesh.rotateOnWorldAxis(this.#axis.set(-this.ball.vz, 0, this.ball.vx).normalize(), (speed * dt) / BALL_R);
+      const axis = new THREE.Vector3(-this.ball.vz, 0, this.ball.vx).normalize();
+      this.ballMesh.rotateOnWorldAxis(axis, (speed * dt) / BALL_R);
     }
+    this.ballMesh.material.userData?.update?.(this.t, dt);
     // aplastamiento elástico al golpear o chocar
     this.squash *= Math.exp(-realDt * 9);
     const wob = this.squash * Math.cos(this.t * 40);
@@ -1354,7 +1236,7 @@ export class GolfGame {
       const bp = ballPose(this.course, b.ball);
       b.mesh.position.set(bp.x, bp.y - b.sinkT * 0.3, bp.z);
       const v = Math.hypot(b.ball.vx, b.ball.vz);
-      if (v > 0) b.mesh.rotateOnWorldAxis(this.#axis.set(-b.ball.vz, 0, b.ball.vx).normalize(), (v * dt) / BALL_R);
+      if (v > 0) b.mesh.rotateOnWorldAxis(new THREE.Vector3(-b.ball.vz, 0, b.ball.vx).normalize(), (v * dt) / BALL_R);
       b.label.position.set(bp.x, bp.y + 0.37, bp.z);
       b.label.visible = !b.done;
       b.mesh.visible = b.sinkT < 1;
@@ -1373,7 +1255,7 @@ export class GolfGame {
     });
 
     if ((this.drag || this.charging || this.spaceCharging || this.power > 0.02) && this.power > 0.02) {
-      const color = this.#aimColor.setHSL(0.33 - this.power * 0.33, 0.95, 0.55);
+      const color = new THREE.Color().setHSL(0.33 - this.power * 0.33, 0.95, 0.55);
       this.aimDots.show(this.#predictPath(), color, this.t);
       this.aimDots.showRing(this.ballRoot.position, this.t);
     } else this.aimDots.hide();
@@ -1385,13 +1267,7 @@ export class GolfGame {
     this.env.update(this.t, dt);
     this.#placeCamera(realDt);
     this.courseView.update(this.t, this.camera.position, this.ball, this.camLook, this.overview);
-    this.fxCtx.speed = speed;
-    this.fxCtx.moving = speed > 0.5;
-    this.skinFx.update(this.t, dt, this.fxCtx);
-    this.matCtx.speed = this.skinFx.speedN;
-    this.matCtx.impact = this.skinFx.impact;
-    this.matCtx.state = this.skinFx.state;
-    this.skinHandle.update(this.t, dt, this.matCtx);
+    this.trail.update(this.ballRoot.position, speed > 0.5);
     this.particles.update(dt, this.camera);
     this.waves.update(realDt);
     this.renderPass.scene = this.scene;
