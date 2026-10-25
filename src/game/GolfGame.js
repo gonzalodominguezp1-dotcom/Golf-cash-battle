@@ -60,6 +60,9 @@ export class GolfGame {
   #fxDir = new THREE.Vector3();
   #fxCup = new THREE.Vector3();
   #fxNormal = new THREE.Vector3();
+  #axis = new THREE.Vector3();
+  #pos = new THREE.Vector3();
+  #aimColor = new THREE.Color();
 
   constructor(container, { onStroke, onSunk, onAim, onRest, onCup, onRival, onLip, onOpenSettings, onOverviewChange, onTimer, onTimeUp } = {}) {
     this.container = container;
@@ -244,15 +247,15 @@ export class GolfGame {
     const el = this.renderer?.domElement;
     if (!el || typeof document === 'undefined') return;
     if (document.pointerLockElement === el || this.isPointerLocked) return;
+    if (!el.isConnected) return;
+    const retry = () => {
+      try { el.requestPointerLock?.()?.catch?.(() => {}); } catch {}
+    };
     try {
       const p = el.requestPointerLock?.({ unadjustedMovement: true });
-      if (p && typeof p.catch === 'function') {
-        p.catch(() => {
-          try { el.requestPointerLock?.(); } catch {}
-        });
-      }
+      if (p && typeof p.catch === 'function') p.catch(retry);
     } catch {
-      try { el.requestPointerLock?.(); } catch {}
+      retry();
     }
   }
 
@@ -405,6 +408,8 @@ export class GolfGame {
 
   #buildScene() {
     this.#disposeFx();
+    // la escena del hoyo anterior: se liberan sus geometrías (three las vuelve a subir si algo las reutiliza)
+    this.scene?.traverse((o) => o.geometry?.dispose());
     const scene = new THREE.Scene();
     this.scene = scene;
     let seed = [...this.course.name].reduce((a, c) => a * 31 + c.charCodeAt(0), 7) % 2147483647;
@@ -453,21 +458,20 @@ export class GolfGame {
     this.ballGlow.rotation.x = -Math.PI / 2;
     scene.add(this.ballGlow);
 
-    // rivales: réplicas fantasma con la skin y los efectos del jugador, y su nombre encima
-    const ghostGeo = new THREE.SphereGeometry(BALL_R, 20, 14);
-    this.ghostHandle = createSkinMaterial(this.skin, skinOpts);
+    // rivales: réplicas fantasma con la skin del jugador (los rivales no tienen skin propia) y su nombre encima.
+    // Solo el acabado: material 'low' compartido (mapa horneado, sin shader ni update) y sin SkinFX.
+    this.ghostGeo = new THREE.SphereGeometry(BALL_R, 20, 14);
+    this.ghostHandle = createSkinMaterial(this.skin, { ...skinOpts, quality: 'low' });
     this.ghostHandle.material.transparent = true;
     this.ghostHandle.material.opacity = 0.75;
-    const ghostLevel = fxLevel === 'low' ? 'low' : 'medium';
     this.bots = this.botPlayers.map((p) => {
       const bot = new Bot(p, this.course, this.segs, Math.random);
-      const mesh = new THREE.Mesh(ghostGeo, this.ghostHandle.material);
+      const mesh = new THREE.Mesh(this.ghostGeo, this.ghostHandle.material);
       const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTexture(p.name, p.color), transparent: true, depthWrite: false }));
       label.scale.set(0.9, 0.225, 1);
       label.renderOrder = 10;
       scene.add(mesh, label);
-      const fx = new SkinFX(scene, this.skin, { quality: ghostLevel });
-      Object.assign(bot, { mesh, label, sinkT: 0, fx, fxCtx: { pos: mesh.position, speed: 0, moving: false, camera: this.camera } });
+      Object.assign(bot, { mesh, label, sinkT: 0 });
       return bot;
     });
 
@@ -494,13 +498,51 @@ export class GolfGame {
 
   /** Libera material, efectos y réplicas de la partida anterior (o de esta, al cerrar). */
   #disposeFx() {
-    for (const b of this.bots ?? []) b.fx?.dispose();
+    for (const b of this.bots ?? []) {
+      b.mesh?.removeFromParent();
+      b.label?.removeFromParent();
+      b.label?.material.map?.dispose();
+      b.label?.material.dispose();
+    }
+    this.ghostGeo?.dispose();
+    this.ghostGeo = null;
     this.skinFx?.dispose();
     this.skinFx = null;
     this.skinHandle?.dispose();
     this.skinHandle = null;
     this.ghostHandle?.dispose();
     this.ghostHandle = null;
+    this.ballMesh?.geometry.dispose();
+    for (const m of [this.ballShadow, this.ballGlow]) {
+      if (!m) continue;
+      m.removeFromParent();
+      m.geometry.dispose();
+      m.material.map?.dispose();
+      m.material.dispose();
+    }
+    this.ballShadow = this.ballGlow = null;
+    if (this.particles) {
+      const { mesh, soft } = this.particles;
+      for (const m of [mesh, soft]) {
+        m.removeFromParent();
+        m.material.map?.dispose();
+        m.material.dispose();
+        m.dispose();
+      }
+      mesh.geometry.dispose();
+      this.particles = null;
+    }
+    this.waves?.dispose();
+    this.waves = null;
+    if (this.aimDots) {
+      for (const o of [this.aimDots.mesh, this.aimDots.ring]) {
+        o.removeFromParent();
+        o.geometry.dispose();
+        o.material.dispose();
+      }
+      this.aimDots.mesh.dispose?.();
+      this.aimDots = null;
+    }
   }
 
   /** Normal de una pared: el choque solo cambia la componente normal de la velocidad, así que el cambio apunta hacia la bola. */
@@ -1107,7 +1149,6 @@ export class GolfGame {
   #tickBots() {
     this.#disqualifyLateBots(this.tick);
     for (const b of this.bots) {
-      const vx0 = b.ball.vx, vz0 = b.ball.vz;
       const r = b.tick(this.t, DT);
       if (!r) continue;
       const dx = b.ball.x - this.ball.x, dz = b.ball.z - this.ball.z;
@@ -1116,20 +1157,16 @@ export class GolfGame {
       const pan = THREE.MathUtils.clamp((dx * right.x + dz * right.z) / 4, -1, 1);
       if (r.shot) {
         sfx.rivalHit(dist, pan);
-        b.fx.onHit(r.shot, b.mesh.position, this.#fxDir.set(b.ball.vx, 0, b.ball.vz).normalize());
         if (this.genericFx.hit) this.particles.puff(new THREE.Vector3(b.ball.x, 0.05, b.ball.z), 0x9be37f, 8 + Math.round(r.shot * 10), 1 + r.shot, 0.18);
       }
       if (r.portal >= 0) this.particles.puff(new THREE.Vector3(b.ball.x, 0.1, b.ball.z), 0xffb020, 8, 1.2, 0.16);
-      if (r.bumper >= 0) b.fx.onBumper(b.mesh.position);
-      else if (r.hit > 2 && !r.shot) {
-        b.fx.onWall(Math.min(1, r.hit / 8), b.mesh.position, this.#bounceNormal(vx0, vz0, b.ball) ?? this.#fxNormal.set(0, 1, 0));
+      if (r.bumper < 0 && r.hit > 2 && !r.shot) {
         if (this.genericFx.wall) this.particles.puff(new THREE.Vector3(b.ball.x, b.mesh.position.y, b.ball.z), 0xf3e3c3, 5, 0.8, 0.14);
       }
       if (r.sunk) {
         b.sunk = true;
         this.#noteSunk(this.tick);
         sfx.rivalCup(pan);
-        b.fx.onSink(this.#fxCup.set(this.course.cup[0], groundHeight(this.course, ...this.course.cup), this.course.cup[1]));
         this.particles.puff(new THREE.Vector3(b.ball.x, 0.1, b.ball.z), new THREE.Color(b.player.color).getHex(), 12, 1.2, 0.18);
       }
       if (r.shot || r.finished) this.onRival?.(b.player, { strokes: b.strokes, sunk: !!r.sunk, done: b.done });
@@ -1169,7 +1206,7 @@ export class GolfGame {
       // se simula también con la bola parada: un aspa puede empujarla
       const r = step(this.course, this.segs, this.ball, this.t, DT);
       const pose = ballPose(this.course, this.ball);
-      const pos = new THREE.Vector3(pose.x, pose.y, pose.z);
+      const pos = this.#pos.set(pose.x, pose.y, pose.z);
       if (r.portal >= 0 && this.course.portals[r.portal].tube) {
         // entra en un tubo: la bola viaja por dentro y la cámara la sigue
         sfx.portal();
@@ -1296,8 +1333,7 @@ export class GolfGame {
     const pose = ballPose(this.course, this.ball);
     this.ballRoot.position.set(pose.x, pose.y - sinkT * 0.3, pose.z);
     if (speed > 0) {
-      const axis = new THREE.Vector3(-this.ball.vz, 0, this.ball.vx).normalize();
-      this.ballMesh.rotateOnWorldAxis(axis, (speed * dt) / BALL_R);
+      this.ballMesh.rotateOnWorldAxis(this.#axis.set(-this.ball.vz, 0, this.ball.vx).normalize(), (speed * dt) / BALL_R);
     }
     // aplastamiento elástico al golpear o chocar
     this.squash *= Math.exp(-realDt * 9);
@@ -1318,13 +1354,10 @@ export class GolfGame {
       const bp = ballPose(this.course, b.ball);
       b.mesh.position.set(bp.x, bp.y - b.sinkT * 0.3, bp.z);
       const v = Math.hypot(b.ball.vx, b.ball.vz);
-      if (v > 0) b.mesh.rotateOnWorldAxis(new THREE.Vector3(-b.ball.vz, 0, b.ball.vx).normalize(), (v * dt) / BALL_R);
+      if (v > 0) b.mesh.rotateOnWorldAxis(this.#axis.set(-b.ball.vz, 0, b.ball.vx).normalize(), (v * dt) / BALL_R);
       b.label.position.set(bp.x, bp.y + 0.37, bp.z);
       b.label.visible = !b.done;
       b.mesh.visible = b.sinkT < 1;
-      b.fxCtx.speed = v;
-      b.fxCtx.moving = v > 0.5;
-      b.fx.update(this.t, dt, b.fxCtx);
       // las etiquetas pegadas a la cámara estorban: se desvanecen de cerca
       const camD = this.camera.position.distanceTo(b.mesh.position);
       b.label.material.opacity = THREE.MathUtils.clamp((camD - 3.7) / 2, 0, 1);
@@ -1340,7 +1373,7 @@ export class GolfGame {
     });
 
     if ((this.drag || this.charging || this.spaceCharging || this.power > 0.02) && this.power > 0.02) {
-      const color = new THREE.Color().setHSL(0.33 - this.power * 0.33, 0.95, 0.55);
+      const color = this.#aimColor.setHSL(0.33 - this.power * 0.33, 0.95, 0.55);
       this.aimDots.show(this.#predictPath(), color, this.t);
       this.aimDots.showRing(this.ballRoot.position, this.t);
     } else this.aimDots.hide();
