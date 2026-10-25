@@ -13,7 +13,8 @@ import { Progress } from './progress/Progress.js';
 import { CHALLENGES, TIERS as SKIN_TIERS, SKINS } from './progress/skins.js';
 import { ballPreview } from './game/render/ballSkins.js';
 import { createSkinInspector, isSkinLabRequested, mountSkinLab } from './ui/skinInspector.js';
-import { hoverLoop, installThumbObserver, upgradeImg } from './ui/skinThumbs.js';
+import { showSkinReveal } from './ui/skinReveal.js';
+import { hoverLoop,installThumbObserver, upgradeImg } from './ui/skinThumbs.js';
 import { rarePatternOf, wearName } from './progress/inventory.js';
 import { getCoursePreview, getCourseDistance } from './game/render/coursePreview.js';
 import { QUALITY_LEVELS, QUALITY_NAMES, getQuality, setQuality } from './game/render/quality.js';
@@ -1430,6 +1431,7 @@ async function showResults(match, tiebreak = {}) {
   const gained = progress.recordMatch({ position: result.me.position, won, entryFee: match.tier.entryFee, holes: match.myHoles.filter(Boolean), tiebreakWon });
   const levelUp = gained.level.level > gained.levelBefore;
   screen = 'lobby';
+  await showSkinReveal(gained.newSkins, { progress });
   const view = h(`
     <main class="screen results ${won ? 'won' : ''}">
       ${won ? '<div class="rays"></div>' : ''}
@@ -1440,14 +1442,6 @@ async function showResults(match, tiebreak = {}) {
         <div class="xp-head"><b>+${gained.xp} XP</b><span>${levelUp ? `¡Nivel ${gained.level.level}!` : `Nivel ${gained.level.level}`}</span></div>
         <span class="bar"><i style="--to:${(gained.level.into / gained.level.need) * 100}%"></i></span>
       </div>
-      ${gained.newSkins.length
-      ? `<h2 class="unlock-title">¡Skin desbloqueada!</h2><div class="unlocks">${gained.newSkins
-        .map(
-          (s) => `<div class="skin-card holo reveal rarity-${s.rarity}"><div class="shine"></div><span class="rarity">${SKIN_TIERS[s.rarity].name}</span>${ball(s, 76, 'float')}<b>${s.name}</b></div>`,
-        )
-        .join('')}</div>`
-      : ''
-    }
       ${standingsTable(result.ranking, true)}
       ${match.tier.entryFee ? `<p class="legal">Bote ${fmt(result.pot)} · comisión ${fmt(result.commission)} · premio ${fmt(result.prize)}</p>` : ''}
       <div class="row">
@@ -1659,6 +1653,7 @@ async function showOnlineResults(match) {
   const waiting = match.players.filter((p) => !p.finished).length;
   const gained = match.status === 'settled' ? recordOnce(match) : null;
   const ranking = [...match.players].sort((a, b) => (a.position ?? 99) - (b.position ?? 99) || (a.total ?? 999) - (b.total ?? 999));
+  if (gained?.newSkins.length) await showSkinReveal(gained.newSkins, { progress });
   let title, sub;
   if (open) {
     title = 'Esperando a los demás';
@@ -1681,12 +1676,6 @@ async function showOnlineResults(match) {
         <div class="xp-head"><b>+${gained.xp} XP</b><span>${gained.level.level > gained.levelBefore ? `¡Nivel ${gained.level.level}!` : `Nivel ${gained.level.level}`}</span></div>
         <span class="bar"><i style="--to:${(gained.level.into / gained.level.need) * 100}%"></i></span>
       </div>`
-      : ''
-    }
-      ${gained?.newSkins.length
-      ? `<h2 class="unlock-title">¡Skin desbloqueada!</h2><div class="unlocks">${gained.newSkins
-        .map((s) => `<div class="skin-card holo reveal rarity-${s.rarity}"><div class="shine"></div><span class="rarity">${SKIN_TIERS[s.rarity].name}</span>${ball(s, 76, 'float')}<b>${s.name}</b></div>`)
-        .join('')}</div>`
       : ''
     }
       ${standingsTable(ranking, !open)}

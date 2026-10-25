@@ -446,17 +446,6 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 .courses-grid .course-card:nth-child(6) { animation-delay: 0.24s; }
 .courses-grid .course-card:nth-child(n+7) { animation-delay: 0.28s; }
 
-.skin-grid .skin-card {
-  animation: cardEntrance 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-.skin-grid .skin-card:nth-child(1) { animation-delay: 0.04s; }
-.skin-grid .skin-card:nth-child(2) { animation-delay: 0.07s; }
-.skin-grid .skin-card:nth-child(3) { animation-delay: 0.10s; }
-.skin-grid .skin-card:nth-child(4) { animation-delay: 0.13s; }
-.skin-grid .skin-card:nth-child(5) { animation-delay: 0.16s; }
-.skin-grid .skin-card:nth-child(6) { animation-delay: 0.19s; }
-.skin-grid .skin-card:nth-child(n+7) { animation-delay: 0.22s; }
-
 .txs li {
   animation: staggerSlideUp 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
@@ -500,7 +489,6 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   .screen > *,
   .tiers .tier,
   .courses-grid .course-card,
-  .skin-grid .skin-card,
   .txs li {
     animation: none !important;
     transition: opacity 0.15s ease !important;
@@ -750,72 +738,6 @@ h2 { margin: 24px 0 12px; font-size: 21px; letter-spacing: -0.01em; }
 .level-progress { flex: 1; display: grid; gap: 6px; }
 .level-progress span, .bar { display: block; height: 8px; border-radius: 9px; background: rgba(255, 255, 255, 0.08); overflow: hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,0.4); }
 .level-progress i, .bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--yellow), #10b981); border-radius: 9px; box-shadow: 0 0 8px rgba(16, 185, 129, 0.4); }
-
-.skin-grid, .unlocks { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 14px; }
-.unlocks { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); margin-bottom: 8px; }
-.skin-card {
-  display: grid; justify-items: center; gap: 8px; padding: 16px 12px; border-radius: var(--radius-lg); text-align: center;
-  background: rgba(18, 25, 36, 0.85);
-  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
-  transition: transform 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out), border-color 0.2s;
-  color: var(--text);
-  position: relative;
-  overflow: hidden;
-}
-.skin-card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(255, 255, 255, 0.16);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-}
-.skin-card b { font-family: var(--display); font-weight: 800; font-size: 17px; line-height: 1.1; letter-spacing: -0.01em; color: #fff; }
-.skin-card small { font-family: var(--body); font-size: 12px; font-weight: 700; color: var(--muted); }
-.skin-card .rarity {
-  font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.14em;
-  background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line-light);
-  padding: 3px 10px; border-radius: 999px; justify-self: stretch; color: var(--text-dim);
-}
-.skin-card .bar { width: 100%; height: 6px; }
-.rarity-common.skin-card { border-color: rgba(154, 164, 178, 0.3); }
-.rarity-common.skin-card .rarity { color: #9aa4b2; border-color: rgba(154, 164, 178, 0.4); }
-.rarity-uncommon.skin-card { border-color: rgba(74, 222, 128, 0.3); }
-.rarity-uncommon.skin-card .rarity { color: #4ade80; border-color: rgba(74, 222, 128, 0.4); }
-.rarity-rare.skin-card { border-color: rgba(59, 130, 246, 0.3); }
-.rarity-rare.skin-card .rarity { color: #3b82f6; border-color: rgba(59, 130, 246, 0.4); }
-.rarity-epic.skin-card { border-color: rgba(168, 85, 247, 0.3); }
-.rarity-epic.skin-card .rarity { color: #a855f7; border-color: rgba(168, 85, 247, 0.4); }
-.rarity-legendary.skin-card { border-color: rgba(245, 158, 11, 0.3); }
-.rarity-legendary.skin-card .rarity { color: #f59e0b; border-color: rgba(245, 158, 11, 0.4); }
-.rarity-mythic.skin-card { border-color: rgba(239, 68, 68, 0.3); }
-.rarity-mythic.skin-card .rarity { color: #ef4444; border-color: rgba(239, 68, 68, 0.4); }
-
-.skin-card.equipped {
-  outline: 2px solid var(--yellow); outline-offset: 2px;
-  box-shadow: 0 0 16px rgba(255, 196, 0, 0.2);
-}
-.skin-card.selected:not(.equipped) {
-  outline: 2px solid rgba(255, 255, 255, 0.5); outline-offset: 2px;
-  box-shadow: 0 0 16px rgba(255, 255, 255, 0.2);
-}
-.skin-card.equipped::before {
-  content: ''; position: absolute; top: 10px; right: 10px; z-index: 3;
-  width: 14px; height: 14px; border-radius: 50%; background: #ffd23f;
-  box-shadow: 0 0 10px #ffd23f, 0 2px 8px rgba(0, 0, 0, 0.4);
-}
-.skin-card.locked::after {
-  content: ''; position: absolute; inset: 0; z-index: 1;
-  background: rgba(11, 15, 21, 0.75); backdrop-filter: blur(2px);
-  pointer-events: none; border-radius: var(--radius-lg);
-}
-.skin-card.locked .ball-img { filter: grayscale(0.5) brightness(0.7); opacity: 0.8; }
-.skin-card.locked .req {
-  position: relative; z-index: 2; background: rgba(0, 0, 0, 0.6);
-  color: #fff; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line);
-  font-size: 11px; font-weight: 700;
-}
-.skin-card.reveal { animation: reveal 0.7s var(--ease-out) both; }
-@keyframes reveal { from { transform: perspective(700px) rotateY(180deg) scale(0.6); opacity: 0; } }
 
 .challenges { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .challenges li {
@@ -1742,7 +1664,6 @@ body.sk-noscroll { overflow: hidden; }
 .xp-head span { font-weight: 800; color: var(--cyan); }
 .xp-card .bar i { width: var(--to); animation: grow 1.2s 0.3s ease-out both; }
 @keyframes grow { from { width: 0; } }
-.unlock-title { margin-bottom: 0; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -2115,14 +2036,6 @@ body.sk-noscroll { overflow: hidden; }
     border-color: rgba(255, 255, 255, 0.25);
   }
 
-  .skin-card {
-    transition: transform 0.2s, box-shadow 0.2s;
-    cursor: pointer;
-  }
-  .skin-card:hover:not(.locked) {
-    transform: translateY(-4px) scale(1.02);
-    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.45);
-  }
   .challenges {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -2470,8 +2383,7 @@ body.sk-noscroll { overflow: hidden; }
 }
 
 /* lámina metálica con las franjas diagonales de las cartas */
-.tier:is(.tier--bronze, .tier--silver, .tier--gold, .tier--diamond, .tier--emerald),
-.skin-card:is(.rarity-common, .rarity-uncommon, .rarity-rare, .rarity-epic, .rarity-legendary, .rarity-mythic) {
+.tier:is(.tier--bronze, .tier--silver, .tier--gold, .tier--diamond, .tier--emerald) {
   background:
     repeating-linear-gradient(118deg, rgba(255, 255, 255, 0.1) 0 2px, transparent 2px 9px),
     var(--foil);
@@ -2504,8 +2416,7 @@ body.sk-noscroll { overflow: hidden; }
 @keyframes glint { 0% { background-position: 130% 0; } 45%, 100% { background-position: -30% 0; } }
 
 /* capa holográfica arcoíris: se mueve sola y sigue al dedo al tocar */
-.tier:is(.tier--bronze, .tier--silver, .tier--gold, .tier--diamond, .tier--emerald) .shine,
-.skin-card:is(.rarity-common, .rarity-uncommon, .rarity-rare, .rarity-epic, .rarity-legendary, .rarity-mythic) .shine {
+.tier:is(.tier--bronze, .tier--silver, .tier--gold, .tier--diamond, .tier--emerald) .shine {
   opacity: var(--holo);
   background:
     radial-gradient(circle at var(--mx, 50%) var(--my, 30%), rgba(255, 255, 255, 0.55), transparent 45%),
@@ -2568,18 +2479,6 @@ body.sk-noscroll { overflow: hidden; }
   box-shadow: 0 0 28px var(--glow), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
-/* skins: misma lámina; nombre y textos en tinta */
-.skin-card:is(.rarity-common, .rarity-uncommon, .rarity-rare, .rarity-epic, .rarity-legendary, .rarity-mythic) b { color: var(--ink); text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5); }
-.skin-card:is(.rarity-common, .rarity-uncommon, .rarity-rare, .rarity-epic, .rarity-legendary, .rarity-mythic) small { color: var(--ink); opacity: 0.8; }
-.skin-card:is(.rarity-common, .rarity-uncommon, .rarity-rare, .rarity-epic, .rarity-legendary, .rarity-mythic) .rarity {
-  background: rgba(8, 10, 16, 0.8); color: var(--edge); border-color: var(--edge);
-}
-.skin-card:is(.rarity-common, .rarity-uncommon, .rarity-rare, .rarity-epic, .rarity-legendary, .rarity-mythic) .bar { background: rgba(0, 0, 0, 0.35); }
-.skin-card.locked { animation: none; }
-.skin-card.locked b, .skin-card.locked small { color: #fff; text-shadow: none; opacity: 0.9; }
-.skin-card.locked .shine { display: none; }
-.skin-card.reveal:is(.rarity-epic, .rarity-legendary, .rarity-mythic) { animation: reveal 0.7s var(--ease-out) both, foil-drift 7s ease-in-out 0.7s infinite alternate; }
-
 /* píldoras de rareza y escaparate de la skin equipada */
 .rarity-pill:is(.rarity-common, .rarity-uncommon, .rarity-rare, .rarity-epic, .rarity-legendary, .rarity-mythic) {
   background: var(--foil); background-size: 200% 200%; color: var(--ink); border-color: var(--edge);
@@ -2591,7 +2490,7 @@ body.sk-noscroll { overflow: hidden; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tier::before, .tier::after, .hero::before, .holo .shine, .tier, .skin-card { animation: none !important; }
+  .tier::before, .tier::after, .hero::before, .holo .shine, .tier { animation: none !important; }
 }
 /* contador cuando alguien ya ha embocado */
 .hole-timer {
