@@ -15,7 +15,7 @@ import { ballPreview } from './game/render/ballSkins.js';
 import { createSkinInspector, isSkinLabRequested, mountSkinLab } from './ui/skinInspector.js';
 import { showSkinReveal } from './ui/skinReveal.js';
 import { hoverLoop,installThumbObserver, upgradeImg } from './ui/skinThumbs.js';
-import { rarePatternOf, wearName } from './progress/inventory.js';
+import { rarePatternOf } from './progress/inventory.js';
 import { getCoursePreview, getCourseDistance } from './game/render/coursePreview.js';
 import { QUALITY_LEVELS, QUALITY_NAMES, getQuality, setQuality } from './game/render/quality.js';
 
@@ -331,7 +331,6 @@ async function showSkins() {
     const inst = progress.instance(skin.id);
     const req = progress.requirement(skin);
     const rare = open && inst ? rarePatternOf(skin, inst.seed) : null;
-    const float = open && inst ? Math.min(1, Math.max(0, inst.float ?? 0)) : null;
     const card = h(`
       <button type="button" class="sk-card holo rarity-${skin.tier} ${open ? '' : 'locked'}" data-skin-id="${skin.id}" style="--sk-a:${skin.palette.base};--sk-b:${skin.palette.accent}">
         <div class="shine"></div>
@@ -344,10 +343,8 @@ async function showSkins() {
         </div>
         <div class="sk-strip">
           <b>${skin.name}</b>
-          <small>${tier.name}${float !== null ? ` · ${wearName(float)}` : ''}</small>
-          ${float !== null
-    ? `<span class="sk-wear" title="Desgaste ${float.toFixed(3)}"><i style="width:${Math.max(3, float * 100)}%;background:hsl(${Math.round((1 - float) * 120)} 70% 50%)"></i></span>`
-    : `<small class="req">${req.text}</small><span class="bar"><i style="width:${req.ratio * 100}%"></i></span>`}
+          <small>${tier.name}</small>
+          ${open ? '' : `<small class="req">${req.text}</small><span class="bar"><i style="width:${req.ratio * 100}%"></i></span>`}
         </div>
       </button>`);
     const img = card.querySelector('.sk-thumb');

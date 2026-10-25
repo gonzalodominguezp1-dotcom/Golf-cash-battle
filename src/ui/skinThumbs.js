@@ -20,7 +20,6 @@ const R = 0.38;
 const FRAMES = 12;
 const IDLE_MS = 4000;
 const FRAME_BUDGET_MS = 7;
-const DEFAULT_INSTANCE = { seed: 0, float: 0.08 };
 
 const cache = new Map(); // key -> dataURL | dataURL[]
 const inflight = new Map(); // key -> Promise
@@ -49,7 +48,7 @@ const thumbQuality = () => {
   const q = getQuality();
   return q === 'high' ? 'medium' : q;
 };
-const instKey = (inst) => `${inst?.seed ?? 0}.${Math.round((inst?.float ?? DEFAULT_INSTANCE.float) * 50)}`;
+const instKey = (inst) => `${inst?.seed ?? 0}`;
 const keyOf = (skin, inst, { hi = false, frames = false } = {}) =>
   `${skin.id}|${instKey(inst)}|${thumbQuality()}${hi ? `|h${HI_SIZE}` : ''}${frames ? '|f' : ''}`;
 
@@ -107,7 +106,7 @@ function renderJob(job) {
     g.renderer.setSize(px, px, false);
     g.px = px;
   }
-  const handle = createSkinMaterial(job.skin, { quality: thumbQuality(), instance: { seed: job.inst?.seed ?? 0, wear: job.inst?.float ?? DEFAULT_INSTANCE.float } });
+  const handle = createSkinMaterial(job.skin, { quality: thumbQuality(), instance: { seed: job.inst?.seed ?? 0 } });
   try {
     g.mesh.material = handle.material;
     handle.update(1.2, 0.016, { speed: 0, impact: 0, state: 0 });

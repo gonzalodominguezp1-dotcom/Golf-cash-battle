@@ -6,7 +6,6 @@ export const COMMON_UNIFORMS = {
   uTime: 0,
   uSpeed: 0,
   uImpact: 0,
-  uWear: 0,
   uSeed: 0,
   uState: 0,
   uQuality: 1,
@@ -17,13 +16,11 @@ export const GLSL_COMMON_DECL = /* glsl */ `
 uniform float uTime;
 uniform float uSpeed;
 uniform float uImpact;
-uniform float uWear;
 uniform float uSeed;
 uniform float uState;
 uniform float uQuality;
 uniform float uReveal;
 uniform vec3 uRevealColor;
-uniform vec3 uUnder;
 uniform vec3 uPalBase;
 uniform vec3 uPalAccent;
 uniform vec3 uPalSecondary;
@@ -32,12 +29,11 @@ varying vec3 vObjPos;
 varying vec3 vObjX;
 varying vec3 vObjY;
 varying vec3 vObjZ;
-// Salidas del patrón / desgaste (se inicializan antes de cada llamada)
+// Salidas del patrón (se inicializan antes de cada llamada)
 float sk_dRough;
 float sk_dMetal;
 vec3 sk_emis;
 vec3 sk_nPert;
-float sk_wearMask;
 `;
 
 export const GLSL_LIB = /* glsl */ `
@@ -96,26 +92,6 @@ float sk_fresnel(vec3 n, vec3 v, float power) {
 vec3 sk_noiseGrad(vec3 p, float e) {
   float c = sk_noise3(p);
   return vec3(sk_noise3(p + vec3(e, 0, 0)) - c, sk_noise3(p + vec3(0, e, 0)) - c, sk_noise3(p + vec3(0, 0, e)) - c) / e;
-}
-`;
-
-// Desgaste: arañazos y rozaduras por ruido 3D semillado. Revela la «subcapa» (finish.underlayer).
-export const GLSL_WEAR = /* glsl */ `
-void sk_applyWear(vec3 p, inout vec4 diffuse) {
-  sk_wearMask = 0.0;
-  if (uWear < 0.002) return;
-  vec3 q = p * 4.0 + uSeed * 1.37;
-  float scuff = sk_fbm3(q, 3);
-  // arañazos finos: crestas de ruido alargado
-  float s = abs(sk_noise3(vec3(p.x * 26.0, p.y * 3.0, p.z * 26.0) + uSeed) - 0.5);
-  float scratch = 1.0 - smoothstep(0.0, 0.035, s);
-  float thr = 1.0 - uWear * 0.55;
-  float m = smoothstep(thr, thr + 0.12, scuff) * 0.85 + scratch * smoothstep(0.15, 0.7, uWear) * 0.6;
-  m = clamp(m * (0.35 + uWear), 0.0, 1.0);
-  sk_wearMask = m;
-  diffuse.rgb = mix(diffuse.rgb, uUnder * (0.75 + 0.25 * scuff), m * 0.8);
-  sk_dRough += m * 0.5;
-  sk_dMetal -= m * 0.6;
 }
 `;
 

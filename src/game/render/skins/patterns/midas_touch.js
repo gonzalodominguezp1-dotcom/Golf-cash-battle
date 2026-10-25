@@ -3,7 +3,7 @@
 // esfera), pátina de bronce que se pierde al crecer el estado, AO de cavidad en los hoyuelos
 // (voronoi, una capa) y chispas HDR en estados altos.
 // Estado evolutivo: `update` acerca `uGild` (suavizado) a ctx.state/5; `uState` se usa para
-// activar las chispas por escalones. `uWear` pule la filigrana (el desgaste borra el grabado).
+// activar las chispas por escalones.
 
 const glsl = /* glsl */ `
 void skinPattern(vec3 p, inout vec4 diffuse) {
@@ -13,7 +13,7 @@ void skinPattern(vec3 p, inout vec4 diffuse) {
   float wv = sk_fbm3(p * 2.1 + uSeed * 0.37, SK_OCT);
   vec3 q = p * 7.0 + vec3(wv, wv * 0.6, -wv * 0.8) * 2.4;
   float f = sin(q.x) + sin(q.y) + sin(q.z);
-  float groove = (1.0 - smoothstep(0.0, 0.2, abs(f))) * SK_FIL_F * (1.0 - 0.5 * uWear);
+  float groove = (1.0 - smoothstep(0.0, 0.2, abs(f))) * SK_FIL_F;
 
   // Pátina: manchas de bronce, visibles solo en estados bajos.
   float mott = smoothstep(0.38, 0.72, sk_fbm3(p * 3.0 + uSeed * 1.9, SK_OCT));

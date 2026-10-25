@@ -4,7 +4,7 @@
 // El patrón se lee por reflejo: metalness 1 en todo el objeto, rough 0.18 en capas claras y 0.34 en oscuras.
 // Los deltas de rough/metal se suman a la base de la ficha (rough 0.14, metal 0.92).
 // Animación: barrido de luz que recorre las capas (velocidad ligada a uSpeed) y «respiración» del filo
-// en idle. uSeed desplaza bandas y grabado; uWear lo aplica la shaderLib y atenúa el grabado.
+// en idle. uSeed desplaza bandas y grabado.
 
 const glsl = /* glsl */ `
 const vec3 DM_STEEL = vec3(0.040, 0.062, 0.066);   // #1C2326 -> lineal aprox.
@@ -27,7 +27,7 @@ void skinPattern(vec3 p, inout vec4 diffuse) {
 
   // Grabado dorado: curvas de nivel de un fbm distinto, solo sobre el acero oscuro
   float gl = sk_fbm3(q * 2.3 + 9.0, SK_FBM);
-  float eng = (1.0 - smoothstep(0.0, 0.012, abs(gl - 0.5))) * (1.0 - layer) * (1.0 - uWear * 0.5);
+  float eng = (1.0 - smoothstep(0.0, 0.012, abs(gl - 0.5))) * (1.0 - layer);
 
   // Grano de forja
   float grain = sk_fbm3(q * 6.0, SK_FBM);

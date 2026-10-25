@@ -30,8 +30,6 @@ void skinPattern(vec3 p, inout vec4 diffuse) {
   // componente tangente de la vista: base del parallax
   vec3 vt = V - p * dot(V, p);
 
-  float wearW = 1.0 + uWear * 0.6;
-
   // --- facetas de cristal: celdas grandes con inclinación propia (reflejos quebrados, con forma) ---
   vec3 fq = p * 2.1 * SK_SCALE_F + vec3(uSeed * 0.53);
   vec3 fv = sk_voronoi3(fq);
@@ -50,10 +48,10 @@ void skinPattern(vec3 p, inout vec4 diffuse) {
   diffuse.rgb = body;
 
   // --- grietas internas: 2 capas a distinta profundidad (parallax) ---
-  float c1 = ice_crack(p, vt, 0.10, 2.3 * SK_SCALE_F, 0.050 * wearW, uSeed);
+  float c1 = ice_crack(p, vt, 0.10, 2.3 * SK_SCALE_F, 0.050, uSeed);
   float c2 = 0.0;
 #if SK_LAYERS > 1
-  c2 = ice_crack(p, vt, 0.38, 4.0 * SK_SCALE_F, 0.075 * wearW, uSeed * 1.7 + 11.0);
+  c2 = ice_crack(p, vt, 0.38, 4.0 * SK_SCALE_F, 0.075, uSeed * 1.7 + 11.0);
 #endif
   float cr = clamp(c1 + c2 * 0.7, 0.0, 1.0);
   // la capa profunda se ve azul oscuro (hundida), la superficial blanca y brillante

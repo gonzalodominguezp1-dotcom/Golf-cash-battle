@@ -129,7 +129,7 @@ export class GolfGame {
   load(course, { bots = [], skin = SKINS[0], instance = null, firstSunkTick = null, timeLimit = HOLE_TIME_LIMIT } = {}) {
     this.botPlayers = bots;
     this.skin = skin;
-    // instance: { seed, wear, ... } de la skin equipada (progress.instance(id)); sin ella, el acabado base
+    // instance: { seed, ... } de la skin equipada (progress.instance(id)); sin ella, el acabado base
     this.instance = instance;
     // puff, onda, borde y confeti genéricos: solo para las skins que no tienen sus propios efectos
     const fx = skin.fx ?? {};

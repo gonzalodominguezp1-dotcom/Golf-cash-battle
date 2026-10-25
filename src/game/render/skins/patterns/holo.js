@@ -35,7 +35,7 @@ void skinPattern(vec3 p, inout vec4 diffuse) {
   film = mix(vec3(dot(film, vec3(0.333))), film, 1.0) ;
 
   // Albedo: cromo azulado teñido por la lámina (metal: el color tiñe el reflejo)
-  float filmAmt = 0.95 * (1.0 - 0.45 * uWear);
+  float filmAmt = 0.95;
   vec3 chrome = uPalBase * vec3(0.851, 0.871, 0.902) * diffuse.rgb;
   diffuse.rgb = clamp(chrome * mix(vec3(1.0), film * 1.35, filmAmt), 0.0, 1.0);
   diffuse.rgb = mix(diffuse.rgb, vec3(0.9), cellEdge * 0.35);
@@ -56,7 +56,7 @@ void skinPattern(vec3 p, inout vec4 diffuse) {
   vec3 gc = floor(g);
   vec3 gf = fract(g) - 0.5;
   vec3 hc = sk_hash3(gc);
-  float flake = step(0.72 + 0.12 * uWear, hc.z);
+  float flake = step(0.72, hc.z);
   vec3 fn = normalize(sk_hash3(gc + 17.0) * 2.0 - 1.0);
   float dotm = 1.0 - smoothstep(0.0, 0.2, length(gf - (hc - 0.5) * 0.6));
   // Solo brilla cuando la mitad vista-luz coincide con la normal de la escama.

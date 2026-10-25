@@ -18,12 +18,12 @@ export const TIER_IDS = Object.keys(TIERS);
 
 // Acabado, efectos y sonido por defecto de cada tier (el «upgrade base»).
 const TIER_FINISH = {
-  common: { preset: 'satin', roughness: 0.42, metalness: 0, clearcoat: 0, underlayer: '#ffffff' },
-  uncommon: { preset: 'pearl', roughness: 0.28, metalness: 0, clearcoat: 0.6, underlayer: '#ffffff' },
-  rare: { preset: 'pbr', roughness: 0.2, metalness: 0.3, clearcoat: 1, underlayer: '#d8dee9' },
-  epic: { preset: 'layered', roughness: 0.15, metalness: 0.45, clearcoat: 1, underlayer: '#d8dee9' },
-  legendary: { preset: 'hdr', roughness: 0.12, metalness: 0.7, clearcoat: 1, underlayer: '#9aa4b2' },
-  mythic: { preset: 'reactive', roughness: 0.08, metalness: 0.9, clearcoat: 1, underlayer: '#9aa4b2' },
+  common: { preset: 'satin', roughness: 0.42, metalness: 0, clearcoat: 0 },
+  uncommon: { preset: 'pearl', roughness: 0.28, metalness: 0, clearcoat: 0.6 },
+  rare: { preset: 'pbr', roughness: 0.2, metalness: 0.3, clearcoat: 1 },
+  epic: { preset: 'layered', roughness: 0.15, metalness: 0.45, clearcoat: 1 },
+  legendary: { preset: 'hdr', roughness: 0.12, metalness: 0.7, clearcoat: 1 },
+  mythic: { preset: 'reactive', roughness: 0.08, metalness: 0.9, clearcoat: 1 },
 };
 const TIER_FX = {
   common: { trail: { style: 'default', width: 0.5, taper: 0 }, aura: null, hit: 'generic', roll: null, wall: 'generic', lip: null, sink: 'generic' },
@@ -53,7 +53,6 @@ function defineSkin(d) {
     counter: d.counter ?? (tier === 'legendary' || tier === 'mythic'),
     variants: d.variants ?? ['base'],
     rarePatterns: d.rarePatterns ?? [],
-    wearRange: d.wearRange ?? (tier === 'mythic' ? [0, 0.15] : [0, 1]),
   };
 }
 

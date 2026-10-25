@@ -26,7 +26,7 @@ test('cada skin tiene los campos del esquema y un tier válido', () => {
     assert.ok(typeof s.collection === 'string');
     assert.ok(typeof s.lore === 'string');
     for (const k of ['base', 'accent', 'secondary', 'glow']) assert.match(s.palette[k], HEX, `${s.id}.palette.${k}`);
-    for (const k of ['preset', 'roughness', 'metalness', 'clearcoat', 'underlayer']) assert.ok(s.finish[k] !== undefined, `${s.id}.finish.${k}`);
+    for (const k of ['preset', 'roughness', 'metalness', 'clearcoat']) assert.ok(s.finish[k] !== undefined, `${s.id}.finish.${k}`);
     assert.ok(s.shader === null || typeof s.shader === 'string');
     for (const k of ['trail', 'aura', 'hit', 'roll', 'wall', 'lip', 'sink']) assert.ok(k in s.fx, `${s.id}.fx.${k}`);
     for (const k of ['style', 'color', 'width', 'taper']) assert.ok(k in s.fx.trail, `${s.id}.fx.trail.${k}`);
@@ -34,7 +34,7 @@ test('cada skin tiene los campos del esquema y un tier válido', () => {
     assert.equal(typeof s.counter, 'boolean');
     assert.ok(Array.isArray(s.variants) && s.variants.length >= 1);
     assert.ok(Array.isArray(s.rarePatterns));
-    assert.ok(Array.isArray(s.wearRange) && s.wearRange[0] >= 0 && s.wearRange[1] <= 1 && s.wearRange[0] <= s.wearRange[1]);
+    assert.equal('wearRange' in s, false, `${s.id}: sin desgaste`);
   }
 });
 
@@ -49,10 +49,9 @@ test('ids existentes intactos y re-tier según el plan', () => {
   for (const id of ['event_horizon', 'midas_touch']) assert.equal(tier(id), 'mythic');
 });
 
-test('legendarias y míticas traen contador; las míticas acotan el desgaste', () => {
+test('legendarias y míticas traen contador', () => {
   for (const s of SKINS) {
     if (s.tier === 'legendary' || s.tier === 'mythic') assert.equal(s.counter, true, s.id);
-    if (s.tier === 'mythic') assert.ok(s.wearRange[1] <= 0.15, s.id);
   }
 });
 

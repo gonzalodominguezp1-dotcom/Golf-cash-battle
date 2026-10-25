@@ -841,8 +841,6 @@ body.sk-noscroll { overflow: hidden; }
 .sk-strip b { font: 800 15px/1.1 var(--display); letter-spacing: -0.01em; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sk-strip small { font: 700 11px/1.2 var(--body); color: var(--edge); }
 .sk-strip .req { color: #fff; opacity: 0.9; }
-.sk-wear { display: block; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
-.sk-wear i { display: block; height: 100%; border-radius: 3px; }
 .sk-strip .bar { height: 5px; }
 
 /* bloqueadas: silueta con el halo del tier y el requisito a la vista */

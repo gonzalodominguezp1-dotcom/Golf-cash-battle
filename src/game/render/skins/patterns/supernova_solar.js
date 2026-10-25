@@ -5,7 +5,6 @@
 //   - medium: 1 capa de voronoi + fbm 3 + limbo.
 //   - high: 2 capas de voronoi + fbm 4 + corona exterior + relieve de granos (sk_nPert).
 //   - uSeed desplaza el dominio del ruido (cada bola tiene su disposición de granos y manchas).
-//   - uWear apaga ligeramente el plasma (estrella «enfriada»); el desgaste base lo aplica shaderLib.
 
 const glsl = /* glsl */ `
 // pendiente de brillo -> color de plasma: fondo oscuro, naranja, ámbar, núcleo blanco-cálido
@@ -63,10 +62,7 @@ void skinPattern(vec3 p, inout vec4 diffuse) {
   float lum = 0.75 + 1.5 * smoothstep(0.45, 1.0, h) + heat * 1.0;
   // oscurecimiento suave de limbo (como el Sol real) para dar volumen
   float ld = mix(1.0, 0.62, pow(limb, 1.6));
-  // desgaste: plasma algo más apagado
-  float cool = 1.0 - 0.35 * uWear;
-
-  vec3 emis = col * lum * ld * cool;
+  vec3 emis = col * lum * ld;
 
   // protuberancias: lenguas de fuego en el limbo, animadas
   float pr = sk_noise3(p * 4.0 + so + vec3(0.0, t * 2.2, t * 1.4));

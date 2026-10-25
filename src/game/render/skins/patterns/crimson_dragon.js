@@ -74,7 +74,7 @@ void skinPattern(vec3 p, inout vec4 diffuse) {
   // Brasa: sólo en las juntas finas, latiendo; más viva con velocidad / impacto; el desgaste la apaga.
   // Algunas escamas (id alto) respiran más fuerte: se lee como piel viva, no como lava.
   float vein = step(0.62, id) * (0.5 + 0.5 * sin(uTime * 1.9 + id * 40.0));
-  float emberAmt = (0.18 + 0.38 * breath + 0.35 * vein) * (0.7 + 0.8 * live) * (1.0 - 0.6 * uWear);
+  float emberAmt = (0.18 + 0.38 * breath + 0.35 * vein) * (0.7 + 0.8 * live);
   float flicker = 0.7 + 0.3 * sk_noise3(q * 2.3 + vec3(uTime * 0.6, 0.0, -uTime * 0.4));
   sk_emis += EMBER * groove * emberAmt * flicker * 1.1;
   sk_emis += EMBER * root * 0.12 * emberAmt;                 // resplandor bajo la escama de arriba

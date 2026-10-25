@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COMMON_UNIFORMS, GLSL_COMMON_DECL, GLSL_LIB, GLSL_WEAR, GLSL_REVEAL, DEFAULT_PATTERN_FN, declareUniforms } from './shaderLib.js';
+import { COMMON_UNIFORMS, GLSL_COMMON_DECL, GLSL_LIB, GLSL_REVEAL, DEFAULT_PATTERN_FN, declareUniforms } from './shaderLib.js';
 import { getStudioEnv } from './envStudio.js';
 import { getPattern, PATTERN_IDS } from './patterns/index.js';
 import { getQuality } from '../quality.js';
@@ -13,7 +13,7 @@ import { TIERS } from '../../../progress/skins.js';
 const LEVEL = { low: 0, medium: 1, high: 2 };
 const EMPTY_CTX = Object.freeze({ speed: 0, impact: 0, state: 0 });
 
-// Extras por preset de acabado (la base —roughness/metalness/clearcoat/underlayer— viene de skin.finish).
+// Extras por preset de acabado (la base —roughness/metalness/clearcoat— viene de skin.finish).
 const PRESETS = {
   satin: { clearcoatRoughness: 0.3, sheen: 0, iridescence: 0, envMapIntensity: 0.7 },
   pearl: { clearcoatRoughness: 0.18, sheen: 0.5, iridescence: 0.1, envMapIntensity: 0.9 },
@@ -138,13 +138,11 @@ export function createSkinMaterial(skin, opts = {}, deps) {
     for (const [k, v] of Object.entries(COMMON_UNIFORMS)) U[k] = { value: v };
     U.uQuality.value = LEVEL[level];
     U.uRevealColor = { value: tierColor };
-    U.uUnder = { value: new THREE.Color(finish.underlayer ?? '#ffffff') };
     U.uPalBase = { value: new THREE.Color(pal.base ?? '#ffffff') };
     U.uPalAccent = { value: new THREE.Color(pal.accent ?? '#ffffff') };
     U.uPalSecondary = { value: new THREE.Color(pal.secondary ?? pal.accent ?? '#ffffff') };
     U.uPalGlow = { value: new THREE.Color(pal.glow ?? pal.accent ?? '#ffffff') };
     U.uSeed.value = seedValue(instance.seed);
-    U.uWear.value = instance.wear ?? instance.float ?? 0;
     patU = {};
     if (pattern) for (const [k, u] of Object.entries(pattern.uniforms ?? {})) patU[k] = cloneUniform(u);
 
@@ -153,7 +151,6 @@ export function createSkinMaterial(skin, opts = {}, deps) {
       GLSL_COMMON_DECL +
       declareUniforms(patU) +
       GLSL_LIB +
-      GLSL_WEAR +
       GLSL_REVEAL +
       (pattern ? pattern.glsl : DEFAULT_PATTERN_FN);
 
@@ -170,13 +167,12 @@ export function createSkinMaterial(skin, opts = {}, deps) {
         .replace('#include <common>', `#include <common>\n${head}`)
         .replace(
           '#include <map_fragment>',
-          '#include <map_fragment>\nsk_dRough = 0.0; sk_dMetal = 0.0; sk_emis = vec3(0.0); sk_nPert = vec3(0.0); sk_wearMask = 0.0;\nskinPattern(vObjPos, diffuseColor);\nsk_applyWear(vObjPos, diffuseColor);\nsk_applyReveal(vObjPos);',
+          '#include <map_fragment>\nsk_dRough = 0.0; sk_dMetal = 0.0; sk_emis = vec3(0.0); sk_nPert = vec3(0.0);\nskinPattern(vObjPos, diffuseColor);\nsk_applyReveal(vObjPos);',
         )
         .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = clamp(roughnessFactor + sk_dRough, 0.04, 1.0);')
         .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nmetalnessFactor = clamp(metalnessFactor + sk_dMetal, 0.0, 1.0);')
         .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nnormal = normalize(normal + sk_nPert.x * vObjX + sk_nPert.y * vObjY + sk_nPert.z * vObjZ);')
-        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += sk_emis;')
-        .replace('#include <lights_physical_fragment>', '#include <lights_physical_fragment>\n#ifdef USE_CLEARCOAT\nmaterial.clearcoat *= (1.0 - sk_wearMask);\n#endif');
+        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += sk_emis;');
     };
 
     // Animación heredada (offsets del mapa, emisión) mientras la skin no tenga patrón de shader propio
@@ -206,10 +202,9 @@ export function createSkinMaterial(skin, opts = {}, deps) {
     setReveal(v) {
       if (U) U.uReveal.value = v;
     },
-    /** Cambia desgaste (0..1) y semilla de patrón sin recompilar. */
+    /** Cambia la semilla de patrón sin recompilar. */
     setInstance(inst = {}) {
       if (!U) return;
-      U.uWear.value = inst.wear ?? inst.float ?? 0;
       U.uSeed.value = seedValue(inst.seed);
     },
     dispose() {

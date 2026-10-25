@@ -5,7 +5,7 @@ import { SkinFX } from '../game/render/skins/skinFx.js';
 import { BALL_R } from '../game/physics.js';
 import { QUALITY_LEVELS, QUALITY_NAMES, getQuality } from '../game/render/quality.js';
 import { SKINS, TIERS } from '../progress/skins.js';
-import { WEAR_BANDS, rarePatternOf, wearName } from '../progress/inventory.js';
+import { rarePatternOf } from '../progress/inventory.js';
 
 // Inspector 360° de skins v2 (docs/skins-premium-plan.md, (c), (e) y P8).
 //   createSkinInspector(container, { skin, instance, mode: 'panel'|'fullscreen', quality? })
@@ -19,7 +19,6 @@ const ZOOM_MIN = 0.6;
 const ZOOM_MAX = 2;
 const FX_K = R / BALL_R; // unidades de juego -> unidades del inspector
 const SPHERE = { low: [24, 16], medium: [48, 32], high: [128, 96] };
-const WEAR_COLORS = ['#4ade80', '#a3e635', '#facc15', '#fb923c', '#ef4444'];
 const FX_LOOP = 6;
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -83,7 +82,7 @@ function makeRenderer(canvas) {
 }
 
 const tierOf = (skin) => TIERS[skin.tier ?? skin.rarity] ?? TIERS.common;
-const SAFE_INSTANCE = { seed: 0, float: 0, counter: { enabled: false, aces: 0, sinks: 0, birdies: 0 } };
+const SAFE_INSTANCE = { seed: 0, counter: { enabled: false, aces: 0, sinks: 0, birdies: 0 } };
 
 export function createSkinInspector(container, opts = {}) {
   const mode = opts.mode === 'fullscreen' ? 'fullscreen' : 'panel';
@@ -176,7 +175,7 @@ export function createSkinInspector(container, opts = {}) {
     geo?.dispose();
     const [w, h] = SPHERE[level] ?? SPHERE.medium;
     geo = new THREE.SphereGeometry(R, w, h);
-    handle = createSkinMaterial(skin, { quality: level, instance: { seed: instance.seed, wear: instance.float } });
+    handle = createSkinMaterial(skin, { quality: level, instance: { seed: instance.seed } });
     ball.geometry = mirrorBall.geometry = geo;
     ball.material = mirrorBall.material = handle.material;
     tierColor.set(tierOf(skin).color);
@@ -523,7 +522,6 @@ export function createSkinInspector(container, opts = {}) {
   function renderPanel() {
     const tier = tierOf(skin);
     const inst = instance ?? SAFE_INSTANCE;
-    const float = clamp(Number.isFinite(inst.float) ? inst.float : 0, 0, 1);
     const rare = rarePatternOf(skin, inst.seed);
     root.style.setProperty('--sk-tier', tier.color);
     body.replaceChildren();
@@ -533,24 +531,6 @@ export function createSkinInspector(container, opts = {}) {
     head.append(chip);
     if (skin.collection && skin.collection !== 'clasica') head.append(el('span', 'sk-coll', skin.collection));
     body.append(head, el('h3', 'sk-name', skin.name));
-
-    const wear = el('div', 'sk-block');
-    const wl = el('div', 'sk-row');
-    wl.append(el('span', 'sk-label', 'Desgaste'), el('strong', 'sk-wear-name', wearName(float)), el('span', 'sk-mono', float.toFixed(3)));
-    const bar = el('div', 'sk-wear');
-    let prev = 0;
-    WEAR_BANDS.forEach((b, i) => {
-      const seg = el('i');
-      seg.style.flex = String(Math.min(1, b.max) - prev);
-      seg.style.background = WEAR_COLORS[i];
-      prev = Math.min(1, b.max);
-      bar.append(seg);
-    });
-    const mark = el('b', 'sk-wear-mark');
-    mark.style.left = `${float * 100}%`;
-    bar.append(mark);
-    wear.append(wl, bar);
-    body.append(wear);
 
     const pat = el('div', 'sk-row sk-block');
     pat.append(el('span', 'sk-label', 'Patrón'), el('strong', 'sk-mono', `#${inst.seed ?? 0}`));
@@ -579,7 +559,7 @@ export function createSkinInspector(container, opts = {}) {
 
   // ---------------------------------------------------------------- API
   const api = {
-    /** Cambia de skin (y opcionalmente de instancia/calidad). Mismo skin+calidad: solo actualiza desgaste y semilla. */
+    /** Cambia de skin (y opcionalmente de instancia/calidad). Mismo skin+calidad: solo actualiza la semilla. */
     setSkin(next, nextInstance, o = {}) {
       if (destroyed) return;
       const nextLevel = QUALITY_LEVELS.includes(o.quality) ? o.quality : level;
@@ -589,7 +569,7 @@ export function createSkinInspector(container, opts = {}) {
       level = nextLevel;
       renderPanel();
       if (same) {
-        handle.setInstance({ seed: instance.seed, wear: instance.float });
+        handle.setInstance({ seed: instance.seed });
         return;
       }
       buildBall();
@@ -684,7 +664,7 @@ function createThumbRenderer(size = 144) {
   scene.add(mesh);
   return {
     render(skin, inst, quality) {
-      const h = createSkinMaterial(skin, { quality, instance: { seed: inst.seed, wear: inst.float } });
+      const h = createSkinMaterial(skin, { quality, instance: { seed: inst.seed } });
       mesh.material = h.material;
       h.update(1.2, 0.016, { speed: 0, impact: 0, state: 0 });
       renderer.render(scene, camera);
@@ -702,11 +682,11 @@ function createThumbRenderer(size = 144) {
 
 /**
  * Laboratorio de skins para el revisor: rejilla de todas las skins (miniaturas 3D reales) con
- * sliders de desgaste, semilla y calidad, y un inspector grande. Devuelve `{ destroy }`.
+ * sliders de semilla y calidad, y un inspector grande. Devuelve `{ destroy }`.
  */
 export function mountSkinLab(container) {
-  const state = { id: SKINS[0].id, float: 0.05, seed: 123, quality: getQuality() };
-  const instFor = () => ({ seed: state.seed, float: state.float, counter: { enabled: true, aces: 2, sinks: 47, birdies: 12 }, unlockedAt: '2026-01-15T10:00:00Z' });
+  const state = { id: SKINS[0].id, seed: 123, quality: getQuality() };
+  const instFor = () => ({ seed: state.seed, counter: { enabled: true, aces: 2, sinks: 47, birdies: 12 }, unlockedAt: '2026-01-15T10:00:00Z' });
   const skinNow = () => SKINS.find((s) => s.id === state.id) ?? SKINS[0];
 
   const root = el('div', 'sk-lab');
@@ -717,8 +697,6 @@ export function mountSkinLab(container) {
     l.append(el('span', '', label), input, v);
     return { l, v };
   };
-  const fIn = el('input');
-  Object.assign(fIn, { type: 'range', min: 0, max: 1, step: 0.001, value: state.float });
   const sIn = el('input');
   Object.assign(sIn, { type: 'range', min: 0, max: 999, step: 1, value: state.seed });
   const qIn = el('select');
@@ -728,13 +706,12 @@ export function mountSkinLab(container) {
     qIn.append(o);
   }
   qIn.value = state.quality;
-  const F = mk('Desgaste', fIn), S = mk('Patrón', sIn), Q = mk('Calidad', qIn);
+  const S = mk('Patrón', sIn), Q = mk('Calidad', qIn);
   const showVals = () => {
-    F.v.textContent = `${state.float.toFixed(3)} · ${wearName(state.float)}`;
     S.v.textContent = `#${state.seed}`;
     Q.v.textContent = '';
   };
-  bar.append(F.l, S.l, Q.l);
+  bar.append(S.l, Q.l);
   const grid = el('div', 'sk-lab-grid');
   const main = el('div', 'sk-lab-main');
   root.append(bar, el('div', 'sk-lab-split'));
@@ -791,14 +768,12 @@ export function mountSkinLab(container) {
     }, 220);
   };
   const onChange = () => {
-    state.float = Number(fIn.value);
     state.seed = Number(sIn.value);
     state.quality = qIn.value;
     showVals();
     inspector.setSkin(skinNow(), instFor(), { quality: state.quality });
     refreshThumbs();
   };
-  fIn.addEventListener('input', onChange);
   sIn.addEventListener('input', onChange);
   qIn.addEventListener('change', onChange);
   showVals();

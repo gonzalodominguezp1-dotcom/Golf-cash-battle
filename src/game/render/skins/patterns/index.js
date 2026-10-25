@@ -4,7 +4,7 @@
 //     glsl: string,          // define `void skinPattern(vec3 p, inout vec4 diffuse)`; `p` = posición unitaria
 //                            // en espacio de objeto. Puede escribir sk_dRough, sk_dMetal (aditivos),
 //                            // sk_emis (HDR, sumado a la emisión) y sk_nPert (perturbación de normal en
-//                            // espacio de objeto). Tiene a mano uTime, uSpeed, uImpact, uWear, uSeed,
+//                            // espacio de objeto). Tiene a mano uTime, uSpeed, uImpact, uSeed,
 //                            // uState, uQuality, uPal{Base,Accent,Secondary,Glow} y shaderLib (sk_*).
 //                            // También se definen SK_Q (0 baja, 1 media, 2 alta) y, por cada clave de
 //                            // quality[nivel], `SK_<CLAVE>` (entero si lo es) y `SK_<CLAVE>_F` (siempre float);

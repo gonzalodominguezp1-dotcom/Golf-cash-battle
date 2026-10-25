@@ -33,7 +33,7 @@ export class Progress {
     if (this.#sync()) this.#persistLocal();
   }
 
-  /** Clave de la que salen seed y float: la cuenta, o el dispositivo si aún no hay. */
+  /** Clave de la que sale el seed: la cuenta, o el dispositivo si aún no hay. */
   get #ownerKey() {
     return this.state.owner || this.state.deviceId;
   }
@@ -43,7 +43,7 @@ export class Progress {
     return ensureInstances(this.state.inventory, this.#ownerKey, SKINS.filter((s) => this.isUnlocked(s)));
   }
 
-  /** Instancia (seed, float, contador...) de una skin desbloqueada, o null. */
+  /** Instancia (seed, contador...) de una skin desbloqueada, o null. */
   instance(id) {
     return this.state.inventory[id] ?? null;
   }
@@ -66,14 +66,13 @@ export class Progress {
         for (const [id, e] of Object.entries(mine)) this.state.inventory[id] ??= e;
       }
     } else {
-      // gana el local, pero las instancias del servidor mandan (seed/float inmutables)
+      // gana el local, pero las instancias del servidor mandan (seed inmutable)
       const theirs = sanitizeInventory(r.inventory);
       for (const [id, e] of Object.entries(theirs)) {
         const m = this.state.inventory[id];
         if (!m) this.state.inventory[id] = e;
         else {
           m.seed = e.seed;
-          m.float = e.float;
           for (const k of ['aces', 'sinks', 'birdies']) m.counter[k] = Math.max(m.counter[k], e.counter[k]);
         }
       }

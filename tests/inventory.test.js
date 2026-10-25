@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Progress } from '../src/progress/Progress.js';
-import { SKINS, skinById } from '../src/progress/skins.js';
-import { floatFor, seedFor, wearName } from '../src/progress/inventory.js';
+import { SKINS } from '../src/progress/skins.js';
+import { sanitizeInventory, seedFor } from '../src/progress/inventory.js';
 
 const mem = (init = {}) => {
   const d = { ...init };
@@ -10,33 +10,40 @@ const mem = (init = {}) => {
 };
 const KEY = 'gcb.progress.v1';
 
-test('seed y float son deterministas por dueño y skin', () => {
+test('seed es determinista por dueño y skin', () => {
   assert.equal(seedFor('u1', 'gold'), seedFor('u1', 'gold'));
-  assert.equal(floatFor('u1', 'gold'), floatFor('u1', 'gold'));
-  assert.notEqual(floatFor('u1', 'gold'), floatFor('u2', 'gold'));
   for (let i = 0; i < 200; i++) {
-    const f = floatFor('o' + i, 'x');
-    assert.ok(f >= 0 && f <= 1);
     const s = seedFor('o' + i, 'x');
     assert.ok(Number.isInteger(s) && s >= 0 && s <= 999);
   }
-  for (let i = 0; i < 200; i++) assert.ok(floatFor('o' + i, 'm', skinById('midas_touch').wearRange) <= 0.15);
 });
 
-test('wearName cubre los rangos', () => {
-  assert.equal(wearName(0), 'Recién forjada');
-  assert.equal(wearName(0.1), 'Casi nueva');
-  assert.equal(wearName(0.2), 'Probada en campo');
-  assert.equal(wearName(0.4), 'Desgastada');
-  assert.equal(wearName(0.9), 'Curtida en batalla');
-  assert.equal(wearName(1), 'Curtida en batalla');
+test('las instancias ya no llevan desgaste (float)', () => {
+  const p = new Progress(mem());
+  assert.equal('float' in p.instance('classic'), false);
+  assert.equal('float' in sanitizeInventory({ gold: { seed: 3, float: 0.4 } }).gold, false);
+});
+
+test('un guardado antiguo con float se lee sin romper y conserva seed y contadores', () => {
+  const old = {
+    xp: 900, wins: 15, equipped: 'diamond',
+    inventory: { diamond: { seed: 42, float: 0.731, variant: 'base', counter: { enabled: true, aces: 3, sinks: 50, birdies: 9 }, unlockedAt: '2026-01-02T00:00:00.000Z' } },
+  };
+  const st = mem({ [KEY]: JSON.stringify(old) });
+  const p = new Progress(st);
+  const d = p.instance('diamond');
+  assert.equal(d.seed, 42);
+  assert.deepEqual([d.counter.aces, d.counter.sinks, d.counter.birdies], [3, 50, 9]);
+  assert.equal('float' in d, false);
+  assert.equal(p.state.xp, 900);
+  assert.equal(p.skin.id, 'diamond');
 });
 
 test('recargar no re-tira: misma instancia; mismo dueño, mismos valores', () => {
   const st = mem();
   const a = new Progress(st);
   const inst = structuredClone(a.instance('classic'));
-  assert.ok(inst && inst.float >= 0 && inst.float <= 1);
+  assert.ok(inst && Number.isInteger(inst.seed));
   const b = new Progress(st);
   assert.deepEqual(b.instance('classic'), inst);
   // al vincular cuenta, lo ya tirado no cambia
@@ -52,7 +59,6 @@ test('recargar no re-tira: misma instancia; mismo dueño, mismos valores', () =>
     x.recordMatch({ position: 1, won: true, entryFee: 0, holes: [] });
   }
   assert.equal(c.instance('champ').seed, d.instance('champ').seed);
-  assert.equal(c.instance('champ').float, d.instance('champ').float);
 });
 
 test('un estado antiguo sin inventory se migra sin perder nada', () => {
@@ -80,12 +86,12 @@ test('contadores suben solo en la skin equipada y con marcador', () => {
   assert.equal(p.instance('classic').counter.aces, 0, 'sin marcador no cuenta');
 });
 
-test('attach: seed y float del servidor mandan sobre los locales', () => {
+test('attach: el seed del servidor manda sobre el local (su float antiguo se ignora)', () => {
   const p = new Progress(mem());
   const remote = { xp: 0, inventory: { classic: { seed: 7, float: 0.5, variant: 'base', counter: { enabled: false, aces: 0, sinks: 0, birdies: 0 }, unlockedAt: '2026-01-01T00:00:00.000Z' } } };
   p.attach('u9', remote, null);
   assert.equal(p.instance('classic').seed, 7);
-  assert.equal(p.instance('classic').float, 0.5);
+  assert.equal('float' in p.instance('classic'), false);
 });
 
 test('sinks cuenta solo embocadas reales, no hoyos con el máximo de golpes', () => {

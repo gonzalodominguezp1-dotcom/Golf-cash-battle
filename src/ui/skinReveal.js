@@ -2,7 +2,7 @@ import './skinReveal.css';
 import { sfx } from '../game/audio.js';
 import { ballPreview } from '../game/render/ballSkins.js';
 import { TIERS } from '../progress/skins.js';
-import { rarePatternOf, wearName } from '../progress/inventory.js';
+import { rarePatternOf } from '../progress/inventory.js';
 import { createSkinInspector } from './skinInspector.js';
 import { thumbFrames, upgradeImg } from './skinThumbs.js';
 
@@ -158,7 +158,6 @@ export function showSkinReveal(skins, { progress = null } = {}) {
       const k = tierKey(skin);
       const tier = TIERS[k];
       const inst = progress?.instance(skin.id) ?? null;
-      const float = inst ? Math.min(1, Math.max(0, inst.float ?? 0)) : null;
       const rare = inst ? rarePatternOf(skin, inst.seed) : null;
       const mythic = k === 'mythic';
       const calm = reduced();
@@ -184,7 +183,7 @@ export function showSkinReveal(skins, { progress = null } = {}) {
           </div>
           <div class="sr-info">
             <h2 class="sr-name">${esc(skin.name)}</h2>
-            ${inst ? `<p class="sr-meta"><span class="sr-wear"><b class="sr-float">${calm ? float.toFixed(3) : '0.000'}</b> · ${wearName(float)}</span><span>Patrón #${String(inst.seed).padStart(3, '0')}</span>${rare ? '<span class="sr-rare">✦ Patrón raro</span>' : ''}${inst.counter?.enabled ? '<span class="sr-rare">Marcador</span>' : ''}</p>` : ''}
+            ${inst ? `<p class="sr-meta"><span>Patrón #${String(inst.seed).padStart(3, '0')}</span>${rare ? '<span class="sr-rare">✦ Patrón raro</span>' : ''}${inst.counter?.enabled ? '<span class="sr-rare">Marcador</span>' : ''}</p>` : ''}
             <div class="sr-actions">
               <button type="button" class="ghost sr-inspect">Inspeccionar</button>
               ${progress ? '<button type="button" class="primary sr-equip">Equipar</button>' : ''}
@@ -195,7 +194,6 @@ export function showSkinReveal(skins, { progress = null } = {}) {
 
       const stage = root.querySelector('.sr-stage');
       const img = root.querySelector('.sr-ball img');
-      const floatEl = root.querySelector('.sr-float');
       const canvas = root.querySelector('.sr-fx');
       const equipBtn = root.querySelector('.sr-equip');
       const nextBtn = root.querySelector('.sr-next');
@@ -248,26 +246,9 @@ export function showSkinReveal(skins, { progress = null } = {}) {
         back.focus({ preventScroll: true });
       });
 
-      // contador de desgaste: rueda hasta su valor al llegar a la fase 5
-      const rollFloat = () => {
-        if (!floatEl || calm) return;
-        const t0 = performance.now();
-        const ms = 520;
-        const tick = (now) => {
-          if (done && floatEl.dataset.fixed) return;
-          const p = Math.min(1, (now - t0) / ms);
-          floatEl.textContent = (float * (1 - (1 - p) ** 3)).toFixed(3);
-          if (p < 1 && !floatEl.dataset.fixed) requestAnimationFrame(tick);
-        };
-        requestAnimationFrame(tick);
-      };
       const settle = () => {
         done = true;
         stage.classList.add('sr-done');
-        if (floatEl) {
-          floatEl.dataset.fixed = '1';
-          floatEl.textContent = float.toFixed(3);
-        }
         clearInterval(spin);
         spin = 0;
         (list.length > 1 && !last ? nextBtn : equipBtn && !equipBtn.disabled ? equipBtn : nextBtn).focus({ preventScroll: true });
@@ -297,7 +278,6 @@ export function showSkinReveal(skins, { progress = null } = {}) {
         }, start[3]));
       }
       timers.push(setTimeout(() => sound(skin, 'hit'), calm ? 0 : start[3]));
-      timers.push(setTimeout(rollFloat, start[4]));
       timers.push(setTimeout(settle, total));
     }
 

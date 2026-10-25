@@ -117,26 +117,6 @@
 .sk-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .sk-row .sk-mono:last-child { margin-left: auto; }
 .sk-mono { font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.sk-wear {
-  position: relative;
-  display: flex;
-  height: 8px;
-  margin-top: 8px;
-  border-radius: 4px;
-  overflow: visible;
-  gap: 2px;
-}
-.sk-wear i { display: block; height: 100%; border-radius: 3px; opacity: 0.85; }
-.sk-wear-mark {
-  position: absolute;
-  top: -4px;
-  width: 4px;
-  height: 16px;
-  margin-left: -2px;
-  border-radius: 2px;
-  background: #fff;
-  box-shadow: 0 0 0 2px #0b0f15, 0 0 8px rgba(255, 255, 255, 0.6);
-}
 .sk-rare {
   padding: 2px 9px;
   border-radius: 999px;

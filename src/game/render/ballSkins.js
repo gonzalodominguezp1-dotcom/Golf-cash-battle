@@ -476,7 +476,7 @@ const deps = { canvas: skinCanvas, legacy: setupSkinAnimation };
 
 /**
  * Material premium de bola: `{ material, update(t, dt, { speed, impact, state }), dispose(), ... }`.
- * Opciones: `quality` ('low'|'medium'|'high', por defecto la guardada), `instance` ({ seed, wear }),
+ * Opciones: `quality` ('low'|'medium'|'high', por defecto la guardada), `instance` ({ seed }),
  * `theme` (para elegir el env de estudio claro u oscuro).
  */
 export function createSkinMaterial(skin, opts = {}) {

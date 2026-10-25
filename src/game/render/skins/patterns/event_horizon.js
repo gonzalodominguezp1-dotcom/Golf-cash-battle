@@ -1,7 +1,7 @@
 // P3f · Horizonte de Sucesos (docs/skins-premium-plan.md, ficha 6): esfera negra pura (rough 1, sin
 // reflejo) con anillo de fotones por fresnel invertido en el borde. El disco de acreción es FX (P5).
 //   uState (racha 0..5): el halo del borde vira oro -> rosa -> violeta y gana intensidad.
-//   uSeed: fase y orientación del temblor de lente en el anillo. uWear: lo aplica shaderLib (subcapa).
+//   uSeed: fase y orientación del temblor de lente en el anillo.
 // Baja no ejecuta shader (material estándar + canvas); se define igualmente por contrato.
 export default {
   glsl: /* glsl */ `

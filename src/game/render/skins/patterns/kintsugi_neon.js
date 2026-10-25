@@ -2,7 +2,7 @@
 // pulido y núcleo magenta emisivo. Las vetas son aristas de un Voronoi 3D (distancia d2 - d1) con el
 // dominio deformado; un pulso viaja a lo largo de ellas (fase = ruido espacial - tiempo) y hay un
 // «latido» idle cada 2.5 s. uImpact = destello blanco + micro-grietas extra que se «reparan».
-// uSeed desplaza el campo (cada instancia tiene sus propias grietas); uWear lo aplica la shaderLib.
+// uSeed desplaza el campo (cada instancia tiene sus propias grietas).
 // Supone material base ~ rough 0.16 / metal 0.72 (skins.js): se reajusta con sk_dRough / sk_dMetal.
 
 const glsl = /* glsl */ `
