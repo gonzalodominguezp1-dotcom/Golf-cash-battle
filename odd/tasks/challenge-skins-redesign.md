@@ -55,12 +55,10 @@ Rediseñar integralmente todas las skins de bola que se consiguen mediante desaf
 - [x] `task-6`: Mapeo procedural esférico 3D continuo sin cortes visuales (Seamless 3D noise & Voronoi), mapa de normales físico de hoyuelos (dimples), y remoción de efectos de rodada y hoyo a solicitud del usuario.
 - [x] `task-7`: Personalizador dinámico de colores interactivo (color pickers para Base, Acento, Secundario y Brillo, presets de lujo en un clic, regeneración inmediata de textura 3D en tiempo real y sincronización en visor y JSON exportable).
 - [x] `task-8`: Integración de las 5 nuevas skins de desafío seleccionadas por el usuario (`kintsugi_neon`, `damascus_imperial`, `zephyr_nacre`, `supernova_solar`, `crimson_dragon`) con su configuración exacta de colores, retos escalonados según su estatus premium, renderizado procedural 3D en `ballSkins.js` y actualización de tests.
-- [x] `task-9`: Revisión y rediseño de contraste y paletas en todos los escenarios del juego (`THEMES` en `src/game/themes.js`): fondos oscuros inmersivos (cielos profundos, neblinas nocturnas), fairways de alto contraste vibrante y contraluces llamativos (rim lighting).
-- [x] `task-10`: Motor de texturas animadas para skins dinámicas (`galaxy`, `supernova_solar`, `crimson_dragon`, `kintsugi_neon`, `lava`, `streak`, `holo`, `damascus_imperial`, `zephyr_nacre`) con deriva de nebulosa, convección solar, pulsación de energía interna y sincronización en `GolfGame.js`, `src/main.js` y `challenge-skins.html`.
 
 ## Registro de Estado y Evidencia
 - **Ruta implementada**: Directa con orquestador y tareas desacopladas.
-- **Commit**: `3c5656a`, `7357a30`, `4342bc2`, `129d523`, `48e36d5`, `f0cd7bf`
+- **Commit**: `3c5656a`, `7357a30`, `4342bc2`, `129d523`, `48e36d5`
 - **Engram Mirror**: `odd/challenge-skins-redesign/tasks` (marcado local).
 - **Modo TDD**: Functional checks + validación interactiva visual en navegador + 69/69 unit tests pasando + build de producción Vite exitoso.
 - **task-1 completada**: Definición estructurada de `CHALLENGE_SKINS_DATA` con 24 variantes de skins, metadatos de rareza, requisito de desafío, parámetros de material 3D (roughness, metalness, clearcoat, iridescence, emissive), tipo de estela de rodada y efecto de acierto en hoyo.
@@ -77,14 +75,3 @@ Rediseñar integralmente todas las skins de bola que se consiguen mediante desaf
   4. `kintsugi_neon` ("Kintsugi Neón", Diamante, desafío `aces3`: 3 hoyos en uno, Base `#000000`, Acento `#e205ff`, Secundario `#e205ff`, Shimmer `#e205ff`).
   5. `damascus_imperial` ("Damasco Imperial", Esmeralda, desafío `birdies15`: 15 birdies, Base `#022c22`, Acento `#10b981`, Secundario `#38ef7d`, Shimmer `#53eaa3`).
   Actualización de `paintBall` y `skinMaterial` en `src/game/render/ballSkins.js` con mapeo esférico 3D procedural y parámetros físicos PBR dedicados, sincronización de valores en `challenge-skins.html`, 69/69 tests unitarios pasando y compilación de producción exitosa en 1.14s.
-- **task-9 completada**: Rediseño y calibración integral del contraste y paletas de color en los 12 escenarios de `THEMES` (`src/game/themes.js`): fondos de noche profunda (`skyTop`, `skyHorizon`, `groundLow`), sombras de niebla y contraluces teatrales llamativos (`rim` neon cian/magenta/ámbar/esmeralda) que hacen resaltar de forma cinematográfica los fairways vibrantes (ej. esmeralda neón en `meadow`, cian eléctrico en `beach`, oro synthwave en `sunset`, aurora boreal en `snow`, ámbar incandescente en `canyon`, magma vivo en `volcano`, cyberpunk en `neon` y `neonPink`).
-- **task-10 completada**: Motor de texturas animadas en tiempo real implementado en `src/game/render/ballSkins.js` (`setupSkinAnimation`), `src/game/GolfGame.js`, `src/main.js` (inspector 3D) y `challenge-skins.html` (visor individual y comparador 4-Up):
-  - `galaxy`: Deriva continua de estrellas y nebulosa espacial (`offset.x`, `offset.y`) con respiración de pulso emisivo cósmico.
-  - `supernova_solar`: Convección turbulenta de plasma solar con llamaradas coronales dinámicas.
-  - `crimson_dragon`: Latido orgánico dracónico en las escamas carmesí y variación sutil de respiración.
-  - `kintsugi_neon`: Base de fibra de carbono 100% negra pura (cero tinte de fondo) mediante mapa emisivo dedicado con arcos voltaicos y chispas eléctricas púrpuras en las fracturas.
-  - `lava`: Flujo viscoso subterráneo de magma ardiente e intensidad térmica pulsante.
-  - `streak`: Parpadeo rápido y oscilación vertical de llamas incandescentes.
-  - `holo`: Dispersión cromática prismática continua en el espectro con modulación armónica de iridiscencia e IOR.
-  - `damascus_imperial` y `zephyr_nacre`: Refracción ondulante de luz metálica y nácar eólico.
-  - 69/69 tests pasando y Vite build en 1.02s sin errores.
