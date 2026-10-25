@@ -11,10 +11,12 @@ import { segmentsOf } from './game/physics.js';
 import { isMuted, setMuted, sfx, unlockAudio } from './game/audio.js';
 import { Progress } from './progress/Progress.js';
 import { CHALLENGES, TIERS as SKIN_TIERS, SKINS } from './progress/skins.js';
-import { ballPreview, skinMaterial } from './game/render/ballSkins.js';
+import { ballPreview } from './game/render/ballSkins.js';
+import { createSkinInspector, isSkinLabRequested, mountSkinLab } from './ui/skinInspector.js';
+import { hoverLoop, installThumbObserver, upgradeImg } from './ui/skinThumbs.js';
+import { rarePatternOf, wearName } from './progress/inventory.js';
 import { getCoursePreview, getCourseDistance } from './game/render/coursePreview.js';
 import { QUALITY_LEVELS, QUALITY_NAMES, getQuality, setQuality } from './game/render/quality.js';
-import * as THREE from 'three';
 
 let backend, wallet, matches;
 // práctica forzada con #hoyoN: siempre local, no toca el servidor
@@ -45,7 +47,8 @@ const h = (html) => {
   t.innerHTML = html.trim();
   return t.content.firstElementChild;
 };
-const ball = (skin, size = 96, cls = '') => `<img class="ball-img ${cls}" src="${ballPreview(skin, size * 2)}" width="${size}" height="${size}" alt="">`;
+// placeholder 2D al instante; installThumbObserver lo cambia por la miniatura 3D (data-skin-id)
+const ball = (skin, size = 96, cls = '') => `<img class="ball-img ${cls}" src="${ballPreview(skin, size * 2)}" data-skin-id="${skin.id}" width="${size}" height="${size}" alt="">`;
 
 let game = null;
 let screen = 'lobby';
@@ -265,136 +268,17 @@ async function showLobby() {
   if (backend.tournaments) showMyTournaments(view.querySelector('.my-tournaments'));
 }
 
-// ---------- inspector 3D de skins para escritorio ----------
-
-const RARITY_HEX = Object.fromEntries(Object.entries(SKIN_TIERS).map(([id, t]) => [id, parseInt(t.color.slice(1), 16)]));
-
-function createSkinInspector(container, initialSkin) {
-  const w = 280, h = 280;
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  renderer.setSize(w, h, false);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.2;
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.domElement.style.touchAction = 'none';
-  container.replaceChildren(renderer.domElement);
-
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 50);
-  camera.position.set(0, 0, 1.35);
-  camera.lookAt(0, 0, 0);
-
-  // Iluminación de estudio
-  scene.add(new THREE.AmbientLight(0xffffff, 0.85));
-  const key = new THREE.DirectionalLight(0xfff7ed, 2.8);
-  key.position.set(2.5, 3.5, 2.5);
-  scene.add(key);
-  const fill = new THREE.DirectionalLight(0x7eaaff, 1.5);
-  fill.position.set(-2.8, -0.2, -1.5);
-  scene.add(fill);
-  const rim = new THREE.DirectionalLight(0xffffff, 2.2);
-  rim.position.set(0, 3, -2.5);
-  scene.add(rim);
-
-  const rarityColor = RARITY_HEX[initialSkin.rarity] || 0xffd23f;
-  const underLight = new THREE.PointLight(rarityColor, 2.5, 3.0);
-  underLight.position.set(0, -0.6, 0.3);
-  scene.add(underLight);
-
-  // Bola 3D centrada
-  const geo = new THREE.SphereGeometry(0.38, 64, 48);
-  let currentMat = skinMaterial(initialSkin);
-  const ballMesh = new THREE.Mesh(geo, currentMat);
-  ballMesh.position.set(0, 0, 0);
-  scene.add(ballMesh);
-
-  let rotX = 0.12, rotY = 0;
-  let velX = 0, velY = 0.005;
-  let isDragging = false;
-  let lastX = 0, lastY = 0;
-
-  const onDown = (e) => {
-    isDragging = true;
-    lastX = e.clientX;
-    lastY = e.clientY;
-    renderer.domElement.style.cursor = 'grabbing';
-  };
-  const onMove = (e) => {
-    if (!isDragging) return;
-    const dx = e.clientX - lastX;
-    const dy = e.clientY - lastY;
-    lastX = e.clientX;
-    lastY = e.clientY;
-    velY = dx * 0.012;
-    velX = dy * 0.012;
-    rotY += velY;
-    rotX += velX;
-  };
-  const onUp = () => {
-    isDragging = false;
-    renderer.domElement.style.cursor = 'grab';
-  };
-  const onWheel = (e) => {
-    e.preventDefault();
-    camera.position.z = Math.max(1.0, Math.min(2.1, camera.position.z + e.deltaY * 0.0015));
-  };
-
-  renderer.domElement.style.cursor = 'grab';
-  renderer.domElement.addEventListener('pointerdown', onDown);
-  renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
-  window.addEventListener('pointermove', onMove);
-  window.addEventListener('pointerup', onUp);
-
-  let active = true;
-  function animate() {
-    if (!active) return;
-    requestAnimationFrame(animate);
-    if (!isDragging) {
-      velY += (0.003 - velY) * 0.04;
-      velX *= 0.9;
-      rotY += velY;
-      rotX += velX;
-    }
-    rotX = Math.max(-1.1, Math.min(1.1, rotX));
-    ballMesh.rotation.set(rotX, rotY, 0);
-    const now = performance.now() * 0.001;
-    ballMesh.material.userData?.update?.(now, 0.016);
-    renderer.render(scene, camera);
-  }
-  requestAnimationFrame(animate);
-
-  return {
-    setSkin(skin) {
-      const oldMat = ballMesh.material;
-      ballMesh.material = skinMaterial(skin);
-      oldMat?.map?.dispose();
-      oldMat?.dispose();
-      const col = RARITY_HEX[skin.rarity] || 0xffd23f;
-      underLight.color.setHex(col);
-    },
-    destroy() {
-      active = false;
-      renderer.domElement.removeEventListener('pointerdown', onDown);
-      renderer.domElement.removeEventListener('wheel', onWheel);
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      renderer.dispose();
-      geo.dispose();
-      ballMesh.material?.map?.dispose();
-      ballMesh.material?.dispose();
-      renderer.domElement.remove();
-    },
-  };
-}
-
 // ---------- skins ----------
+
+const tierOrder = (s) => SKIN_TIERS[s.tier]?.order ?? 0;
+const FILTER_TIERS = Object.keys(SKIN_TIERS).reverse();
 
 async function showSkins() {
   screen = 'skins';
   const unlocked = SKINS.filter((s) => progress.isUnlocked(s)).length;
   const { level, into, need } = progress.level;
-  let selectedSkin = progress.skin;
+  const collections = [...new Set(SKINS.map((s) => s.collection))];
+  const filter = { tier: 'all', owned: false, collection: 'all' };
 
   const view = h(`
     <main class="screen skins">
@@ -406,142 +290,177 @@ async function showSkins() {
         <div><small>Nivel</small><strong>${level}</strong></div>
         <div class="level-progress"><span><i style="width:${(into / need) * 100}%"></i></span><small>${into} / ${need} XP</small></div>
       </div>
-      <div class="skins-content-layout">
-        <div class="skins-left-col">
-          <div class="skin-grid"></div>
-          <h2>Desafíos</h2>
-          <ul class="challenges">
-            ${CHALLENGES.map((c) => {
+      <div class="sk-filters" role="toolbar" aria-label="Filtros de skins">
+        <div class="sk-filter-row">
+          <button type="button" class="sk-fchip on" data-tier="all">Todas</button>
+          ${FILTER_TIERS.map((id) => `<button type="button" class="sk-fchip rarity-${id}" data-tier="${id}"><i>${SKIN_TIERS[id].icon}</i>${SKIN_TIERS[id].name}</button>`).join('')}
+        </div>
+        <div class="sk-filter-row">
+          <button type="button" class="sk-fchip sk-fowned" aria-pressed="false">Solo desbloqueadas</button>
+          ${collections.length > 1 ? `<select class="sk-fcoll" aria-label="Colección"><option value="all">Todas las colecciones</option>${collections.map((c) => `<option value="${c}">${c[0].toUpperCase()}${c.slice(1)}</option>`).join('')}</select>` : ''}
+        </div>
+      </div>
+      <div class="sk-grid"></div>
+      <p class="sk-empty" hidden>Ninguna skin cumple estos filtros.</p>
+      <h2>Desafíos</h2>
+      <ul class="challenges">
+        ${CHALLENGES.map((c) => {
     const st = progress.challenge(c.id);
     const reward = SKINS.find((s) => s.unlock?.challenge === c.id);
     return `<li class="${st.done ? 'done' : ''}">
-                ${ball(reward, 34)}
-                <div><b>${c.name}</b><span class="bar"><i style="width:${(st.value / st.goal) * 100}%"></i></span></div>
-                <small>${st.done ? 'Completado' : `${st.value}/${st.goal}`}</small>
-              </li>`;
+            ${ball(reward, 34)}
+            <div><b>${c.name}</b><span class="bar"><i style="width:${(st.value / st.goal) * 100}%"></i></span></div>
+            <small>${st.done ? 'Completado' : `${st.value}/${st.goal}`}</small>
+          </li>`;
   }).join('')}
-          </ul>
-        </div>
-        <aside class="skin-inspector-panel">
-          <span class="rarity badge-rarity rarity-${selectedSkin.rarity}">${SKIN_TIERS[selectedSkin.rarity].name}</span>
-          <div class="skin-inspector-canvas"></div>
-          <p class="skin-inspector-hint">Arrastra para girar 360° · Rueda para zoom</p>
-          <h3 class="skin-inspector-name">${selectedSkin.name}</h3>
-          <p class="skin-inspector-desc">Materiales 3D con brillo físico e iridiscencia</p>
-          <button class="primary skin-inspector-btn" disabled>Equipada</button>
-        </aside>
-      </div>
+      </ul>
     </main>`);
 
-  const grid = view.querySelector('.skin-grid');
-  const inspectorCanvas = view.querySelector('.skin-inspector-canvas');
-  const inspectorName = view.querySelector('.skin-inspector-name');
-  const inspectorRarity = view.querySelector('.badge-rarity');
-  const inspectorBtn = view.querySelector('.skin-inspector-btn');
+  const grid = view.querySelector('.sk-grid');
+  const empty = view.querySelector('.sk-empty');
+  const cards = new Map();
 
-  const updateEquippedUI = () => {
-    grid.querySelectorAll('.skin-card').forEach((btn) => {
-      const id = btn.dataset.skinId;
-      const isEq = progress.skin.id === id;
-      btn.classList.toggle('equipped', isEq);
-      const small = btn.querySelector('small:not(.req)');
-      if (small) small.textContent = isEq ? 'Equipada' : 'Toca para equipar';
-    });
-  };
+  const isOpen = (s) => progress.isUnlocked(s);
+  const sorted = [...SKINS].sort((a, b) => tierOrder(b) - tierOrder(a) || isOpen(b) - isOpen(a) || a.name.localeCompare(b.name, 'es'));
+  const jobs = [];
 
-  const updateSelectedCardUI = (selectedId) => {
-    grid.querySelectorAll('.skin-card').forEach((btn) => {
-      btn.classList.toggle('selected', btn.dataset.skinId === selectedId);
-    });
-  };
-
-  const updateInspector = (s) => {
-    selectedSkin = s;
-    updateSelectedCardUI(s.id);
-    if (activeSkinInspector) activeSkinInspector.setSkin(s);
-    inspectorName.textContent = s.name;
-    inspectorRarity.textContent = SKIN_TIERS[s.rarity].name;
-    inspectorRarity.className = `rarity badge-rarity rarity-${s.rarity}`;
-    const req = progress.requirement(s);
-    const open = req.ratio >= 1;
-    const isEq = progress.skin.id === s.id;
-    if (isEq) {
-      inspectorBtn.textContent = 'Equipada';
-      inspectorBtn.disabled = true;
-    } else if (open) {
-      inspectorBtn.textContent = 'Equipar skin';
-      inspectorBtn.disabled = false;
-    } else {
-      inspectorBtn.textContent = `Bloqueada (${req.text})`;
-      inspectorBtn.disabled = true;
-    }
-  };
-
-  inspectorBtn.addEventListener('click', () => {
-    const req = progress.requirement(selectedSkin);
-    if (req.ratio >= 1 && progress.equip(selectedSkin.id)) {
-      updateEquippedUI();
-      updateInspector(selectedSkin);
-    }
-  });
-
-  const order = [...SKINS].sort((a, b) => SKIN_TIERS[a.rarity].order - SKIN_TIERS[b.rarity].order);
-  for (const skin of order) {
+  for (const skin of sorted) {
+    const tier = SKIN_TIERS[skin.tier];
+    const open = isOpen(skin);
+    const inst = progress.instance(skin.id);
     const req = progress.requirement(skin);
-    const open = req.ratio >= 1;
-    const equipped = progress.skin.id === skin.id;
-    const isSelected = selectedSkin.id === skin.id;
+    const rare = open && inst ? rarePatternOf(skin, inst.seed) : null;
+    const float = open && inst ? Math.min(1, Math.max(0, inst.float ?? 0)) : null;
     const card = h(`
-      <button class="skin-card holo rarity-${skin.rarity} ${open ? '' : 'locked'} ${equipped ? 'equipped' : ''} ${isSelected ? 'selected' : ''}" data-skin-id="${skin.id}">
+      <button type="button" class="sk-card holo rarity-${skin.tier} ${open ? '' : 'locked'}" data-skin-id="${skin.id}" style="--sk-a:${skin.palette.base};--sk-b:${skin.palette.accent}">
         <div class="shine"></div>
-        <span class="rarity">${SKIN_TIERS[skin.rarity].name}</span>
-        ${ball(skin, 76, open ? 'float' : '')}
-        <b>${skin.name}</b>
-        ${open
-        ? `<small>${equipped ? 'Equipada' : 'Toca para equipar'}</small>`
-        : `<small class="req">${req.text}</small><span class="bar"><i style="width:${req.ratio * 100}%"></i></span>`
-      }
+        <div class="sk-scene">
+          <span class="sk-ico" title="${tier.name}">${tier.icon}</span>
+          <span class="sk-eq">Equipada</span>
+          <img class="sk-thumb" src="${ballPreview(skin, 152)}" width="76" height="76" alt="" draggable="false">
+          ${open && inst?.counter?.enabled ? '<span class="sk-chip">Marcador</span>' : ''}
+          ${rare ? '<span class="sk-chip sk-chip-rare">✦ Patrón raro</span>' : ''}
+        </div>
+        <div class="sk-strip">
+          <b>${skin.name}</b>
+          <small>${tier.name}${float !== null ? ` · ${wearName(float)}` : ''}</small>
+          ${float !== null
+    ? `<span class="sk-wear" title="Desgaste ${float.toFixed(3)}"><i style="width:${Math.max(3, float * 100)}%;background:hsl(${Math.round((1 - float) * 120)} 70% 50%)"></i></span>`
+    : `<small class="req">${req.text}</small><span class="bar"><i style="width:${req.ratio * 100}%"></i></span>`}
+        </div>
       </button>`);
-    card.addEventListener('click', () => {
-      updateInspector(skin);
-      if (open) {
-        if (progress.equip(skin.id)) {
-          updateEquippedUI();
-          updateInspector(skin);
-        }
-      }
-    });
+    const img = card.querySelector('.sk-thumb');
+    img.dataset.thumb = '1';
+    jobs.push({ img, skin, inst, open });
+    card.addEventListener('click', () => openInspect(skin, card));
+    if (open) hoverLoop(card, img, skin, inst);
+    cards.set(skin.id, { card, skin, open });
     grid.append(card);
   }
 
-  await shell(view);
-
-  let inspector = null;
-  const syncInspector = () => {
-    if (typeof window !== 'undefined' && window.innerWidth >= 900) {
-      if (!inspector) {
-        inspector = createSkinInspector(inspectorCanvas, selectedSkin);
-      }
-    } else if (inspector) {
-      inspector.destroy();
-      inspector = null;
+  const refreshEquipped = () => {
+    for (const { card, skin } of cards.values()) card.classList.toggle('equipped', progress.skin.id === skin.id);
+  };
+  const applyFilters = () => {
+    let shown = 0;
+    for (const { card, skin, open } of cards.values()) {
+      const ok = (filter.tier === 'all' || skin.tier === filter.tier) && (filter.collection === 'all' || skin.collection === filter.collection) && (!filter.owned || open);
+      card.hidden = !ok;
+      if (ok) shown++;
     }
+    empty.hidden = shown > 0;
   };
+  view.querySelectorAll('[data-tier]').forEach((b) => b.addEventListener('click', () => {
+    filter.tier = b.dataset.tier;
+    view.querySelectorAll('[data-tier]').forEach((x) => x.classList.toggle('on', x === b));
+    applyFilters();
+  }));
+  const ownedBtn = view.querySelector('.sk-fowned');
+  ownedBtn.addEventListener('click', () => {
+    filter.owned = !filter.owned;
+    ownedBtn.classList.toggle('on', filter.owned);
+    ownedBtn.setAttribute('aria-pressed', String(filter.owned));
+    applyFilters();
+  });
+  view.querySelector('.sk-fcoll')?.addEventListener('change', (e) => {
+    filter.collection = e.target.value;
+    applyFilters();
+  });
 
-  syncInspector();
-  window.addEventListener('resize', syncInspector);
-
-  activeSkinInspector = {
-    setSkin(skin) {
-      selectedSkin = skin;
-      inspector?.setSkin(skin);
-    },
-    destroy() {
-      window.removeEventListener('resize', syncInspector);
-      inspector?.destroy();
-      inspector = null;
-    },
+  // inspección a pantalla completa (también en móvil); equipar es un botón explícito
+  let view3d = null;
+  const closeInspect = () => {
+    if (!view3d) return;
+    const { overlay, inspector, onKey, from } = view3d;
+    view3d = null;
+    document.removeEventListener('keydown', onKey, true);
+    try { inspector?.destroy(); } catch { }
+    overlay.remove();
+    document.body.classList.remove('sk-noscroll');
+    if (from?.isConnected) from.focus({ preventScroll: true });
   };
+  function openInspect(skin, from) {
+    closeInspect();
+    const tier = SKIN_TIERS[skin.tier];
+    const overlay = h(`
+      <div class="sk-view rarity-${skin.tier}" role="dialog" aria-modal="true" aria-label="Inspeccionar ${skin.name}">
+        <div class="sk-view-bar">
+          <button type="button" class="sk-view-back" aria-label="Cerrar inspección">‹ Skins</button>
+          <span class="sk-view-title">${tier.icon} ${skin.name}</span>
+        </div>
+        <div class="sk-view-stage"></div>
+        <div class="sk-view-actions">
+          <div class="sk-view-req"></div>
+          <button type="button" class="primary sk-equip"></button>
+        </div>
+      </div>`);
+    document.body.append(overlay);
+    document.body.classList.add('sk-noscroll');
+    const equipBtn = overlay.querySelector('.sk-equip');
+    const reqBox = overlay.querySelector('.sk-view-req');
+    const syncAction = () => {
+      const req = progress.requirement(skin);
+      const open = req.ratio >= 1;
+      const isEq = progress.skin.id === skin.id;
+      equipBtn.disabled = isEq || !open;
+      equipBtn.textContent = isEq ? '✓ Equipada' : open ? 'Equipar' : 'Bloqueada';
+      reqBox.hidden = open;
+      reqBox.innerHTML = open ? '' : `<small>${req.text}</small><span class="bar"><i style="width:${req.ratio * 100}%"></i></span>`;
+    };
+    syncAction();
+    equipBtn.addEventListener('click', () => {
+      if (progress.equip(skin.id)) {
+        refreshEquipped();
+        syncAction();
+      }
+    });
+    overlay.querySelector('.sk-view-back').addEventListener('click', closeInspect);
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      closeInspect();
+    };
+    document.addEventListener('keydown', onKey, true);
+    let inspector = null;
+    try {
+      inspector = createSkinInspector(overlay.querySelector('.sk-view-stage'), { skin, instance: progress.instance(skin.id) ?? undefined, mode: 'fullscreen' });
+    } catch (err) {
+      console.warn('inspector no disponible', err);
+    }
+    view3d = { overlay, inspector, onKey, from };
+    overlay.querySelector('.sk-view-back').focus({ preventScroll: true });
+  }
+
+  refreshEquipped();
+  applyFilters();
+  await shell(view);
+  // shell() destruye el inspector anterior: el nuevo se registra después
+  activeSkinInspector = { destroy: closeInspect };
+
+  // miniaturas 3D progresivas: primero lo desbloqueado (la equipada, la primera), luego lo bloqueado
+  const eqId = progress.skin.id;
+  jobs.sort((a, b) => (b.open - a.open) || ((b.skin.id === eqId) - (a.skin.id === eqId)));
+  for (const j of jobs) upgradeImg(j.img, j.skin, j.inst, { size: 76, priority: j.skin.id === eqId });
 }
 
 // ---------- cuenta ----------
@@ -1288,7 +1207,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         } else if (!freePlay && n >= MAX_STROKES_PER_HOLE) finish(n);
       },
     });
-    game.load(course, { bots: freePlay ? [] : players.filter((p) => p.isBot), skin: progress.skin, firstSunkTick, timeLimit: freePlay ? null : timeLimit });
+    game.load(course, { bots: freePlay ? [] : players.filter((p) => p.isBot), skin: progress.skin, instance: progress.instance(progress.skin.id), firstSunkTick, timeLimit: freePlay ? null : timeLimit });
     showDistance();
     if (freePlay) {
       view.querySelector('.restart-btn')?.addEventListener('click', (e) => {
@@ -2092,14 +2011,20 @@ export function showFreePlayHoleResult(courseIndex, course, strokes) {
   sfx.cup();
 }
 
-app.innerHTML = '<main class="screen loading"><h1>Golf Cash Battle</h1><p class="sub">Conectando…</p></main>';
-createBackend().then((b) => {
-  backend = b;
-  ({ wallet, matches } = b);
-  if (b.account) progress.attach(b.user.id, b.account.profile?.progress, (s) => b.account.saveProgress(s));
-  wallet.subscribe((n) => {
-    const el = app.querySelector('.balance');
-    if (el) el.innerHTML = `${coin(n)}<span class="plus">+</span>`;
+installThumbObserver(app, (id) => progress.instance(id));
+if (isSkinLabRequested()) {
+  app.innerHTML = '';
+  mountSkinLab(app);
+} else {
+  app.innerHTML = '<main class="screen loading"><h1>Golf Cash Battle</h1><p class="sub">Conectando…</p></main>';
+  createBackend().then((b) => {
+    backend = b;
+    ({ wallet, matches } = b);
+    if (b.account) progress.attach(b.user.id, b.account.profile?.progress, (s) => b.account.saveProgress(s));
+    wallet.subscribe((n) => {
+      const el = app.querySelector('.balance');
+      if (el) el.innerHTML = `${coin(n)}<span class="plus">+</span>`;
+    });
+    showLobby();
   });
-  showLobby();
-});
+}

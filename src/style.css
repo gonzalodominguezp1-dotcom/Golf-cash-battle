@@ -834,6 +834,135 @@ h2 { margin: 24px 0 12px; font-size: 21px; letter-spacing: -0.01em; }
 }
 .challenges li.done small { color: var(--pos); font-size: 16px; }
 
+/* ---------- pantalla de skins: tarjetas por rareza (P9) ---------- */
+body.sk-noscroll { overflow: hidden; }
+
+.sk-filters { display: grid; gap: 8px; margin-top: 14px; }
+.sk-filter-row { display: flex; align-items: center; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px 0; }
+.sk-filter-row::-webkit-scrollbar { display: none; }
+.sk-fchip {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 6px 14px;
+  border-radius: 999px; border: 1px solid var(--line-light, rgba(255, 255, 255, 0.16));
+  background: rgba(18, 25, 36, 0.85); color: var(--text); font: 700 12px/1 var(--body); cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.sk-fchip i { font-style: normal; color: var(--edge, var(--text)); }
+.sk-fchip:hover { border-color: var(--edge, #fff); }
+.sk-fchip.on { background: #f1f5f9; color: #0b0f15; border-color: #fff; }
+.sk-fchip[class*='rarity-'].on { background: var(--foil); color: var(--ink); border-color: var(--edge); box-shadow: 0 0 12px var(--glow); }
+.sk-fchip.on i { color: inherit; }
+.sk-fcoll {
+  flex: none; min-height: 38px; padding: 6px 12px; border-radius: 999px; background: rgba(18, 25, 36, 0.85);
+  color: var(--text); border: 1px solid var(--line-light, rgba(255, 255, 255, 0.16)); font: 700 12px var(--body);
+}
+
+.sk-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.sk-empty { text-align: center; color: var(--muted); padding: 24px 0; }
+
+/* marco = lámina del tier; dentro, la «escena» de la skin con su paleta */
+.sk-card {
+  appearance: none; display: flex; flex-direction: column; padding: 4px; margin: 0; min-width: 0; text-align: left;
+  border-radius: var(--radius-lg); border: 1.5px solid var(--edge); color: #fff; font: inherit; cursor: pointer;
+  background: var(--foil); background-size: 220% 220%;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4), 0 0 18px var(--glow), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+.sk-card[hidden] { display: none; }
+.sk-card:hover { border-color: #fff; box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5), 0 0 28px var(--glow), inset 0 1px 0 rgba(255, 255, 255, 0.7); }
+.sk-card:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.sk-card .shine {
+  opacity: var(--holo);
+  background:
+    radial-gradient(circle at var(--mx, 50%) var(--my, 30%), rgba(255, 255, 255, 0.5), transparent 45%),
+    repeating-linear-gradient(115deg, #ff3d7f 0%, #ffd23f 7%, #3dffa8 14%, #3dd6ff 21%, #b46cff 28%, #ff3d7f 35%);
+  background-size: 100% 100%, 300% 300%;
+  mix-blend-mode: color-dodge; z-index: 1;
+}
+.sk-scene {
+  position: relative; display: grid; place-items: center; aspect-ratio: 1 / 0.9; overflow: hidden;
+  border-radius: calc(var(--radius-lg) - 5px) calc(var(--radius-lg) - 5px) 6px 6px;
+  background:
+    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--sk-a) 55%, transparent) 0%, transparent 62%),
+    radial-gradient(circle at 80% 100%, color-mix(in srgb, var(--sk-b) 40%, transparent) 0%, transparent 55%),
+    linear-gradient(180deg, #121a27, #0a0e15);
+  box-shadow: inset 0 0 22px rgba(0, 0, 0, 0.55);
+}
+.sk-thumb {
+  width: 76%; height: auto; aspect-ratio: 1; object-fit: contain; border-radius: 50%;
+  filter: drop-shadow(0 8px 10px rgba(0, 0, 0, 0.5)); transition: transform 0.25s var(--ease-out, ease-out);
+  user-select: none; -webkit-user-drag: none;
+}
+.sk-card:hover .sk-thumb { transform: scale(1.06); }
+.sk-ico {
+  position: absolute; top: 6px; left: 6px; z-index: 4; width: 24px; height: 24px; display: grid; place-items: center;
+  border-radius: 50%; background: rgba(8, 10, 16, 0.78); color: var(--edge); font-size: 13px; border: 1px solid var(--edge);
+  box-shadow: 0 0 8px var(--glow);
+}
+.sk-eq {
+  display: none; position: absolute; top: 6px; right: 6px; z-index: 4; padding: 3px 8px; border-radius: 999px;
+  background: var(--yellow, #ffd23f); color: #1b1300; font: 900 10px/1.2 var(--body); letter-spacing: 0.06em; text-transform: uppercase;
+  box-shadow: 0 0 10px rgba(255, 210, 63, 0.7);
+}
+.sk-card.equipped .sk-eq { display: block; }
+.sk-card.equipped { outline: 2px solid var(--yellow, #ffd23f); outline-offset: 2px; }
+.sk-chip {
+  position: absolute; left: 6px; bottom: 6px; z-index: 4; padding: 2px 8px; border-radius: 999px;
+  background: #1a0d03; color: #ff9a1f; border: 1px solid rgba(255, 140, 0, 0.5); font: 800 10px/1.4 var(--body);
+}
+.sk-chip-rare { left: auto; right: 6px; background: linear-gradient(90deg, #fde68a, #f59e0b); color: #0b0f15; border-color: transparent; }
+.sk-chip + .sk-chip-rare { bottom: 6px; }
+
+.sk-strip {
+  display: grid; gap: 4px; padding: 8px 8px 6px; margin-top: 4px; border-radius: 6px 6px calc(var(--radius-lg) - 5px) calc(var(--radius-lg) - 5px);
+  background: rgba(8, 10, 16, 0.86);
+}
+.sk-strip b { font: 800 15px/1.1 var(--display); letter-spacing: -0.01em; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sk-strip small { font: 700 11px/1.2 var(--body); color: var(--edge); }
+.sk-strip .req { color: #fff; opacity: 0.9; }
+.sk-wear { display: block; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.sk-wear i { display: block; height: 100%; border-radius: 3px; }
+.sk-strip .bar { height: 5px; }
+
+/* bloqueadas: silueta con el halo del tier y el requisito a la vista */
+.sk-card.locked { filter: saturate(0.7); }
+.sk-card.locked .shine { display: none; }
+.sk-card.locked .sk-thumb { filter: brightness(0.22) contrast(1.1) drop-shadow(0 0 12px var(--glow)); opacity: 0.95; }
+.sk-card.locked .sk-scene { background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--edge) 22%, transparent) 0%, transparent 65%), linear-gradient(180deg, #10151f, #07090d); }
+
+/* inspección a pantalla completa */
+.sk-view {
+  position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; background: #080b10;
+  padding-top: env(safe-area-inset-top, 0); animation: sk-view-in 0.22s var(--ease-out, ease-out) both;
+}
+@keyframes sk-view-in { from { opacity: 0; transform: translateY(12px); } }
+.sk-view-bar { flex: none; display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: rgba(14, 19, 28, 0.95); }
+.sk-view-back {
+  appearance: none; min-height: 44px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--edge);
+  background: rgba(8, 10, 16, 0.8); color: var(--edge); font: 800 14px var(--body); cursor: pointer;
+}
+.sk-view-title { font: 800 17px/1.1 var(--display); color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sk-view-stage { position: relative; flex: 1 1 auto; min-height: 0; display: flex; }
+.sk-view-stage > .sk-insp { flex: 1 1 auto; min-width: 0; border-radius: 0; }
+.sk-view-actions {
+  flex: none; display: flex; align-items: center; gap: 14px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0));
+  border-top: 1px solid var(--line); background: rgba(14, 19, 28, 0.97);
+}
+.sk-view-req { flex: 1; display: grid; gap: 5px; min-width: 0; }
+.sk-view-req[hidden] { display: none; }
+.sk-view-req small { font: 700 12px var(--body); color: var(--text-dim, #cbd5e1); }
+.sk-view-actions .primary { margin-left: auto; min-width: 150px; min-height: 48px; font-weight: 800; }
+
+@media (min-width: 600px) {
+  .sk-grid { grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 16px; }
+}
+@media (min-width: 900px) {
+  .sk-filters { grid-template-columns: 1fr auto; align-items: center; }
+  .sk-card { transition: transform 0.2s, box-shadow 0.2s; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk-card, .sk-thumb, .sk-view { transition: none; animation: none; }
+}
+
 /* ---------- wallet ---------- */
 
 .wallet-dashboard-col { display: grid; gap: 16px; }
@@ -1910,8 +2039,6 @@ h2 { margin: 24px 0 12px; font-size: 21px; letter-spacing: -0.01em; }
   .hint-touch { display: inline-block !important; }
   .desktop-controls-bar { display: none !important; }
   .kbd-hint { display: none !important; }
-  .skin-inspector-panel { display: none !important; }
-  .skins-content-layout { display: block; }
 }
 
 @media (min-width: 900px) {
@@ -1988,87 +2115,6 @@ h2 { margin: 24px 0 12px; font-size: 21px; letter-spacing: -0.01em; }
     border-color: rgba(255, 255, 255, 0.25);
   }
 
-  /* Grid y Visor 3D de Skins en escritorio */
-  .skins-content-layout {
-    display: grid;
-    grid-template-columns: 1fr 340px;
-    gap: 32px;
-    align-items: start;
-    width: 100%;
-  }
-  .skins-left-col {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    min-width: 0;
-  }
-  .skin-inspector-panel {
-    position: sticky;
-    top: 96px;
-    background: rgba(20, 12, 40, 0.78);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid var(--line-light);
-    border-radius: var(--radius-lg);
-    padding: 24px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
-    text-align: center;
-  }
-  .skin-inspector-canvas {
-    width: 280px;
-    height: 280px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 8px 0;
-    background: transparent;
-    border: none;
-    box-shadow: none;
-    overflow: visible;
-  }
-  .skin-inspector-canvas canvas {
-    width: 280px !important;
-    height: 280px !important;
-    display: block;
-  }
-  .skin-inspector-hint {
-    font-size: 12px;
-    color: var(--muted);
-    font-weight: 600;
-    margin: 0 0 12px;
-  }
-  .skin-inspector-name {
-    font-family: var(--display);
-    font-size: 24px;
-    font-weight: 800;
-    letter-spacing: -0.01em;
-    color: #fff;
-    margin: 4px 0;
-  }
-  .skin-inspector-desc {
-    font-size: 13px;
-    color: var(--muted);
-    margin: 0 0 14px;
-  }
-  .skin-inspector-btn {
-    width: 100%;
-    margin-top: 6px;
-    font-size: 14px;
-    font-weight: 800;
-    padding: 12px;
-  }
-  .badge-rarity {
-    margin-bottom: 4px;
-    font-size: 12px;
-    padding: 3px 10px;
-  }
-  .skin-grid {
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-  }
   .skin-card {
     transition: transform 0.2s, box-shadow 0.2s;
     cursor: pointer;
