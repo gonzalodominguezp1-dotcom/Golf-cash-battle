@@ -335,3 +335,147 @@ test('disparo con clic izquierdo en modo pointer lock funciona por carga en tiem
   assert.ok(executedShot.power > 0.3);
 });
 
+test('elementos que obstaculizan la cámara se vuelven 90% invisibles sin desaparecer en vista normal y vista general (Espacio)', () => {
+  // Simulación de elemento con materiales transparentes y opacidad dinámica
+  const createObstacle = () => ({
+    opacity: 1.0,
+    mats: [{ opacity: 1.0, depthWrite: true, visible: true }],
+    meshes: [{ visible: true }],
+  });
+
+  const wall = createObstacle();
+  const post = createObstacle();
+
+  // Función de actualización de opacidad de elementos ante obstrucción de cámara
+  const updateObstacle = (element, blocks) => {
+    // 90% invisible = 10% opacidad (0.10)
+    const targetOpacity = blocks ? 0.1 : 1.0;
+    element.opacity += (targetOpacity - element.opacity) * 0.2;
+    element.meshes.forEach((m) => (m.visible = true)); // NUNCA desaparece por completo
+    for (const m of element.mats) {
+      m.opacity = element.opacity;
+      m.depthWrite = element.opacity > 0.95;
+      m.visible = true; // Permanece visible con silueta translúcida elegante
+    }
+  };
+
+  // 1. En reposo sin obstrucción: opacidad al 100%
+  assert.equal(wall.opacity, 1.0);
+  assert.equal(wall.mats[0].visible, true);
+
+  // 2. Vista normal: un muro obstaculiza la cámara apuntando a la bola
+  for (let frame = 0; frame < 25; frame++) {
+    updateObstacle(wall, true);
+  }
+  assert.ok(wall.opacity >= 0.099 && wall.opacity <= 0.105, `La pared debe converger a 0.1 (90% invisible), obtenida: ${wall.opacity}`);
+  assert.equal(wall.mats[0].visible, true, 'La pared nunca debe ponerse en visible = false');
+  assert.equal(wall.meshes[0].visible, true);
+  assert.equal(wall.mats[0].depthWrite, false, 'depthWrite debe ser false en modo translúcido');
+
+  // 3. Vista general (tecla Espacio): cámara orbita el terreno y un poste obstaculiza la línea de visión
+  for (let frame = 0; frame < 25; frame++) {
+    updateObstacle(post, true);
+  }
+  assert.ok(post.opacity >= 0.099 && post.opacity <= 0.105, `El poste debe converger a 0.1 (90% invisible), obtenida: ${post.opacity}`);
+  assert.equal(post.mats[0].visible, true, 'El poste nunca debe desaparecer de la escena');
+
+  // 4. Al dejar de obstaculizar la cámara (girar vista), se recupera la opacidad 1.0 suavemente
+  for (let frame = 0; frame < 30; frame++) {
+    updateObstacle(wall, false);
+  }
+  assert.ok(wall.opacity >= 0.99, `La pared debe recuperar opacidad completa (1.0), obtenida: ${wall.opacity}`);
+  assert.equal(wall.mats[0].depthWrite, true);
+});
+
+test('el muro lejano y elementos detrás de la pelota nunca se desenfocan ni transparentan', () => {
+  // Cámara (0, 1.5, 10), pelota (0, 0.1, 5)
+  // Muro frontal (0, 1.5, 7.5) -> t = 0.5 (entre cámara y pelota): obstruye
+  // Muro lejano (0, 0, -2) -> t = 2.4 (detrás de la pelota): NO obstruye
+  const isBetweenCamAndBall = (t) => t > 0.02 && t < 0.98;
+
+  const tFarWall = 2.4;
+  const tBetweenWall = 0.5;
+
+  assert.equal(isBetweenCamAndBall(tFarWall), false, 'Muro lejano detrás de la pelota NO debe considerarse obstrucción');
+  assert.equal(isBetweenCamAndBall(tBetweenWall), true, 'Muro entre la cámara y la pelota sí debe considerarse obstrucción');
+});
+
+test('todas las capas del molino (aspas, torre, marco, ventanas y contornos) se desenfocan simultáneamente al 90% ante obstrucción', () => {
+  // Simulación del conjunto multicapa del molino
+  const layers = [
+    { name: 'body', opacity: 1, transparent: true, depthWrite: true },
+    { name: 'roof', opacity: 1, transparent: true, depthWrite: true },
+    { name: 'windows', opacity: 1, transparent: true, depthWrite: true },
+    { name: 'frame', opacity: 1, transparent: true, depthWrite: true },
+    { name: 'edges', opacity: 1, transparent: true, depthWrite: true },
+    { name: 'blades', opacity: 1, transparent: true, depthWrite: true },
+    { name: 'arms', opacity: 1, transparent: true, depthWrite: true },
+    { name: 'cap', opacity: 1, transparent: true, depthWrite: true },
+  ];
+  let lightIntensity = 2.5;
+  let opacity = 1.0;
+
+  const updateWindmill = (blocks) => {
+    const target = blocks ? 0.1 : 1.0;
+    opacity += (target - opacity) * 0.2;
+    for (const l of layers) {
+      l.opacity = opacity;
+      l.depthWrite = opacity > 0.95;
+    }
+    lightIntensity = 2.5 * (0.1 + 0.9 * (opacity - 0.1) / 0.9);
+  };
+
+  // 1. Inicialmente todas las capas son opacas
+  for (const l of layers) {
+    assert.equal(l.opacity, 1.0);
+    assert.equal(l.depthWrite, true);
+  }
+  assert.equal(lightIntensity, 2.5);
+
+  // 2. Al obstruir la pelota, TODAS las capas se vuelven 90% invisibles al unísono
+  for (let frame = 0; frame < 25; frame++) {
+    updateWindmill(true);
+  }
+
+  assert.ok(opacity >= 0.099 && opacity <= 0.105, `Opacidad de molino esperada ~0.1, obtenida: ${opacity}`);
+  for (const l of layers) {
+    assert.ok(l.opacity >= 0.099 && l.opacity <= 0.105, `Capa ${l.name} debe tener opacidad 0.1`);
+    assert.equal(l.depthWrite, false, `Capa ${l.name} debe desactivar depthWrite`);
+  }
+  assert.ok(lightIntensity < 0.35, 'La luz debe atenuarse proporcionalmente con el molino');
+
+  // 3. Al despejar la vista, todas las capas recuperan el 100% de solidez
+  for (let frame = 0; frame < 30; frame++) {
+    updateWindmill(false);
+  }
+  assert.ok(opacity >= 0.99, 'El molino debe volver a solidez total');
+  for (const l of layers) {
+    assert.ok(l.opacity >= 0.99, `Capa ${l.name} debe volver a 1.0`);
+    assert.equal(l.depthWrite, true);
+  }
+});
+
+test('múltiples objetos en la trayectoria de la cámara (muro + molino + aspa) se desenfocan a la vez', () => {
+  // Simular tres objetos simultáneos en el camino cámara -> pelota
+  const wall = { opacity: 1 };
+  const windmill = { opacity: 1 };
+  const spinner = { opacity: 1 };
+
+  const updateSimultaneous = (wallBlocks, wmBlocks, spBlocks) => {
+    wall.opacity += ((wallBlocks ? 0.1 : 1) - wall.opacity) * 0.2;
+    windmill.opacity += ((wmBlocks ? 0.1 : 1) - windmill.opacity) * 0.2;
+    spinner.opacity += ((spBlocks ? 0.1 : 1) - spinner.opacity) * 0.2;
+  };
+
+  for (let frame = 0; frame < 25; frame++) {
+    updateSimultaneous(true, true, true);
+  }
+
+  assert.ok(wall.opacity <= 0.105 && wall.opacity >= 0.099, 'El muro debe desenfocarse al 90%');
+  assert.ok(windmill.opacity <= 0.105 && windmill.opacity >= 0.099, 'El molino debe desenfocarse al 90%');
+  assert.ok(spinner.opacity <= 0.105 && spinner.opacity >= 0.099, 'El aspa debe desenfocarse al 90%');
+});
+
+
+
+

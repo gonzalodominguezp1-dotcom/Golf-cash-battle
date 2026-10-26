@@ -224,6 +224,552 @@ function play(name, { vol = 1, rate = 1, wet = true, pan = 0 } = {}) {
 
 const vary = (a = 0.06) => 1 + (Math.random() - 0.5) * a;
 
+// ---- sonido por skin (P7): síntesis en tiempo real, nada descargado ----
+// Cada set es una capa encima del sonido base. Todo pasa por un bus con
+// nivel máximo 0.6, un compresor (evita clipping al encadenar golpes) y un
+// límite de llamadas simultáneas. Las voces devuelven su duración en segundos.
+
+const SKIN_VOL = 0.6;
+const SKIN_MAX_ACTIVE = 12;
+let skinBus = null;
+let skinNoise = null;
+let skinActive = 0;
+
+function skinOut() {
+  if (!skinBus) {
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -16;
+    comp.knee.value = 6;
+    comp.ratio.value = 6;
+    comp.attack.value = 0.003;
+    comp.release.value = 0.12;
+    skinBus = ctx.createGain();
+    skinBus.gain.value = SKIN_VOL;
+    skinBus.connect(comp).connect(master);
+    const send = ctx.createGain();
+    send.gain.value = 0.3;
+    skinBus.connect(send).connect(reverb);
+  }
+  return skinBus;
+}
+
+// ruido blanco generado una vez en memoria (no es una descarga)
+function noiseSrc() {
+  if (!skinNoise) {
+    skinNoise = ctx.createBuffer(1, SR * 2, SR);
+    const d = skinNoise.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  return skinNoise;
+}
+
+// envolvente (ataque lineal, caída exponencial) y filtro opcional; devuelve la entrada
+function strip(t, dur, vol, { filter, attack = 0.003 } = {}) {
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(vol, t + attack);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  g.connect(skinOut());
+  if (!filter) return g;
+  const f = ctx.createBiquadFilter();
+  f.type = filter.type;
+  f.frequency.setValueAtTime(filter.f, t);
+  if (filter.to) f.frequency.exponentialRampToValueAtTime(filter.to, t + dur);
+  f.Q.value = filter.q ?? 0.7;
+  f.connect(g);
+  return f;
+}
+
+function tone(t, dur, vol, f, { type = 'sine', attack, filter, to, toT, detune = 0 } = {}) {
+  const input = strip(t, dur, vol, { filter, attack });
+  const o = ctx.createOscillator();
+  o.type = type;
+  o.frequency.setValueAtTime(f, t);
+  if (to) o.frequency.exponentialRampToValueAtTime(to, t + (toT ?? dur));
+  o.detune.value = detune;
+  o.connect(input);
+  o.start(t);
+  o.stop(t + dur + 0.05);
+}
+
+function air(t, dur, vol, filter, attack) {
+  const input = strip(t, dur, vol, { filter, attack });
+  const s = ctx.createBufferSource();
+  s.buffer = noiseSrc();
+  s.loop = true;
+  s.connect(input);
+  s.start(t, Math.random() * 1.5);
+  s.stop(t + dur + 0.05);
+}
+
+function crackle(t, n, span, vol, filter) {
+  for (let i = 0; i < n; i++) {
+    air(t + Math.random() * span, 0.008 + Math.random() * 0.012, vol * (0.4 + Math.random() * 0.6), filter, 0.001);
+  }
+}
+
+// campanita de cristal: fundamental + parciales inarmónicos
+function glass(t, f, dur, vol) {
+  tone(t, dur, vol, f);
+  tone(t, dur * 0.45, vol * 0.4, f * 2.4);
+  tone(t, dur * 0.18, vol * 0.15, f * 5.1);
+}
+
+// clic metálico de moneda
+function clink(t, f, vol) {
+  tone(t, 0.09, vol, f);
+  tone(t, 0.04, vol * 0.5, f * 2.1);
+}
+
+const sv = (p) => 0.4 + 0.6 * p; // volumen según potencia
+const sk = (p) => 0.97 + 0.06 * p; // subida leve de tono con la potencia
+
+const SKIN_SETS = {
+  // Kintsugi Neón: zumbido de alta frecuencia y cristal + campana
+  neon: {
+    hit: (t, p) => {
+      const v = sv(p);
+      const k = sk(p);
+      tone(t, 0.22, 0.28 * v, 2400 * k, { type: 'square', filter: { type: 'lowpass', f: 5200 } });
+      tone(t, 0.22, 0.28 * v, 2412 * k, { type: 'square', filter: { type: 'lowpass', f: 5200 } });
+      air(t, 0.05, 0.25 * v, { type: 'bandpass', f: 6000, q: 3 });
+      return 0.25;
+    },
+    wall: (t, p) => {
+      const v = sv(p);
+      tone(t, 0.12, 0.5 * v, 3200 * sk(p));
+      air(t, 0.03, 0.4 * v, { type: 'bandpass', f: 4000, q: 6 });
+      return 0.15;
+    },
+    sink: (t, p) => {
+      const v = sv(p);
+      const f0 = 1568 * sk(p);
+      tone(t, 1.1, 0.55 * v, f0);
+      tone(t, 0.5, 0.25 * v, f0 * 2.756);
+      tone(t, 0.25, 0.12 * v, f0 * 5.4);
+      tone(t + 0.09, 0.9, 0.4 * v, 2352 * sk(p));
+      air(t, 0.03, 0.3 * v, { type: 'bandpass', f: 7000, q: 2 });
+      return 1.2;
+    },
+    roll: (t, p) => {
+      crackle(t, 6, 0.3, 0.25 * sv(p), { type: 'highpass', f: 5000 });
+      return 0.35;
+    },
+  },
+  // Damasco Imperial: ting de acero templado, yunque y vapor
+  steel: {
+    hit: (t, p) => {
+      const v = sv(p);
+      const f = 2093 * sk(p);
+      tone(t, 0.9, 0.6 * v, f);
+      tone(t, 0.35, 0.3 * v, f * 2.76);
+      tone(t, 0.15, 0.18 * v, f * 5.4);
+      air(t, 0.008, 0.5 * v, { type: 'bandpass', f: 3500, q: 1 });
+      return 0.9;
+    },
+    wall: (t, p) => {
+      const v = sv(p);
+      const f = 1174 * sk(p);
+      tone(t, 0.2, 0.4 * v, f);
+      tone(t, 0.1, 0.25 * v, f * 2.76);
+      air(t, 0.06, 0.6 * v, { type: 'bandpass', f: 1400, q: 4 });
+      return 0.2;
+    },
+    sink: (t, p) => {
+      const v = sv(p);
+      const k = sk(p);
+      // martillo sobre yunque, campana corta y vapor que sube
+      tone(t, 0.12, 0.8 * v, 180 * k, { to: 90, toT: 0.1 });
+      air(t, 0.03, 0.6 * v, { type: 'lowpass', f: 900 });
+      tone(t + 0.03, 1.2, 0.4 * v, 523 * k);
+      tone(t + 0.03, 0.5, 0.15 * v, 523 * k * 2.76);
+      air(t + 0.1, 0.9, 0.3 * v, { type: 'highpass', f: 2500 }, 0.25);
+      return 1.2;
+    },
+    roll: (t, p) => {
+      air(t, 0.5, 0.3 * sv(p), { type: 'bandpass', f: 6000, q: 2, to: 4000 }, 0.12);
+      return 0.5;
+    },
+  },
+  // Supernova Solar: whoomp grave y crepitar
+  solar: {
+    hit: (t, p) => {
+      const v = sv(p);
+      const k = sk(p);
+      tone(t, 0.25, 0.9 * v, 110 * k, { to: 50, toT: 0.22 });
+      air(t, 0.2, 0.4 * v, { type: 'lowpass', f: 900, to: 300, q: 0.8 }, 0.01);
+      crackle(t + 0.03, 6, 0.2, 0.3 * v, { type: 'bandpass', f: 2500, q: 1.5 });
+      return 0.3;
+    },
+    wall: (t, p) => {
+      const v = sv(p);
+      air(t, 0.25, 0.6 * v, { type: 'bandpass', f: 900, to: 2200, q: 1 }, 0.01);
+      tone(t, 0.25, 0.3 * v, 300 * sk(p), { to: 180, toT: 0.25 });
+      return 0.3;
+    },
+    sink: (t, p) => {
+      const v = sv(p);
+      const k = sk(p);
+      tone(t, 0.9, 1.0 * v, 90 * k, { to: 35, toT: 0.8 });
+      air(t, 0.9, 0.5 * v, { type: 'lowpass', f: 1200, to: 200 }, 0.01);
+      crackle(t + 0.1, 10, 0.7, 0.3 * v, { type: 'bandpass', f: 3000, q: 1.2 });
+      air(t + 0.02, 0.5, 0.25 * v, { type: 'highpass', f: 3000 });
+      return 1.0;
+    },
+    roll: (t, p) => {
+      crackle(t, 6, 0.4, 0.2 * sv(p), { type: 'lowpass', f: 2000 });
+      return 0.45;
+    },
+  },
+  // Dragón Carmesí: gruñido grave filtrado y rugido corto
+  dragon: {
+    hit: (t, p) => {
+      const v = sv(p);
+      const k = sk(p);
+      tone(t, 0.42, 0.8 * v, 72 * k, {
+        type: 'sawtooth',
+        to: 58,
+        toT: 0.4,
+        attack: 0.02,
+        filter: { type: 'lowpass', f: 320, to: 180, q: 4 },
+      });
+      air(t, 0.3, 0.25 * v, { type: 'lowpass', f: 400, q: 1 }, 0.03);
+      return 0.45;
+    },
+    wall: (t, p) => {
+      const v = sv(p);
+      air(t, 0.04, 0.4 * v, { type: 'bandpass', f: 2600, q: 4 });
+      tone(t, 0.08, 0.25 * v, 900 * sk(p), { to: 620, toT: 0.07 });
+      return 0.12;
+    },
+    sink: (t, p) => {
+      const v = sv(p);
+      const k = sk(p);
+      tone(t, 0.9, 0.9 * v, 110 * k, {
+        type: 'sawtooth',
+        to: 78,
+        toT: 0.85,
+        attack: 0.08,
+        filter: { type: 'lowpass', f: 800, to: 260, q: 3 },
+      });
+      tone(t, 0.9, 0.3 * v, 55 * k);
+      air(t, 0.9, 0.4 * v, { type: 'bandpass', f: 500, to: 250, q: 1.2 }, 0.06);
+      return 1.0;
+    },
+    roll: (t, p) => {
+      air(t, 0.5, 0.2 * sv(p), { type: 'lowpass', f: 180 }, 0.2);
+      return 0.5;
+    },
+  },
+  // Criónova: campanilla cristalina y crujido de hielo
+  ice: {
+    hit: (t, p) => {
+      const v = sv(p);
+      glass(t, 1760 * sk(p), 0.7, 0.5 * v);
+      air(t, 0.02, 0.3 * v, { type: 'highpass', f: 6000 });
+      return 0.7;
+    },
+    wall: (t, p) => {
+      const v = sv(p);
+      air(t, 0.018, 0.5 * v, { type: 'highpass', f: 5000 });
+      tone(t, 0.06, 0.25 * v, 3000 * sk(p));
+      return 0.1;
+    },
+    sink: (t, p) => {
+      const v = sv(p);
+      crackle(t, 8, 0.25, 0.35 * v, { type: 'bandpass', f: 3000, q: 3 });
+      glass(t + 0.15, 1046 * sk(p), 1.4, 0.4 * v);
+      return 1.5;
+    },
+    roll: (t, p) => {
+      air(t, 0.35, 0.12 * sv(p), { type: 'highpass', f: 8000 }, 0.1);
+      return 0.4;
+    },
+  },
+  // Horizonte de Sucesos: implosión y sub-bajo descendente con whoosh invertido
+  void: {
+    hit: (t, p) => {
+      const v = sv(p);
+      tone(t, 0.3, 0.9 * v, 90 * sk(p), { to: 40, toT: 0.28 });
+      air(t, 0.3, 0.45 * v, { type: 'bandpass', f: 2800, to: 200, q: 0.8 });
+      return 0.3;
+    },
+    wall: (t, p) => {
+      const v = sv(p);
+      tone(t, 0.35, 0.55 * v, 220 * sk(p), { type: 'triangle', to: 110, toT: 0.3 });
+      air(t, 0.25, 0.3 * v, { type: 'bandpass', f: 600, q: 0.7 });
+      return 0.35;
+    },
+    sink: (t, p) => {
+      const v = sv(p);
+      tone(t, 1.3, 1.0 * v, 60 * sk(p), { to: 30, toT: 1.2, attack: 0.02 });
+      // whoosh invertido: sube durante 0.75 s y corta de golpe
+      air(t, 0.8, 0.5 * v, { type: 'bandpass', f: 200, to: 2500, q: 0.8 }, 0.75);
+      return 1.3;
+    },
+    roll: (t, p) => {
+      const v = sv(p);
+      tone(t, 0.5, 0.15 * v, 55 * sk(p), { attack: 0.15 });
+      air(t, 0.5, 0.06 * v, { type: 'lowpass', f: 300 }, 0.15);
+      return 0.5;
+    },
+  },
+  // Prisma Holo: prisma de rayos, ting brillante y arpegio corto
+  holo: {
+    hit: (t, p) => {
+      const v = sv(p);
+      const k = sk(p);
+      for (let i = 0; i < 6; i++) tone(t + i * 0.018, 0.07, 0.35 * v, (2000 + i * 420) * k);
+      air(t, 0.2, 0.15 * v, { type: 'highpass', f: 5000 });
+      return 0.2;
+    },
+    wall: (t, p) => {
+      const v = sv(p);
+      const k = sk(p);
+      tone(t, 0.25, 0.4 * v, 2349 * k);
+      tone(t + 0.03, 0.25, 0.25 * v, 3136 * k);
+      return 0.3;
+    },
+    sink: (t, p) => {
+      const v = sv(p);
+      const k = sk(p);
+      [1047, 1319, 1568, 2093].forEach((f, i) =>
+        tone(t + i * 0.07, 0.5, 0.35 * v, f * k, { type: 'triangle', filter: { type: 'lowpass', f: 6000 } }),
+      );
+      air(t + 0.28, 0.4, 0.12 * v, { type: 'highpass', f: 7000 });
+      return 0.9;
+    },
+    roll: (t, p) => {
+      const v = sv(p);
+      for (let i = 0; i < 4; i++) tone(t + Math.random() * 0.4, 0.08, 0.12 * v, 3000 + Math.random() * 3000);
+      return 0.45;
+    },
+  },
+  // Toque de Midas: pepitas, clink de monedas y coro corto
+  gold: {
+    hit: (t, p) => {
+      const v = sv(p);
+      for (let i = 0; i < 5; i++) {
+        clink(t + i * 0.025 + Math.random() * 0.01, 3200 + Math.random() * 1000, (0.4 + Math.random() * 0.3) * v);
+      }
+      return 0.25;
+    },
+    wall: (t, p) => {
+      clink(t, 2600 * sk(p), 0.6 * sv(p));
+      return 0.12;
+    },
+    sink: (t, p) => {
+      const v = sv(p);
+      const k = sk(p);
+      for (let i = 0; i < 6; i++) clink(t + i * 0.06, 2900 + Math.random() * 900, 0.5 * v);
+      [261.6, 329.6, 392].forEach((f) => {
+        for (const detune of [-7, 7]) {
+          tone(t + 0.2, 1.2, 0.25 * v, f * k, {
+            type: 'sawtooth',
+            detune,
+            attack: 0.35,
+            filter: { type: 'lowpass', f: 1400, to: 900, q: 0.5 },
+          });
+        }
+      });
+      return 1.5;
+    },
+    roll: (t, p) => {
+      for (let i = 0; i < 4; i++) clink(t + i * 0.14, 2200 * sk(p), 0.25 * sv(p));
+      return 0.5;
+    },
+  },
+};
+
+/** Sonido de skin: sfx.skin('neon', 'hit', { power: 0.8 }). Eventos: hit, wall, sink, roll. */
+function playSkin(set, event, { power = 0.5 } = {}) {
+  if (!ctx || isMuted()) return;
+  const voice = SKIN_SETS[set]?.[event];
+  if (typeof voice !== 'function' || skinActive >= SKIN_MAX_ACTIVE) return;
+  const p = Number.isFinite(power) ? Math.min(1, Math.max(0, power)) : 0.5;
+  let dur;
+  try {
+    dur = voice(ctx.currentTime + 0.005, p);
+  } catch {
+    return;
+  }
+  skinActive++;
+  setTimeout(() => {
+    skinActive--;
+  }, (dur + 0.3) * 1000);
+}
+
+// ---- apertura de recompensas: síntesis en tiempo real, pensada para impactar ----
+// order: 0 común … 5 mítica. Todo pasa por el bus de skins (compresor + reverb).
+
+const R_NOTES = [0, 4, 7, 12, 16, 19, 24]; // acorde mayor en capas
+
+/** Zumbido que crece mientras mantienes pulsado (p de 0 a 1; null = apagar). */
+let holdVoice = null;
+function holdCharge(p) {
+  if (!ctx || isMuted()) return;
+  if (p == null || p <= 0) {
+    if (holdVoice) {
+      const t = ctx.currentTime;
+      holdVoice.g.gain.cancelScheduledValues(t);
+      holdVoice.g.gain.setTargetAtTime(0, t, 0.06);
+      const v = holdVoice;
+      holdVoice = null;
+      setTimeout(() => v.stop(), 400);
+    }
+    return;
+  }
+  if (!holdVoice) {
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    const f = ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.Q.value = 2.5;
+    f.connect(g).connect(skinOut());
+    const oscs = [-9, 0, 9].map((detune) => {
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.detune.value = detune;
+      o.connect(f);
+      o.start();
+      return o;
+    });
+    const sub = ctx.createOscillator();
+    sub.type = 'sine';
+    const sg = ctx.createGain();
+    sg.gain.value = 0.9;
+    sub.connect(sg).connect(f);
+    sub.start();
+    const n = ctx.createBufferSource();
+    n.buffer = noiseSrc();
+    n.loop = true;
+    const nf = ctx.createBiquadFilter();
+    nf.type = 'bandpass';
+    nf.Q.value = 1.2;
+    const ng = ctx.createGain();
+    ng.gain.value = 0;
+    n.connect(nf).connect(ng).connect(skinOut());
+    n.start();
+    holdVoice = {
+      g, f, oscs, sub, nf, ng,
+      stop() {
+        [...oscs, sub].forEach((o) => { try { o.stop(); } catch { } });
+        try { n.stop(); } catch { }
+      },
+    };
+  }
+  const t = ctx.currentTime;
+  const base = 70 * Math.pow(2, p * 2.2); // sube más de dos octavas
+  holdVoice.oscs.forEach((o) => o.frequency.setTargetAtTime(base, t, 0.05));
+  holdVoice.sub.frequency.setTargetAtTime(base / 2, t, 0.05);
+  holdVoice.f.frequency.setTargetAtTime(250 + p * p * 5200, t, 0.05);
+  holdVoice.g.gain.setTargetAtTime(0.1 + p * 0.5, t, 0.04);
+  holdVoice.nf.frequency.setTargetAtTime(800 + p * 6000, t, 0.05);
+  holdVoice.ng.gain.setTargetAtTime(p * p * 0.35, t, 0.05);
+}
+
+/** Tic de carga que sube de tono con el progreso. */
+function rewardTick(p = 0) {
+  if (!ctx || isMuted()) return;
+  const t = ctx.currentTime;
+  tone(t, 0.12, 0.25 + p * 0.25, 900 * Math.pow(2, p * 2), { type: 'triangle' });
+  glass(t, 1800 * Math.pow(2, p * 1.5), 0.25, 0.08 + p * 0.1);
+}
+
+/** Riser de tensión (secs) previo al estallido. */
+function rewardRiser(secs, order = 0) {
+  if (!ctx || isMuted()) return 0;
+  const t = ctx.currentTime + 0.01;
+  const k = 1 + order * 0.15;
+  tone(t, secs, 0.28 * k, 110, { type: 'sawtooth', to: 880, toT: secs, attack: secs * 0.9, filter: { type: 'lowpass', f: 300, to: 7000, q: 3 } });
+  tone(t, secs, 0.22 * k, 112.5, { type: 'sawtooth', to: 887, toT: secs, attack: secs * 0.9, filter: { type: 'lowpass', f: 300, to: 7000, q: 3 } });
+  air(t, secs, 0.5 * k, { type: 'bandpass', f: 500, to: 9000, q: 1.5 }, secs * 0.95);
+  for (let i = 0; i < 8 + order * 2; i++) {
+    const at = t + secs * (1 - Math.pow(1 - i / (8 + order * 2), 1.6)); // pulsos que se aceleran
+    clink(at, 1800 + i * 160, 0.1 + i * 0.012);
+  }
+  return secs;
+}
+
+/** El estallido: impacto, coro de acorde, arpegio de cristal y chispas. */
+function rewardReveal(order = 0) {
+  if (!ctx || isMuted()) return 0;
+  const t = ctx.currentTime + 0.005;
+  const k = 0.7 + order * 0.1;
+  // golpe: sub que cae + crujido de ruido
+  tone(t, 1.8, 0.95 * k, 90, { type: 'sine', to: 28, toT: 1.2, attack: 0.002 });
+  tone(t, 0.5, 0.5 * k, 160, { type: 'triangle', to: 50, toT: 0.3, attack: 0.001 });
+  air(t, 1.0, 0.9 * k, { type: 'lowpass', f: 9000, to: 250, q: 0.7 }, 0.002);
+  air(t, 0.35, 0.6 * k, { type: 'highpass', f: 3000, q: 0.5 }, 0.001);
+  // coro de acorde con swell (más capas cuanto más rara)
+  const root = 48 + (order >= 4 ? 0 : 3);
+  const layers = Math.min(R_NOTES.length, 3 + order);
+  for (let n = 0; n < layers; n++) {
+    const f = note(root + R_NOTES[n]);
+    for (const detune of [-11, 0, 11]) {
+      tone(t + 0.05, 2.6 + order * 0.35, 0.16 * k, f, {
+        type: 'sawtooth', detune, attack: 0.5,
+        filter: { type: 'lowpass', f: 700, to: 3800, q: 0.8 },
+      });
+    }
+    tone(t + 0.05, 3.2, 0.1 * k, f * 2, { type: 'sine', attack: 0.4 });
+  }
+  // arpegio de cristal subiendo
+  const arp = [72, 76, 79, 84, 88, 91, 96, 100];
+  const count = 5 + order;
+  for (let i = 0; i < count; i++) glass(t + 0.12 + i * 0.075, note(arp[i % arp.length]), 1.4, 0.2 * k);
+  // lluvia de chispas
+  crackle(t + 0.15, 14 + order * 10, 1.2 + order * 0.2, 0.4 * k, { type: 'highpass', f: 5000, q: 0.6 });
+  if (order >= 3) {
+    // barrido ascendente final para legendarias y míticas
+    tone(t + 0.3, 1.4, 0.3, 300, { type: 'sawtooth', to: 2400, toT: 1.2, attack: 0.5, filter: { type: 'lowpass', f: 1200, to: 6000, q: 1 } });
+  }
+  if (order >= 5) {
+    for (const f of [note(36), note(43)]) tone(t, 3.4, 0.5, f, { type: 'sine', attack: 0.01 });
+  }
+  return 3.5;
+}
+
+/**
+ * Melodía de final de partida (~5 s). Victoria: fanfarria con metales, redoble y acorde final;
+ * resto de puestos: motivo más suave y esperanzador que invita a la revancha.
+ */
+function endJingle(won = false, position = 2) {
+  if (!ctx || isMuted()) return 0;
+  const t = ctx.currentTime + 0.05;
+  const brass = (at, dur, midi, vol = 0.22) => {
+    const f = note(midi);
+    for (const detune of [-8, 0, 8]) tone(at, dur, vol, f, { type: 'sawtooth', detune, attack: 0.02, filter: { type: 'lowpass', f: 900, to: 3200, q: 0.9 } });
+    tone(at, dur, vol * 0.6, f / 2, { type: 'triangle', attack: 0.02 });
+  };
+  const bass = (at, dur, midi) => tone(at, dur, 0.4, note(midi - 12), { type: 'sine', attack: 0.01 });
+  if (won) {
+    // redoble de caja que sube
+    for (let i = 0; i < 12; i++) air(t + i * 0.05, 0.05, 0.1 + i * 0.03, { type: 'bandpass', f: 3500, q: 0.8 }, 0.002);
+    // C4 C4 C4 · E4 G4 · C5 (ta-ta-ta-TAAA)
+    const m = [[0.6, 0.14, 60], [0.78, 0.14, 60], [0.96, 0.14, 60], [1.14, 0.3, 64], [1.5, 0.3, 67], [1.9, 1.7, 72]];
+    for (const [d, dur, midi] of m) { brass(t + d, dur, midi); bass(t + d, dur, midi); }
+    // acorde final grande + golpe + chispas
+    const end = t + 1.9;
+    for (const n of [76, 79, 84]) brass(end, 2.6, n, 0.14);
+    tone(end, 1.6, 0.9, 85, { type: 'sine', to: 32, toT: 1.2, attack: 0.002 });
+    air(end, 0.7, 0.6, { type: 'lowpass', f: 8000, to: 300, q: 0.7 }, 0.002);
+    [84, 88, 91, 96, 100, 103, 108].forEach((m2, i) => glass(end + 0.1 + i * 0.09, note(m2), 1.5, 0.16));
+    crackle(end + 0.1, 30, 1.8, 0.4, { type: 'highpass', f: 5500, q: 0.6 });
+    return 4.5;
+  }
+  // sin victoria: motivo cálido (La menor → Do mayor) con campanas
+  const mel = position <= 3 ? [69, 72, 76, 74, 72, 79] : [64, 67, 71, 69, 67, 72];
+  mel.forEach((midi, i) => {
+    glass(t + 0.3 + i * 0.28, note(midi + 12), 1.4, 0.22);
+    tone(t + 0.3 + i * 0.28, 0.9, 0.12, note(midi), { type: 'triangle', attack: 0.02, filter: { type: 'lowpass', f: 1800, q: 0.6 } });
+  });
+  for (const n of [57, 60, 64]) tone(t + 0.3, 2.2, 0.1, note(n), { type: 'sine', attack: 0.4 });
+  for (const n of [60, 64, 67, 72]) tone(t + 2.1, 2.6, 0.11, note(n), { type: 'sine', attack: 0.3 });
+  glass(t + 2.1, note(96), 2, 0.12);
+  return 4.5;
+}
+
 export const sfx = {
   hit: (power) => play('putt', { vol: 0.35 + power * 0.65, rate: vary() * (0.94 + power * 0.12) }),
   wall: (strength) => play('wall', { vol: Math.min(1, 0.15 + strength / 9), rate: vary(0.1) }),
@@ -239,6 +785,14 @@ export const sfx = {
   coins: () => play('coins', { vol: 0.8 }),
   rivalCup: (pan) => play('rivalCup', { vol: 0.5, pan }),
   rivalHit: (dist, pan) => play('putt', { vol: Math.max(0.05, 0.25 - dist * 0.02), rate: vary(0.1), pan }),
+  skin: playSkin,
+  reward: {
+    hold: holdCharge,
+    riser: rewardRiser,
+    reveal: rewardReveal,
+    tick: rewardTick,
+  },
+  endJingle,
 };
 
 /** Rodar de la bola: ruido grave cuyo volumen sigue a la velocidad. */

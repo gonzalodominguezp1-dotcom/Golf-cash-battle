@@ -5,26 +5,33 @@ import { InsufficientFundsError } from './wallet/WalletService.js';
 import { MatchService, leaders } from './match/MatchService.js';
 import { createBackend } from './backend/index.js';
 import { COURSES, TIEBREAK_COURSE } from './game/courses.js';
-import { GolfGame } from './game/GolfGame.js';
 import { Bot } from './game/bots.js';
 import { segmentsOf } from './game/physics.js';
 import { isMuted, setMuted, sfx, unlockAudio } from './game/audio.js';
 import { Progress } from './progress/Progress.js';
-import { CHALLENGES, RARITIES, SKINS } from './progress/skins.js';
-import { ballPreview, skinMaterial } from './game/render/ballSkins.js';
+import { CHALLENGES, TIERS as SKIN_TIERS, SKINS } from './progress/skins.js';
+import { ballPreview } from './game/render/ballPaint.js';
+import { showSkinReveal } from './ui/skinReveal.js';
+import { installThumbObserver, thumbCached, upgradeImg, warmThumbs } from './ui/skinThumbs.js';
+import { rarePatternOf } from './progress/inventory.js';
+import { getCourseDistance, staticCoursePreview } from './game/render/coursePreviewStatic.js';
 import { QUALITY_LEVELS, QUALITY_NAMES, getQuality, setQuality } from './game/render/quality.js';
-import * as THREE from 'three';
 
 let backend, wallet, matches;
 // práctica forzada con #hoyoN: siempre local, no toca el servidor
 const practice = new MatchService(new LocalWallet(), Math.random, COURSES.length);
 const progress = new Progress();
+// miniaturas de skins guardadas (IndexedDB) a memoria cuanto antes: las <img> salen ya con su imagen
+warmThumbs();
+// three.js (partida, inspector 3D) se carga solo cuando hace falta: lobby y pantalla de skins no lo pagan
+const loadGolfGame = () => import('./game/GolfGame.js').then((m) => m.GolfGame);
+const loadSkinInspector = () => import('./ui/skinInspector.js');
 
 // clave nueva: quien silenció sin querer cuando no se oía nada vuelve a tener sonido
 const MUTE_KEY = 'gcb.muted.v2';
 try {
   setMuted(localStorage.getItem(MUTE_KEY) === '1');
-} catch {}
+} catch { }
 
 // el audio solo puede arrancar con un gesto: cualquier toque o tecla vale
 for (const ev of ['pointerdown', 'touchend', 'keydown']) document.addEventListener(ev, unlockAudio, { capture: true, passive: true });
@@ -44,7 +51,11 @@ const h = (html) => {
   t.innerHTML = html.trim();
   return t.content.firstElementChild;
 };
-const ball = (skin, size = 96, cls = '') => `<img class="ball-img ${cls}" src="${ballPreview(skin, size * 2)}" width="${size}" height="${size}" alt="">`;
+// miniatura estática si ya está en caché; si no, marcador 2D que installThumbObserver cambia por ella (data-skin-id)
+const ball = (skin, size = 96, cls = '') => {
+  const cached = thumbCached(skin, progress.instance(skin.id));
+  return `<img class="ball-img ${cls}" src="${cached ?? ballPreview(skin, size * 2)}" data-skin-id="${skin.id}"${cached ? ' data-hd="1"' : ''} width="${size}" height="${size}" alt="">`;
+};
 
 let game = null;
 let screen = 'lobby';
@@ -54,7 +65,7 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
   game?.dispose();
   game = null;
   if (activeSkinInspector) {
-    try { activeSkinInspector.destroy(); } catch {}
+    try { activeSkinInspector.destroy(); } catch { }
     activeSkinInspector = null;
   }
   const balance = await wallet.getBalance();
@@ -64,26 +75,31 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
     const { level, into, need } = progress.level;
     app.append(
       h(`
-      <header class="topbar">
-        <div class="topbar-brand">
-          <button class="brand-btn" data-go="lobby">
-            <span class="brand-icon">⛳</span>
-            <span class="brand-name">Golf Cash Battle</span>
+      <header class="topbar game-hud-topbar">
+        <div class="topbar-left">
+          <button class="brand-btn desktop-brand-btn" data-go="lobby" aria-label="Golf Cash Battle">
+            <img src="/logo-header.png" alt="Golf Cash Battle" class="brand-logo" />
           </button>
-        </div>
-        <nav class="desktop-nav">
-          <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}"><span>⛳</span>Jugar <kbd>1</kbd></button>
-          <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}"><span>✨</span>Skins <kbd>2</kbd></button>
-          <button data-go="wallet" class="${screen === 'wallet' ? 'on' : ''}"><span>💎</span>Wallet <kbd>3</kbd></button>
-          <button data-go="account" class="${screen === 'account' ? 'on' : ''}"><span>👤</span>Cuenta <kbd>4</kbd></button>
-        </nav>
-        <div class="topbar-right">
           <button class="level" data-go="skins" style="--p:${(into / need) * 100}%" title="Nivel ${level} · ${(into / need * 100).toFixed(0)}%">
             <span class="level-ring"><b>${level}</b></span>
             <span class="level-text"><small>Nivel</small><span class="xpbar"><i></i></span></span>
           </button>
+        </div>
+        <div class="topbar-center">
+          <button class="brand-btn mobile-brand-btn" data-go="lobby" aria-label="Golf Cash Battle">
+            <img src="/logo-header.png" alt="Golf Cash Battle" class="brand-logo" />
+          </button>
+          <nav class="desktop-nav">
+            <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}">Jugar <kbd>1</kbd></button>
+            <button data-go="freeplay" class="${screen === 'freeplay' ? 'on' : ''}">Juego Libre <kbd>2</kbd></button>
+            <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}">Skins <kbd>3</kbd></button>
+            <button data-go="wallet" class="${screen === 'wallet' ? 'on' : ''}">Wallet <kbd>4</kbd></button>
+            <button data-go="account" class="${screen === 'account' ? 'on' : ''}">Cuenta <kbd>5</kbd></button>
+          </nav>
+        </div>
+        <div class="topbar-right">
           <button class="balance" data-go="wallet" title="Tu saldo">${coin(balance)}<span class="plus">+</span></button>
-          <button class="pill mute topbar-sound-btn" aria-label="Sonido" title="Silenciar / Activar sonido (M)">${isMuted() ? '🔇' : '🔊'}</button>
+          <button class="pill mute topbar-sound-btn" aria-label="Sonido" title="Silenciar / Activar sonido (M)">${isMuted() ? 'Mudo' : 'Sonido'}</button>
         </div>
       </header>`),
     );
@@ -91,8 +107,8 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
     if (topMute) {
       topMute.addEventListener('click', () => {
         setMuted(!isMuted());
-        topMute.textContent = isMuted() ? '🔇' : '🔊';
-        try { localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0'); } catch {}
+        topMute.textContent = isMuted() ? 'Mudo' : 'Sonido';
+        try { localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0'); } catch { }
       });
     }
   }
@@ -101,10 +117,11 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
     app.append(
       h(`
       <nav class="tabbar">
-        <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}"><span>⛳</span>Jugar</button>
-        <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}"><span>✨</span>Skins</button>
-        <button data-go="wallet" class="${screen === 'wallet' ? 'on' : ''}"><span>💎</span>Wallet</button>
-        <button data-go="account" class="${screen === 'account' ? 'on' : ''}"><span>👤</span>Cuenta</button>
+        <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}">Jugar</button>
+        <button data-go="freeplay" class="${screen === 'freeplay' ? 'on' : ''}">Libre</button>
+        <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}">Skins</button>
+        <button data-go="wallet" class="${screen === 'wallet' ? 'on' : ''}">Wallet</button>
+        <button data-go="account" class="${screen === 'account' ? 'on' : ''}">Cuenta</button>
       </nav>`),
     );
   }
@@ -126,15 +143,36 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (game || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-  if (e.code === 'Digit1') go('lobby');
-  else if (e.code === 'Digit2') go('skins');
-  else if (e.code === 'Digit3') go('wallet');
-  else if (e.code === 'Digit4') go('account');
+
+  const isNum = (n) => e.key === String(n) || e.code === `Digit${n}` || e.code === `Numpad${n}`;
+
+  const triggerNav = (dest) => {
+    e.preventDefault();
+    unlockAudio();
+    sfx.tap();
+    const navBtn = document.querySelector(`.desktop-nav button[data-go="${dest}"]`);
+    if (navBtn) {
+      navBtn.classList.add('nav-key-active');
+      setTimeout(() => navBtn.classList.remove('nav-key-active'), 220);
+    }
+    const tabBtn = document.querySelector(`.tabbar button[data-go="${dest}"]`);
+    if (tabBtn) {
+      tabBtn.classList.add('tab-key-active');
+      setTimeout(() => tabBtn.classList.remove('tab-key-active'), 220);
+    }
+    go(dest);
+  };
+
+  if (isNum(1)) triggerNav('lobby');
+  else if (isNum(2)) triggerNav('freeplay');
+  else if (isNum(3)) triggerNav('skins');
+  else if (isNum(4)) triggerNav('wallet');
+  else if (isNum(5)) triggerNav('account');
   else if (e.code === 'KeyM') {
     setMuted(!isMuted());
     const topMute = document.querySelector('.topbar-sound-btn');
-    if (topMute) topMute.textContent = isMuted() ? '🔇' : '🔊';
-    try { localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0'); } catch {}
+    if (topMute) topMute.textContent = isMuted() ? 'Mudo' : 'Sonido';
+    try { localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0'); } catch { }
   }
 });
 
@@ -142,6 +180,7 @@ function go(to) {
   if (to === 'wallet') return showWallet();
   if (to === 'skins') return showSkins();
   if (to === 'account') return showAccount();
+  if (to === 'freeplay') return showFreePlayCourseSelect();
   return showLobby();
 }
 
@@ -184,7 +223,7 @@ async function showLobby() {
         </div>
         <div class="hero-text">
           <div class="hero-badge-row">
-            <span class="rarity-pill rarity-${skin.rarity}">${RARITIES[skin.rarity].name}</span>
+            <span class="rarity-pill rarity-${skin.rarity}">${SKIN_TIERS[skin.rarity].name}</span>
             <span class="hero-level-tag">Nivel ${progress.level.level}</span>
           </div>
           <strong>${skin.name}</strong>
@@ -200,9 +239,9 @@ async function showLobby() {
           <span class="live-pill"><i class="pulse-dot"></i> EN VIVO</span>
         </div>
         <div class="lobby-specs">
-          <span class="spec-chip">⚔️ ${PLAYERS_PER_MATCH} Jugadores</span>
-          <span class="spec-chip">⛳ ${HOLES_PER_MATCH} Hoyos</span>
-          <span class="spec-chip">🎯 Determinista</span>
+          <span class="spec-chip">${PLAYERS_PER_MATCH} Jugadores</span>
+          <span class="spec-chip">${HOLES_PER_MATCH} Hoyos</span>
+          <span class="spec-chip">Determinista</span>
         </div>
       </div>
       <div class="tiers"></div>
@@ -234,142 +273,20 @@ async function showLobby() {
   }
   await shell(view);
   if (backend.tournaments) showMyTournaments(view.querySelector('.my-tournaments'));
-}
-
-// ---------- inspector 3D de skins para escritorio ----------
-
-const RARITY_HEX = {
-  bronze: 0xc87a38,
-  silver: 0x94a3b8,
-  gold: 0xffd23f,
-  diamond: 0x00e5ff,
-  emerald: 0x00f076,
-};
-
-function createSkinInspector(container, initialSkin) {
-  const w = 280, h = 280;
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  renderer.setSize(w, h, false);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.2;
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.domElement.style.touchAction = 'none';
-  container.replaceChildren(renderer.domElement);
-
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 50);
-  camera.position.set(0, 0, 1.35);
-  camera.lookAt(0, 0, 0);
-
-  // Iluminación de estudio
-  scene.add(new THREE.AmbientLight(0xffffff, 0.85));
-  const key = new THREE.DirectionalLight(0xfff7ed, 2.8);
-  key.position.set(2.5, 3.5, 2.5);
-  scene.add(key);
-  const fill = new THREE.DirectionalLight(0x7eaaff, 1.5);
-  fill.position.set(-2.8, -0.2, -1.5);
-  scene.add(fill);
-  const rim = new THREE.DirectionalLight(0xffffff, 2.2);
-  rim.position.set(0, 3, -2.5);
-  scene.add(rim);
-
-  const rarityColor = RARITY_HEX[initialSkin.rarity] || 0xffd23f;
-  const underLight = new THREE.PointLight(rarityColor, 2.5, 3.0);
-  underLight.position.set(0, -0.6, 0.3);
-  scene.add(underLight);
-
-  // Bola 3D centrada
-  const geo = new THREE.SphereGeometry(0.38, 64, 48);
-  let currentMat = skinMaterial(initialSkin);
-  const ballMesh = new THREE.Mesh(geo, currentMat);
-  ballMesh.position.set(0, 0, 0);
-  scene.add(ballMesh);
-
-  let rotX = 0.12, rotY = 0;
-  let velX = 0, velY = 0.005;
-  let isDragging = false;
-  let lastX = 0, lastY = 0;
-
-  const onDown = (e) => {
-    isDragging = true;
-    lastX = e.clientX;
-    lastY = e.clientY;
-    renderer.domElement.style.cursor = 'grabbing';
-  };
-  const onMove = (e) => {
-    if (!isDragging) return;
-    const dx = e.clientX - lastX;
-    const dy = e.clientY - lastY;
-    lastX = e.clientX;
-    lastY = e.clientY;
-    velY = dx * 0.012;
-    velX = dy * 0.012;
-    rotY += velY;
-    rotX += velX;
-  };
-  const onUp = () => {
-    isDragging = false;
-    renderer.domElement.style.cursor = 'grab';
-  };
-  const onWheel = (e) => {
-    e.preventDefault();
-    camera.position.z = Math.max(1.0, Math.min(2.1, camera.position.z + e.deltaY * 0.0015));
-  };
-
-  renderer.domElement.style.cursor = 'grab';
-  renderer.domElement.addEventListener('pointerdown', onDown);
-  renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
-  window.addEventListener('pointermove', onMove);
-  window.addEventListener('pointerup', onUp);
-
-  let active = true;
-  function animate() {
-    if (!active) return;
-    requestAnimationFrame(animate);
-    if (!isDragging) {
-      velY += (0.003 - velY) * 0.04;
-      velX *= 0.9;
-      rotY += velY;
-      rotX += velX;
-    }
-    rotX = Math.max(-1.1, Math.min(1.1, rotX));
-    ballMesh.rotation.set(rotX, rotY, 0);
-    renderer.render(scene, camera);
-  }
-  requestAnimationFrame(animate);
-
-  return {
-    setSkin(skin) {
-      const oldMat = ballMesh.material;
-      ballMesh.material = skinMaterial(skin);
-      oldMat?.map?.dispose();
-      oldMat?.dispose();
-      const col = RARITY_HEX[skin.rarity] || 0xffd23f;
-      underLight.color.setHex(col);
-    },
-    destroy() {
-      active = false;
-      renderer.domElement.removeEventListener('pointerdown', onDown);
-      renderer.domElement.removeEventListener('wheel', onWheel);
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-      renderer.dispose();
-      geo.dispose();
-      ballMesh.material?.map?.dispose();
-      ballMesh.material?.dispose();
-      renderer.domElement.remove();
-    },
-  };
+  claimRewards();
 }
 
 // ---------- skins ----------
+
+const tierOrder = (s) => SKIN_TIERS[s.tier]?.order ?? 0;
+const FILTER_TIERS = Object.keys(SKIN_TIERS).reverse();
 
 async function showSkins() {
   screen = 'skins';
   const unlocked = SKINS.filter((s) => progress.isUnlocked(s)).length;
   const { level, into, need } = progress.level;
-  let selectedSkin = progress.skin;
+  const collections = [...new Set(SKINS.map((s) => s.collection))];
+  const filter = { tier: 'all', owned: false, collection: 'all' };
 
   const view = h(`
     <main class="screen skins">
@@ -381,143 +298,175 @@ async function showSkins() {
         <div><small>Nivel</small><strong>${level}</strong></div>
         <div class="level-progress"><span><i style="width:${(into / need) * 100}%"></i></span><small>${into} / ${need} XP</small></div>
       </div>
-      <div class="skins-content-layout">
-        <div class="skins-left-col">
-          <div class="skin-grid"></div>
-          <h2>Desafíos</h2>
-          <ul class="challenges">
-            ${CHALLENGES.map((c) => {
-              const st = progress.challenge(c.id);
-              const reward = SKINS.find((s) => s.unlock?.challenge === c.id);
-              return `<li class="${st.done ? 'done' : ''}">
-                ${ball(reward, 34)}
-                <div><b>${c.name}</b><span class="bar"><i style="width:${(st.value / st.goal) * 100}%"></i></span></div>
-                <small>${st.done ? '✓' : `${st.value}/${st.goal}`}</small>
-              </li>`;
-            }).join('')}
-          </ul>
+      <div class="sk-filters" role="toolbar" aria-label="Filtros de skins">
+        <div class="sk-filter-row">
+          <button type="button" class="sk-fchip on" data-tier="all">Todas</button>
+          ${FILTER_TIERS.map((id) => `<button type="button" class="sk-fchip rarity-${id}" data-tier="${id}"><i>${SKIN_TIERS[id].icon}</i>${SKIN_TIERS[id].name}</button>`).join('')}
         </div>
-        <aside class="skin-inspector-panel">
-          <span class="rarity badge-rarity rarity-${selectedSkin.rarity}">${RARITIES[selectedSkin.rarity].name}</span>
-          <div class="skin-inspector-canvas"></div>
-          <p class="skin-inspector-hint">🖱️ Arrastra para girar 360° · Rueda para zoom</p>
-          <h3 class="skin-inspector-name">${selectedSkin.name}</h3>
-          <p class="skin-inspector-desc">Materiales 3D con brillo físico e iridiscencia</p>
-          <button class="primary skin-inspector-btn" disabled>Equipada</button>
-        </aside>
+        <div class="sk-filter-row">
+          <button type="button" class="sk-fchip sk-fowned" aria-pressed="false">Solo desbloqueadas</button>
+          ${collections.length > 1 ? `<select class="sk-fcoll" aria-label="Colección"><option value="all">Todas las colecciones</option>${collections.map((c) => `<option value="${c}">${c[0].toUpperCase()}${c.slice(1)}</option>`).join('')}</select>` : ''}
+        </div>
       </div>
+      <div class="sk-grid"></div>
+      <p class="sk-empty" hidden>Ninguna skin cumple estos filtros.</p>
+      <h2>Desafíos</h2>
+      <ul class="challenges">
+        ${CHALLENGES.map((c) => {
+    const st = progress.challenge(c.id);
+    const reward = SKINS.find((s) => s.unlock?.challenge === c.id);
+    return `<li class="${st.done ? 'done' : ''}">
+            ${ball(reward, 34)}
+            <div><b>${c.name}</b><span class="bar"><i style="width:${(st.value / st.goal) * 100}%"></i></span></div>
+            <small>${st.done ? 'Completado' : `${st.value}/${st.goal}`}</small>
+          </li>`;
+  }).join('')}
+      </ul>
     </main>`);
 
-  const grid = view.querySelector('.skin-grid');
-  const inspectorCanvas = view.querySelector('.skin-inspector-canvas');
-  const inspectorName = view.querySelector('.skin-inspector-name');
-  const inspectorRarity = view.querySelector('.badge-rarity');
-  const inspectorBtn = view.querySelector('.skin-inspector-btn');
+  const grid = view.querySelector('.sk-grid');
+  const empty = view.querySelector('.sk-empty');
+  const cards = new Map();
 
-  const updateEquippedUI = () => {
-    grid.querySelectorAll('.skin-card').forEach((btn) => {
-      const id = btn.dataset.skinId;
-      const isEq = progress.skin.id === id;
-      btn.classList.toggle('equipped', isEq);
-      const small = btn.querySelector('small:not(.req)');
-      if (small) small.textContent = isEq ? 'Equipada' : 'Toca para equipar';
-    });
-  };
+  const isOpen = (s) => progress.isUnlocked(s);
+  const sorted = [...SKINS].sort((a, b) => tierOrder(b) - tierOrder(a) || isOpen(b) - isOpen(a) || a.name.localeCompare(b.name, 'es'));
+  const jobs = [];
 
-  const updateSelectedCardUI = (selectedId) => {
-    grid.querySelectorAll('.skin-card').forEach((btn) => {
-      btn.classList.toggle('selected', btn.dataset.skinId === selectedId);
-    });
-  };
-
-  const updateInspector = (s) => {
-    selectedSkin = s;
-    updateSelectedCardUI(s.id);
-    if (activeSkinInspector) activeSkinInspector.setSkin(s);
-    inspectorName.textContent = s.name;
-    inspectorRarity.textContent = RARITIES[s.rarity].name;
-    inspectorRarity.className = `rarity badge-rarity rarity-${s.rarity}`;
-    const req = progress.requirement(s);
-    const open = req.ratio >= 1;
-    const isEq = progress.skin.id === s.id;
-    if (isEq) {
-      inspectorBtn.textContent = 'Equipada';
-      inspectorBtn.disabled = true;
-    } else if (open) {
-      inspectorBtn.textContent = 'Equipar skin';
-      inspectorBtn.disabled = false;
-    } else {
-      inspectorBtn.textContent = `Bloqueada (${req.text})`;
-      inspectorBtn.disabled = true;
-    }
-  };
-
-  inspectorBtn.addEventListener('click', () => {
-    const req = progress.requirement(selectedSkin);
-    if (req.ratio >= 1 && progress.equip(selectedSkin.id)) {
-      updateEquippedUI();
-      updateInspector(selectedSkin);
-    }
-  });
-
-  const order = [...SKINS].sort((a, b) => RARITIES[a.rarity].order - RARITIES[b.rarity].order);
-  for (const skin of order) {
+  for (const skin of sorted) {
+    const tier = SKIN_TIERS[skin.tier];
+    const open = isOpen(skin);
+    const inst = progress.instance(skin.id);
     const req = progress.requirement(skin);
-    const open = req.ratio >= 1;
-    const equipped = progress.skin.id === skin.id;
-    const isSelected = selectedSkin.id === skin.id;
+    const rare = open && inst ? rarePatternOf(skin, inst.seed) : null;
     const card = h(`
-      <button class="skin-card holo rarity-${skin.rarity} ${open ? '' : 'locked'} ${equipped ? 'equipped' : ''} ${isSelected ? 'selected' : ''}" data-skin-id="${skin.id}">
+      <button type="button" class="sk-card rarity-${skin.tier} ${open ? '' : 'locked'}" data-skin-id="${skin.id}" style="--sk-a:${skin.palette.base};--sk-b:${skin.palette.accent}">
         <div class="shine"></div>
-        <span class="rarity">${RARITIES[skin.rarity].name}</span>
-        ${ball(skin, 76, open ? 'float' : '')}
-        <b>${skin.name}</b>
-        ${
-          open
-            ? `<small>${equipped ? 'Equipada' : 'Toca para equipar'}</small>`
-            : `<small class="req">🔒 ${req.text}</small><span class="bar"><i style="width:${req.ratio * 100}%"></i></span>`
-        }
+        <div class="sk-scene">
+          <span class="sk-ico" title="${tier.name}">${tier.icon}</span>
+          <span class="sk-eq">Equipada</span>
+          <img class="sk-thumb" src="${(open && thumbCached(skin, inst)) || ballPreview(skin, 152)}" width="76" height="76" alt="" draggable="false">
+          ${open && inst?.counter?.enabled ? '<span class="sk-chip">Marcador</span>' : ''}
+          ${rare ? '<span class="sk-chip sk-chip-rare">✦ Patrón raro</span>' : ''}
+        </div>
+        <div class="sk-strip">
+          <b>${skin.name}</b>
+          <small>${tier.name}</small>
+          ${open ? '' : `<small class="req">${req.text}</small><span class="bar"><i style="width:${req.ratio * 100}%"></i></span>`}
+        </div>
       </button>`);
-    card.addEventListener('click', () => {
-      updateInspector(skin);
-      if (open) {
-        if (progress.equip(skin.id)) {
-          updateEquippedUI();
-          updateInspector(skin);
-        }
-      }
-    });
+    const img = card.querySelector('.sk-thumb');
+    img.dataset.thumb = '1';
+    // bloqueadas: silueta con el marcador 2D (no se renderiza nada en 3D)
+    if (open) jobs.push({ img, skin, inst });
+    card.addEventListener('click', () => openInspect(skin, card));
+    cards.set(skin.id, { card, skin, open });
     grid.append(card);
   }
 
-  await shell(view);
-
-  let inspector = null;
-  const syncInspector = () => {
-    if (typeof window !== 'undefined' && window.innerWidth >= 900) {
-      if (!inspector) {
-        inspector = createSkinInspector(inspectorCanvas, selectedSkin);
-      }
-    } else if (inspector) {
-      inspector.destroy();
-      inspector = null;
+  const refreshEquipped = () => {
+    for (const { card, skin } of cards.values()) card.classList.toggle('equipped', progress.skin.id === skin.id);
+  };
+  const applyFilters = () => {
+    let shown = 0;
+    for (const { card, skin, open } of cards.values()) {
+      const ok = (filter.tier === 'all' || skin.tier === filter.tier) && (filter.collection === 'all' || skin.collection === filter.collection) && (!filter.owned || open);
+      card.hidden = !ok;
+      if (ok) shown++;
     }
+    empty.hidden = shown > 0;
   };
+  view.querySelectorAll('[data-tier]').forEach((b) => b.addEventListener('click', () => {
+    filter.tier = b.dataset.tier;
+    view.querySelectorAll('[data-tier]').forEach((x) => x.classList.toggle('on', x === b));
+    applyFilters();
+  }));
+  const ownedBtn = view.querySelector('.sk-fowned');
+  ownedBtn.addEventListener('click', () => {
+    filter.owned = !filter.owned;
+    ownedBtn.classList.toggle('on', filter.owned);
+    ownedBtn.setAttribute('aria-pressed', String(filter.owned));
+    applyFilters();
+  });
+  view.querySelector('.sk-fcoll')?.addEventListener('change', (e) => {
+    filter.collection = e.target.value;
+    applyFilters();
+  });
 
-  syncInspector();
-  window.addEventListener('resize', syncInspector);
-
-  activeSkinInspector = {
-    setSkin(skin) {
-      selectedSkin = skin;
-      inspector?.setSkin(skin);
-    },
-    destroy() {
-      window.removeEventListener('resize', syncInspector);
-      inspector?.destroy();
-      inspector = null;
-    },
+  // inspección a pantalla completa (también en móvil); equipar es un botón explícito
+  let view3d = null;
+  const closeInspect = () => {
+    if (!view3d) return;
+    const { overlay, onKey, from } = view3d;
+    const inspector = view3d.inspector;
+    view3d = null;
+    document.removeEventListener('keydown', onKey, true);
+    try { inspector?.destroy(); } catch { }
+    overlay.remove();
+    document.body.classList.remove('sk-noscroll');
+    if (from?.isConnected) from.focus({ preventScroll: true });
   };
+  function openInspect(skin, from) {
+    closeInspect();
+    const tier = SKIN_TIERS[skin.tier];
+    const overlay = h(`
+      <div class="sk-view rarity-${skin.tier}" role="dialog" aria-modal="true" aria-label="Inspeccionar ${skin.name}">
+        <div class="sk-view-bar">
+          <button type="button" class="sk-view-back" aria-label="Cerrar inspección">‹ Skins</button>
+          <span class="sk-view-title">${tier.icon} ${skin.name}</span>
+        </div>
+        <div class="sk-view-stage"><img class="sk-view-poster" src="${thumbCached(skin, progress.instance(skin.id)) ?? ballPreview(skin, 288)}" alt="" draggable="false"></div>
+        <div class="sk-view-actions">
+          <div class="sk-view-req"></div>
+          <button type="button" class="primary sk-equip"></button>
+        </div>
+      </div>`);
+    document.body.append(overlay);
+    document.body.classList.add('sk-noscroll');
+    const equipBtn = overlay.querySelector('.sk-equip');
+    const reqBox = overlay.querySelector('.sk-view-req');
+    const syncAction = () => {
+      const req = progress.requirement(skin);
+      const open = req.ratio >= 1;
+      const isEq = progress.skin.id === skin.id;
+      equipBtn.disabled = isEq || !open;
+      equipBtn.textContent = isEq ? '✓ Equipada' : open ? 'Equipar' : 'Bloqueada';
+      reqBox.hidden = open;
+      reqBox.innerHTML = open ? '' : `<small>${req.text}</small><span class="bar"><i style="width:${req.ratio * 100}%"></i></span>`;
+    };
+    syncAction();
+    equipBtn.addEventListener('click', () => {
+      if (progress.equip(skin.id)) {
+        refreshEquipped();
+        syncAction();
+      }
+    });
+    overlay.querySelector('.sk-view-back').addEventListener('click', closeInspect);
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      closeInspect();
+    };
+    document.addEventListener('keydown', onKey, true);
+    const mine = { overlay, inspector: null, onKey, from };
+    view3d = mine;
+    overlay.querySelector('.sk-view-back').focus({ preventScroll: true });
+    // el visor 3D (three.js + materiales) se descarga y crea solo ahora, al abrir
+    loadSkinInspector().then(({ createSkinInspector }) => {
+      if (view3d !== mine) return; // cerrado mientras cargaba
+      mine.inspector = createSkinInspector(overlay.querySelector('.sk-view-stage'), { skin, instance: progress.instance(skin.id) ?? undefined, mode: 'fullscreen' });
+    }).catch((err) => console.warn('inspector no disponible', err));
+  }
+
+  refreshEquipped();
+  applyFilters();
+  await shell(view);
+  // shell() destruye el inspector anterior: el nuevo se registra después
+  activeSkinInspector = { destroy: closeInspect };
+
+  // miniaturas estáticas (caché); las que falten se renderizan una vez, en cola, la equipada primero
+  const eqId = progress.skin.id;
+  jobs.sort((a, b) => (b.skin.id === eqId) - (a.skin.id === eqId));
+  for (const j of jobs) upgradeImg(j.img, j.skin, j.inst, { size: 76, priority: j.skin.id === eqId });
 }
 
 // ---------- cuenta ----------
@@ -534,7 +483,7 @@ const BLOCK_TEXT = {
 const KYC_TEXT = {
   none: 'Sin verificar',
   pending: 'En curso',
-  verified: 'Verificada ✓',
+  verified: 'Verificada',
   rejected: 'Rechazada',
 };
 
@@ -647,7 +596,7 @@ async function showAccount(note = '') {
 
   const emailBox = view.querySelector('.email-box');
   if (!guest) {
-    emailBox.innerHTML = `<p class="field-ok">${esc(p.email)} ✓</p>`;
+    emailBox.innerHTML = `<p class="field-ok">${esc(p.email)}</p>`;
   } else {
     emailBox.append(
       emailForm({
@@ -677,7 +626,7 @@ async function showAccount(note = '') {
   if (guest) {
     kycBox.innerHTML = '<p class="sub">Primero guarda tu cuenta con email.</p>';
   } else if (kyc === 'verified') {
-    kycBox.innerHTML = `<p class="field-ok">Identidad verificada${p.adult ? ' · mayor de 18' : ''} ✓</p>`;
+    kycBox.innerHTML = `<p class="field-ok">Identidad verificada${p.adult ? ' · mayor de 18' : ''}</p>`;
   } else {
     kycBox.innerHTML = `
       ${kyc === 'rejected' ? `<p class="sub">${KYC_REASON[p.kyc_reason] ?? KYC_REASON.provider_declined}</p>` : ''}
@@ -722,7 +671,7 @@ function emailForm({ intro, button, send, codeType }) {
       try {
         await backend.account.verifyCode(sentTo, box.code.value.trim(), codeType);
         // si cambia de usuario la app se recarga sola; si es el mismo, se refresca
-        showAccount('Cuenta guardada ✓');
+        showAccount('Cuenta guardada');
       } catch {
         btn.disabled = false;
         alertMsg('El código no es válido o ha caducado.');
@@ -761,7 +710,7 @@ function renameForm(view, current) {
     e.preventDefault();
     try {
       await backend.account.setUsername(form.name.value.trim());
-      showAccount('Nombre guardado ✓');
+      showAccount('Nombre guardado');
     } catch (err) {
       alertMsg(err.code === 'username_taken' ? 'Ese nombre ya está cogido.' : 'Usa de 3 a 16 letras, números o _.');
     }
@@ -838,9 +787,8 @@ async function showWallet() {
             <button class="primary deposit-btn" data-add="200"><span>+200</span> Créditos</button>
           </div>
         </div>
-        ${
-          wallet.depositCrypto
-            ? `<div class="crypto-section">
+        ${wallet.depositCrypto
+      ? `<div class="crypto-section">
           <h3>Depositar en Cripto <small class="tag">pruebas</small></h3>
           <div class="row">
             <button class="secondary" data-crypto="10">10 USD</button>
@@ -849,33 +797,28 @@ async function showWallet() {
           </div>
           <p class="legal">Pago con NOWPayments (USDT, BTC, ETH…). Modo de pruebas: no se cobra dinero real.</p>
         </div>`
-            : ''
-        }
+      : ''
+    }
       </div>
       <div class="txs-container">
         <h3>Historial de Movimientos</h3>
         <ul class="txs">
-          ${
-            txs.length
-              ? txs
-                  .map(
-                    (t) => {
-                      const icon = t.type === 'prize' ? '🏆' : t.type === 'entry' ? '⚔️' : t.type === 'bonus' ? '🎁' : '💎';
-                      return `<li>
+          ${txs.length
+      ? txs
+        .map(
+          (t) => `<li>
                         <div class="tx-info">
-                          <span class="tx-icon">${icon}</span>
                           <div class="tx-text">
                             <b>${TX_LABEL[t.type] ?? t.type}</b>
                             <small>${t.note} · ${new Date(t.at).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}</small>
                           </div>
                         </div>
                         <span class="${t.amount >= 0 ? 'pos' : 'neg'}">${t.amount >= 0 ? '+' : ''}${fmt(t.amount)}</span>
-                      </li>`;
-                    },
-                  )
-                  .join('')
-              : '<li class="empty"><span class="empty-icon">🪙</span><p>Sin movimientos todavía</p></li>'
-          }
+                      </li>`,
+        )
+        .join('')
+      : '<li class="empty"><p>Sin movimientos todavía</p></li>'
+    }
         </ul>
       </div>
     </main>`);
@@ -908,13 +851,13 @@ async function showWallet() {
 
 // ---------- matchmaking ----------
 
-async function startMatch(tier) {
+async function startMatch(tier, rematchOf = null) {
   // #hoyo3 en la URL: la práctica empieza por ese hoyo (útil para probar);
   // #hoyo3-empate además fuerza el desempate al final
   const forced = tier.entryFee === 0 && /^#hoyo(\d+)(-empate)?$/.exec(location.hash);
   // con servidor, las mesas de pago son torneos contra jugadores reales y la
   // práctica se juega en el móvil contra rivales simulados
-  if (!forced && tier.entryFee > 0 && backend.tournaments) return startTournament(tier);
+  if (!forced && tier.entryFee > 0 && backend.tournaments) return startTournament(tier, rematchOf);
   const service = forced || backend.tournaments ? practice : matches;
   let match;
   try {
@@ -963,38 +906,43 @@ async function startMatch(tier) {
  * Pantalla de juego. mode 'hole' es un hoyo normal; 'tiebreak' es el hoyo
  * sin agujero del desempate (un tiro, gana el más cercano).
  */
-function playScreen(match, { course, title, subtitle, players, onDone, firstSunkTick = null, timeLimit = HOLE_TIME_LIMIT }) {
+function playScreen(match, { course, title, subtitle, players, onDone, firstSunkTick = null, timeLimit = HOLE_TIME_LIMIT, freePlay = false, onRestartHole = null, onSelectMap = null }) {
   const tiebreak = !!course.noCup;
   const view = h(`
-    <main class="play-screen ${tiebreak ? 'is-tiebreak' : ''}">
+    <main class="play-screen ${tiebreak ? 'is-tiebreak' : ''} ${freePlay ? 'is-freeplay' : ''}">
       <div class="stage"></div>
       <div class="vignette"></div>
-      <div class="hud">
-        <div class="pill hl">${title}</div>
-        <div class="pill">${tiebreak ? '1 tiro' : `Par ${course.par}`}</div>
+      <div class="hud ${freePlay ? 'hud-freeplay' : ''}">
+        ${freePlay ? '<div class="pill hl freeplay-pill">Modo Libre</div>' : `<div class="pill hl">${title}</div>`}
+        <div class="pill">${freePlay ? course.name : tiebreak ? '1 tiro' : `Par ${course.par}`}</div>
+        ${freePlay ? `<div class="pill">Par ${course.par}</div>` : ''}
         ${tiebreak ? '' : '<div class="pill strokes">Golpes <b>0</b></div>'}
         <div class="pill dist">— m</div>
-        <button class="pill mute mobile-only" aria-label="Sonido">${isMuted() ? '🔇' : '🔊'}</button>
-        <button class="pill fullscreen mobile-only" aria-label="Pantalla completa" title="Pantalla completa (F11)">⛶</button>
-        <button class="pill settings-btn-hud mobile-only" aria-label="Ajustes" title="Ajustes (Esc)">⚙️</button>
-        <button class="pill desktop-esc-hint" aria-label="Ajustes">⚙️ Ajustes <kbd class="kbd-hint">Esc</kbd></button>
+        ${freePlay ? `
+        <button class="pill restart-btn hud-freeplay-btn" aria-label="Reiniciar hoyo" title="Reiniciar hoyo al tee (R)">Reiniciar <kbd class="kbd-hint">R</kbd></button>
+        <button class="pill map-select-btn hud-freeplay-btn" aria-label="Elegir otro mapa" title="Elegir otro mapa">Mapas</button>
+        ` : ''}
+        <button class="pill mute mobile-only" aria-label="Sonido">${isMuted() ? 'Mudo' : 'Sonido'}</button>
+        <button class="pill fullscreen mobile-only" aria-label="Pantalla completa" title="Pantalla completa (F11)">Pantalla</button>
+        <button class="pill settings-btn-hud mobile-only" aria-label="Ajustes" title="Ajustes (Esc)">Ajustes</button>
+        <button class="pill desktop-esc-hint" aria-label="Ajustes">Ajustes <kbd class="kbd-hint">Esc</kbd></button>
       </div>
-      <div class="rivals">${players
-        .map((p) => `<div class="chip ${p.id === 'me' ? 'me' : ''}" data-id="${p.id}" style="--c:${p.color}"><i>${p.name[0]}</i><b>${tiebreak ? '·' : 0}</b></div>`)
-        .join('')}</div>
+      <div class="rivals ${freePlay ? 'rivals-hidden' : ''}">${freePlay ? '' : players
+      .map((p) => `<div class="chip ${p.id === 'me' ? 'me' : ''}" data-id="${p.id}" style="--c:${p.color}"><i>${p.name[0]}</i><b>${tiebreak ? '·' : 0}</b></div>`)
+      .join('')}</div>
       <div class="toasts"></div>
       <div class="intro-banner">
         <small>${subtitle}</small>
         <strong>${course.name}</strong>
-        <span>${tiebreak ? 'Deja la bola lo más cerca de la diana' : `Par ${course.par}`}</span>
+        <span>${freePlay ? `Modo Libre · Par ${course.par} · Sin tiempo ni rivales` : tiebreak ? 'Deja la bola lo más cerca de la diana' : `Par ${course.par}`}</span>
         ${course.tip && !tiebreak ? `<em>${course.tip}</em>` : ''}
       </div>
-      <div class="overview-banner"><span class="ov-mouse">🗺️ Vista General del Mapa · Mueve el ratón para orbitar · Pulsa <kbd>Espacio</kbd> para volver</span><span class="ov-touch">🗺️ Vista del mapa · Desliza para girarla</span></div>
+      <div class="overview-banner"><span class="ov-mouse">Vista General del Mapa · Mueve el ratón para orbitar · Pulsa <kbd>Espacio</kbd> para volver</span><span class="ov-touch">Vista del mapa · Desliza para girarla</span></div>
       <div class="cup-banner"></div>
-      <div class="hole-timer" hidden><small>Tiempo para embocar</small><b>${timeLimit}</b></div>
+      <div class="hole-timer" hidden><small>Tiempo para embocar</small><b>${timeLimit ?? ''}</b></div>
       <div class="hint">
-        <span class="hint-touch">↔ Desliza: cámara · Arrastra la bola hacia atrás: tiro</span>
-        <span class="hint-mouse">🖱️ Ratón para apuntar · Clic Izquierdo para calcular y disparar · <kbd>Espacio</kbd> Ver mapa · <kbd>Esc</kbd> Ajustes</span>
+        <span class="hint-touch">Desliza: cámara · Arrastra la bola hacia atrás: tiro</span>
+        <span class="hint-mouse">Ratón para apuntar · Clic Izquierdo para calcular y disparar · <kbd>Espacio</kbd> Ver mapa · <kbd>Esc</kbd> Ajustes</span>
       </div>
       <div class="desktop-controls-bar">
         <span><kbd>Ratón</kbd> Apuntar y Disparar</span>
@@ -1002,11 +950,14 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         <span><kbd>Rueda</kbd> Zoom / Fuerza</span>
         <span><kbd>Espacio</kbd> Vista mapa completo</span>
         <span><kbd>Esc</kbd> Ajustes</span>
+        ${freePlay ? '<span><kbd>R</kbd> Reiniciar hoyo</span>' : ''}
       </div>
       <div class="power"><div class="fill"></div><span>0%</span></div>
       <button class="map-btn" aria-label="Ver el hoyo completo">Ver mapa <kbd class="kbd-hint">Espacio</kbd></button>
     </main>`);
-  shell(view, { hideHeader: true }).then(() => {
+  const gameClass = loadGolfGame();
+  Promise.all([gameClass, shell(view, { hideHeader: true })]).then(([GolfGame]) => {
+    if (!view.isConnected) return; // se salió de la pantalla mientras cargaba el motor
     const strokesEl = view.querySelector('.strokes b');
     const distEl = view.querySelector('.dist');
     const power = view.querySelector('.power');
@@ -1049,9 +1000,9 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
           <div class="in-game-settings-modal">
             <div class="settings-modal-header">
               <div class="settings-title">
-                <h3>⚙️ Ajustes de Partida</h3>
+                <h3>Ajustes de Partida</h3>
               </div>
-              <button class="close-settings-btn" aria-label="Cerrar ajustes">✕</button>
+              <button class="close-settings-btn" aria-label="Cerrar ajustes">Cerrar</button>
             </div>
 
             <div class="settings-modal-body">
@@ -1061,7 +1012,6 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
                   <small>Efectos ambientales y de golpe</small>
                 </div>
                 <button class="settings-btn toggle-sound-btn ${isMuted() ? 'muted' : ''}">
-                  <span class="btn-icon">${isMuted() ? '🔇' : '🔊'}</span>
                   <span class="btn-text">${isMuted() ? 'Silenciado' : 'Activado'}</span>
                 </button>
               </div>
@@ -1072,7 +1022,6 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
                   <small>Modo inmersivo de pantalla completa</small>
                 </div>
                 <button class="settings-btn toggle-fs-btn">
-                  <span class="btn-icon">${document.fullscreenElement ? '🗗' : '⛶'}</span>
                   <span class="btn-text">${document.fullscreenElement ? 'Ventana' : 'Pantalla Completa'}</span>
                 </button>
               </div>
@@ -1093,13 +1042,12 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
                   <small>Ver todo el terreno en 3D</small>
                 </div>
                 <button class="settings-btn toggle-overview-btn">
-                  <span class="btn-icon">🗺️</span>
                   <span class="btn-text">${game.overview ? 'Volver a la bola' : 'Ver todo el terreno'}</span>
                 </button>
               </div>
 
               <div class="settings-controls-card">
-                <div class="card-title">🎮 Controles Activos</div>
+                <div class="card-title">Controles Activos</div>
                 <div class="controls-grid">
                   <div class="c-item"><kbd>Ratón</kbd><span>Apuntar y calcular fuerza (pulsar/arrastrar y soltar)</span></div>
                   <div class="c-item"><kbd>Clic Der</kbd><span>Rotar cámara alrededor de la bola</span></div>
@@ -1111,8 +1059,9 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
             </div>
 
             <div class="settings-modal-footer">
-              <button class="primary resume-btn">▶ Reanudar partida</button>
-              <button class="danger quit-btn">🚪 Salir al Lobby</button>
+              <button class="primary resume-btn">Reanudar partida</button>
+              ${freePlay ? '<button class="secondary restart-settings-btn">Reiniciar Hoyo</button><button class="secondary map-settings-btn">Cambiar de Mapa</button>' : ''}
+              <button class="danger quit-btn">Salir al Lobby</button>
             </div>
           </div>
         </div>
@@ -1135,22 +1084,20 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         setMuted(!isMuted());
         const muted = isMuted();
         soundBtn.classList.toggle('muted', muted);
-        soundBtn.querySelector('.btn-icon').textContent = muted ? '🔇' : '🔊';
         soundBtn.querySelector('.btn-text').textContent = muted ? 'Silenciado' : 'Activado';
-        muteBtn.textContent = muted ? '🔇' : '🔊';
-        try { localStorage.setItem(MUTE_KEY, muted ? '1' : '0'); } catch {}
+        muteBtn.textContent = muted ? 'Mudo' : 'Sonido';
+        try { localStorage.setItem(MUTE_KEY, muted ? '1' : '0'); } catch { }
       });
 
       const fsModalBtn = overlay.querySelector('.toggle-fs-btn');
       fsModalBtn.addEventListener('click', () => {
         if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen().catch(() => {});
+          document.documentElement.requestFullscreen().catch(() => { });
         } else {
-          document.exitFullscreen().catch(() => {});
+          document.exitFullscreen().catch(() => { });
         }
         setTimeout(() => {
           const isFs = !!document.fullscreenElement;
-          fsModalBtn.querySelector('.btn-icon').textContent = isFs ? '🗗' : '⛶';
           fsModalBtn.querySelector('.btn-text').textContent = isFs ? 'Ventana' : 'Pantalla Completa';
         }, 100);
       });
@@ -1178,6 +1125,27 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         }
       });
 
+      if (freePlay) {
+        overlay.querySelector('.restart-settings-btn')?.addEventListener('click', () => {
+          close();
+          if (onRestartHole) {
+            onRestartHole();
+          } else if (game) {
+            game.restart();
+            if (strokesEl) strokesEl.textContent = '0';
+            showDistance();
+            toast('Hoyo reiniciado al tee', '#00f076');
+          }
+        });
+        overlay.querySelector('.map-settings-btn')?.addEventListener('click', () => {
+          overlay.remove();
+          game.setPaused?.(false);
+          game.dispose();
+          if (onSelectMap) onSelectMap();
+          else showFreePlayCourseSelect();
+        });
+      }
+
       view.append(overlay);
     }
 
@@ -1198,11 +1166,11 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       },
       onRival: (p, st) => {
         if (tiebreak) {
-          if (st.done) setChip(p.id, '✓', true);
+          if (st.done) setChip(p.id, 'OK', true);
           return;
         }
         if (st.dq) {
-          setChip(p.id, '✗', true);
+          setChip(p.id, 'DQ', true);
           return;
         }
         setChip(p.id, st.strokes, st.sunk);
@@ -1222,7 +1190,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       onSunk: finish,
       onTimer: (left) => {
         if (left == null) return (timerEl.hidden = true);
-        if (timerEl.hidden) toast(`⏱ ¡${left} s para embocar o quedas descalificado!`, '#ff5a5a');
+        if (timerEl.hidden) toast(`¡${left} s para embocar o quedas descalificado!`, '#ff5a5a');
         timerEl.hidden = false;
         timerEl.querySelector('b').textContent = left;
         timerEl.classList.toggle('urgent', left <= 5);
@@ -1231,8 +1199,9 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         timerEl.classList.add('tick');
       },
       onTimeUp: () => {
+        if (freePlay) return;
         timerEl.hidden = true;
-        setChip('me', '✗', true);
+        setChip('me', 'DQ', true);
         banner('¡Tiempo! Descalificado');
         cupBanner.classList.add('dq');
         setTimeout(() => finish(MAX_STROKES_PER_HOLE), 1600);
@@ -1243,31 +1212,64 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         if (tiebreak) {
           setChip('me', `${game.distanceToCup().toFixed(2)}m`, true);
           setTimeout(() => finish(n), 900);
-        } else if (n >= MAX_STROKES_PER_HOLE) finish(n);
+        } else if (!freePlay && n >= MAX_STROKES_PER_HOLE) finish(n);
       },
     });
-    game.load(course, { bots: players.filter((p) => p.isBot), skin: progress.skin, firstSunkTick, timeLimit });
+    game.load(course, { bots: freePlay ? [] : players.filter((p) => p.isBot), skin: progress.skin, instance: progress.instance(progress.skin.id), firstSunkTick, timeLimit: freePlay ? null : timeLimit });
     showDistance();
-    if (isMuted()) toast('🔇 Sonido silenciado · actívalo en ⚙️ Ajustes', '#ffffff');
+    if (freePlay) {
+      view.querySelector('.restart-btn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (onRestartHole) onRestartHole();
+        else if (game) {
+          game.restart();
+          if (strokesEl) strokesEl.textContent = '0';
+          showDistance();
+          toast('Hoyo reiniciado al tee', '#00f076');
+        }
+      });
+      view.querySelector('.map-select-btn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        game.locked = true;
+        game.exitPointerLock?.();
+        game.dispose();
+        if (onSelectMap) onSelectMap();
+        else showFreePlayCourseSelect();
+      });
+      const onKeyR = (e) => {
+        if (e.code === 'KeyR' && !game?.paused && !view.querySelector('.in-game-settings-overlay')) {
+          e.preventDefault();
+          if (onRestartHole) onRestartHole();
+          else if (game) {
+            game.restart();
+            if (strokesEl) strokesEl.textContent = '0';
+            showDistance();
+            toast('Hoyo reiniciado al tee', '#00f076');
+          }
+        }
+      };
+      window.addEventListener('keydown', onKeyR);
+    }
+    if (isMuted()) toast('Sonido silenciado · actívalo en Ajustes', '#ffffff');
     const muteBtn = view.querySelector('.mute');
     muteBtn.addEventListener('click', () => {
       setMuted(!isMuted());
-      muteBtn.textContent = isMuted() ? '🔇' : '🔊';
+      muteBtn.textContent = isMuted() ? 'Mudo' : 'Sonido';
       try {
         localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0');
-      } catch {}
+      } catch { }
     });
     const fsBtn = view.querySelector('.fullscreen');
     if (fsBtn) {
       fsBtn.addEventListener('click', () => {
         if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen().catch(() => {});
+          document.documentElement.requestFullscreen().catch(() => { });
         } else {
-          document.exitFullscreen().catch(() => {});
+          document.exitFullscreen().catch(() => { });
         }
       });
       document.addEventListener('fullscreenchange', () => {
-        fsBtn.textContent = document.fullscreenElement ? '🗗' : '⛶';
+        fsBtn.textContent = document.fullscreenElement ? 'Ventana' : 'Pantalla';
       });
     }
     view.querySelector('.settings-btn-hud')?.addEventListener('click', openSettingsMenu);
@@ -1275,7 +1277,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
     function setChip(id, text, done) {
       const chip = view.querySelector(`.chip[data-id="${id}"]`);
       if (!chip) return;
-      chip.querySelector('b').textContent = done && typeof text === 'number' ? `✓${text}` : text;
+      chip.querySelector('b').textContent = text;
       chip.classList.toggle('sunk', done);
       chip.classList.remove('bump');
       void chip.offsetWidth;
@@ -1324,7 +1326,7 @@ function standingsTable(players, highlightPayout) {
       (p, i) => `<li class="${p.id === 'me' ? 'me' : ''} ${(p.position ?? i + 1) === 1 ? 'first' : ''}" style="--c:${p.color}">
         <span class="pos">${p.position ?? i + 1}</span>
         <span class="name"><i></i>${p.name}</span>
-        <span class="scores">${p.scores ? p.scores.join(' · ') : p.finished ? 'Terminado' : `Jugando · ${p.holesPlayed} hoyo${p.holesPlayed === 1 ? '' : 's'}`}${p.tiebreak !== undefined ? ` · 🎯${p.tiebreak.toFixed(2)}m` : ''}</span>
+        <span class="scores">${p.scores ? p.scores.join(' · ') : p.finished ? 'Terminado' : `Jugando · ${p.holesPlayed} hoyo${p.holesPlayed === 1 ? '' : 's'}`}${p.tiebreak !== undefined ? ` · ${p.tiebreak.toFixed(2)}m` : ''}</span>
         <b>${p.total ?? '—'}</b>
         ${highlightPayout && p.payout ? `<span class="payout">+${fmt(p.payout)}</span>` : ''}
       </li>`,
@@ -1413,8 +1415,8 @@ function showTiebreakResult(match, tied, distances) {
       <div class="card tiebreak-card">
         <h2 class="score-title">Desempate</h2>
         <ol class="standings">${rows
-          .map((p, i) => `<li class="${p.id === 'me' ? 'me' : ''} ${i === 0 ? 'first' : ''}" style="--c:${p.color}"><span class="pos">${i + 1}</span><span class="name"><i></i>${p.name}</span><span></span><b>${distances[p.id].toFixed(2)} m</b></li>`)
-          .join('')}</ol>
+      .map((p, i) => `<li class="${p.id === 'me' ? 'me' : ''} ${i === 0 ? 'first' : ''}" style="--c:${p.color}"><span class="pos">${i + 1}</span><span class="name"><i></i>${p.name}</span><span></span><b>${distances[p.id].toFixed(2)} m</b></li>`)
+      .join('')}</ol>
         <button class="primary next">Ver resultado</button>
       </div>
     </div>`);
@@ -1434,37 +1436,83 @@ async function showResults(match, tiebreak = {}) {
   const won = result.me.position === 1 || result.me.payout > 0;
   const tiebreakWon = won && tiebreak.me !== undefined;
   const gained = progress.recordMatch({ position: result.me.position, won, entryFee: match.tier.entryFee, holes: match.myHoles.filter(Boolean), tiebreakWon });
-  const levelUp = gained.level.level > gained.levelBefore;
   screen = 'lobby';
-  const view = h(`
-    <main class="screen results ${won ? 'won' : ''}">
-      ${won ? '<div class="rays"></div>' : ''}
-      <div class="trophy">${won ? '🏆' : result.me.position <= 3 ? '🥈' : '⛳'}</div>
-      <h1 class="score-title">${won ? '¡Has ganado!' : `Posición ${result.me.position} de ${PLAYERS_PER_MATCH}`}</h1>
-      <p class="sub">${match.tier.entryFee ? (won ? `Premio ${coin(result.me.payout)}` : `Bote ${coin(result.pot)} para el ganador`) : 'Partida de práctica'}</p>
-      <div class="xp-card">
-        <div class="xp-head"><b>+${gained.xp} XP</b><span>${levelUp ? `¡Nivel ${gained.level.level}!` : `Nivel ${gained.level.level}`}</span></div>
-        <span class="bar"><i style="--to:${(gained.level.into / gained.level.need) * 100}%"></i></span>
+  showEndOverlay({
+    onRematch: () => startMatch(match.tier),
+    won,
+    position: result.me.position,
+    total: PLAYERS_PER_MATCH,
+    prize: match.tier.entryFee ? (won ? `Premio ${coin(result.me.payout)}` : `Bote ${coin(result.pot)} para el ganador`) : 'Partida de práctica',
+    ranking: result.ranking,
+    legal: match.tier.entryFee ? `Bote ${fmt(result.pot)} · comisión ${fmt(result.commission)} · premio ${fmt(result.prize)}` : '',
+    holes: match.myHoles.filter(Boolean),
+    gained,
+  });
+}
+
+// Final de partida: 1) resultado con XP y aviso de recompensas, sobre el propio juego;
+// 2) recompensas, ya fuera del juego, al salir hacia el menú; 3) menú principal.
+let rewardsOpen = false;
+
+async function claimRewards() {
+  const list = progress.claimable;
+  if (!list.length || rewardsOpen) return;
+  rewardsOpen = true;
+  try {
+    await showSkinReveal(list, { progress });
+    list.forEach((sk) => progress.claim(sk.id));
+  } finally {
+    rewardsOpen = false;
+  }
+}
+
+function showEndOverlay({ won, position, total, prize, ranking, legal, holes, gained, onRematch }) {
+  app.querySelector('.overlay')?.remove();
+  const levelUp = gained.level.level > gained.levelBefore;
+  const pending = progress.claimable.length;
+  const overlay = h(`
+    <div class="overlay end-overlay">
+      <div class="card end-card ${won ? 'good' : ''}">
+        <div class="trophy">${won ? 'Victoria' : `Puesto #${position}`}</div>
+        <h2 class="score-title">${won ? '¡Has ganado!' : `Posición ${position} de ${total}`}</h2>
+        <p class="sub">${prize}</p>
+        <div class="xp-card">
+          <div class="xp-head"><b>+${gained.xp} XP</b><span>${levelUp ? `¡Nivel ${gained.level.level}!` : `Nivel ${gained.level.level}`}</span></div>
+          <span class="bar"><i style="--to:${(gained.level.into / gained.level.need) * 100}%"></i></span>
+        </div>
+        ${pending ? `<p class="reward-note"><i></i>${pending === 1 ? 'Tienes 1 recompensa por reclamar' : `Tienes ${pending} recompensas por reclamar`}</p>` : ''}
+        ${statsGrid(holes)}
+        ${standingsTable(ranking, true)}
+        ${legal ? `<p class="legal">${legal}</p>` : ''}
+        <div class="row">
+          <button class="primary again">Revancha</button>
+          <button class="ghost next">${pending ? 'Reclamar y salir' : 'Salir'}</button>
+        </div>
       </div>
-      ${
-        gained.newSkins.length
-          ? `<h2 class="unlock-title">¡Skin desbloqueada!</h2><div class="unlocks">${gained.newSkins
-              .map(
-                (s) => `<div class="skin-card holo reveal rarity-${s.rarity}"><div class="shine"></div><span class="rarity">${RARITIES[s.rarity].name}</span>${ball(s, 76, 'float')}<b>${s.name}</b></div>`,
-              )
-              .join('')}</div>`
-          : ''
-      }
-      ${standingsTable(result.ranking, true)}
-      ${match.tier.entryFee ? `<p class="legal">Bote ${fmt(result.pot)} · comisión ${fmt(result.commission)} · premio ${fmt(result.prize)}</p>` : ''}
-      <div class="row">
-        <button class="primary again">Revancha</button>
-        <button class="ghost" data-go="lobby">Lobby</button>
-      </div>
-    </main>`);
-  view.querySelector('.again').addEventListener('click', () => startMatch(match.tier));
-  await shell(view, { nav: false });
-  if (won || gained.newSkins.length) sfx.coins();
+    </div>`);
+  overlay.querySelector('.again').addEventListener('click', (e) => {
+    e.target.disabled = true;
+    overlay.remove();
+    onRematch();
+  });
+  overlay.querySelector('.next').addEventListener('click', () => showLobby());
+  app.append(overlay);
+  sfx.endJingle(won, position);
+}
+
+function statsGrid(holes) {
+  if (!holes.length) return '';
+  const strokes = holes.reduce((a, x) => a + x.strokes, 0);
+  const diff = strokes - holes.reduce((a, x) => a + x.par, 0);
+  const birdies = holes.filter((x) => x.strokes < x.par).length;
+  const best = holes.reduce((a, x) => (x.strokes - x.par < a.strokes - a.par ? x : a));
+  const cell = (k, v) => `<div><b>${v}</b><span>${k}</span></div>`;
+  return `<div class="stats-grid">
+    ${cell('Golpes', strokes)}
+    ${cell('Vs par', diff > 0 ? `+${diff}` : diff === 0 ? 'E' : diff)}
+    ${cell('Birdies', birdies)}
+    ${cell('Mejor hoyo', scoreLabel(best.strokes, best.par).replace('¡', '').replace('!', ''))}
+  </div>`;
 }
 
 // ---------- torneos contra jugadores reales ----------
@@ -1474,14 +1522,18 @@ async function showResults(match, tiebreak = {}) {
 
 const POLL_MS = 5000;
 
-async function startTournament(tier) {
+async function startTournament(tier, rematchOf = null) {
   let match;
   try {
-    match = await backend.tournaments.join(tier, TIERS);
+    // revancha: el servidor junta en la misma sala a quienes la piden; si ya no vale, mesa normal
+    match = await backend.tournaments.join(tier, TIERS, rematchOf).catch((e) => {
+      if (e.code === 'rematch_invalid') return backend.tournaments.join(tier, TIERS);
+      throw e;
+    });
   } catch (e) {
     if (e instanceof InsufficientFundsError) return showWallet();
     if (e.blocked) {
-      backend.account?.load().catch(() => {});
+      backend.account?.load().catch(() => { });
       return showBlocked(e.code);
     }
     return alertMsg('No se ha podido entrar en el torneo. Prueba otra vez.');
@@ -1506,6 +1558,7 @@ function showTournamentLobby(match) {
       <h1>Torneo ${tier.name}</h1>
       <p class="sub count"></p>
       <div class="seats"></div>
+      ${match.rematchOf ? '<p class="legal">Revancha: quienes pidan revancha como tú entrarán juntos en esta sala.</p>' : ''}
       <p class="legal">Todos jugáis los mismos ${match.holes} hoyos, cada uno a su ritmo. Cuando terminéis todos (o se cierre la inscripción) gana quien menos golpes haga y se reparte el bote. El servidor repite cada golpe para que nadie pueda hacer trampas.</p>
       <button class="primary start">Empezar a jugar</button>
       <button class="ghost cancel">Salir y recuperar entrada</button>
@@ -1534,7 +1587,7 @@ function showTournamentLobby(match) {
       await backend.tournaments.status(match);
       if (match.players.length > before) sfx.tick();
       if (view.isConnected) render();
-    } catch {}
+    } catch { }
     setTimeout(poll, POLL_MS);
   };
   setTimeout(poll, POLL_MS);
@@ -1549,7 +1602,7 @@ function showTournamentLobby(match) {
   });
   view.querySelector('.cancel').addEventListener('click', async (e) => {
     e.target.disabled = true;
-    await backend.tournaments.leave(match).catch(() => {});
+    await backend.tournaments.leave(match).catch(() => { });
     showLobby();
   });
   shell(view, { nav: false });
@@ -1611,7 +1664,7 @@ function offerTiebreak(match) {
   overlay.querySelector('.next').addEventListener('click', () => playOnlineTiebreak(match));
   overlay.querySelector('.skip').addEventListener('click', async (e) => {
     e.target.disabled = true;
-    await backend.tournaments.leave(match).catch(() => {});
+    await backend.tournaments.leave(match).catch(() => { });
     showOnlineResults(match);
   });
   app.append(overlay);
@@ -1636,11 +1689,11 @@ function recordOnce(match) {
   let seen = [];
   try {
     seen = JSON.parse(localStorage.getItem(KEY) ?? '[]');
-  } catch {}
+  } catch { }
   if (seen.includes(match.id)) return null;
   try {
     localStorage.setItem(KEY, JSON.stringify([match.id, ...seen].slice(0, 50)));
-  } catch {}
+  } catch { }
   const me = match.me;
   const won = me.position === 1 || me.payout > 0;
   const leaders = match.players.filter((p) => p.total === me.total).length;
@@ -1657,7 +1710,7 @@ async function showOnlineResults(match) {
   app.querySelector('.overlay')?.remove();
   try {
     await backend.tournaments.status(match);
-  } catch {}
+  } catch { }
   screen = 'lobby';
   const { me, tier } = match;
   const open = match.status === 'open';
@@ -1666,6 +1719,19 @@ async function showOnlineResults(match) {
   const waiting = match.players.filter((p) => !p.finished).length;
   const gained = match.status === 'settled' ? recordOnce(match) : null;
   const ranking = [...match.players].sort((a, b) => (a.position ?? 99) - (b.position ?? 99) || (a.total ?? 999) - (b.total ?? 999));
+  if (gained) {
+    return showEndOverlay({
+      onRematch: () => startMatch(tier, match.id),
+      won,
+      position: me.position,
+      total: match.players.length,
+      prize: won ? `Premio ${coin(me.payout)}` : `Bote ${coin(match.pot)} para el ganador`,
+      ranking,
+      legal: `Bote ${fmt(match.pot)} · comisión ${fmt(match.commission)} · premio ${fmt(match.prize)}`,
+      holes: me.scores.map((strokes, i) => ({ strokes, par: COURSES[match.courses[i]].par })),
+      gained,
+    });
+  }
   let title, sub;
   if (open) {
     title = 'Esperando a los demás';
@@ -1680,24 +1746,16 @@ async function showOnlineResults(match) {
   const view = h(`
     <main class="screen results ${won ? 'won' : ''}">
       ${won ? '<div class="rays"></div>' : ''}
-      <div class="trophy">${open ? '⏳' : won ? '🏆' : cancelled ? '↩️' : me.position <= 3 ? '🥈' : '⛳'}</div>
+      <div class="trophy">${open ? 'En espera' : won ? 'Victoria' : cancelled ? 'Cancelado' : `Puesto #${me.position}`}</div>
       <h1 class="score-title">${title}</h1>
       <p class="sub">${sub}</p>
-      ${
-        gained
-          ? `<div class="xp-card">
+      ${gained
+      ? `<div class="xp-card">
         <div class="xp-head"><b>+${gained.xp} XP</b><span>${gained.level.level > gained.levelBefore ? `¡Nivel ${gained.level.level}!` : `Nivel ${gained.level.level}`}</span></div>
         <span class="bar"><i style="--to:${(gained.level.into / gained.level.need) * 100}%"></i></span>
       </div>`
-          : ''
-      }
-      ${
-        gained?.newSkins.length
-          ? `<h2 class="unlock-title">¡Skin desbloqueada!</h2><div class="unlocks">${gained.newSkins
-              .map((s) => `<div class="skin-card holo reveal rarity-${s.rarity}"><div class="shine"></div><span class="rarity">${RARITIES[s.rarity].name}</span>${ball(s, 76, 'float')}<b>${s.name}</b></div>`)
-              .join('')}</div>`
-          : ''
-      }
+      : ''
+    }
       ${standingsTable(ranking, !open)}
       ${match.status === 'settled' ? `<p class="legal">Bote ${fmt(match.pot)} · comisión ${fmt(match.commission)} · premio ${fmt(match.prize)}</p>` : ''}
       ${open ? '<p class="legal">Puedes salir: el resultado y el premio aparecerán en el lobby, en «Tus torneos».</p>' : ''}
@@ -1715,7 +1773,7 @@ async function showOnlineResults(match) {
       if (!view.isConnected) return;
       try {
         await backend.tournaments.status(match);
-      } catch {}
+      } catch { }
       if (!view.isConnected) return;
       if (`${match.status}:${match.players.filter((p) => !p.finished).length}` !== key) showOnlineResults(match);
       else setTimeout(poll, POLL_MS);
@@ -1734,7 +1792,7 @@ async function showMyTournaments(box) {
   if (!list.length || !box.isConnected) return;
   const label = (m) => {
     if (m.status === 'cancelled') return 'Sin rivales · entrada devuelta';
-    if (m.status === 'settled') return m.me.payout > 0 ? `🏆 Ganaste ${coin(m.me.payout)}` : `Posición ${m.me.position} de ${m.players.length}`;
+    if (m.status === 'settled') return m.me.payout > 0 ? `Ganaste ${coin(m.me.payout)}` : `Posición ${m.me.position} de ${m.players.length}`;
     if (!m.me.finished) return `Sin terminar · ${m.me.holesPlayed}/${m.holes} hoyos`;
     return `Esperando · ${m.players.filter((p) => p.finished).length}/${m.players.length} han terminado`;
   };
@@ -1784,14 +1842,270 @@ function alertMsg(text) {
   app.append(overlay);
 }
 
-app.innerHTML = '<main class="screen loading"><h1>⛳</h1><p class="sub">Conectando…</p></main>';
-createBackend().then((b) => {
-  backend = b;
-  ({ wallet, matches } = b);
-  if (b.account) progress.attach(b.user.id, b.account.profile?.progress, (s) => b.account.saveProgress(s));
-  wallet.subscribe((n) => {
-    const el = app.querySelector('.balance');
-    if (el) el.innerHTML = `${coin(n)}<span class="plus">+</span>`;
+// ---------- juego libre en solitario ----------
+
+const THEME_INFO = {
+  meadow: { name: 'Pradera', icon: '', color: '#5cc24a' },
+  beach: { name: 'Playa', icon: '', color: '#2fe0ff' },
+  sunset: { name: 'Atardecer', icon: '', color: '#ff9a5c' },
+  snow: { name: 'Nieve', icon: '', color: '#90d7ff' },
+  canyon: { name: 'Cañón', icon: '', color: '#e58f4a' },
+  autumn: { name: 'Otoño', icon: '', color: '#e06b3a' },
+  night: { name: 'Noche', icon: '', color: '#7a8bff' },
+  gardenNight: { name: 'Jardín Nocturno', icon: '', color: '#da70d6' },
+  volcano: { name: 'Volcán', icon: '', color: '#ff4d2e' },
+  beachNight: { name: 'Playa Nocturna', icon: '', color: '#00d2be' },
+  neon: { name: 'Neón Cyberpunk', icon: '', color: '#00e5ff' },
+  neonPink: { name: 'Neón Magenta', icon: '', color: '#ff2e93' },
+};
+
+function getCourseFeatures(c) {
+  const feats = [];
+  if (c.loops?.length) feats.push('Looping');
+  if (c.windmills?.length) feats.push('Molino');
+  if (c.portals?.length) {
+    if (c.portals.some((p) => p.tube)) feats.push('Tubos');
+    else feats.push('Portales');
+  }
+  if (c.tunnels?.length) feats.push('Pasadizo');
+  if (c.boosts?.length) feats.push('Acelerador');
+  if (c.mounds?.length) feats.push('Volcán');
+  if (c.slopes?.length) feats.push('Pendiente');
+  if (c.movers?.length) feats.push('Bloques');
+  if (c.spinners?.length) feats.push('Aspas');
+  if (c.bumpers?.length) feats.push('Setas');
+  if (c.sand?.length) feats.push('Arena');
+  return feats;
+}
+
+export async function showFreePlayCourseSelect() {
+  screen = 'freeplay';
+  const view = h(`
+    <main class="screen freeplay-select">
+      <div class="freeplay-select-hero">
+        <div class="freeplay-select-badge-row">
+          <span class="rarity-pill rarity-epic">Modo Práctica Libre</span>
+          <span class="hero-level-tag">${COURSES.length} Hoyos</span>
+        </div>
+        <div class="section-title-row">
+          <h1>Selector de Mapas</h1>
+          <span class="live-pill solo-live-pill"><i class="pulse-dot"></i> EN SOLITARIO</span>
+        </div>
+        <p class="freeplay-desc">Elige cualquier hoyo para entrenar a tu propio ritmo. Sin límite de tiempo, sin desafíos ni misiones y sin oponentes.</p>
+        <div class="freeplay-features-bar">
+          <span class="spec-chip">Sin límite de tiempo</span>
+          <span class="spec-chip">Sin rivales</span>
+          <span class="spec-chip">Tiros ilimitados</span>
+          <span class="spec-chip">Reinicio rápido [R]</span>
+        </div>
+      </div>
+
+      <div class="courses-grid"></div>
+
+      <div class="freeplay-footer-actions">
+        <button class="ghost back-to-lobby" data-go="lobby">← Volver al Menú Principal</button>
+      </div>
+    </main>
+  `);
+
+  const grid = view.querySelector('.courses-grid');
+  COURSES.forEach((course, idx) => {
+    const theme = THEME_INFO[course.theme] || { name: course.theme, icon: '', color: '#00f076' };
+    const feats = getCourseFeatures(course);
+    const dist = getCourseDistance(course);
+    const card = h(`
+      <div class="course-card holo theme--${course.theme}">
+        <div class="course-card-top">
+          <span class="course-num-badge">Hoyo ${idx + 1}</span>
+          <span class="course-theme-tag" style="--accent:${theme.color}">
+            ${theme.name}
+          </span>
+          <span class="course-par-badge">Par ${course.par}</span>
+        </div>
+        <div class="course-card-preview-wrap" style="--accent:${theme.color}" title="Haga clic para jugar el Hoyo ${idx + 1}">
+          <div class="course-preview-media">
+            <img class="course-preview-img" src="${staticCoursePreview(course) ?? ''}" alt="Vista previa de ${course.name}" loading="lazy" />
+            <div class="course-preview-glow"></div>
+            <div class="course-preview-badges">
+              <span class="preview-badge dist-badge">~${dist}m</span>
+              ${feats[0] ? `<span class="preview-badge feat-badge">${feats[0]}</span>` : ''}
+            </div>
+            <div class="course-preview-action-overlay">
+              <span class="preview-play-icon"></span>
+              <span class="preview-play-text">Entrenar Hoyo ${idx + 1}</span>
+            </div>
+          </div>
+        </div>
+        <div class="course-card-body">
+          <h3 class="course-name">${course.name}</h3>
+          ${course.tip ? `<p class="course-tip">${course.tip}</p>` : ''}
+          ${feats.length ? `<div class="course-feats">${feats.map((f) => `<span class="feat-tag">${f}</span>`).join('')}</div>` : ''}
+        </div>
+        <button class="primary play-course-btn">Jugar Hoyo ${idx + 1}</button>
+      </div>
+    `);
+    const launchPlay = () => playFreePlay(idx);
+    card.querySelector('.play-course-btn').addEventListener('click', launchPlay);
+    card.querySelector('.course-card-preview-wrap').addEventListener('click', launchPlay);
+    grid.append(card);
   });
-  showLobby();
-});
+
+  const tbTheme = THEME_INFO[TIEBREAK_COURSE.theme] || { name: 'Atardecer', icon: '', color: '#ff9a5c' };
+  const tbDist = getCourseDistance(TIEBREAK_COURSE);
+  const tbCard = h(`
+    <div class="course-card holo course-card-extra theme--${TIEBREAK_COURSE.theme}">
+      <div class="course-card-top">
+        <span class="course-num-badge extra">Extra</span>
+        <span class="course-theme-tag" style="--accent:${tbTheme.color}">
+          ${tbTheme.name}
+        </span>
+        <span class="course-par-badge">Diana</span>
+      </div>
+      <div class="course-card-preview-wrap" style="--accent:${tbTheme.color}" title="Haga clic para jugar el Desempate">
+        <div class="course-preview-media">
+          <img class="course-preview-img" src="${staticCoursePreview(TIEBREAK_COURSE) ?? ''}" alt="Vista previa de Desempate" loading="lazy" />
+          <div class="course-preview-glow"></div>
+          <div class="course-preview-badges">
+            <span class="preview-badge dist-badge">~${tbDist}m</span>
+            <span class="preview-badge feat-badge">Diana</span>
+          </div>
+          <div class="course-preview-action-overlay">
+            <span class="preview-play-icon"></span>
+            <span class="preview-play-text">Entrenar Desempate</span>
+          </div>
+        </div>
+      </div>
+      <div class="course-card-body">
+        <h3 class="course-name">Desempate: Diana</h3>
+        <p class="course-tip">Un solo tiro al objetivo: afina la precisión al centro de la diana sin agujero.</p>
+        <div class="course-feats">
+          <span class="feat-tag">Diana de precisión</span>
+          <span class="feat-tag">Muerte súbita</span>
+        </div>
+      </div>
+      <button class="primary play-course-btn">Jugar Desempate</button>
+    </div>
+  `);
+  const launchTbPlay = () => playFreePlay('tiebreak');
+  tbCard.querySelector('.play-course-btn').addEventListener('click', launchTbPlay);
+  tbCard.querySelector('.course-card-preview-wrap').addEventListener('click', launchTbPlay);
+  grid.append(tbCard);
+  // mapas sin WebP pre-renderizado: se renderizan con three.js (import() solo si hace falta)
+  const missing = [...COURSES, TIEBREAK_COURSE].filter((c) => !staticCoursePreview(c));
+  if (missing.length) {
+    import('./game/render/coursePreview.js').then(({ getCoursePreview }) => {
+      const imgs = view.querySelectorAll('.course-preview-img');
+      [...COURSES, TIEBREAK_COURSE].forEach((c, i) => {
+        if (!staticCoursePreview(c) && imgs[i]) imgs[i].src = getCoursePreview(c);
+      });
+    });
+  }
+
+  await shell(view);
+}
+
+export function playFreePlay(courseIndex) {
+  screen = 'freeplay-game';
+  const isTiebreak = courseIndex === 'tiebreak';
+  const course = isTiebreak ? TIEBREAK_COURSE : COURSES[courseIndex];
+  const holeNum = isTiebreak ? 'Extra' : courseIndex + 1;
+  const totalHoles = COURSES.length;
+
+  playScreen(null, {
+    course,
+    freePlay: true,
+    title: isTiebreak ? 'Desempate' : `Hoyo ${holeNum}/${totalHoles}`,
+    subtitle: isTiebreak ? 'Práctica de Precisión' : `Modo Libre · Hoyo ${holeNum}`,
+    players: [{ id: 'me', name: 'Tú', color: '#00f076', isBot: false }],
+    timeLimit: null,
+    onRestartHole: () => playFreePlay(courseIndex),
+    onSelectMap: () => showFreePlayCourseSelect(),
+    onDone: (_g, strokes, _banner) => {
+      showFreePlayHoleResult(courseIndex, course, strokes);
+    },
+  });
+}
+
+export function showFreePlayHoleResult(courseIndex, course, strokes) {
+  const isTiebreak = courseIndex === 'tiebreak';
+  const parDiff = strokes - course.par;
+  const scoreName = scoreLabel(strokes, course.par);
+  const nextIndex = typeof courseIndex === 'number' && courseIndex + 1 < COURSES.length ? courseIndex + 1 : null;
+  const isGood = strokes <= course.par;
+
+  const overlay = h(`
+    <div class="overlay freeplay-result-overlay">
+      <div class="card freeplay-result-card ${isGood ? 'good' : ''}">
+        <div class="freeplay-result-badge">HOYO COMPLETADO · MODO LIBRE</div>
+        <h2 class="score-title">${scoreName}</h2>
+        <p class="sub">${course.name} · ${strokes} golpe${strokes === 1 ? '' : 's'} · Par ${course.par}</p>
+        
+        <div class="freeplay-stats-box">
+          <div class="stat-item">
+            <span class="stat-label">Golpes</span>
+            <strong class="stat-val">${strokes}</strong>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Par del Hoyo</span>
+            <strong class="stat-val">${course.par}</strong>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Balance</span>
+            <strong class="stat-val ${parDiff <= 0 ? 'good' : ''}">${parDiff === 0 ? 'Par (E)' : parDiff < 0 ? `${parDiff}` : `+${parDiff}`}</strong>
+          </div>
+        </div>
+
+        <div class="freeplay-actions">
+          <button class="primary retry-btn">Repetir este hoyo</button>
+          ${nextIndex != null ? `<button class="primary next-btn">Siguiente hoyo (${nextIndex + 1})</button>` : ''}
+          <button class="secondary select-map-btn">Elegir otro mapa</button>
+          <button class="ghost to-lobby-btn">Lobby principal</button>
+        </div>
+      </div>
+    </div>
+  `);
+
+  overlay.querySelector('.retry-btn').addEventListener('click', () => {
+    overlay.remove();
+    playFreePlay(courseIndex);
+  });
+  if (nextIndex != null) {
+    overlay.querySelector('.next-btn').addEventListener('click', () => {
+      overlay.remove();
+      playFreePlay(nextIndex);
+    });
+  }
+  overlay.querySelector('.select-map-btn').addEventListener('click', () => {
+    overlay.remove();
+    showFreePlayCourseSelect();
+  });
+  overlay.querySelector('.to-lobby-btn').addEventListener('click', () => {
+    overlay.remove();
+    showLobby();
+  });
+
+  app.append(overlay);
+  sfx.cup();
+}
+
+installThumbObserver(app, (id) => progress.instance(id));
+let skinLab = false;
+try {
+  skinLab = new URLSearchParams(location.search).get('skinlab') === '1';
+} catch { }
+if (skinLab) {
+  app.innerHTML = '';
+  loadSkinInspector().then(({ mountSkinLab }) => mountSkinLab(app));
+} else {
+  app.innerHTML = '<main class="screen loading"><h1>Golf Cash Battle</h1><p class="sub">Conectando…</p></main>';
+  createBackend().then((b) => {
+    backend = b;
+    ({ wallet, matches } = b);
+    if (b.account) progress.attach(b.user.id, b.account.profile?.progress, (s) => b.account.saveProgress(s));
+    wallet.subscribe((n) => {
+      const el = app.querySelector('.balance');
+      if (el) el.innerHTML = `${coin(n)}<span class="plus">+</span>`;
+    });
+    showLobby();
+  });
+}

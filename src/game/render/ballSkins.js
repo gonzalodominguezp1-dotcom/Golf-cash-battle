@@ -1,156 +1,180 @@
 import * as THREE from 'three';
+import { createSkinMaterial as buildSkinMaterial } from './skins/skinMaterial.js';
+import { ballPreview, fbm3D, paintBall, skinCanvas, uvToSphere } from './ballPaint.js';
 
-// Dibuja la textura de una skin (proyección esférica: x = longitud, y = latitud).
-export function paintBall(g, n, skin) {
-  const { base, accent, pattern } = skin;
-  const w = n * 2, h = n;
-  g.fillStyle = base;
-  g.fillRect(0, 0, w, h);
-  g.fillStyle = accent;
-  switch (pattern) {
-    case 'stripe':
-      g.fillRect(0, h * 0.42, w, h * 0.16);
-      break;
-    case 'dual':
-      g.fillRect(0, h / 2, w, h / 2);
-      g.fillStyle = 'rgba(255,255,255,0.8)';
-      g.fillRect(0, h * 0.48, w, h * 0.04);
-      break;
-    case 'dots':
-      for (let y = h * 0.12; y < h; y += h / 6)
-        for (let x = (y / (h / 6)) % 2 ? w / 24 : 0; x < w; x += w / 12) circle(g, x, y, h * 0.045);
-      break;
-    case 'stars':
-      for (let i = 0; i < 18; i++) star(g, ((i * 0.37) % 1) * w, (0.15 + ((i * 0.61) % 0.7)) * h, h * 0.07);
-      break;
-    case 'gradient': {
-      const gr = g.createLinearGradient(0, 0, 0, h);
-      gr.addColorStop(0, base);
-      gr.addColorStop(1, accent);
-      g.fillStyle = gr;
-      g.fillRect(0, 0, w, h);
+// El pintado 2D vive en ballPaint.js (sin three.js); se reexporta por compatibilidad.
+export { ballPreview, paintBall };
+
+const cache = new Map(); // mapas emisivos horneados por skin
+
+function kintsugiEmissiveCanvas(skin) {
+  const w = 512, h = 256;
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const g = c.getContext('2d');
+  const imgData = g.createImageData(w, h);
+  const data = imgData.data;
+  const cAccent = new THREE.Color(skin.accent || '#e205ff');
+  const cShimmer = new THREE.Color(skin.shimmer || '#ffffff');
+
+  for (let y = 0; y < h; y++) {
+    const v = y / (h - 1);
+    for (let x = 0; x < w; x++) {
+      const u = x / (w - 1);
+      const p = uvToSphere(u, v);
+      const idx = (y * w + x) * 4;
+      const fFracture = Math.abs(fbm3D(p.x * 2.8, p.y * 2.8, p.z * 2.8, 3) - 0.48);
+      if (fFracture < 0.035) {
+        const goldIntensity = 1 - fFracture / 0.035;
+        const t = goldIntensity * 0.8;
+        const cr = cAccent.r + (cShimmer.r - cAccent.r) * t;
+        const cg = cAccent.g + (cShimmer.g - cAccent.g) * t;
+        const cb = cAccent.b + (cShimmer.b - cAccent.b) * t;
+        data[idx] = Math.floor(Math.min(1, Math.max(0, cr)) * 255);
+        data[idx + 1] = Math.floor(Math.min(1, Math.max(0, cg)) * 255);
+        data[idx + 2] = Math.floor(Math.min(1, Math.max(0, cb)) * 255);
+        data[idx + 3] = 255;
+      } else {
+        // Fondo 100% negro en el mapa emisivo: cero emisión en la base de carbono
+        data[idx] = 0;
+        data[idx + 1] = 0;
+        data[idx + 2] = 0;
+        data[idx + 3] = 255;
+      }
+    }
+  }
+  g.putImageData(imgData, 0, 0);
+  return c;
+}
+
+/** Animación heredada por skin (hasta que cada una tenga su patrón de shader, P3). Devuelve update(t, dt) o null. */
+function setupSkinAnimation(material, skin, map, disposables = []) {
+  const id = skin.id;
+  let update = null;
+
+  switch (id) {
+    case 'galaxy': {
+      material.emissive = new THREE.Color(skin.accent || '#b26bff');
+      update = (t, dt) => {
+        map.offset.x = (map.offset.x + dt * 0.035) % 1;
+        map.offset.y = Math.sin(t * 0.5) * 0.02;
+        material.emissiveIntensity = 0.25 + Math.sin(t * 2.2) * 0.18;
+      };
       break;
     }
-    case 'rainbow':
-      for (let i = 0; i < 12; i++) {
-        g.fillStyle = `hsl(${i * 30}, 95%, 62%)`;
-        g.fillRect(0, (i * h) / 12, w, h / 12 + 1);
-      }
+
+    case 'supernova_solar': {
+      material.emissive = new THREE.Color(skin.base || '#ed450c');
+      update = (t, dt) => {
+        map.offset.x = (map.offset.x + dt * 0.045) % 1;
+        map.offset.y = Math.cos(t * 0.6) * 0.025;
+        material.emissiveIntensity = 0.42 + Math.sin(t * 3.2) * 0.22;
+      };
       break;
-    case 'flame':
-      for (let k = 0; k < 3; k++) {
-        g.fillStyle = k === 0 ? accent : k === 1 ? mix(accent, '#ffd000', 0.5) : '#fff1a0';
-        g.beginPath();
-        g.moveTo(0, h);
-        for (let x = 0; x <= w; x += 4) g.lineTo(x, h * (0.55 + k * 0.12) - Math.abs(Math.sin((x / w) * Math.PI * 10 + k)) * h * 0.22);
-        g.lineTo(w, h);
-        g.fill();
-      }
+    }
+
+    case 'crimson_dragon': {
+      material.emissive = new THREE.Color(skin.accent || '#e11d48');
+      update = (t, dt) => {
+        const beat = Math.pow(Math.max(0, Math.sin(t * 2.4)), 4);
+        material.emissiveIntensity = 0.15 + beat * 0.45;
+        map.offset.y = Math.sin(t * 1.1) * 0.012;
+      };
       break;
-    case 'galaxy':
-      for (let i = 0; i < 6; i++) {
-        const x = ((i * 0.29 + 0.1) % 1) * w, y = (0.25 + ((i * 0.43) % 0.5)) * h;
-        const gr = g.createRadialGradient(x, y, 0, x, y, h * 0.35);
-        gr.addColorStop(0, i % 2 ? accent + 'cc' : '#3fd0ffaa');
-        gr.addColorStop(1, 'transparent');
-        g.fillStyle = gr;
-        g.fillRect(0, 0, w, h);
-      }
-      g.fillStyle = '#fff';
-      for (let i = 0; i < 90; i++) g.fillRect(((i * 0.618) % 1) * w, ((i * 0.377) % 1) * h, 2, 2);
+    }
+
+    case 'kintsugi_neon': {
+      const emCanvas = cache.has(skin.id + '_emissive')
+        ? cache.get(skin.id + '_emissive')
+        : kintsugiEmissiveCanvas(skin);
+      cache.set(skin.id + '_emissive', emCanvas);
+      const emTex = new THREE.CanvasTexture(emCanvas);
+      emTex.wrapS = THREE.RepeatWrapping;
+      emTex.wrapT = THREE.RepeatWrapping;
+      disposables.push(emTex);
+      material.emissiveMap = emTex;
+      material.emissive = new THREE.Color(0xffffff);
+      update = (t, dt) => {
+        const surge = Math.sin(t * 3.5) * 0.35 + (Math.sin(t * 14.0) > 0.82 ? 0.3 : 0);
+        material.emissiveIntensity = 0.5 + surge;
+      };
       break;
-    case 'gem':
-      for (let y = 0; y < 4; y++)
-        for (let x = 0; x < 12; x++) {
-          g.fillStyle = (x + y) % 2 ? accent : mix(base, accent, 0.35);
-          g.globalAlpha = 0.55 + ((x * 7 + y * 3) % 5) * 0.09;
-          g.beginPath();
-          g.moveTo((x * w) / 12, (y * h) / 4);
-          g.lineTo(((x + 1) * w) / 12, (y * h) / 4);
-          g.lineTo(((x + 0.5) * w) / 12, ((y + 1) * h) / 4);
-          g.fill();
-        }
-      g.globalAlpha = 1;
+    }
+
+    case 'lava': {
+      material.emissive = new THREE.Color(skin.accent || '#ff5a1f');
+      update = (t, dt) => {
+        map.offset.y = (map.offset.y + dt * 0.038) % 1;
+        map.offset.x = Math.sin(t * 0.5) * 0.015;
+        material.emissiveIntensity = 0.32 + Math.sin(t * 2.1) * 0.18;
+      };
       break;
-    default:
+    }
+
+    case 'streak': {
+      material.emissive = new THREE.Color(skin.accent || '#ff3d00');
+      update = (t, dt) => {
+        map.offset.y = (map.offset.y + dt * 0.065) % 1;
+        map.offset.x = Math.sin(t * 4.0) * 0.012;
+        material.emissiveIntensity = 0.25 + Math.sin(t * 6.0) * 0.16;
+      };
       break;
-  }
-  // hoyuelos
-  g.fillStyle = 'rgba(0,0,0,0.07)';
-  for (let y = 6; y < h; y += 12) for (let x = (y / 12) % 2 ? 6 : 0; x < w; x += 12) g.fillRect(x, y, 3, 3);
+    }
+
+    case 'holo': {
+      update = (t, dt) => {
+        map.offset.x = (map.offset.x + dt * 0.035) % 1;
+        material.iridescence = 0.8 + Math.sin(t * 1.6) * 0.2;
+        material.iridescenceIOR = 1.35 + Math.sin(t * 1.1) * 0.28;
+      };
+      break;
+    }
+
+    case 'damascus_imperial': {
+      material.emissive = new THREE.Color(skin.accent || '#10b981');
+      update = (t, dt) => {
+        material.emissiveIntensity = 0.14 + Math.sin(t * 2.0) * 0.1;
+        material.iridescence = 0.45 + Math.sin(t * 1.5) * 0.15;
+      };
+      break;
+    }
+
+    case 'zephyr_nacre': {
+      update = (t, dt) => {
+        material.iridescence = 0.88 + Math.sin(t * 1.5) * 0.12;
+        map.offset.y = Math.sin(t * 0.8) * 0.015;
+      };
+      break;
+    }
+
+    default: {
+      update = null;
+      break;
+    }
+  }  return update;
 }
 
-function circle(g, x, y, r) {
-  g.beginPath();
-  g.arc(x, y, r, 0, Math.PI * 2);
-  g.fill();
+const deps = { canvas: skinCanvas, legacy: setupSkinAnimation };
+
+/**
+ * Material premium de bola: `{ material, update(t, dt, { speed, impact, state }), dispose(), ... }`.
+ * Opciones: `quality` ('low'|'medium'|'high', por defecto la guardada), `instance` ({ seed }),
+ * `theme` (para elegir el env de estudio claro u oscuro).
+ */
+export function createSkinMaterial(skin, opts = {}) {
+  return buildSkinMaterial(skin, opts, deps);
 }
 
-function star(g, x, y, r) {
-  g.beginPath();
-  for (let i = 0; i < 10; i++) {
-    const a = (i * Math.PI) / 5 - Math.PI / 2, rr = i % 2 ? r * 0.45 : r;
-    g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
-  }
-  g.fill();
-}
-
-function mix(a, b, t) {
-  return '#' + new THREE.Color(a).lerp(new THREE.Color(b), t).getHexString();
-}
-
-const cache = new Map();
-function skinCanvas(skin) {
-  if (!cache.has(skin.id)) {
-    const c = document.createElement('canvas');
-    c.width = 512;
-    c.height = 256;
-    paintBall(c.getContext('2d'), 256, skin);
-    cache.set(skin.id, c);
-  }
-  return cache.get(skin.id);
-}
-
-/** Material 3D: cuanto más rara la skin, más brillo (metal, iridiscencia). */
-export function skinMaterial(skin) {
-  const map = new THREE.CanvasTexture(skinCanvas(skin));
-  map.colorSpace = THREE.SRGBColorSpace;
-  map.anisotropy = 4;
-  const r = skin.rarity;
-  return new THREE.MeshPhysicalMaterial({
-    map,
-    roughness: r === 'bronze' ? 0.35 : r === 'silver' ? 0.25 : 0.15,
-    metalness: r === 'gold' ? 0.45 : 0,
-    clearcoat: 1,
-    clearcoatRoughness: 0.1,
-    iridescence: r === 'diamond' || r === 'emerald' ? 1 : 0,
-    iridescenceIOR: 1.6,
-    emissive: r === 'emerald' ? new THREE.Color(skin.accent) : new THREE.Color(0),
-    emissiveIntensity: r === 'emerald' ? 0.25 : 0,
-  });
-}
-
-/** Imagen de la bola para la interfaz (esfera sombreada con la textura). */
-export function ballPreview(skin, size = 160) {
-  const key = `${skin.id}@${size}`;
-  if (cache.has(key)) return cache.get(key);
-  const c = document.createElement('canvas');
-  c.width = c.height = size;
-  const g = c.getContext('2d');
-  const r = size / 2;
-  g.save();
-  g.beginPath();
-  g.arc(r, r, r * 0.96, 0, Math.PI * 2);
-  g.clip();
-  g.drawImage(skinCanvas(skin), 128, 0, 256, 256, 0, 0, size, size);
-  const shade = g.createRadialGradient(r * 0.7, r * 0.6, r * 0.1, r, r, r);
-  shade.addColorStop(0, 'rgba(255,255,255,0.55)');
-  shade.addColorStop(0.35, 'rgba(255,255,255,0)');
-  shade.addColorStop(1, 'rgba(0,0,0,0.45)');
-  g.fillStyle = shade;
-  g.fillRect(0, 0, size, size);
-  g.restore();
-  const url = c.toDataURL();
-  cache.set(key, url);
-  return url;
+/**
+ * Compatibilidad: devuelve solo el material (con `userData.update(t, dt, ctx)` y `userData.handle`).
+ * `material.dispose()` libera también mapas propios; el normal de hoyuelos y los env son compartidos.
+ */
+export function skinMaterial(skin, opts = {}) {
+  const handle = createSkinMaterial(skin, opts);
+  const { material } = handle;
+  material.userData.handle = handle;
+  material.userData.update = handle.update;
+  material.dispose = handle.dispose;
+  return material;
 }

@@ -45,8 +45,32 @@ export function groundHeight(course, x, z) {
   return h;
 }
 
-// desplazamiento lateral en la vuelta para que el carril no se cruce consigo mismo
-const TWIST = 0.28;
+const TWO_PI = Math.PI * 2;
+// Desplazamiento lateral helicoidal suave para que el carril no se cruce consigo mismo
+const LOOP_HELIX_OFFSET = 0.24;
+
+/** Desplazamiento lateral suave en función del avance s a lo largo del looping. */
+export function loopLateralOffset(l, s, th) {
+  const table = loopTable(l);
+  const R = l.radius, r = R / LOOP_RATIO;
+  const pad = (l.len - TWO_PI * r) / 2;
+  const sStart = pad;
+  const sEnd = Math.max(sStart, table.length - pad);
+  const D = LOOP_HELIX_OFFSET;
+
+  if (s < sStart) {
+    const t = sStart > 0 ? Math.max(0, Math.min(1, s / sStart)) : 1;
+    const ease = t * t * (3 - 2 * t);
+    return -D * ease;
+  }
+  if (s > sEnd) {
+    const exitLen = table.length - sEnd;
+    const t = exitLen > 0 ? Math.max(0, Math.min(1, (s - sEnd) / exitLen)) : 1;
+    const ease = t * t * (3 - 2 * t);
+    return D * (1 - ease);
+  }
+  return -D * Math.cos(th / 2);
+}
 
 /**
  * Punto del carril del looping a s metros de la entrada (sin el radio de la
@@ -57,7 +81,7 @@ export function loopPoint(l, s, lateral = 0) {
   const q = sampleAt(table, s);
   const a = table.pts[q.k], b = table.pts[q.k + 1];
   const ta = b.along - a.along, ty = b.y - a.y, tl = Math.hypot(ta, ty) || 1;
-  const side = lateral - TWIST * Math.sin(q.th);
+  const side = lateral + loopLateralOffset(l, s, q.th);
   const [dx, dz] = l.dir, sx = -dz, sz = dx;
   const along = q.along - l.len / 2;
   return {
@@ -69,6 +93,9 @@ export function loopPoint(l, s, lateral = 0) {
     nY: ta / tl,
     dx,
     dz,
+    s,
+    th: q.th,
+    side,
   };
 }
 
@@ -83,7 +110,8 @@ function loopFlightPoint(l, tr) {
   const c = Math.min(1, Math.max(-1, 1 - y / R));
   const sn = Math.sqrt(1 - c * c) * (tr.from > 0 ? 1 : -1);
   const da = r + R * c, dy = R * sn, v = Math.hypot(da, dy) || 1;
-  const side = tr.lat - TWIST * sn;
+  const th = sn >= 0 ? Math.acos(c) : TWO_PI - Math.acos(c);
+  const side = tr.lat - LOOP_HELIX_OFFSET * Math.cos(th / 2);
   const [dx, dz] = l.dir, sx = -dz, sz = dx;
   const along = a - l.len / 2;
   return { x: l.x + dx * along + sx * side, y, z: l.z + dz * along + sz * side, nAlong: -dy / v, nY: da / v, dx, dz };
