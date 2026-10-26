@@ -461,7 +461,7 @@ export class GolfGame {
     const pose = ballPose(this.course, this.ball);
     const [bx, bz] = p.b, [ox, oz] = p.out;
     return {
-      pos: new THREE.Vector3(bx + ox * 3.2 + oz * 1.2, 2.2, bz + oz * 3.2 - ox * 1.2),
+      pos: new THREE.Vector3(bx + ox * 5.5 + oz * 2, 3.2, bz + oz * 5.5 - ox * 2),
       look: new THREE.Vector3(pose.x, pose.y - 0.3, pose.z),
     };
   }
