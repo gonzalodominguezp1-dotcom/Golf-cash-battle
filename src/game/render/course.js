@@ -92,21 +92,19 @@ export function buildCourse(scene, course, theme) {
   if (lavaCup) lavaCup.group.position.y = hc;
   else if (relief && !course.noCup) scene.add(cupCollar(hx, hz, hc, grassMat));
 
-  // arena con bordes redondeados: hundida hacia el borde, donde el labio de césped la sombrea
+  // arena: un montoncito con volumen que se deshace en granos sobre el césped,
+  // sin borde dibujado. La zona de juego (física) es el rectángulo; el fundido
+  // queda repartido a ambos lados de su borde
   const sandM = course.sand.length ? sandMaps() : null;
   if (sandM) sandM.map.repeat.set(0.5, 0.5);
-  for (const s of course.sand) {
-    const r = Math.min(s.w, s.d) * 0.35;
-    const sh = roundedRect(s.w, s.d, r);
-    const m = new THREE.Mesh(new THREE.ShapeGeometry(sh, 12), bunkerMaterial(sandM, s.w, s.d, r));
+  course.sand.forEach((s, i) => {
+    const m = new THREE.Mesh(bunkerGeometry(s.w, s.d), bunkerMaterial(sandM, s.w, s.d, i, theme));
     m.rotation.x = -Math.PI / 2;
-    m.position.set(s.x, lift(s.x, s.z) + 0.004, s.z);
+    m.position.set(s.x, lift(s.x, s.z) + 0.002, s.z);
     m.receiveShadow = true;
-    const edge = new THREE.Mesh(new THREE.ShapeGeometry(roundedRect(s.w + 0.1, s.d + 0.1, r + 0.05), 12), sandEdgeMat);
-    edge.rotation.x = -Math.PI / 2;
-    edge.position.set(s.x, lift(s.x, s.z) + 0.003, s.z);
-    scene.add(edge, m);
-  }
+    m.renderOrder = 1;
+    scene.add(m);
+  });
 
   // paredes de madera (en neón: oscuras con una línea de luz arriba)
   const night = !!theme.rim && theme.sunIntensity < 2;
@@ -873,53 +871,100 @@ function drape(mesh, lift) {
   for (let i = 0; i < p.count; i++) p.setY(i, p.getY(i) + lift(p.getX(i), p.getZ(i)));
 }
 
-function roundedRect(w, d, r) {
-  const s = new THREE.Shape();
-  const x = -w / 2, y = -d / 2;
-  s.moveTo(x + r, y);
-  s.lineTo(x + w - r, y);
-  s.quadraticCurveTo(x + w, y, x + w, y + r);
-  s.lineTo(x + w, y + d - r);
-  s.quadraticCurveTo(x + w, y + d, x + w - r, y + d);
-  s.lineTo(x + r, y + d);
-  s.quadraticCurveTo(x, y + d, x, y + d - r);
-  s.lineTo(x, y + r);
-  s.quadraticCurveTo(x, y, x + r, y);
-  return s;
-}
-
 function scaleUV(geo, su, sv) {
   const uv = geo.attributes.uv;
   for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * su, uv.getY(i) * sv);
 }
 
-const sandEdgeMat = new THREE.MeshStandardMaterial({ color: 0x9c7c45, roughness: 1 });
+const BUNKER_FADE = 0.35; // metros de fundido fuera del rectángulo de la arena
+
+/** Malla subdividida del búnker, con las UV en metros para que la textura no se estire. */
+function bunkerGeometry(w, d) {
+  const W = w + BUNKER_FADE * 2, D = d + BUNKER_FADE * 2;
+  const geo = new THREE.PlaneGeometry(W, D, Math.ceil(W / 0.06), Math.ceil(D / 0.06));
+  const pos = geo.attributes.position, uv = geo.attributes.uv;
+  for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i), pos.getY(i));
+  return geo;
+}
 
 /**
- * Material de un búnker: la arena se oscurece y se inclina hacia el borde
- * (distancia a un rectángulo redondeado), como si bajara desde el labio de
- * césped, con una franja algo más clara justo donde empieza la pendiente.
+ * Material del búnker. Con la distancia al borde (rectángulo redondeado,
+ * deformado con ruido para que no sea un contorno perfecto):
+ * - el vértice sube formando un lomo suave, y la normal sigue esa forma;
+ * - la arena se vuelve transparente hacia fuera y se rompe en granos sueltos
+ *   que se quedan entre el césped, sin ninguna línea de borde.
  */
-function bunkerMaterial(maps, w, d, r) {
-  const mat = new THREE.MeshStandardMaterial({ ...maps, roughness: 1, normalScale: new THREE.Vector2(0.9, 0.9) });
+function bunkerMaterial(maps, w, d, seed, theme) {
+  // con las luces de color de los temas oscuros la arena perdería su tono:
+  // un poco de luz propia la mantiene dorada sin que llegue a brillar
+  const glow = theme.sunIntensity < 2 || theme.neon ? 0.32 : 0.12;
+  const mat = new THREE.MeshStandardMaterial({
+    ...maps,
+    emissiveMap: maps.map,
+    emissive: 0xffffff,
+    emissiveIntensity: glow,
+    roughness: 1,
+    normalScale: new THREE.Vector2(0.9, 0.9),
+    transparent: true,
+    depthWrite: false,
+  });
+  const common = /* glsl */ `
+    uniform vec4 uBunker; // semiancho, semifondo, radio de esquina, semilla
+    float bHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    float bNoise(vec2 p) {
+      vec2 i = floor(p), f = fract(p);
+      f = f * f * (3.0 - 2.0 * f);
+      return mix(mix(bHash(i), bHash(i + vec2(1, 0)), f.x), mix(bHash(i + vec2(0, 1)), bHash(i + vec2(1, 1)), f.x), f.y);
+    }
+    // distancia hacia dentro del borde (positiva dentro), con el contorno ondulado
+    float bInside(vec2 p) {
+      vec2 q = abs(p) - uBunker.xy + uBunker.z;
+      float sd = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - uBunker.z;
+      vec2 o = p + uBunker.w * 17.0;
+      return -sd + (bNoise(o * 2.2) - 0.5) * 0.22 + (bNoise(o * 6.0) - 0.5) * 0.06;
+    }
+    // altura del lomo: sube rápido desde el borde y se queda casi llano dentro
+    float bHeight(vec2 p) {
+      float e = bInside(p);
+      return 0.035 * smoothstep(-0.12, 0.45, e) + 0.008 * (bNoise(p * 3.0 + uBunker.w) - 0.5) * smoothstep(0.0, 0.4, e);
+    }
+  `;
   mat.onBeforeCompile = (sh) => {
-    sh.uniforms.uBunker = { value: new THREE.Vector3(w / 2, d / 2, r) };
+    sh.uniforms.uBunker = { value: new THREE.Vector4(w / 2, d / 2, Math.min(w, d) * 0.3, seed + 1) };
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec2 vBunker;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvBunker = position.xy;');
+      .replace('#include <common>', `#include <common>\nvarying vec2 vBunker;\n${common}`)
+      .replace(
+        '#include <beginnormal_vertex>',
+        `vec2 bp = position.xy;
+        float bh = bHeight(bp);
+        float bx = bHeight(bp + vec2(0.03, 0.0)) - bh, by = bHeight(bp + vec2(0.0, 0.03)) - bh;
+        vec3 objectNormal = normalize(vec3(-bx / 0.03, -by / 0.03, 1.0));
+        #ifdef USE_TANGENT
+          vec3 objectTangent = vec3(tangent.xyz);
+        #endif`,
+      )
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed.z += bh;\nvBunker = position.xy;');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec2 vBunker;\nuniform vec3 uBunker;')
+      .replace('#include <common>', `#include <common>\nvarying vec2 vBunker;\n${common}`)
       .replace(
         '#include <map_fragment>',
         `#include <map_fragment>
-        vec2 q = abs(vBunker) - uBunker.xy + uBunker.z;
-        float inside = -(length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - uBunker.z);
-        float lip = smoothstep(0.0, 0.28, inside);
-        float crest = (inside - 0.3) * 9.0;
-        diffuseColor.rgb *= mix(0.62, 1.0, lip) + 0.06 * exp(-crest * crest);`,
+        float e = bInside(vBunker);
+        // núcleo opaco, fundido suave y granos sueltos que se esparcen por el césped
+        float body = smoothstep(-0.1, 0.16, e);
+        float grains = step(0.82 - 0.5 * smoothstep(-0.35, 0.05, e), bHash(floor(vBunker * 140.0)));
+        float scatter = grains * smoothstep(-0.34, -0.05, e) * 0.85;
+        diffuseColor.a *= max(body, scatter);
+        // donde la capa es fina se ve más oscura (sombra entre la hierba)
+        diffuseColor.rgb *= mix(0.78, 1.0, smoothstep(-0.05, 0.3, e));`,
+      )
+      .replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+        totalEmissiveRadiance *= mix(0.5, 1.0, smoothstep(-0.05, 0.3, e));`,
       );
   };
-  mat.customProgramCacheKey = () => 'bunker';
+  mat.customProgramCacheKey = () => 'bunker2';
   return mat;
 }
 
