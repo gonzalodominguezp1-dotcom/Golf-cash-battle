@@ -166,6 +166,32 @@ export const THEMES = {
     clouds: 0x24080a,
     floaters: { color: 0xff7a2a, count: 140, size: 0.07, speed: 0.9, glow: true },
   },
+  // dentro del volcán: cámara de magma con paredes de roca, lago de lava
+  // alrededor y la boca del cráter arriba (caldera: se construye la cueva)
+  caldera: {
+    rim: [0xff6a1a, 0xffa040],
+    sound: 'wind',
+    skyTop: 0x0c0610,
+    skyHorizon: 0x5a1a10,
+    sunColor: 0xff9a5a,
+    sunIntensity: 1.3,
+    sunDir: [0.2, 0.9, 0.35],
+    ambient: 0.55,
+    groundLow: 0x1a1214,
+    groundMid: 0x2e2224,
+    groundHigh: 0x3a2c2a,
+    grass: ['#4a3a36', '#43332f'],
+    rockFloor: true,
+    terrainOffset: -2.6,
+    waterLevel: -0.7,
+    water: 0xff5a1f,
+    lava: true,
+    caldera: true,
+    trees: ['rockpile', 'rockpile', 'deadtree'],
+    flowers: false,
+    clouds: 0x4a2a2a,
+    floaters: { color: 0xff8a3a, count: 180, size: 0.06, speed: 0.7, glow: true },
+  },
   // neón: pista oscura con bordes de luz (neon son los colores de las luces)
   neon: {
     rim: [0x00f0ff, 0xff007f],

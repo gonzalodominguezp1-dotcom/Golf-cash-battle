@@ -32,28 +32,9 @@ function normalMapFrom(tex, strength = 2) {
   const data = src.getContext('2d').getImageData(0, 0, n, n).data;
   const h = new Float32Array(n * n);
   for (let i = 0; i < n * n; i++) h[i] = (data[i * 4] * 0.3 + data[i * 4 + 1] * 0.59 + data[i * 4 + 2] * 0.11) / 255;
-  const c = document.createElement('canvas');
-  c.width = c.height = n;
-  const g = c.getContext('2d');
-  const out = g.createImageData(n, n);
-  const at = (x, y) => h[((y + n) % n) * n + ((x + n) % n)];
-  const k = strength * (n / 256);
-  for (let y = 0; y < n; y++) {
-    for (let x = 0; x < n; x++) {
-      const dx = (at(x + 1, y) - at(x - 1, y)) * k, dy = (at(x, y + 1) - at(x, y - 1)) * k;
-      const len = Math.hypot(dx, dy, 1);
-      const o = (y * n + x) * 4;
-      out.data[o] = ((-dx / len) * 0.5 + 0.5) * 255;
-      out.data[o + 1] = ((dy / len) * 0.5 + 0.5) * 255;
-      out.data[o + 2] = ((1 / len) * 0.5 + 0.5) * 255;
-      out.data[o + 3] = 255;
-    }
-  }
-  g.putImageData(out, 0, 0);
-  const t = new THREE.CanvasTexture(c);
+  const t = normalMapFromHeight(h, n, strength);
   t.wrapS = tex.wrapS;
   t.wrapT = tex.wrapT;
-  t.anisotropy = 4;
   return t;
 }
 
@@ -112,6 +93,50 @@ export function grassTexture([a, b]) {
   });
 }
 
+/** Suelo de la cámara de magma: basalto con losas, grietas y alguna veta encendida. */
+export function rockFloorMaps([a, b]) {
+  return withNormals(rockFloorTexture([a, b]), 2.6);
+}
+
+export function rockFloorTexture([a, b]) {
+  return canvasTexture(detailSize(256), (g, n) => {
+    const k = n / 256;
+    const r = rand(11);
+    g.fillStyle = a;
+    g.fillRect(0, 0, n, n);
+    // manchas grandes: el basalto nunca es de un color plano
+    for (let i = 0; i < 40; i++) {
+      const x = r() * n, y = r() * n, rad = n * (0.06 + r() * 0.16);
+      const spot = g.createRadialGradient(x, y, 0, x, y, rad);
+      spot.addColorStop(0, r() > 0.5 ? b : 'rgba(20,12,12,0.5)');
+      spot.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = spot;
+      g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+    }
+    // grano fino
+    for (let i = 0; i < 3000 * k * k; i++) {
+      g.fillStyle = r() > 0.5 ? 'rgba(255,230,210,0.06)' : 'rgba(0,0,0,0.12)';
+      g.fillRect(r() * n, r() * n, (1 + r() * 2) * k, (1 + r() * 2) * k);
+    }
+    // grietas entre losas (alguna con el brillo de la lava de debajo)
+    const crack = (x, y, len, glow) => {
+      g.beginPath();
+      g.moveTo(x, y);
+      let ang = r() * Math.PI * 2;
+      for (let s = 0; s < len; s++) {
+        ang += (r() - 0.5) * 0.9;
+        x += Math.cos(ang) * 6 * k;
+        y += Math.sin(ang) * 6 * k;
+        g.lineTo(x, y);
+      }
+      g.strokeStyle = glow ? 'rgba(255,110,30,0.55)' : 'rgba(10,6,6,0.6)';
+      g.lineWidth = (glow ? 1.4 : 1.8) * k;
+      g.stroke();
+    };
+    for (let i = 0; i < 26; i++) crack(r() * n, r() * n, 6 + Math.floor(r() * 10), i % 7 === 0);
+  });
+}
+
 export function woodMaps() {
   return withNormals(woodTexture(), 2.4);
 }
@@ -153,51 +178,199 @@ export function woodTexture() {
   });
 }
 
+/**
+ * Ruido de valor periódico (se repite cada `period` celdas): permite texturas
+ * sin costuras al repetirse por la arena.
+ */
+function periodicNoise(seed) {
+  const r = rand(seed);
+  const lattice = new Float32Array(256 * 256).map(() => r());
+  return (x, y, period) => {
+    const xi = Math.floor(x), yi = Math.floor(y);
+    const fx = x - xi, fy = y - yi;
+    const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy);
+    const at = (i, j) => lattice[(((j % period) + period) % period) * 256 + (((i % period) + period) % period)];
+    const a = at(xi, yi), b = at(xi + 1, yi), c = at(xi, yi + 1), d = at(xi + 1, yi + 1);
+    return a + (b - a) * ux + (c - a) * uy + (a - b - c + d) * ux * uy;
+  };
+}
+
+/** Suma de octavas de ruido periódico en [0, 1]. */
+function fbm(noise, x, y, period, octaves) {
+  let v = 0, amp = 0.5, total = 0;
+  for (let o = 0; o < octaves; o++) {
+    v += noise(x, y, period) * amp;
+    total += amp;
+    x *= 2;
+    y *= 2;
+    period *= 2;
+    amp *= 0.5;
+  }
+  return v / total;
+}
+
+/** Normales a partir de un mapa de alturas en [0, 1], con borde periódico. */
+function normalMapFromHeight(h, n, strength) {
+  const c = document.createElement('canvas');
+  c.width = c.height = n;
+  const g = c.getContext('2d');
+  const out = g.createImageData(n, n);
+  const at = (x, y) => h[((y + n) % n) * n + ((x + n) % n)];
+  const k = strength * (n / 256);
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      const dx = (at(x + 1, y) - at(x - 1, y)) * k, dy = (at(x, y + 1) - at(x, y - 1)) * k;
+      const len = Math.hypot(dx, dy, 1);
+      const o = (y * n + x) * 4;
+      out.data[o] = ((-dx / len) * 0.5 + 0.5) * 255;
+      out.data[o + 1] = ((dy / len) * 0.5 + 0.5) * 255;
+      out.data[o + 2] = ((1 / len) * 0.5 + 0.5) * 255;
+      out.data[o + 3] = 255;
+    }
+  }
+  g.putImageData(out, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = 4;
+  return t;
+}
+
+/**
+ * Arena de búnker: dunas suaves, surcos de rastrillo que serpentean, granos
+ * de varios minerales (cuarzo claro, feldespato rosado, granos oscuros) y
+ * pequeñas piedras. Color, normales y rugosidad salen del mismo relieve, así
+ * que la luz rasante marca los surcos y los granos de verdad.
+ */
 export function sandMaps() {
-  return withNormals(sandTexture(), 2);
+  const n = detailSize(256);
+  const k = n / 256;
+  const r = rand(11);
+  const noise = periodicNoise(23);
+  const h = new Float32Array(n * n);
+  const col = new Float32Array(n * n * 3);
+  const rough = new Uint8ClampedArray(n * n);
+  // tono base y variaciones (arena dorada de campo de golf)
+  const base = [236, 208, 150], warm = [222, 178, 112], pale = [246, 230, 190];
+  const RAKE = 9; // surcos por tesela
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      const u = x / n, v = y / n;
+      const i = y * n + x;
+      // manchas grandes de humedad/tono y dunas medianas
+      const big = fbm(noise, u * 3, v * 3, 3, 3);
+      const mid = fbm(noise, u * 8 + 17, v * 8 + 5, 8, 3);
+      // surcos del rastrillo: ondulan y se interrumpen con el ruido
+      const wob = (fbm(noise, u * 4 + 40, v * 4, 4, 2) - 0.5) * 0.9 + Math.sin(u * Math.PI * 2 * 2) * 0.12;
+      const ph = (v * RAKE + wob) * Math.PI * 2;
+      const fade = Math.min(1, Math.max(0, (fbm(noise, u * 2 + 9, v * 2 + 31, 2, 2) - 0.25) * 2.5));
+      // perfil del surco: cresta redondeada y valle más estrecho
+      const rake = (1 - Math.abs(Math.sin(ph))) ** 0.7 * fade;
+      // grano fino: ruido de alta frecuencia (unos 2-3 píxeles por grano)
+      const grain = noise(u * 96 * k, v * 96 * k, 96 * k);
+      const fine = noise(u * 40 + 3, v * 40 + 7, 40);
+      h[i] = big * 0.2 + mid * 0.15 + rake * 0.5 + grain * 0.05 + fine * 0.06;
+      // color: mezcla de tonos según las manchas, sombra en el fondo del surco
+      const tw = Math.min(1, Math.max(0, (big - 0.35) * 2.2));
+      const tp = Math.min(1, Math.max(0, (mid - 0.55) * 3));
+      const shade = 0.84 + rake * 0.2 + (grain - 0.5) * 0.06 + (fine - 0.5) * 0.08;
+      for (let c = 0; c < 3; c++) {
+        const tone = base[c] + (warm[c] - base[c]) * tw + (pale[c] - base[c]) * tp * 0.6;
+        col[i * 3 + c] = tone * shade;
+      }
+      // el fondo del surco (más compacto) es algo más liso
+      rough[i] = 235 - rake * 30 + grain * 20;
+    }
+  }
+  // granos sueltos de distintos minerales y alguna piedrecita, con borde periódico
+  const grains = [
+    { c: [255, 250, 236], a: 0.75, w: 0.55 }, // cuarzo
+    { c: [214, 160, 128], a: 0.55, w: 0.2 }, // feldespato rosado
+    { c: [120, 96, 70], a: 0.55, w: 0.15 }, // grano oscuro
+    { c: [70, 62, 56], a: 0.6, w: 0.1 }, // mineral negro
+  ];
+  const put = (x, y, c, a, lift) => {
+    const xi = ((Math.round(x) % n) + n) % n, yi = ((Math.round(y) % n) + n) % n;
+    const i = yi * n + xi;
+    for (let j = 0; j < 3; j++) col[i * 3 + j] += (c[j] - col[i * 3 + j]) * a;
+    h[i] += lift;
+    rough[i] = 200;
+  };
+  for (let i = 0; i < 2400 * k * k; i++) {
+    let pick = r(), g = grains[0];
+    for (const gr of grains) if ((pick -= gr.w) <= 0) { g = gr; break; }
+    const x = r() * n, y = r() * n, a = g.a * (0.3 + r() * 0.4);
+    put(x, y, g.c, a, 0.04);
+    if (k >= 2 && r() > 0.5) put(x + 1, y, g.c, a * 0.6, 0.05);
+  }
+  // piedrecitas: óvalos con sombra abajo y brillo arriba
+  for (let i = 0; i < 8 * k; i++) {
+    const cx = r() * n, cy = r() * n, rx = (1.2 + r() * 1.8) * k, ry = rx * (0.6 + r() * 0.35);
+    const tint = 175 + r() * 50;
+    for (let dy = -Math.ceil(ry) - 1; dy <= Math.ceil(ry) + 1; dy++) {
+      for (let dx = -Math.ceil(rx) - 1; dx <= Math.ceil(rx) + 1; dx++) {
+        const d = (dx / rx) ** 2 + (dy / ry) ** 2;
+        if (d > 1.6) continue;
+        if (d > 1) {
+          // sombra de contacto
+          if (dy > 0) put(cx + dx, cy + dy, [120, 95, 60], 0.3 * (1.6 - d), 0);
+          continue;
+        }
+        const light = 1 - dy / ry * 0.35;
+        put(cx + dx, cy + dy, [tint * light, tint * 0.93 * light, tint * 0.85 * light], 0.9, 0.25 * (1 - d));
+      }
+    }
+  }
+  // volcado a canvas
+  const mk = (fill) => {
+    const c = document.createElement('canvas');
+    c.width = c.height = n;
+    const g = c.getContext('2d');
+    const img = g.createImageData(n, n);
+    fill(img.data);
+    g.putImageData(img, 0, 0);
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.anisotropy = 8;
+    return t;
+  };
+  const map = mk((d) => {
+    for (let i = 0; i < n * n; i++) {
+      d[i * 4] = col[i * 3];
+      d[i * 4 + 1] = col[i * 3 + 1];
+      d[i * 4 + 2] = col[i * 3 + 2];
+      d[i * 4 + 3] = 255;
+    }
+  });
+  map.colorSpace = THREE.SRGBColorSpace;
+  const roughnessMap = mk((d) => {
+    for (let i = 0; i < n * n; i++) {
+      d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = rough[i];
+      d[i * 4 + 3] = 255;
+    }
+  });
+  const normalMap = normalMapFromHeight(h, n, 3);
+  // las tres texturas comparten repetición y desplazamiento
+  normalMap.repeat = roughnessMap.repeat = map.repeat;
+  normalMap.offset = roughnessMap.offset = map.offset;
+  return { map, normalMap, roughnessMap };
 }
 
-export function sandTexture() {
-  return canvasTexture(detailSize(128), (g, n) => {
-    const k = n / 128;
-    g.fillStyle = '#efd28f';
-    g.fillRect(0, 0, n, n);
-    const r = rand(11);
-    // ondas de rastrillo
-    for (let y = 4 * k; y < n; y += 9 * k) {
-      g.strokeStyle = 'rgba(170,130,60,0.28)';
-      g.lineWidth = 2 * k;
-      g.beginPath();
-      for (let x = 0; x <= n; x += 4 * k) g.lineTo(x, y + Math.sin(x * 0.09 / k) * 2 * k);
-      g.stroke();
-      g.strokeStyle = 'rgba(255,245,215,0.35)';
-      g.lineWidth = k;
-      g.beginPath();
-      for (let x = 0; x <= n; x += 4 * k) g.lineTo(x, y - 2 * k + Math.sin(x * 0.09 / k) * 2 * k);
-      g.stroke();
-    }
-    // granos
-    for (let i = 0; i < 2600 * k * k; i++) {
-      g.fillStyle = r() > 0.5 ? 'rgba(255,255,255,0.4)' : 'rgba(150,110,40,0.3)';
-      g.fillRect(r() * n, r() * n, 1.2 * k, 1.2 * k);
-    }
-  }, false);
-}
-
-export function dirtMaps(neon = false) {
-  return withNormals(dirtTexture(neon), 3);
+export function dirtMaps(neon = false, rock = false) {
+  return withNormals(dirtTexture(neon, rock), 3);
 }
 
 /**
  * Lateral de la maqueta: labio de césped arriba y capas de tierra, grava y
  * roca debajo, como un corte de terreno.
  */
-export function dirtTexture(neon = false) {
+export function dirtTexture(neon = false, rock = false) {
   return canvasTexture(detailSize(128), (g, n) => {
     const k = n / 128;
     const layers = neon
       ? ['#2a1d48', '#22173d', '#1b1232', '#140d27']
-      : ['#8a5a34', '#74492a', '#9a7a5a', '#6a6460'];
+      : rock
+        ? ['#3a2c2a', '#2a2022', '#4a2a1e', '#1e1618']
+        : ['#8a5a34', '#74492a', '#9a7a5a', '#6a6460'];
     const r = rand(5);
     // capas con el borde ondulado
     let y0 = 0;
@@ -219,6 +392,19 @@ export function dirtTexture(neon = false) {
       g.beginPath();
       g.ellipse(r() * n, y, (1.5 + r() * (2 + deep * 6)) * k, (1.2 + r() * 2.5) * k, r() * 3, 0, Math.PI * 2);
       g.fill();
+    }
+    // roca volcánica: sin césped, con vetas de magma
+    if (rock) {
+      for (let i = 0; i < 10; i++) {
+        g.strokeStyle = 'rgba(255,100,25,0.5)';
+        g.lineWidth = k;
+        g.beginPath();
+        let x = r() * n, y = n * (0.2 + r() * 0.8);
+        g.moveTo(x, y);
+        for (let s = 0; s < 5; s++) g.lineTo((x += (r() - 0.5) * 14 * k), (y += (r() - 0.3) * 10 * k));
+        g.stroke();
+      }
+      return;
     }
     // labio de césped con flecos
     g.fillStyle = neon ? '#ff3df0' : '#4caf3f';
@@ -274,11 +460,11 @@ export function softDotTexture() {
   );
 }
 
-export function chevronTexture() {
+export function chevronTexture(bg = '#1d3b8f', fg = '#5fd0ff') {
   return canvasTexture(128, (g, n) => {
-    g.fillStyle = '#1d3b8f';
+    g.fillStyle = bg;
     g.fillRect(0, 0, n, n);
-    g.fillStyle = '#5fd0ff';
+    g.fillStyle = fg;
     g.lineJoin = 'round';
     for (let y = -n / 2; y < n * 1.5; y += n / 2) {
       g.beginPath();
@@ -304,30 +490,6 @@ export function slopeShadeTexture() {
     g.fillRect(0, 0, n, n);
   }, false);
   return tex;
-}
-
-/** Remolino del portal. */
-export function swirlTexture(color) {
-  return canvasTexture(128, (g, n) => {
-    const c = n / 2;
-    const grad = g.createRadialGradient(c, c, 0, c, c, c);
-    grad.addColorStop(0, '#ffffff');
-    grad.addColorStop(0.35, color);
-    grad.addColorStop(1, 'rgba(0,0,0,0)');
-    g.fillStyle = grad;
-    g.fillRect(0, 0, n, n);
-    g.strokeStyle = 'rgba(255,255,255,0.7)';
-    g.lineWidth = 5;
-    for (let k = 0; k < 4; k++) {
-      g.beginPath();
-      for (let i = 0; i <= 40; i++) {
-        const t = i / 40, a = k * (Math.PI / 2) + t * 4, r = t * c * 0.95;
-        const x = c + Math.cos(a) * r, y = c + Math.sin(a) * r;
-        i ? g.lineTo(x, y) : g.moveTo(x, y);
-      }
-      g.stroke();
-    }
-  }, false);
 }
 
 export function crateTexture() {
