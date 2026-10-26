@@ -27,6 +27,8 @@ const MILL_NEON = windmill({ x: 0, z: 0, depth: 1.4, left: -2, right: 2, speed: 
 const MILL_DAY = windmill({ x: 0, z: -1.5, depth: 1.6, left: -2.6, right: 2.6, speed: 1.3 });
 const MILL_N1 = windmill({ x: -1.2, z: 2.6, w: 1, left: -2.6, right: 2.6, speed: 1.2, blades: 3 });
 const MILL_N2 = windmill({ x: 1.2, z: -4, w: 1, left: -2.6, right: 2.6, speed: -1.3, blades: 3, phase: 0.7 });
+const MILL_PRADO = windmill({ x: 0, z: 0.8, w: 1.1, depth: 1.6, left: -1.6, right: 1.6, speed: 1.2 });
+const LOOP_PRADO = { x: 2.4, z: -6.6, dir: [0, -1], len: 4.4, w: 1.6, radius: 0.8 };
 
 
 
@@ -332,6 +334,38 @@ export const COURSES = [
     loops: [LOOP_N],
     tunnels: [{ x: 0, z: -5, w: 0.9, d: 1.6 }],
     waypoints: [[0, -6.4]],
+  },
+  {
+    name: 'El Molino del Prado',
+    tip: 'Cruza la puerta del molino o arriésgate por el carril del looping',
+    par: 5,
+    theme: 'meadowDay',
+    tee: [0, 11.5],
+    cup: [0, -11.6],
+    // salida estrecha, ensanche con arena y setas, carriles a los lados del
+    // molino, zona alta con montículo y pasillo hasta el green
+    outline: [
+      [-1.4, 13], [-1.4, 9], [-3.2, 7], [-3.2, -10.2],
+      [-0.75, -10.2], [-0.75, -10.7], [-1.55, -11.3], [-1.55, -12.2], [-0.75, -12.9],
+      [0.75, -12.9], [1.55, -12.2], [1.55, -11.3], [0.75, -10.7], [0.75, -10.2],
+      [3.2, -10.2], [3.2, 6.5], [1.4, 9], [1.4, 13],
+    ],
+    grounded: true,
+    // paredes del molino y las que separan los carriles laterales de la zona central
+    walls: [...MILL_PRADO.walls, [[-1.6, 0.8], [-1.6, -5]], [[1.6, 0.8], [1.6, -9]]],
+    bumpers: [{ x: -1, z: 3.8, r: 0.4 }, { x: 1.15, z: 5.6, r: 0.4 }],
+    sand: [{ x: -2.35, z: 4, w: 1.5, d: 4 }],
+    // aspas pegadas a la pared derecha del carril: hay que subir por la izquierda
+    spinners: [{ x: 3, z: -1.6, len: 1.1, speed: 1.5 }, { x: 3, z: -3, len: 1.1, speed: -1.9 }],
+    boosts: [{ x: 2.4, z: 3.4, w: 1, d: 2.4, dir: [0, -1], speed: 9 }],
+    movers: [{ x: -2.4, z: -2.6, w: 0.6, d: 0.5, axis: 'x', range: 0.4, speed: 1.6 }],
+    // montículo suave al centro-izquierda: con poca fuerza desvía, con fuerza se sube
+    mounds: [{ x: -0.9, z: -7, top: 0.4, base: 1, accel: 5, tint: 0xdcffb0 }],
+    loops: [LOOP_PRADO],
+    windmills: [MILL_PRADO.windmill],
+    // al salir del looping, el portal deja la bola frente al pasillo del green
+    portals: [{ a: [2.4, -9.6], b: [0, -8.3], r: 0.42 }],
+    waypoints: [[0, 2.6], [0, -2.4], [0.6, -8]], // delante de la puerta, detrás y la zona alta
   },
 ];
 

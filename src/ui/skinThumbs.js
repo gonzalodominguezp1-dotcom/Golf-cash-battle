@@ -14,7 +14,7 @@ import { skinById } from '../progress/skins.js';
 // IndexedDB. Al vaciarse la cola se libera el renderer y su contexto WebGL. Desde la segunda visita no se
 // renderiza nada ni se carga three.js. Opción `hi: true` (solo el reveal): HI_SIZE px en vez de SIZE.
 
-const VERSION = 1; // súbelo si cambian materiales, shaders o luces de las miniaturas
+const VERSION = 2; // súbelo si cambian materiales, shaders o luces de las miniaturas
 const SIZE = 144;
 const HI_SIZE = 384;
 const DB_NAME = 'gcb-skin-thumbs';

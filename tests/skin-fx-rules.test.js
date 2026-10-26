@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { SKINS } from '../src/progress/skins.js';
 import {
-  REDUCED_SPEED, STILL_TIME, continuousOpen, hitList, particleLimit, reducedCount, reducedMotion, ribbonNoise, setReducedMotionForTests, sinkBurstAllowed, sinkDecalAllowed, trailRate, withoutCells,
+  REDUCED_SPEED, STILL_TIME, burstCount, calmList, continuousOpen, echoRing, hitList, particleLimit, reducedCount, reducedMotion, ribbonNoise, ribbonWave, setReducedMotionForTests, sinkBurstAllowed, sinkDecalAllowed, trailRate, withoutCells,
 } from '../src/game/render/skins/fxRules.js';
+import { SKIN_SIG } from '../src/game/render/skins/skinFx.js';
 
 test('E1: sin maxParticles el limite es el del nivel (skins actuales intactas)', () => {
   for (const [name, n] of [['low', 40], ['medium', 120], ['high', 300]]) {
@@ -98,4 +99,68 @@ test('E2: ruido de la cinta 0 solo con la bandera', () => {
   assert.equal(ribbonNoise('ribbon_particles', false), 0.25);
   assert.equal(ribbonNoise('default', false), 0);
   for (const st of ['shaped', 'ribbon_particles', 'default']) assert.equal(ribbonNoise(st, true), 0);
+});
+
+// ---------------------------------------------------------------- ajustes a las referencias
+const NUEVAS = ['antimatter_void', 'tormenta_voltaica', 'anima_errante', 'cronometro_laton', 'abyssal_tide'];
+const asList = (x) => (x ? (Array.isArray(x) ? x : [x]) : []);
+
+test('calmList: quita celdas y destellos solo si los hay', () => {
+  const a = { cell: 'spark', n: 4 }, b = { cell: 'streak', n: 4, flash: true }, c = { cell: 'glyph', n: 1 };
+  const plain = [a, c];
+  assert.equal(calmList(plain, undefined), plain); // nada que quitar: misma lista
+  assert.deepEqual(calmList([a, b, c], undefined), [a, c]);
+  assert.deepEqual(calmList([a, b, c], ['glyph']), [a]);
+  assert.deepEqual(calmList(plain, ['glyph']), [a]);
+});
+
+test('ribbonWave y echoRing: apagados con la bandera', () => {
+  const w = { amp: 0.1, freq: 4, speed: 2 };
+  assert.equal(ribbonWave(w, false), 0.1);
+  assert.equal(ribbonWave(w, true), 0);
+  assert.equal(ribbonWave(undefined, false), 0);
+  const e = { at: 0.2, size: 1.5, speed: 2 };
+  assert.equal(echoRing(e, false), e);
+  assert.equal(echoRing(e, true), null);
+  assert.equal(echoRing(undefined, false), null);
+});
+
+test('burstCount: suma a potencia 1 y a la mitad con la bandera', () => {
+  const l = [{ n: 5 }, { n: 1 }, { n: 4 }];
+  assert.equal(burstCount(l), 10);
+  assert.equal(burstCount(l, true), 3 + 1 + 2);
+});
+
+test('skins nuevas: cada evento cabe en su tope de partículas', () => {
+  for (const id of NUEVAS) {
+    const skin = SKINS.find((s) => s.id === id);
+    const sig = SKIN_SIG[id], max = skin.fx.maxParticles;
+    assert.ok(burstCount(sig.hit) <= max, `${id}: golpe ${burstCount(sig.hit)} > ${max}`);
+    assert.ok(burstCount(sig.wall) <= max, `${id}: pared ${burstCount(sig.wall)} > ${max}`);
+    const k = skin.fx.sink;
+    const extra = k === 'cinematic' || k === 'transform' ? burstCount(asList(sig.sinkBurst)) + 1 + (k === 'transform' ? 1 : 0) : 0;
+    const sink = burstCount(asList(sig.sinkFountain)) + extra;
+    assert.ok(sink <= max, `${id}: embocada ${sink} > ${max}`);
+    assert.equal(sig.trail.n, 1, `${id}: estela de 1 en 1`);
+    assert.ok(skin.fx.maxParticles <= 20);
+  }
+});
+
+test('skins nuevas con la bandera: sin destellos ni celdas marcadas, sin onda ni ecos', () => {
+  for (const id of NUEVAS) {
+    const sig = SKIN_SIG[id];
+    for (const [list, drop] of [[sig.hit, sig.rmDropHit], [sig.wall, null], [asList(sig.sinkFountain), sig.rmDropSink]]) {
+      const calm = calmList(list, drop);
+      assert.ok(calm.every((s) => !s.flash && !(drop ?? []).includes(s.cell)), id);
+    }
+    assert.equal(ribbonWave(sig.wave, true), 0, id);
+    assert.equal(echoRing(sig.hitEcho, true), null, id);
+    assert.equal(echoRing(sig.sinkEcho, true), null, id);
+  }
+  // cronómetro: en la embocada con la bandera, sin el reloj (glyph) y 6 partículas
+  const cr = SKIN_SIG.cronometro_laton;
+  assert.equal(burstCount(calmList(cr.sinkFountain, cr.rmDropSink), true), 6);
+  // tormenta y marea: géiser/columna de 6 con la bandera
+  assert.equal(burstCount(calmList(SKIN_SIG.tormenta_voltaica.sinkFountain, undefined), true), 6);
+  assert.equal(burstCount(calmList(SKIN_SIG.abyssal_tide.sinkFountain, undefined), true), 6);
 });

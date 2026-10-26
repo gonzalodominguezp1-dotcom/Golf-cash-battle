@@ -66,6 +66,8 @@ export function buildCourse(scene, course, theme) {
   platform.receiveShadow = true;
   scene.add(platform);
   if (grounded && !neon) scene.add(collarMesh(course, theme));
+  // salida marcada: losa de cristal verde con borde de color (solo temas con teePad)
+  if (theme.teePad && !neon) scene.add(teePadMesh(course.tee, theme.teePad, lift(course.tee[0], course.tee[1])));
   if (relief) {
     // el césped de verdad es una malla con relieve; la plataforma queda debajo
     geo.translate(0, -0.03, 0);
@@ -118,11 +120,18 @@ export function buildCourse(scene, course, theme) {
   const outward = grounded ? outwardNormals(course.outline) : [];
   segmentsOf(course).forEach(([[ax, az], [bx, bz]], i) => {
     // materiales propios para poder transparentar la pared que tapa la bola
+    // glowWalls (pradera de día): cuerpo verde y remate que brilla esmeralda a la
+    // izquierda y cian a la derecha, con los colores de theme.rim
+    const glowColor = theme.glowWalls && !neon && theme.rim ? theme.rim[(ax + bx) / 2 <= 0 ? 0 : 1] : null;
     const wallMat = neon
       ? new THREE.MeshStandardMaterial({ color: 0x0d0c1c, roughness: 0.4, metalness: 0.5, transparent: true })
+      : glowColor !== null
+      ? new THREE.MeshStandardMaterial({ normalMap: wood.normalMap, color: 0x23724f, roughness: 0.6, transparent: true })
       : new THREE.MeshStandardMaterial({ ...wood, roughness: 0.75, transparent: true });
     const capMat = neon
       ? new THREE.MeshStandardMaterial({ color: neonColor(i), emissive: neonColor(i), emissiveIntensity: 0.35, roughness: 0.3, transparent: true })
+      : glowColor !== null
+      ? new THREE.MeshStandardMaterial({ color: new THREE.Color(glowColor).multiplyScalar(0.12), emissive: glowColor, emissiveIntensity: 0.85, roughness: 0.3, transparent: true })
       : new THREE.MeshStandardMaterial({ color: 0xeeeeea, roughness: 0.75, envMapIntensity: 0.4, transparent: true });
     // de noche el remate de las paredes es una tira de luz del color del contraluz
     const baseEmissive = capMat.emissiveIntensity || 0;
@@ -906,6 +915,24 @@ function roundedRect(w, d, r) {
   s.lineTo(x, y + r);
   s.quadraticCurveTo(x, y, x + r, y);
   return s;
+}
+
+/** Losa de salida: cristal verde con un borde brillante (course.tee es el centro de la bola). */
+function teePadMesh([tx, tz], { color, w, d }, y) {
+  const g = new THREE.Group();
+  // el borde es un marco (con el hueco de la losa), para que no se vea a través del cristal
+  const frame = roundedRect(w + 0.2, d + 0.2, 0.24);
+  frame.holes.push(roundedRect(w, d, 0.16));
+  const border = new THREE.Mesh(new THREE.ShapeGeometry(frame, 12), new THREE.MeshBasicMaterial({ color }));
+  const pad = new THREE.Mesh(new THREE.ShapeGeometry(roundedRect(w, d, 0.16), 12), new THREE.MeshLambertMaterial({ color: 0xa6efc7, transparent: true, opacity: 0.6 }));
+  border.rotation.x = pad.rotation.x = -Math.PI / 2;
+  border.position.y = 0.004;
+  pad.position.y = 0.007;
+  pad.receiveShadow = true;
+  g.add(border, pad);
+  // el centro de la losa queda un poco por detrás de la bola, hacia el fondo de la salida
+  g.position.set(tx, y, tz + 0.1);
+  return g;
 }
 
 function scaleUV(geo, su, sv) {

@@ -57,11 +57,16 @@ void skinPattern(vec3 p, inout vec4 diffuse) {
 
   float d = skHex(q) - 0.5;
   float win = 1.0 - smoothstep(-0.01, 0.01, d);
-  float frame = (1.0 - win) * (1.0 - smoothstep(0.075, 0.09, d));
+  float frame = (1.0 - win) * (1.0 - smoothstep(0.105, 0.115, d));
+  // filete de latón claro que rodea el marco de cobre
+  float fillet = smoothstep(0.115, 0.122, d) * (1.0 - smoothstep(0.136, 0.143, d));
 
   // cuerpo de latón cepillado
   float brush = sk_noise3(p * vec3(40.0, 2.0, 2.0));
-  vec3 col = uPalBase * (0.94 + 0.12 * brush);
+  vec3 col = uPalBase * vec3(0.98, 0.86, 0.8) * (0.94 + 0.12 * brush);
+  // grabados: dos contornos finos del hexágono, más oscuros (la hoja tiene filigrana alrededor de las ventanas)
+  float eng = smoothstep(0.0045, 0.0, abs(d - 0.2)) + smoothstep(0.0035, 0.0, abs(d - 0.235)) * 0.7;
+  col *= 1.0 - 0.32 * eng * (1.0 - win) * (1.0 - frame);
   sk_dRough = 0.06 * (brush - 0.5) * (1.0 - win);
 
   #if SK_SEAMS > 0
@@ -72,31 +77,49 @@ void skinPattern(vec3 p, inout vec4 diffuse) {
   col = mix(col, uPalSecondary, smoothstep(0.014, 0.004, a1 - a2) * 0.85 * (1.0 - win) * (1.0 - frame));
   #endif
 
-  // marco de cobre
-  col = mix(col, uPalAccent, frame);
+  // marco de cobre con su filete claro; el cobre se aclara un poco hacia el borde exterior
+  col = mix(col, uPalGlow * 0.85, fillet);
+  col = mix(col, uPalAccent * (0.8 + 0.5 * smoothstep(0.0, 0.11, d)), frame);
 
   #if SK_RIVETS > 0
   // remaches en los seis vértices del marco
   vec2 aq = abs(q);
-  float rv = min(length(aq - vec2(0.624, 0.0)), length(aq - vec2(0.312, 0.54)));
-  float rivet = (1.0 - smoothstep(0.026, 0.034, rv)) * frame;
-  col = mix(col, uPalGlow, rivet * 0.85);
+  float rv = min(length(aq - vec2(0.641, 0.0)), length(aq - vec2(0.320, 0.555)));
+  float rivet = 1.0 - smoothstep(0.042, 0.05, rv);
+  col = mix(col, uPalGlow * (0.55 + 0.6 * smoothstep(0.045, 0.0, rv)), rivet);
   #endif
 
   // ventana: cristal oscuro con el mecanismo detrás
   if (win > 0.0) {
     float rot = uGearPh + uSeed + fid * 1.7;
-    vec3 mech = uPalSecondary;
+    // fondo del mecanismo: marrón oscuro con un fondo más cálido hacia el centro
+    float lq = length(q);
+    vec3 mech = mix(uPalSecondary * 1.5, uPalSecondary * 0.7, smoothstep(0.0, 0.6, lq));
     float gm = 0.0;
-    vec3 em = uPalGlow * (0.12 * (1.0 - smoothstep(0.0, 0.7, length(q))));
+    vec3 em = (uPalAccent * 0.12 + uPalGlow * 0.03) * (1.0 - smoothstep(0.0, 0.75, lq)) + uPalAccent * 0.04;   // luz cálida del mecanismo
 
     #if SK_GEARS > 1
-    float gb = skGear(q - vec2(-0.11, 0.21), 7.0, -rot * 1.4286 + 0.45, 0.12);
-    mech = mix(mech, uPalAccent, gb);
+    // engranaje B (7 dientes, contrario) y, en alta, un piñón pequeño C
+    vec2 gbp = q - vec2(-0.12, 0.2);
+    float gb = skGear(gbp, 7.0, -rot * 1.4286 + 0.45, 0.13);
+    mech = mix(mech, uPalAccent * (0.8 + 0.4 * smoothstep(0.05, 0.14, length(gbp))), gb);
+    em += uPalGlow * gb * 0.05;
     gm = gb;
     #endif
-    float ga = skGear(q - vec2(0.1, -0.08), 10.0, rot, 0.2);
-    mech = mix(mech, uPalBase * (0.85 + 0.3 * smoothstep(0.1, 0.22, length(q - vec2(0.1, -0.08)))), ga);
+    #if SK_GEARS > 2
+    vec2 gcp = q - vec2(0.27, 0.19);
+    float gc = skGear(gcp, 6.0, rot * 1.6667 + 0.3, 0.085);
+    mech = mix(mech, uPalBase * 0.75, gc);
+    gm = max(gm, gc);
+    // cilindro del muelle, abajo a la derecha
+    float bar = 1.0 - smoothstep(0.075, 0.085, length(q - vec2(0.27, -0.3)));
+    mech = mix(mech, mix(uPalAccent, uPalGlow, 0.4 * smoothstep(0.07, 0.0, length(q - vec2(0.25, -0.28)))), bar);
+    gm = max(gm, bar);
+    #endif
+    vec2 gap = q - vec2(0.1, -0.08);
+    float ga = skGear(gap, 10.0, rot, 0.2);
+    mech = mix(mech, uPalBase * (0.95 + 0.4 * smoothstep(0.1, 0.22, length(gap))), ga);
+    em += uPalGlow * ga * 0.06;
     gm = max(gm, ga);
 
     // agujas: la horaria continua y lenta; el minutero a saltos de 1 Hz
@@ -106,10 +129,11 @@ void skinPattern(vec3 p, inout vec4 diffuse) {
     mech = mix(mech, uPalGlow, hands);
     em += uPalGlow * hands * 0.5;
 
+    mech *= 0.55 + 0.45 * smoothstep(-0.07, -0.012, d);   // sombra interior pegada al marco
     col = mix(col, mech, win);
     sk_emis += em * win;
-    sk_dRough += -0.2 * win * (1.0 - gm);
-    sk_dMetal = -0.6 * win * (1.0 - gm);
+    sk_dRough += 0.3 * win * (1.0 - gm);
+    sk_dMetal = -0.85 * win * (1.0 - gm);
   }
 
   diffuse.rgb = col;
@@ -124,7 +148,7 @@ void skinPattern(vec3 p, inout vec4 diffuse) {
   },
   quality: {
     low: { gears: 1, rivets: 0, seams: 0 },
-    medium: { gears: 1, rivets: 0, seams: 0 },
-    high: { gears: 2, rivets: 1, seams: 1 },
+    medium: { gears: 2, rivets: 1, seams: 0 },
+    high: { gears: 3, rivets: 1, seams: 1 },
   },
 };

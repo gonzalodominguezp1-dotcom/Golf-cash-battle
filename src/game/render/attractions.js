@@ -9,7 +9,7 @@ import { loopPoint } from './terrain.js';
 export function attractionStyle(theme) {
   if (theme.neon) return { kind: 'neon', colors: theme.neon };
   if (theme.lanterns || theme.stars) return { kind: 'night', colors: [0xffc46b, 0x6bd5ff, 0xff7ad9] };
-  return { kind: 'day', colors: [0xff5a4e, 0x3d8bff, 0xffc145] };
+  return { kind: 'day', colors: [0xff5a4e, 0x3d8bff, 0xffc145], wood: !!theme.woodMill };
 }
 
 // GLOW ajustado para que los brillos nunca excedan el 15% de bloom
@@ -608,10 +608,10 @@ export function buildWindmill(scene, wm, style, lift = 0) {
   const color = style.colors[0];
   const bodyMat = neon
     ? new THREE.MeshStandardMaterial({ color: 0x14122a, roughness: 0.5, metalness: 0.3, transparent: true })
-    : new THREE.MeshStandardMaterial({ color: style.kind === 'night' ? 0xd9d2c5 : 0xf4efe6, roughness: 0.8, transparent: true });
+    : new THREE.MeshStandardMaterial({ color: style.wood ? 0xa8713f : style.kind === 'night' ? 0xd9d2c5 : 0xf4efe6, roughness: 0.8, transparent: true });
   const roofMat = neon
     ? new THREE.MeshStandardMaterial({ color: 0x1d0f33, emissive: style.colors[1], emissiveIntensity: 0.35, roughness: 0.4, transparent: true })
-    : new THREE.MeshStandardMaterial({ color: 0xd8433a, roughness: 0.7, transparent: true });
+    : new THREE.MeshStandardMaterial({ color: style.wood ? 0x8a5a30 : 0xd8433a, roughness: 0.7, transparent: true });
   const W = 1.9, H = 1.6, door = wm.w / 2 - 0.15;
   const depth = wm.depth + 0.1, cz = -wm.face * (wm.depth / 2);
   const box = (w, h, d, x, y, z, m) => {

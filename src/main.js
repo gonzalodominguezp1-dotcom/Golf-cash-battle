@@ -1849,6 +1849,7 @@ function alertMsg(text) {
 
 const THEME_INFO = {
   meadow: { name: 'Pradera', icon: '', color: '#5cc24a' },
+  meadowDay: { name: 'Pradera de Día', icon: '', color: '#6fd24f' },
   beach: { name: 'Playa', icon: '', color: '#2fe0ff' },
   sunset: { name: 'Atardecer', icon: '', color: '#ff9a5c' },
   snow: { name: 'Nieve', icon: '', color: '#90d7ff' },

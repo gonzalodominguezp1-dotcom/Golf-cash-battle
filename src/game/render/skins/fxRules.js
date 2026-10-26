@@ -98,3 +98,32 @@ export function sinkBurstAllowed(sig, rm) {
 export function sinkDecalAllowed(sig, rm) {
   return !(rm && sig?.rmNoSinkDecal);
 }
+
+// ---------------------------------------------------------------- ajustes a las referencias
+/**
+ * Lista «tranquila» para la bandera: sin las celdas `drop` y sin los destellos
+ * marcados con `flash: true` (estrellas de rayos del golpe o del rebote).
+ * Si no hay nada que quitar devuelve la misma lista.
+ */
+export function calmList(specs, drop) {
+  const hasFlash = specs.some((s) => s.flash);
+  if (!hasFlash && !(drop && drop.length)) return specs;
+  return withoutCells(specs, drop).filter((s) => !s.flash);
+}
+
+/** Amplitud de la onda lateral de la cinta: 0 con la bandera o si la skin no la define. */
+export function ribbonWave(wave, rm) {
+  return rm || !wave ? 0 : wave.amp;
+}
+
+/** Anillo de eco retrasado (golpe o embocada): ninguno con la bandera (como mucho 1 anillo por evento). */
+export function echoRing(echo, rm) {
+  return rm || !echo ? null : echo;
+}
+
+/** Partículas que lanza una lista de emisores a potencia 1 (o con la bandera, cada uno a la mitad). */
+export function burstCount(specs, rm = false) {
+  let n = 0;
+  for (const s of specs) n += rm ? reducedCount(s.n) : s.n;
+  return n;
+}
