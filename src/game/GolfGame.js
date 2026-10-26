@@ -64,8 +64,9 @@ export class GolfGame {
   #pos = new THREE.Vector3();
   #aimColor = new THREE.Color();
 
-  constructor(container, { onStroke, onSunk, onAim, onRest, onCup, onRival, onLip, onLava, onOpenSettings, onOverviewChange, onTimer, onTimeUp } = {}) {
+  constructor(container, { onStroke, onSunk, onAim, onRest, onCup, onRival, onLip, onLava, onFall, onOpenSettings, onOverviewChange, onTimer, onTimeUp } = {}) {
     this.onLava = onLava;
+    this.onFall = onFall;
     this.container = container;
     this.onTimer = onTimer;
     this.onTimeUp = onTimeUp;
@@ -1184,7 +1185,7 @@ export class GolfGame {
         if (this.genericFx.hit) this.particles.puff(new THREE.Vector3(b.ball.x, 0.05, b.ball.z), 0x9be37f, 8 + Math.round(r.shot * 10), 1 + r.shot, 0.18);
       }
       if (r.portal >= 0) this.particles.puff(new THREE.Vector3(b.ball.x, 0.1, b.ball.z), 0xffb020, 8, 1.2, 0.16);
-      if (r.lava) this.particles.puff(new THREE.Vector3(r.lava[0], 0, r.lava[1]), 0xffa030, 10, 1.6, 0.12);
+      if (r.lava) this.particles.puff(new THREE.Vector3(r.lava[0], 0, r.lava[1]), r.pit ? 0x2a2420 : 0xffa030, 10, 1.6, 0.12);
       if (r.bumper < 0 && r.hit > 2 && !r.shot) {
         if (this.genericFx.wall) this.particles.puff(new THREE.Vector3(b.ball.x, b.mesh.position.y, b.ball.z), 0xf3e3c3, 5, 0.8, 0.14);
       }
@@ -1263,7 +1264,16 @@ export class GolfGame {
         this.squash = Math.max(this.squash, Math.min(0.3, r.impact * 0.08));
         this.#addShake(Math.min(0.3, r.impact * 0.06));
       }
-      if (r.lava) {
+      if (r.pit) {
+        // cae a un agujero: polvo en el borde y vuelve a su sitio
+        const [lx, lz] = r.lava;
+        sfx.fall();
+        this.particles.puff(new THREE.Vector3(lx, 0, lz), 0x6b5a4a, 14, 1.6, 0.2);
+        this.waves.emit(this.ball.x, this.ball.z, 0xffffff, 1.2, 2);
+        this.#addShake(0.25);
+        navigator.vibrate?.([20, 30, 20]);
+        this.onFall?.();
+      } else if (r.lava) {
         // se quema en la lava: chispas y humo donde ha caído y vuelve a su sitio
         const [lx, lz] = r.lava;
         const at = new THREE.Vector3(lx, 0, lz);

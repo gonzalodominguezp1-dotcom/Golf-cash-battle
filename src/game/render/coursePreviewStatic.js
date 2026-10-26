@@ -25,6 +25,7 @@ export const STATIC_COURSE_PREVIEWS = {
   'Las Tuberías': '/courses/course-17.webp',
   'Looping Nocturno': '/courses/course-18.webp',
   'Dentro del Volcán': '/courses/course-19.webp',
+  'El Abismo': '/courses/course-20.webp',
   'Desempate': '/courses/tiebreak.webp',
 };
 

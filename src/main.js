@@ -1208,6 +1208,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       },
       onLip: () => toast('¡Uy! Demasiado fuerte para entrar', '#ffffff'),
       onLava: () => toast('🔥 ¡A la lava! Vuelves al sitio del golpe', '#ff8a3a'),
+      onFall: () => toast('🕳️ ¡Al agujero! Vuelves al sitio del golpe', '#ffc400'),
       onRest: (n) => {
         showDistance();
         if (tiebreak) {

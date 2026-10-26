@@ -430,6 +430,18 @@ export function ballTexture(color = '#ff4d4d') {
   );
 }
 
+/** Oscuridad del fondo de un agujero: casi transparente arriba y negra abajo. */
+export function abyssTexture() {
+  return canvasTexture(64, (g, n) => {
+    const grd = g.createLinearGradient(0, 0, 0, n);
+    grd.addColorStop(0, 'rgba(0,0,0,0.35)');
+    grd.addColorStop(0.25, 'rgba(0,0,0,0.9)');
+    grd.addColorStop(0.5, 'rgba(0,0,0,1)');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, n, n);
+  }, false);
+}
+
 export function stripeTexture(a, b) {
   return canvasTexture(64, (g, n) => {
     g.fillStyle = a;

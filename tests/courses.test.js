@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DT, MIN_SLOPE_ACCEL, inLava, inSand, isMoving, onMound, onRamp, portalAt, quantizeShot, rampAccel, segmentsOf, shotVelocity, step, windmillBlocks } from '../src/game/physics.js';
+import { DT, MIN_SLOPE_ACCEL, inLava, inPit, inSand, isMoving, onMound, onRamp, portalAt, quantizeShot, rampAccel, segmentsOf, shotVelocity, step, windmillBlocks } from '../src/game/physics.js';
 import { ballPose } from '../src/game/render/terrain.js';
 import { groundHeight, hasRelief } from '../src/game/render/terrain.js';
 import { replayHole } from '../src/game/replay.js';
@@ -323,4 +323,38 @@ test('dentro del volcán: el servidor repite igual la cueva, los saltos y la lav
     assert.ok(a.ok, `p=${p}: ${a.reason}`);
     assert.deepEqual(a, b);
   }
+});
+
+test('abismo: los agujeros cruzan la pista de pared a pared y cada uno tiene su rampa', () => {
+  const c = COURSES.find((x) => x.name === 'El Abismo');
+  const xs = c.outline.map((p) => p[0]);
+  for (const { poly } of c.pits) {
+    const px = poly.map((p) => p[0]), pz = poly.map((p) => p[1]);
+    assert.ok(Math.min(...px) <= Math.min(...xs) && Math.max(...px) >= Math.max(...xs), 'ocupa todo el ancho');
+    // el labio de una rampa (hacia -z) está en el borde de arriba del agujero
+    assert.ok(c.ramps.some((r) => r.dir[1] === -1 && Math.abs(r.z - r.d / 2 - Math.max(...pz)) < 1e-9));
+  }
+  assert.ok(!inPit(c, ...c.tee) && !inPit(c, ...c.cup));
+});
+
+test('abismo: sin rampa la bola cae y vuelve al sitio del golpe', () => {
+  const c = COURSES.find((x) => x.name === 'El Abismo');
+  for (const v of [4, 8, 13]) {
+    const r = rollFrom(c, 1.6, 9, v);
+    assert.ok(r.lava && inPit(c, ...r.lava), `v=${v}: cae al agujero`);
+    assert.deepEqual([r.ball.x, r.ball.z], [1.6, 9], `v=${v}: vuelve a donde tiró`);
+  }
+});
+
+test('abismo: por la rampa, flojo vuelve, a medias cae y bien fuerte salta', () => {
+  const c = COURSES.find((x) => x.name === 'El Abismo');
+  const [r] = c.ramps;
+  const [x, z] = c.tee;
+  const weak = rollFrom(c, x, z, 0.4 * 13);
+  assert.ok(!weak.launch && !weak.lava && weak.ball.z > r.z + r.d / 2, 'flojo: la rampa la devuelve');
+  const short = rollFrom(c, x, z, 0.6 * 13);
+  assert.ok(short.launch && short.lava, 'a medias: despega pero cae al agujero');
+  const good = rollFrom(c, x, z, 0.78 * 13);
+  assert.ok(good.launch && !good.lava, 'fuerte: salta el agujero');
+  assert.ok(good.ball.z < Math.min(...c.pits[0].poly.map((p) => p[1])), 'y para al otro lado');
 });

@@ -42,6 +42,11 @@ const VOLCANO_RAMP_A = ramp({ x: -3.4, z: 4.2 });
 const VOLCANO_SHORTCUT = ramp({ x: -2.15, z: 6.2, w: 1.6, d: 1.7, dir: [1, 0] });
 const VOLCANO_RAMP_B = ramp({ x: 3.4, z: -4.6, dir: [0, 1] });
 
+// El Abismo: dos agujeros de pared a pared; cada uno se salta desde su rampa
+const ABYSS_RAMP_A = ramp({ x: -1.3, z: 7.2, w: 1.4 });
+const ABYSS_RAMP_B = ramp({ x: 0, z: -5.4, w: 2 });
+const band = (z0, z1) => ({ poly: [[-3, z0], [3, z0], [3, z1], [-3, z1]] });
+
 const LOOP_A = { x: 0, z: 1, dir: [0, -1], len: 4.4, w: 1.6, radius: 0.8 };
 const LOOP_B1 = { x: -3.6, z: 3, dir: [0, -1], len: 4.4, w: 1.6, radius: 0.8 };
 const LOOP_B2 = { x: -0.2, z: -7.8, dir: [1, 0], len: 4.4, w: 1.6, radius: 0.8 };
@@ -400,6 +405,23 @@ export const COURSES = [
     ],
     // los rivales cogen el atajo
     waypoints: [[-3.4, 17.2], [3.6, 6.2]],
+  },
+  {
+    name: 'El Abismo',
+    tip: 'Salta los agujeros con las rampas: si caes, vuelves a tirar desde donde estabas',
+    par: 4,
+    theme: 'canyon',
+    tee: [-1.3, 11.6],
+    cup: [-0.8, -15],
+    outline: [[-3, 13.2], [3, 13.2], [3, -17.4], [-3, -17.4]],
+    walls: [...ABYSS_RAMP_A.walls, ...ABYSS_RAMP_B.walls],
+    bumpers: [{ x: 1.4, z: -13, r: 0.35 }],
+    sand: [],
+    spinners: [],
+    ramps: [ABYSS_RAMP_A.ramp, ABYSS_RAMP_B.ramp],
+    // de pared a pared: sin rampa no se puede pasar
+    pits: [band(6.4, 3.8), band(-6.2, -9)],
+    waypoints: [[-1.3, 9.6], [-1.3, 0.6], [0, -2.6], [0.8, -11.4]],
   },
 ];
 

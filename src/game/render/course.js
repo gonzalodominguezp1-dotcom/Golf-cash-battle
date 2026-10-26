@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { BALL_R, CUP_R, WALL_HALF, moverPos, segmentsOf, tubeTable } from '../physics.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { chevronTexture, crateTexture, dirtMaps, grassMaps, rockFloorMaps, roughTone, sandMaps, slopeArrowTexture, slopeShadeTexture, softDotTexture, stripeTexture, woodMaps } from './textures.js';
+import { abyssTexture, chevronTexture, crateTexture, dirtMaps, grassMaps, rockFloorMaps, roughTone, sandMaps, slopeArrowTexture, slopeShadeTexture, softDotTexture, stripeTexture, woodMaps } from './textures.js';
 import { buildPortal } from './portal.js';
 import { groundHeight, hasRelief, tierHeight } from './terrain.js';
 import { lavaMaterial } from './lava.js';
@@ -48,6 +48,10 @@ export function buildCourse(scene, course, theme) {
   }
   // la lava va en canales recortados en la plataforma
   for (const l of course.lava ?? []) shape.holes.push(new THREE.Path(l.poly.map(([x, z]) => new THREE.Vector2(x, -z))));
+  // agujeros sin fondo: se dejan unos centímetros bajo las paredes para que el
+  // recorte no toque el contorno (la malla no lo admitiría)
+  const pitRects = (course.pits ?? []).map((p) => pitRect(course, p));
+  for (const r of pitRects) shape.holes.push(new THREE.Path([[r.x0, r.z0], [r.x0, r.z1], [r.x1, r.z1], [r.x1, r.z0]].map(([x, z]) => new THREE.Vector2(x, -z))));
   // a ras del terreno el green es una lámina (sin losa ni laterales de tierra)
   const grounded = !!course.grounded;
   const sink = grounded ? GROUND_SINK : 0;
@@ -110,6 +114,7 @@ export function buildCourse(scene, course, theme) {
 
   // ríos y charcos de lava que corren por los canales
   const lavaMats = (course.lava ?? []).map((l) => buildLava(scene, l));
+  if (pitRects.length) buildPits(scene, course, pitRects);
 
   // arena con bordes redondeados: hundida hacia el borde, donde el labio de césped la sombrea
   const sandM = course.sand.length ? sandMaps() : null;
@@ -615,6 +620,47 @@ function buildChute(scene, portal, y) {
       ring.scale.setScalar(1 + Math.sin(t * 4) * 0.04);
     },
   };
+}
+
+/** Rectángulo de un agujero, recortado unos centímetros dentro del contorno. */
+function pitRect(course, p) {
+  const xs = course.outline.map((q) => q[0]), zs = course.outline.map((q) => q[1]);
+  const px = p.poly.map((q) => q[0]), pz = p.poly.map((q) => q[1]);
+  return {
+    x0: Math.max(Math.min(...px), Math.min(...xs) + 0.06),
+    x1: Math.min(Math.max(...px), Math.max(...xs) - 0.06),
+    z0: Math.max(Math.min(...pz), Math.min(...zs) + 0.06),
+    z1: Math.min(Math.max(...pz), Math.max(...zs) - 0.06),
+  };
+}
+
+/** Agujeros: oscuridad que se traga la bola y borde de aviso amarillo y negro. */
+function buildPits(scene, course, rects) {
+  const xs = course.outline.map((q) => q[0]), zs = course.outline.map((q) => q[1]);
+  const dark = new THREE.MeshBasicMaterial({ map: abyssTexture(), transparent: true, side: THREE.BackSide, depthWrite: false });
+  const hidden = new THREE.MeshBasicMaterial({ visible: false });
+  const hazard = stripeTexture('#ffc400', '#1a1a1a');
+  const depth = PLATFORM_DEPTH - 0.2;
+  for (const r of rects) {
+    const w = r.x1 - r.x0, d = r.z1 - r.z0, cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2;
+    // caja abierta por arriba un poco dentro de las paredes del recorte
+    const box = new THREE.Mesh(new THREE.BoxGeometry(w - 0.06, depth, d - 0.06), [dark, dark, hidden, hidden, dark, dark]);
+    box.position.set(cx, -depth / 2, cz);
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(cx, -depth + 0.05, cz);
+    scene.add(box, floor);
+    for (const [ex, ez, ew, ed] of [[cx, r.z0 - 0.09, w, 0.18], [cx, r.z1 + 0.09, w, 0.18], [r.x0 - 0.09, cz, 0.18, d], [r.x1 + 0.09, cz, 0.18, d]]) {
+      if (ex < Math.min(...xs) || ex > Math.max(...xs) || ez < Math.min(...zs) || ez > Math.max(...zs)) continue;
+      const tex = hazard.clone();
+      tex.repeat.set(Math.max(ew, ed) / 0.5, 0.36);
+      const strip = new THREE.Mesh(new THREE.PlaneGeometry(Math.max(ew, ed), Math.min(ew, ed)), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 }));
+      strip.rotation.set(-Math.PI / 2, 0, ew > ed ? 0 : Math.PI / 2);
+      strip.position.set(ex, 0.004, ez);
+      strip.receiveShadow = true;
+      scene.add(strip);
+    }
+  }
 }
 
 /** Río o charco de lava en su canal, con una luz que parpadea. */

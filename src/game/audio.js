@@ -108,6 +108,16 @@ const DEFS = {
   // entrada en arena
   sand: () => render(0.4, (d) => noise(d, { dur: 0.38, gain: 0.35, cutoff: 0.08, attack: 0.03, shape: 'sin' })),
   // la bola cae en la lava: chisporroteo y un "fsss" que se apaga
+  // cae a un agujero: silbido que baja y se pierde a lo lejos
+  fall: () =>
+    render(0.9, (d) => {
+      let ph = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / SR;
+        ph += (2 * Math.PI * (900 * Math.exp(-t * 2.2) + 120)) / SR;
+        d[i] += Math.sin(ph) * 0.14 * Math.exp(-t * 3) * Math.min(1, t / 0.02);
+      }
+    }),
   lava: () =>
     render(0.9, (d) => {
       noise(d, { dur: 0.85, gain: 0.5, cutoff: 0.5, attack: 0.01 });
@@ -785,6 +795,7 @@ export const sfx = {
   sand: () => play('sand', { vol: 0.8, rate: vary(0.1) }),
   boost: () => play('boost', { vol: 0.7 }),
   lava: () => play('lava', { vol: 0.8, rate: vary(0.08) }),
+  fall: () => play('fall', { vol: 0.8 }),
   tick: () => play('tick', { vol: 0.5, rate: vary(0.1), wet: false }),
   portal: () => play('portal', { vol: 0.8 }),
   lip: () => play('lip', { vol: 0.8, rate: vary(0.08) }),
