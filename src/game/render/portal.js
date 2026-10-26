@@ -52,7 +52,8 @@ function plasmaMaterial(color, time, seed) {
         float t = uTime + uSeed * 13.0;
         vec2 p = vP; // en radios del portal: el borde está en 1
         float d = length(p);
-        float a = atan(p.y, p.x);
+        // atan(0, 0) no está definido en todas las GPU: se aparta un pelo del centro
+        float a = atan(p.y, p.x + 1e-4);
 
         // espiral: cuatro brazos logarítmicos que giran hacia dentro
         float swirl = a * 4.0 + log(max(d, 0.03)) * 5.5 + t * 2.2;
@@ -60,19 +61,22 @@ function plasmaMaterial(color, time, seed) {
         float ca = cos(t * 0.6 + 2.2 / (d + 0.35)), sa = sin(t * 0.6 + 2.2 / (d + 0.35));
         vec2 q = mat2(ca, -sa, sa, ca) * p;
         float plasma = fbm3(vec3(q * 2.4, t * 0.45));
-        float arm = 0.5 + 0.5 * sin(swirl + (plasma - 0.5) * 4.0);
+        // pow() con base negativa da NaN en GPU reales y el bloom lo convierte en
+        // cuadrados negros: todas las bases se recortan a [0, 1]
+        float arm = clamp(0.5 + 0.5 * sin(swirl + (plasma - 0.5) * 4.0), 0.0, 1.0);
         float filament = pow(arm, 5.0);
         float sheath = pow(arm, 1.6) * 0.35;
         // hebras finas que se retuercen entre los brazos, como descargas de plasma
         float turb = fbm3(vec3(q * 6.0, t * 1.1));
-        float strand = pow(0.5 + 0.5 * sin(swirl * 2.0 - t * 1.3 + turb * 7.0), 14.0) * 0.6;
+        float strand = pow(clamp(0.5 + 0.5 * sin(swirl * 2.0 - t * 1.3 + turb * 7.0), 0.0, 1.0), 14.0) * 0.6;
         filament = filament * (0.6 + 0.8 * turb) + strand * smoothstep(0.25, 0.6, d);
 
         float inside = smoothstep(1.0, 0.82, d);
         float eye = smoothstep(0.05, 0.32, d); // ojo oscuro en el centro del vórtice
         float spiral = (filament + sheath) * inside * eye * (0.55 + 0.75 * plasma);
         float core = exp(-d * d * 18.0) * 0.35 * (0.8 + 0.2 * sin(t * 3.0));
-        float rim = exp(-pow((d - 0.97) * 14.0, 2.0)) * 0.55;
+        float rd = (d - 0.97) * 14.0;
+        float rim = exp(-rd * rd) * 0.55;
 
         // halo: la luz que sale del portal, deformada por la ola de calor
         vec2 w = heatWarp(p * 0.8, t);
@@ -83,7 +87,7 @@ function plasmaMaterial(color, time, seed) {
         vec3 hot = mix(uColor, vec3(1.0), 0.55);
         vec3 col = uColor * (spiral * 0.75 + rim + halo) + hot * (filament * inside * eye * 0.22 + core);
         col *= smoothstep(1.9, 1.35, d); // fundido al borde del disco
-        gl_FragColor = vec4(col, 1.0);
+        gl_FragColor = vec4(clamp(col, 0.0, 4.0), 1.0);
       }`,
     transparent: true,
     depthWrite: false,
@@ -137,8 +141,8 @@ function hazeMaterial(color, time, seed) {
         float rays = 0.55 + 0.45 * sin(ang * 7.0 + warp.x * 6.0 + noise3(vec3(ring * 2.0, h * 1.5 - t * 0.6)) * 4.0);
         float fall = exp(-max(hw, 0.0) * 3.2) * smoothstep(0.0, 0.06, h);
         float shimmer = 0.75 + 0.5 * fbm3(vec3(ring * 3.0, h * 6.0 - t * 2.4));
-        float a = fall * rays * shimmer * pow(vFacing, 1.3);
-        gl_FragColor = vec4(uColor * a * 0.42, 1.0);
+        float a = fall * rays * shimmer * pow(clamp(vFacing, 0.0, 1.0), 1.3);
+        gl_FragColor = vec4(clamp(uColor * a * 0.42, 0.0, 4.0), 1.0);
       }`,
     transparent: true,
     depthWrite: false,

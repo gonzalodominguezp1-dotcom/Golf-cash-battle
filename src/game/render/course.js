@@ -586,7 +586,8 @@ function bunkerMaterial(maps, w, d, r) {
         vec2 q = abs(vBunker) - uBunker.xy + uBunker.z;
         float inside = -(length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - uBunker.z);
         float lip = smoothstep(0.0, 0.28, inside);
-        diffuseColor.rgb *= mix(0.62, 1.0, lip) + 0.06 * exp(-pow((inside - 0.3) * 9.0, 2.0));`,
+        float crest = (inside - 0.3) * 9.0;
+        diffuseColor.rgb *= mix(0.62, 1.0, lip) + 0.06 * exp(-crest * crest);`,
       );
   };
   mat.customProgramCacheKey = () => 'bunker';
