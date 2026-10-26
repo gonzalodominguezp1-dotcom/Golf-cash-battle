@@ -23,7 +23,32 @@ function segBlocked(ax, az, bx, bz, segs, course) {
     const t = Math.max(0, Math.min(1, ((b.x - ax) * rx + (b.z - az) * rz) / len2));
     if (Math.hypot(ax + rx * t - b.x, az + rz * t - b.z) < b.r + BALL_R + 0.1) return true;
   }
+  // un agujero solo se cruza saltando: la línea tiene que subir por una rampa y salir por el labio
+  const pits = course.pits ?? [];
+  if (pits.some((p) => crossesRect(ax, az, bx, bz, p)) && !(course.ramps ?? []).some((r) => jumpsRamp(ax, az, bx, bz, r))) return true;
   return false;
+}
+
+const lineSamples = (ax, az, bx, bz) => {
+  const n = Math.ceil(Math.hypot(bx - ax, bz - az) / 0.1);
+  return Array.from({ length: n + 1 }, (_, i) => [ax + ((bx - ax) * i) / n, az + ((bz - az) * i) / n]);
+};
+
+function crossesRect(ax, az, bx, bz, r) {
+  return lineSamples(ax, az, bx, bz).some(([x, z]) => Math.abs(x - r.x) < r.w / 2 && Math.abs(z - r.z) < r.d / 2);
+}
+
+/** ¿La línea entra en la rampa por abajo y sale por el labio, lejos de los lados? */
+function jumpsRamp(ax, az, bx, bz, r) {
+  const len = r.dir[0] !== 0 ? r.w : r.d, half = (r.dir[0] !== 0 ? r.d : r.w) / 2 - 0.25;
+  const pts = lineSamples(ax, az, bx, bz).map(([x, z]) => ({
+    a: (x - r.x) * r.dir[0] + (z - r.z) * r.dir[1] + len / 2,
+    lat: -(x - r.x) * r.dir[1] + (z - r.z) * r.dir[0],
+  }));
+  const on = pts.findIndex((p) => p.a >= 0 && p.a <= len && Math.abs(p.lat) < half);
+  if (on < 0 || pts[on].a > 0.3) return false;
+  const off = pts.findIndex((p, i) => i > on && (p.a > len || Math.abs(p.lat) >= half));
+  return off > 0 && pts[off].a > len && Math.abs(pts[off].lat) < half;
 }
 
 function chooseTarget(ball, course, segs) {
@@ -39,7 +64,7 @@ function chooseTarget(ball, course, segs) {
 
 /** Distancia recorrida por un tiro (sin aspas, bloques ni molinos, para que sea estable). */
 function travel(course, segs, from, dirX, dirZ, power) {
-  const sim = { x: from.x, z: from.z, vx: dirX * power * MAX_SHOT_SPEED, vz: dirZ * power * MAX_SHOT_SPEED };
+  const sim = { x: from.x, z: from.z, vx: dirX * power * MAX_SHOT_SPEED, vz: dirZ * power * MAX_SHOT_SPEED, home: [from.x, from.z] };
   const c = { ...course, spinners: [], movers: [], windmills: [] };
   let d = 0;
   for (let i = 0; i < 2400 && isMoving(sim); i++) {
@@ -64,7 +89,7 @@ function powerFor(course, segs, from, dirX, dirZ, dist) {
 
 /** Dónde para un tiro (o null si entra). */
 function landing(course, segs, from, dirX, dirZ, power) {
-  const sim = { x: from.x, z: from.z, vx: dirX * power * MAX_SHOT_SPEED, vz: dirZ * power * MAX_SHOT_SPEED };
+  const sim = { x: from.x, z: from.z, vx: dirX * power * MAX_SHOT_SPEED, vz: dirZ * power * MAX_SHOT_SPEED, home: [from.x, from.z] };
   const c = { ...course, spinners: [], movers: [], windmills: [] };
   for (let i = 0; i < 3600 && isMoving(sim); i++) if (step(c, segs, sim, 0, DT).sunk) return null;
   return sim;
@@ -73,7 +98,7 @@ function landing(course, segs, from, dirX, dirZ, power) {
 const SEARCH_POWERS = Array.from({ length: 32 }, (_, i) => 0.06 + i * 0.03);
 
 /**
- * Con pendientes, montículos, loopings o portales la distancia no crece con la potencia, así que se
+ * Con pendientes, montículos, loopings, portales o rampas la distancia no crece con la potencia, así que se
  * prueban potencias (una por paso de física, para no trabar la imagen) y se
  * elige la que deja la bola más cerca, o la del medio de las que entran.
  */
@@ -121,7 +146,7 @@ export class Bot {
     const miss = 1 - this.player.skill;
     const ang = Math.atan2(dx, -dz) + gauss(rng) * (0.015 + miss * 0.09);
     const dirX = Math.sin(ang), dirZ = -Math.cos(ang);
-    if (course.slopes || course.mounds || course.loops || course.portals) return { dirX, dirZ, search: new PowerSearch(course, segs, ball, dirX, dirZ, target) };
+    if (course.slopes || course.mounds || course.loops || course.portals || course.ramps) return { dirX, dirZ, search: new PowerSearch(course, segs, ball, dirX, dirZ, target) };
     const firm = target.isCup && !course.noCup;
     let power = powerFor(course, segs, ball, dirX, dirZ, firm ? dist + 0.4 : dist);
     // al hoyo se le pega con firmeza: la búsqueda da justo el mínimo para llegar

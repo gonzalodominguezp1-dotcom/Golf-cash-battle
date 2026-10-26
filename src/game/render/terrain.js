@@ -1,4 +1,4 @@
-import { BALL_R, GRAVITY, LOOP_RATIO, loopTable, sampleAt, tubeTable } from '../physics.js';
+import { BALL_R, GRAVITY, LOOP_RATIO, loopTable, pitAt, rampHeight, sampleAt, tubeTable } from '../physics.js';
 
 // Relieve que se ve: la física es plana (x, z) y aquí se saca la altura del
 // césped a partir de las pendientes y montículos del hoyo, para levantar la
@@ -104,6 +104,8 @@ export function ballPose(course, ball) {
     const q = sampleAt(tubeTable(course.portals[tr.i]), tr.s);
     return { x: q.x, y: q.y, z: q.z, ground: groundHeight(course, q.x, q.z), onTrack: true };
   }
-  const g = groundHeight(course, ball.x, ball.z);
+  const g = groundHeight(course, ball.x, ball.z) + (course.ramps ? rampHeight(course, ball.x, ball.z) : 0);
+  // en el aire la sombra se queda en el suelo; sobre un agujero no hay sombra
+  if (ball.air) return { x: ball.x, y: ball.air.y + BALL_R, z: ball.z, ground: g, onTrack: false, overPit: pitAt(course, ball.x, ball.z) >= 0 };
   return { x: ball.x, y: g + BALL_R, z: ball.z, ground: g, onTrack: false };
 }

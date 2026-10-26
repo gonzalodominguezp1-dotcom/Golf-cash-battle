@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import { BALL_R, CUP_R, WALL_HALF, moverPos, segmentsOf } from '../physics.js';
+import { BALL_R, CUP_R, PIT_DEPTH, WALL_HALF, moverPos, segmentsOf } from '../physics.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { chevronTexture, crateTexture, dirtMaps, grassMaps, sandMaps, slopeArrowTexture, slopeShadeTexture, softDotTexture, stripeTexture, swirlTexture, woodMaps } from './textures.js';
+import { abyssTexture, chevronTexture, crateTexture, dirtMaps, grassMaps, sandMaps, slopeArrowTexture, slopeShadeTexture, softDotTexture, stripeTexture, swirlTexture, woodMaps } from './textures.js';
 import { groundHeight, hasRelief } from './terrain.js';
 import { attractionStyle, buildLoop, buildTube, buildTunnel, buildWindmill, neonGridTexture } from './attractions.js';
 
@@ -36,6 +36,23 @@ export function buildCourse(scene, course, theme) {
   if (!course.noCup) {
     const hole = new THREE.Path();
     hole.absarc(hx, -hz, CUP_R, 0, Math.PI * 2, true);
+    shape.holes.push(hole);
+  }
+  // agujeros: sin suelo. Se dejan unos centímetros bajo las paredes para que
+  // el contorno no se toque con el agujero (la malla no lo admitiría)
+  const xs = course.outline.map((p) => p[0]), zs = course.outline.map((p) => p[1]);
+  const pitRects = (course.pits ?? []).map((p) => {
+    const x0 = Math.max(p.x - p.w / 2, Math.min(...xs) + 0.06), x1 = Math.min(p.x + p.w / 2, Math.max(...xs) - 0.06);
+    const z0 = Math.max(p.z - p.d / 2, Math.min(...zs) + 0.06), z1 = Math.min(p.z + p.d / 2, Math.max(...zs) - 0.06);
+    return { x0, x1, z0, z1 };
+  });
+  for (const r of pitRects) {
+    const hole = new THREE.Path();
+    hole.moveTo(r.x0, -r.z0);
+    hole.lineTo(r.x0, -r.z1);
+    hole.lineTo(r.x1, -r.z1);
+    hole.lineTo(r.x1, -r.z0);
+    hole.closePath();
     shape.holes.push(hole);
   }
   const geo = new THREE.ExtrudeGeometry(shape, { depth: PLATFORM_DEPTH, bevelEnabled: false, curveSegments: 32 });
@@ -272,6 +289,36 @@ export function buildCourse(scene, course, theme) {
     return { tex, speed: sl.accel * 0.12 };
   });
 
+  // agujeros: oscuridad que se traga la bola y borde de aviso amarillo y negro
+  const abyss = pitRects.length ? abyssTexture() : null;
+  const hazard = pitRects.length ? stripeTexture('#ffc400', '#1a1a1a') : null;
+  for (const r of pitRects) {
+    const w = r.x1 - r.x0, d = r.z1 - r.z0, cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2;
+    const dark = new THREE.Mesh(
+      new THREE.BoxGeometry(w - 0.06, PIT_DEPTH + 0.6, d - 0.06),
+      [abyssMat(abyss), abyssMat(abyss), null, null, abyssMat(abyss), abyssMat(abyss)].map((m) => m ?? hiddenMat),
+    );
+    dark.position.set(cx, -(PIT_DEPTH + 0.6) / 2, cz);
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(cx, -PIT_DEPTH - 0.5, cz);
+    scene.add(dark, floor);
+    for (const [ex, ez, ew, ed] of [[cx, r.z0 - 0.09, w, 0.18], [cx, r.z1 + 0.09, w, 0.18], [r.x0 - 0.09, cz, 0.18, d], [r.x1 + 0.09, cz, 0.18, d]]) {
+      if (ex < Math.min(...xs) || ex > Math.max(...xs) || ez < Math.min(...zs) || ez > Math.max(...zs)) continue;
+      const tex = hazard.clone();
+      tex.repeat.set(Math.max(ew, ed) / 0.5, 0.36);
+      const strip = new THREE.Mesh(new THREE.PlaneGeometry(Math.max(ew, ed), Math.min(ew, ed)), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 }));
+      strip.rotation.set(-Math.PI / 2, 0, ew > ed ? 0 : Math.PI / 2);
+      strip.position.set(ex, 0.004, ez);
+      strip.receiveShadow = true;
+      scene.add(strip);
+    }
+  }
+
+  // rampas: cuña de madera con flechas que marcan hacia dónde se salta
+  const rampTex = (course.ramps ?? []).length ? chevronTexture(neon ? '#16122e' : '#e85d1a', neon ? '#' + new THREE.Color(neon[0]).getHexString() : '#fff3d6') : null;
+  for (const r of course.ramps ?? []) scene.add(buildRamp(r, rampTex, wood, lift(r.x, r.z)));
+
   // atracciones
   const attractions = [
     ...(course.loops ?? []).map((l, i) => buildLoop(scene, l, style, i)),
@@ -373,6 +420,50 @@ export function buildCourse(scene, course, theme) {
     },
   };
 }
+
+/** Cuña de la rampa: sube a lo largo de dir hasta h; arriba flechas, a los lados madera. */
+function buildRamp(r, tex, wood, y0) {
+  const len = r.dir[0] !== 0 ? r.w : r.d, hf = (r.dir[0] !== 0 ? r.d : r.w) / 2;
+  const [dx, dz] = r.dir, sx = -dz, sz = dx;
+  // de coordenadas de la rampa (u a lo largo, v de lado, y) al mundo
+  const P = (u, v, y) => [r.x + dx * (u - len / 2) + sx * v, y0 + y, r.z + dz * (u - len / 2) + sz * v];
+  const quads = (list) => {
+    const pos = [], uv = [];
+    for (const [a, b, c, d, ua, ub, uc, ud] of list) {
+      pos.push(...a, ...b, ...c, ...a, ...c, ...d);
+      uv.push(...ua, ...ub, ...uc, ...ua, ...uc, ...ud);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.computeVertexNormals();
+    return g;
+  };
+  const h = r.h, k = len / (hf * 2);
+  const top = quads([[P(0, hf, 0.004), P(0, -hf, 0.004), P(len, -hf, h + 0.004), P(len, hf, h + 0.004), [0, 0], [1, 0], [1, k], [0, k]]]);
+  const body = quads([
+    // lados (triángulos: el cuarto vértice repite el tercero)
+    [P(0, -hf, 0), P(len, -hf, 0), P(len, -hf, h), P(len, -hf, h), [0, 0], [len, 0], [len, h], [len, h]],
+    [P(len, hf, 0), P(0, hf, 0), P(len, hf, h), P(len, hf, h), [len, 0], [0, 0], [len, h], [len, h]],
+    // cara del labio, la que da al agujero
+    [P(len, -hf, 0), P(len, hf, 0), P(len, hf, h), P(len, -hf, h), [0, 0], [hf * 2, 0], [hf * 2, h], [0, h]],
+  ]);
+  const g = new THREE.Group();
+  const topMesh = new THREE.Mesh(top, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.55, side: THREE.DoubleSide }));
+  const bodyMesh = new THREE.Mesh(body, new THREE.MeshStandardMaterial({ ...wood, roughness: 0.75, side: THREE.DoubleSide }));
+  // listón blanco en el labio para ver bien desde dónde se salta
+  const lip = new THREE.Mesh(new THREE.BoxGeometry(hf * 2 + 0.04, 0.05, 0.08), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 }));
+  const [lx, ly, lz] = P(len - 0.04, 0, h);
+  lip.position.set(lx, ly, lz);
+  lip.rotation.y = -Math.atan2(sz, sx);
+  topMesh.castShadow = bodyMesh.castShadow = topMesh.receiveShadow = true;
+  g.add(topMesh, bodyMesh, lip);
+  return g;
+}
+
+const hiddenMat = new THREE.MeshBasicMaterial({ visible: false });
+const abyssMats = new Map();
+const abyssMat = (tex) => abyssMats.get(tex) ?? abyssMats.set(tex, new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.BackSide, depthWrite: false })).get(tex);
 
 function portalMesh(scene, [x, z], r, css, color, y = 0) {
   const g = new THREE.Group();

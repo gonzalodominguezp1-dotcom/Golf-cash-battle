@@ -54,7 +54,7 @@ export class GolfGame {
   #onClickCanvas = null;
   #onBlur = null;
 
-  constructor(container, { onStroke, onSunk, onAim, onRest, onCup, onRival, onLip, onOpenSettings, onOverviewChange, onTimer, onTimeUp } = {}) {
+  constructor(container, { onStroke, onSunk, onAim, onRest, onCup, onRival, onLip, onFall, onOpenSettings, onOverviewChange, onTimer, onTimeUp } = {}) {
     this.container = container;
     this.onTimer = onTimer;
     this.onTimeUp = onTimeUp;
@@ -65,6 +65,7 @@ export class GolfGame {
     this.onCup = onCup;
     this.onRival = onRival;
     this.onLip = onLip;
+    this.onFall = onFall;
     this.onOpenSettings = onOpenSettings;
     this.onOverviewChange = onOverviewChange;
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -994,7 +995,7 @@ export class GolfGame {
 
   #predictPath() {
     const fwd = forwardOf(this.yaw);
-    const sim = { x: this.ball.x, z: this.ball.z, vx: fwd.x * this.power * MAX_SHOT_SPEED, vz: fwd.z * this.power * MAX_SHOT_SPEED };
+    const sim = { x: this.ball.x, z: this.ball.z, vx: fwd.x * this.power * MAX_SHOT_SPEED, vz: fwd.z * this.power * MAX_SHOT_SPEED, home: [this.ball.x, this.ball.z] };
     const pts = [];
     const maxLen = 1.2 + this.power * 4.5;
     let travelled = 0, sinceBounce = -1, lastX = sim.x, lastZ = sim.z, acc = 0;
@@ -1013,7 +1014,8 @@ export class GolfGame {
       }
       if (r.hit > 0 && sinceBounce < 0) sinceBounce = 0;
       if (sinceBounce >= 0 && (sinceBounce += d) > 1) break;
-      if (r.sunk || !isMoving(sim)) break;
+      // la previsión acaba al borde de un agujero
+      if (r.sunk || r.fell || !isMoving(sim)) break;
     }
     return pts;
   }
@@ -1067,6 +1069,7 @@ export class GolfGame {
       if (!this.sunk && !this.timedOut && this.deadlineTick != null && this.tick > this.deadlineTick) this.#timeUp();
       if (this.sunk || this.paused || this.timedOut) continue;
       const wasMoving = isMoving(this.ball);
+      const wasAir = !!this.ball.air;
       // se simula también con la bola parada: un aspa puede empujarla
       const r = step(this.course, this.segs, this.ball, this.t, DT);
       const pose = ballPose(this.course, this.ball);
@@ -1087,6 +1090,27 @@ export class GolfGame {
         this.camLook?.add(jump);
         this.#addShake(0.25);
         navigator.vibrate?.(20);
+      }
+      if (r.air && !wasAir) sfx.jump();
+      if (r.landed > 1.5) {
+        sfx.wall(r.landed * 1.5);
+        this.particles.puff(pos, 0xf3e3c3, 8, 1, 0.16);
+        this.squash = Math.max(this.squash, Math.min(0.3, r.landed * 0.06));
+        this.#addShake(Math.min(0.3, r.landed * 0.05));
+      }
+      if (r.fell) {
+        sfx.fall();
+        navigator.vibrate?.([20, 30, 20]);
+        this.onFall?.();
+      }
+      if (r.respawn) {
+        // vuelve al punto de tiro: la cámara salta con la bola
+        const jump = new THREE.Vector3(this.ball.x, 0, this.ball.z).sub(this.ballRoot.position.clone().setY(0));
+        this.camPos?.add(jump);
+        this.camLook?.add(jump);
+        sfx.portal();
+        this.particles.puff(pos, 0xffffff, 14, 1.4, 0.2);
+        this.waves.emit(this.ball.x, this.ball.z, 0xffffff, 1.2, 2);
       }
       if (r.bumper >= 0) {
         this.courseView.bumpers[r.bumper].userData.squash = 0.18;
@@ -1195,7 +1219,7 @@ export class GolfGame {
     const wob = this.squash * Math.cos(this.t * 40);
     this.ballRoot.scale.set(1 + wob * 0.5, 1 - wob, 1 + wob * 0.5);
     this.ballShadow.position.set(pose.x, pose.ground + 0.004, pose.z);
-    this.ballShadow.visible = !this.sunk && !pose.onTrack;
+    this.ballShadow.visible = !this.sunk && !pose.onTrack && !pose.overPit;
     this.trauma = Math.max(0, this.trauma - realDt * 2.2);
     this.fovKick *= Math.exp(-realDt * 5);
     const fov = this.baseFov + this.fovKick - (1 - this.timeScale) * 8;
@@ -1219,7 +1243,7 @@ export class GolfGame {
     }
     this.#declutterLabels();
     this.ballGlow.position.set(pose.x, pose.ground + 0.006, pose.z);
-    this.ballGlow.visible = !this.sunk && !pose.onTrack;
+    this.ballGlow.visible = !this.sunk && !pose.onTrack && !pose.overPit;
     this.ballGlow.material.opacity = isMoving(this.ball) ? 0.15 : 0.35 + Math.sin(this.t * 4) * 0.15;
 
     this.course.spinners.forEach((sp, i) => {

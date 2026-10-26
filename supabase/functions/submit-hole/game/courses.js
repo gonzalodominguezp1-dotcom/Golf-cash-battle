@@ -332,6 +332,30 @@ export const COURSES = [
     tunnels: [{ x: 0, z: -5, w: 0.9, d: 1.6 }],
     waypoints: [[0, -6.4]],
   },
+  {
+    name: 'El Abismo',
+    tip: 'Salta los agujeros con las rampas: si caes, vuelves a tirar desde donde estabas',
+    par: 4,
+    theme: 'canyon',
+    tee: [-1.3, 11.6],
+    cup: [-0.8, -12.6],
+    outline: [[-3, 13.2], [3, 13.2], [3, -15], [-3, -15]],
+    walls: [],
+    bumpers: [{ x: 1.4, z: -10.6, r: 0.35 }],
+    sand: [],
+    spinners: [],
+    // agujeros de pared a pared: la única forma de cruzarlos es saltar desde una rampa
+    pits: [
+      { x: 0, z: 5.1, w: 6, d: 2.6 },
+      { x: 0, z: -5.4, w: 6, d: 2.8 },
+    ],
+    // dir: hacia dónde sube (y salta); h: altura del labio, pegado al agujero
+    ramps: [
+      { x: -1.3, z: 7.3, w: 1.4, d: 1.8, dir: [0, -1], h: 0.5 },
+      { x: 0, z: -3.1, w: 2, d: 1.8, dir: [0, -1], h: 0.5 },
+    ],
+    waypoints: [[-1.3, 9.6], [-1.3, 1.6], [0, -0.4], [0.8, -8.8]],
+  },
 ];
 
 // Desempate: sin agujero. Un tiro cada uno y gana quien pare más cerca de la diana.

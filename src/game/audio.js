@@ -129,6 +129,18 @@ const DEFS = {
       }
       [88, 95].forEach((m, i) => modal(d, bell(note(m), 0.3, 0.08), 1, Math.floor((0.05 + i * 0.08) * SR)));
     }),
+  // cae a un agujero: silbido que baja y se pierde a lo lejos
+  fall: () =>
+    render(0.9, (d) => {
+      let ph = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / SR;
+        ph += (2 * Math.PI * (900 * Math.exp(-t * 2.2) + 120)) / SR;
+        d[i] += Math.sin(ph) * 0.14 * Math.exp(-t * 3) * Math.min(1, t / 0.02);
+      }
+    }),
+  // despega de una rampa: "zas" de aire
+  jump: () => render(0.4, (d) => noise(d, { dur: 0.35, gain: 0.3, cutoff: 0.25, attack: 0.04, shape: 'sin' })),
   // la bola pasa por encima del hoyo sin caer: traqueteo contra el borde
   lip: () =>
     render(0.4, (d) => {
@@ -231,6 +243,8 @@ export const sfx = {
   cup: () => play('cup', { vol: 0.9 }),
   sand: () => play('sand', { vol: 0.8, rate: vary(0.1) }),
   boost: () => play('boost', { vol: 0.7 }),
+  fall: () => play('fall', { vol: 0.8 }),
+  jump: () => play('jump', { vol: 0.7, rate: vary(0.1) }),
   tick: () => play('tick', { vol: 0.5, rate: vary(0.1), wet: false }),
   portal: () => play('portal', { vol: 0.8 }),
   lip: () => play('lip', { vol: 0.8, rate: vary(0.08) }),

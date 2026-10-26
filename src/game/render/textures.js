@@ -269,11 +269,11 @@ export function softDotTexture() {
   );
 }
 
-export function chevronTexture() {
+export function chevronTexture(bg = '#1d3b8f', fg = '#5fd0ff') {
   return canvasTexture(128, (g, n) => {
-    g.fillStyle = '#1d3b8f';
+    g.fillStyle = bg;
     g.fillRect(0, 0, n, n);
-    g.fillStyle = '#5fd0ff';
+    g.fillStyle = fg;
     g.lineJoin = 'round';
     for (let y = -n / 2; y < n * 1.5; y += n / 2) {
       g.beginPath();
@@ -287,6 +287,18 @@ export function chevronTexture() {
       g.fill();
     }
   });
+}
+
+/** Oscuridad del fondo de un agujero: transparente arriba y negra abajo (v = 0). */
+export function abyssTexture() {
+  return canvasTexture(64, (g, n) => {
+    const grd = g.createLinearGradient(0, 0, 0, n);
+    grd.addColorStop(0, 'rgba(0,0,0,0.35)');
+    grd.addColorStop(0.25, 'rgba(0,0,0,0.9)');
+    grd.addColorStop(0.5, 'rgba(0,0,0,1)');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, n, n);
+  }, false);
 }
 
 /** Flechas blancas semitransparentes que marcan hacia dónde cae una pendiente. */

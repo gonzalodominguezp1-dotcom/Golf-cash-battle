@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DT, MIN_SLOPE_ACCEL, inSand, isMoving, onMound, portalAt, quantizeShot, segmentsOf, shotVelocity, step, windmillBlocks } from '../src/game/physics.js';
+import { DT, MIN_SLOPE_ACCEL, inSand, isMoving, onMound, onRamp, pitAt, portalAt, quantizeShot, rampAccel, rampHeight, segmentsOf, shotVelocity, step, windmillBlocks } from '../src/game/physics.js';
 import { groundHeight, hasRelief } from '../src/game/render/terrain.js';
 import { replayHole } from '../src/game/replay.js';
 import { COURSES } from '../src/game/courses.js';
@@ -212,4 +212,76 @@ test('volcán: la ladera echa la bola hacia fuera y la cima es llana', () => {
   // el relieve que se dibuja: cima arriba, base abajo
   assert.ok(groundHeight(c, ...c.cup) > 1);
   assert.equal(groundHeight(c, ...c.tee), 0);
+});
+
+test('abismo: los agujeros cruzan la pista de pared a pared y cada uno tiene su rampa', () => {
+  const c = COURSES.find((x) => x.name === 'El Abismo');
+  const xs = c.outline.map((p) => p[0]);
+  for (const p of c.pits) {
+    assert.ok(p.x - p.w / 2 <= Math.min(...xs) && p.x + p.w / 2 >= Math.max(...xs), 'el agujero ocupa todo el ancho');
+    // el labio de una rampa está justo en el borde del agujero
+    assert.ok(c.ramps.some((r) => Math.abs(r.z - r.d / 2 - (p.z + p.d / 2)) < 1e-9 && r.dir[1] === -1));
+  }
+  for (const r of c.ramps) assert.ok(rampAccel(r) >= MIN_SLOPE_ACCEL, 'en la rampa la bola nunca se queda quieta');
+  assert.equal(pitAt(c, ...c.tee), -1);
+  assert.equal(pitAt(c, ...c.cup), -1);
+});
+
+// tiro desde (x, z) hacia -z con potencia p: dónde acaba y qué ha pasado
+function abyssShot(c, x, z, p, vx = 0) {
+  const segs = segmentsOf(c);
+  // parada antes del golpe, como en el juego: ese es el punto de tiro
+  const ball = { x, z, vx: 0, vz: 0 };
+  step(c, segs, ball, 0, DT);
+  Object.assign(ball, { vx, vz: -p * 13 });
+  const ev = { fell: false, respawn: false, flew: false };
+  for (let t = 1; isMoving(ball) && t < 120 * 30; t++) {
+    const r = step(c, segs, ball, t * DT, DT);
+    if (r.sunk) return { ...ev, sunk: true, ball };
+    ev.fell ||= !!r.fell;
+    ev.respawn ||= !!r.respawn;
+    ev.flew ||= !!ball.air && ball.air.y > 0.3;
+  }
+  return { ...ev, ball };
+}
+
+test('abismo: sin rampa la bola cae y vuelve al punto de tiro', () => {
+  const c = COURSES.find((x) => x.name === 'El Abismo');
+  // lejos de la rampa, a cualquier potencia
+  for (const p of [0.3, 0.6, 1]) {
+    const r = abyssShot(c, 1.6, 9, p);
+    assert.ok(r.fell && r.respawn, `p=${p}: cae al agujero`);
+    assert.deepEqual([r.ball.x, r.ball.z], [1.6, 9], `p=${p}: vuelve a donde tiró`);
+    assert.ok(!isMoving(r.ball));
+  }
+  // la primera vez, sin haber parado nunca, vuelve a la salida
+  const segs = segmentsOf(c);
+  const ball = { x: c.tee[0], z: c.tee[1], vx: 2, vz: -10 };
+  for (let t = 1; isMoving(ball) && t < 120 * 30; t++) step(c, segs, ball, t * DT, DT);
+  assert.deepEqual([ball.x, ball.z], c.tee);
+});
+
+test('abismo: por la rampa, flojo vuelve, justo cae y bien fuerte salta', () => {
+  const c = COURSES.find((x) => x.name === 'El Abismo');
+  const [r] = c.ramps, [pit] = c.pits;
+  const weak = abyssShot(c, r.x, r.z + 3, 0.3);
+  assert.ok(!weak.fell && weak.ball.z > r.z + r.d / 2, 'flojo: se queda corta y la rampa la devuelve');
+  const short = abyssShot(c, r.x, r.z + 3, 0.5);
+  assert.ok(short.flew && short.fell && short.respawn, 'a medias: despega pero cae al agujero');
+  const good = abyssShot(c, r.x, r.z + 3, 0.75);
+  assert.ok(good.flew && !good.fell, 'fuerte: salta el agujero');
+  assert.ok(good.ball.z < pit.z - pit.d / 2, 'y para al otro lado');
+  assert.deepEqual(rampHeight(c, r.x, r.z), r.h / 2);
+});
+
+test('abismo: los laterales altos de la rampa son una pared', () => {
+  const c = COURSES.find((x) => x.name === 'El Abismo');
+  const [r] = c.ramps;
+  const segs = segmentsOf(c);
+  // rueda de lado contra la parte alta de la rampa
+  const ball = { x: r.x + r.w / 2 + 0.6, z: r.z - r.d / 2 + 0.3, vx: -4, vz: 0 };
+  let hit = 0;
+  for (let t = 1; t < 60; t++) hit = Math.max(hit, step(c, segs, ball, t * DT, DT).hit);
+  assert.ok(hit > 0 && ball.vx > 0, 'rebota');
+  assert.ok(!onRamp(c, ball.x, ball.z));
 });

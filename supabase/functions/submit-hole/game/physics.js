@@ -455,10 +455,134 @@ export function portalAt(course, x, z) {
   return -1;
 }
 
+// ---------- agujeros y rampas ----------
+//
+// Los agujeros (pits) son rectángulos sin suelo: si la bola cae dentro se
+// pierde y vuelve a donde se tiró (ball.home, el último sitio donde estuvo
+// parada; al principio, la salida). Las rampas son rectángulos que suben hacia
+// dir hasta la altura h en el borde de arriba (el labio): frenan como una
+// cuesta y, si la bola pasa el labio, sale volando. En el aire lleva
+// ball.air = { y, vy, pit }: altura, velocidad vertical y el agujero en el que
+// está cayendo (o -1). Como track, el objeto se sustituye, nunca se modifica.
+
+export const PIT_DEPTH = 1.6; // lo que cae antes de volver al punto de tiro
+const PIT_KEEP = 0.2; // velocidad horizontal que conserva al caer dentro
+const LAND_KEEP = 0.5; // velocidad que conserva al aterrizar (el golpe contra el suelo frena)
+const RAMP_STEP = 0.08; // más alto que esto, el lateral de la rampa es una pared
+
+export const pitAt = (course, x, z) => {
+  const ps = course.pits ?? [];
+  for (let i = 0; i < ps.length; i++) if (inRect(ps[i], x, z)) return i;
+  return -1;
+};
+
+/** Distancia a lo largo de la rampa desde el borde de abajo (a), lateral (lat), largo y media anchura. */
+function rampCoords(r, x, z) {
+  const len = slopeLen(r);
+  return {
+    a: (x - r.x) * r.dir[0] + (z - r.z) * r.dir[1] + len / 2,
+    lat: -(x - r.x) * r.dir[1] + (z - r.z) * r.dir[0],
+    len,
+    half: (r.dir[0] !== 0 ? r.d : r.w) / 2,
+  };
+}
+
+export const onRamp = (course, x, z) => (course.ramps ?? []).find((r) => inRect(r, x, z));
+/** Aceleración cuesta abajo de una rampa: g · inclinación. */
+export const rampAccel = (r) => (GRAVITY * r.h) / slopeLen(r);
+
+/** Altura del suelo de las rampas en (x, z) (0 fuera de ellas). */
+export function rampHeight(course, x, z) {
+  const r = onRamp(course, x, z);
+  if (!r) return 0;
+  const c = rampCoords(r, x, z);
+  return (r.h * c.a) / c.len;
+}
+
+function clampToPit(p, ball) {
+  const hx = p.w / 2 - BALL_R, hz = p.d / 2 - BALL_R;
+  ball.x = Math.max(p.x - hx, Math.min(p.x + hx, ball.x));
+  ball.z = Math.max(p.z - hz, Math.min(p.z + hz, ball.z));
+}
+
+function respawn(course, ball) {
+  const [x, z] = ball.home ?? course.tee;
+  ball.x = x;
+  ball.z = z;
+  ball.vx = ball.vz = 0;
+  ball.air = null;
+}
+
+/**
+ * Rampas al moverse por el suelo de p a ball: si pasa el labio despega con la
+ * inclinación de la rampa; si sale por un lado desde arriba, cae desde esa
+ * altura; si choca con un lateral alto o con el labio por fuera, rebota.
+ */
+function rampCross(course, ball, px, pz) {
+  let hit = 0;
+  for (const r of course.ramps) {
+    const p = rampCoords(r, px, pz), n = rampCoords(r, ball.x, ball.z);
+    const wasIn = p.a >= 0 && p.a <= p.len && Math.abs(p.lat) <= p.half;
+    const isIn = n.a >= 0 && n.a <= n.len && Math.abs(n.lat) <= n.half;
+    if (wasIn && !isIn) {
+      const u = ball.vx * r.dir[0] + ball.vz * r.dir[1];
+      if (n.a > n.len && u > 0) ball.air = { y: r.h, vy: (u * r.h) / n.len, pit: -1 };
+      else if ((r.h * p.a) / p.len > 0.02) ball.air = { y: (r.h * p.a) / p.len, vy: 0, pit: -1 };
+      return hit;
+    }
+    if (!wasIn && isIn && p.a >= 0 && (r.h * n.a) / n.len > RAMP_STEP) {
+      // por el labio (desde delante) o por un lateral: es una pared
+      ball.x = px;
+      ball.z = pz;
+      const [nx, nz] = p.a > p.len ? r.dir : p.lat > 0 ? [-r.dir[1], r.dir[0]] : [r.dir[1], -r.dir[0]];
+      hit = Math.max(hit, bounce(ball, nx, nz, 0));
+    }
+  }
+  return hit;
+}
+
+/** Un paso en el aire: vuela recta con gravedad, choca con las paredes, aterriza o cae en un agujero. */
+function airStep(course, segs, ball, dt) {
+  const air = ball.air;
+  const vy = air.vy - GRAVITY * dt, y = air.y + vy * dt;
+  const res = { sunk: false, hit: 0, bumper: -1, portal: -1, air: true };
+  ball.x += ball.vx * dt;
+  ball.z += ball.vz * dt;
+  if (air.pit >= 0) {
+    if (y < -PIT_DEPTH) {
+      respawn(course, ball);
+      return { ...res, air: false, respawn: true };
+    }
+    clampToPit(course.pits[air.pit], ball);
+    ball.air = { y, vy, pit: air.pit };
+    return res;
+  }
+  for (const seg of segs) res.hit = Math.max(res.hit, collideSegment(ball, seg, 0, 0));
+  const pit = pitAt(course, ball.x, ball.z);
+  if (pit >= 0 && y < 0) {
+    // por debajo del suelo y sin suelo: se ha caído
+    ball.vx *= PIT_KEEP;
+    ball.vz *= PIT_KEEP;
+    clampToPit(course.pits[pit], ball);
+    ball.air = { y, vy, pit };
+    return { ...res, fell: true };
+  }
+  if (pit < 0 && y <= rampHeight(course, ball.x, ball.z)) {
+    ball.air = null;
+    ball.vx *= LAND_KEEP;
+    ball.vz *= LAND_KEEP;
+    return { ...res, air: false, landed: -vy };
+  }
+  ball.air = { y, vy, pit: -1 };
+  return res;
+}
+
 /**
  * Avanza la simulación dt segundos. Devuelve { sunk, hit, bumper, portal }: hit
  * es la velocidad del choque más fuerte, bumper el índice de la seta golpeada
- * y portal el del portal cruzado (o -1).
+ * y portal el del portal cruzado (o -1). En hoyos con agujeros también puede
+ * traer air (va por el aire), fell (acaba de caer en un agujero), respawn
+ * (vuelve al punto de tiro) y landed (aterriza, con su velocidad vertical).
  */
 export function step(course, segs, ball, t, dt) {
   let hit = 0;
@@ -468,6 +592,7 @@ export function step(course, segs, ball, t, dt) {
     const ev = trackStep(course, ball, dt);
     return { sunk: false, hit, bumper, portal, track: ball.track?.kind ?? null, trackExit: ev === 'exit' };
   }
+  if (ball.air) return airStep(course, segs, ball, dt);
   const speed = hyp(ball.vx, ball.vz);
   if (speed > 0) {
     const sand = inSand(course, ball.x, ball.z) ? SAND_FACTOR : 1;
@@ -501,9 +626,24 @@ export function step(course, segs, ball, t, dt) {
     ball.vx += (dx / d) * incline * dt;
     ball.vz += (dz / d) * incline * dt;
   }
+  const ramp = course.ramps ? onRamp(course, ball.x, ball.z) : null;
+  if (ramp) {
+    // la rampa sube hacia dir: frena al subir y devuelve la bola si no llega
+    incline = rampAccel(ramp);
+    ball.vx -= ramp.dir[0] * incline * dt;
+    ball.vz -= ramp.dir[1] * incline * dt;
+  }
   const px = ball.x, pz = ball.z;
   ball.x += ball.vx * dt;
   ball.z += ball.vz * dt;
+
+  if (course.ramps) hit = rampCross(course, ball, px, pz);
+  // rueda hasta un agujero: cae desde el borde
+  if (!ball.air && course.pits && pitAt(course, ball.x, ball.z) >= 0) ball.air = { y: 0, vy: 0, pit: -1 };
+  if (ball.air) {
+    for (const seg of segs) hit = Math.max(hit, collideSegment(ball, seg, 0, 0));
+    return { sunk: false, hit, bumper, portal, air: true };
+  }
 
   const loop = course.loops ? enterLoop(course, ball, px, pz) : null;
   if (loop) {
@@ -562,10 +702,14 @@ export function step(course, segs, ball, t, dt) {
     return { sunk: true, hit, bumper, portal };
   }
   const rolls = incline > ROLL_DECEL * (inSand(course, ball.x, ball.z) ? SAND_FACTOR : 1);
-  if (v < STOP_SPEED && !rolls) ball.vx = ball.vz = 0;
+  if (v < STOP_SPEED && !rolls) {
+    ball.vx = ball.vz = 0;
+    // de aquí sale el próximo tiro: si cae en un agujero, vuelve aquí
+    if (course.pits && (ball.home?.[0] !== ball.x || ball.home?.[1] !== ball.z)) ball.home = [ball.x, ball.z];
+  }
   return { sunk: false, hit, bumper, portal };
 }
 
 export function isMoving(ball) {
-  return ball.vx !== 0 || ball.vz !== 0 || !!ball.track;
+  return ball.vx !== 0 || ball.vz !== 0 || !!ball.track || !!ball.air;
 }
