@@ -1,6 +1,5 @@
 import * as THREE from 'three';
-import { loopTable, tubeTable } from '../physics.js';
-import { loopPoint } from './terrain.js';
+import { tubeTable } from '../physics.js';
 
 // Atracciones de minigolf: loopings, molinos, tubos y pasadizos. Cada una
 // tiene tres estilos: de día, de noche (con luces) y neón.
@@ -22,579 +21,117 @@ const glowMat = (color, intensity = 1.0) =>
     roughness: 0.35,
   });
 
-/** Textura de cheurones de avance animados en la pista del looping. */
-function loopChevronTexture(color, kind) {
-  const c = document.createElement('canvas');
-  c.width = 64;
-  c.height = 256;
-  const ctx = c.getContext('2d');
-  ctx.clearRect(0, 0, 64, 256);
+// Banda del anillo del looping: media anchura (a lo ancho de la pista), grosor
+// del hielo y cuánto se estrechan los cantos por fuera (bisel)
+const RING_HALF_W = 0.36;
+const RING_THICK = 0.2;
+const RING_BEVEL = 0.07;
+// caras alrededor del anillo: pocas, para que se vean las facetas del hielo
+const RING_FACETS = 26;
 
-  const hex = typeof color === 'string' ? color : `#${(color || 0x00ffff).toString(16).padStart(6, '0')}`;
-  ctx.strokeStyle = hex;
-  ctx.lineWidth = 6;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-
-  if (kind !== 'day') {
-    ctx.shadowColor = hex;
-    ctx.shadowBlur = 12;
-  }
-
-  for (let y = 32; y < 256; y += 64) {
-    ctx.beginPath();
-    ctx.moveTo(14, y + 18);
-    ctx.lineTo(32, y - 6);
-    ctx.lineTo(50, y + 18);
-    ctx.stroke();
-  }
-
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(1, 4);
-  return tex;
-}
-
-/** Textura antideslizante para las chapas de transición de entrada y salida. */
-function metalPlateTexture() {
-  const c = document.createElement('canvas');
-  c.width = 128;
-  c.height = 128;
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = '#1c2030';
-  ctx.fillRect(0, 0, 128, 128);
-
-  ctx.strokeStyle = '#323a54';
-  ctx.lineWidth = 2.5;
-  for (let i = -128; i < 256; i += 16) {
-    ctx.beginPath();
-    ctx.moveTo(i, 0);
-    ctx.lineTo(i + 128, 128);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(i, 128);
-    ctx.lineTo(i + 128, 0);
-    ctx.stroke();
-  }
-
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(2, 2);
-  return tex;
-}
-
-/** Looping: carril realista con sección transversal sólida en U, estructura portante en celosía y arco de entrada. */
+/**
+ * Looping: un anillo vertical de hielo translúcido plantado en el césped. La
+ * bola entra por abajo, sube por dentro de la banda, da la vuelta y sale por
+ * el otro lado (en espiral, ver loopLateral en terrain.js).
+ */
 export function buildLoop(scene, loop, style, i = 0) {
   const g = new THREE.Group();
-  const N = 150;
-  const S = loopTable(loop).length;
-  const color = style.colors[i % style.colors.length];
   const isNeon = style.kind === 'neon';
   const isNight = style.kind === 'night';
+  const R = loop.radius;
+  const [dx, dz] = loop.dir, sx = -dz, sz = dx;
+  // el anillo apoya en el centro del looping; se sube un pelo para no pelearse con el césped
+  const cy = R + 0.004;
 
-  const halfW = 0.28;  // Semianchura de la pista interior
-  const curbW = 0.045; // Anchura del bordillo
-  const curbH = 0.075; // Altura del bordillo de seguridad
-  const thk = 0.055;   // Grosor del casco inferior
-
-  // 1. Muestreo de la trayectoria con marco ortonormal (tangente, normal y lateral)
-  const slices = [];
-  const railPtsL = [], railPtsR = [];
-
-  for (let k = 0; k <= N; k++) {
-    const p = (k / N) * S;
-    const q = loopPoint(loop, p, 0);
-    const cx = q.x, cy = q.y, cz = q.z;
-    const nx = q.dx * q.nAlong, ny = q.nY, nz = q.dz * q.nAlong;
-
-    // Tangente calculada numéricamente a lo largo de la trayectoria
-    const pNext = Math.min(S, p + 0.04), pPrev = Math.max(0, p - 0.04);
-    const qN = loopPoint(loop, pNext, 0), qP = loopPoint(loop, pPrev, 0);
-    let tx = qN.x - qP.x, ty = qN.y - qP.y, tz = qN.z - qP.z;
-    const tLen = Math.hypot(tx, ty, tz) || 1;
-    tx /= tLen; ty /= tLen; tz /= tLen;
-
-    // Vector lateral L = T x N
-    let lx = ty * nz - tz * ny, ly = tz * nx - tx * nz, lz = tx * ny - ty * nx;
-    const lLen = Math.hypot(lx, ly, lz) || 1;
-    lx /= lLen; ly /= lLen; lz /= lLen;
-
-    // Asegurar orientación hacia la derecha de la pista
-    const sideDirX = -loop.dir[1], sideDirZ = loop.dir[0];
-    if (lx * sideDirX + lz * sideDirZ < 0) {
-      lx = -lx; ly = -ly; lz = -lz;
-    }
-
-    // Puntos de la sección transversal
-    const bLx = cx - lx * halfW, bLy = cy - ly * halfW, bLz = cz - lz * halfW;
-    const bRx = cx + lx * halfW, bRy = cy + ly * halfW, bRz = cz + lz * halfW;
-
-    const cInLx = bLx + nx * curbH, cInLy = bLy + ny * curbH, cInLz = bLz + nz * curbH;
-    const cInRx = bRx + nx * curbH, cInRy = bRy + ny * curbH, cInRz = bRz + nz * curbH;
-
-    const cTopLx = cInLx - lx * curbW, cTopLy = cInLy - ly * curbW, cTopLz = cInLz - lz * curbW;
-    const cTopRx = cInRx + lx * curbW, cTopRy = cInRy + ly * curbW, cTopRz = cInRz + lz * curbW;
-
-    const hBotLx = cx - lx * (halfW + curbW) - nx * thk;
-    const hBotLy = cy - ly * (halfW + curbW) - ny * thk;
-    const hBotLz = cz - lz * (halfW + curbW) - nz * thk;
-
-    const hBotRx = cx + lx * (halfW + curbW) - nx * thk;
-    const hBotRy = cy + ly * (halfW + curbW) - ny * thk;
-    const hBotRz = cz + lz * (halfW + curbW) - nz * thk;
-
-    const hKeelX = cx - nx * (thk + 0.025);
-    const hKeelY = cy - ny * (thk + 0.025);
-    const hKeelZ = cz - nz * (thk + 0.025);
-
-    slices.push({
-      cx, cy, cz, nx, ny, nz, lx, ly, lz, p,
-      bL: [bLx, bLy, bLz], bR: [bRx, bRy, bRz],
-      cInL: [cInLx, cInLy, cInLz], cInR: [cInRx, cInRy, cInRz],
-      cTopL: [cTopLx, cTopLy, cTopLz], cTopR: [cTopRx, cTopRy, cTopRz],
-      hBotL: [hBotLx, hBotLy, hBotLz], hBotR: [hBotRx, hBotRy, hBotRz],
-      hKeel: [hKeelX, hKeelY, hKeelZ],
-    });
-
-    // Puntos elevados para raíles de protección
-    railPtsL.push(new THREE.Vector3(cTopLx + nx * 0.028, cTopLy + ny * 0.028, cTopLz + nz * 0.028));
-    railPtsR.push(new THREE.Vector3(cTopRx + nx * 0.028, cTopRy + ny * 0.028, cTopRz + nz * 0.028));
+  // sección: cara interior plana (por donde rueda la bola), cantos biselados y
+  // cara exterior más estrecha; por fuera cada faceta sobresale un poco distinto,
+  // como hielo tallado
+  const pos = [];
+  const quad = (a, b, c, d) => pos.push(...a, ...b, ...c, ...a, ...c, ...d);
+  const bump = (k) => 0.035 * (((k * 7 + i * 3) % 5) / 4 - 0.5);
+  const at = (k, r, side) => {
+    const th = (k / RING_FACETS) * TAU;
+    const along = -Math.sin(th) * r, y = cy - Math.cos(th) * r;
+    return [loop.x + dx * along + sx * side, y, loop.z + dz * along + sz * side];
+  };
+  const w = RING_HALF_W, wo = RING_HALF_W - RING_BEVEL;
+  for (let k = 0; k < RING_FACETS; k++) {
+    const n = k + 1;
+    const ri = R, rm = R + RING_THICK * 0.55;
+    const ro = R + RING_THICK + bump(k), ron = R + RING_THICK + bump(n % RING_FACETS);
+    const rmk = rm + bump(k) * 0.5, rmn = rm + bump(n % RING_FACETS) * 0.5;
+    quad(at(k, ri, -w), at(n, ri, -w), at(n, ri, w), at(k, ri, w));
+    quad(at(k, ri, w), at(n, ri, w), at(n, rmn, w), at(k, rmk, w));
+    quad(at(k, rmk, -w), at(n, rmn, -w), at(n, ri, -w), at(k, ri, -w));
+    quad(at(k, rmk, w), at(n, rmn, w), at(n, ron, wo), at(k, ro, wo));
+    quad(at(k, ro, -wo), at(n, ron, -wo), at(n, rmn, -w), at(k, rmk, -w));
+    quad(at(k, ro, wo), at(n, ron, wo), at(n, ron, -wo), at(k, ro, -wo));
   }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.computeVertexNormals();
 
-  // Helper para construir mallas conectando quads a lo largo de las rebanadas
-  function buildStrip(getPair, nSlices) {
-    const pos = [], uvs = [], idx = [];
-    for (let k = 0; k < nSlices; k++) {
-      const [p1, p2] = getPair(k);
-      const v = k / (nSlices - 1);
-      pos.push(...p1, ...p2);
-      uvs.push(0, v, 1, v);
-      if (k < nSlices - 1) {
-        const a = k * 2, b = a + 1, c = a + 2, d = a + 3;
-        idx.push(a, b, c, b, d, c);
-      }
-    }
-    const geom = new THREE.BufferGeometry();
-    geom.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    geom.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-    geom.setIndex(idx);
-    geom.computeVertexNormals();
-    return geom;
-  }
-
-  // 2. Materiales temáticos de alta fidelidad
-  const trackBedMat = isNeon
-    ? new THREE.MeshStandardMaterial({
-        color: 0x090c18,
-        roughness: 0.35,
-        metalness: 0.65,
-        emissive: color,
-        emissiveIntensity: 0.08,
-      })
-    : isNight
-    ? new THREE.MeshStandardMaterial({
-        color: 0x162438,
-        roughness: 0.65,
-        metalness: 0.2,
-      })
-    : new THREE.MeshStandardMaterial({
-        color: 0x2262cc,
-        roughness: 0.5,
-        metalness: 0.25,
-      });
-
-  const curbMat = isNeon
-    ? new THREE.MeshStandardMaterial({
-        color: 0x161a2e,
-        roughness: 0.25,
-        metalness: 0.75,
-        emissive: color,
-        emissiveIntensity: 0.15,
-      })
-    : isNight
-    ? new THREE.MeshStandardMaterial({
-        color: 0x3d271d,
-        roughness: 0.6,
-        metalness: 0.25,
-      })
-    : new THREE.MeshStandardMaterial({
-        color: 0x184499,
-        roughness: 0.4,
-        metalness: 0.3,
-      });
-
-  const hullMat = isNeon
-    ? new THREE.MeshStandardMaterial({
-        color: 0x0f1220,
-        roughness: 0.3,
-        metalness: 0.8,
-      })
-    : isNight
-    ? new THREE.MeshStandardMaterial({
-        color: 0x2b1c14,
-        roughness: 0.7,
-        metalness: 0.15,
-      })
-    : new THREE.MeshStandardMaterial({
-        color: 0x15357a,
-        roughness: 0.35,
-        metalness: 0.4,
-      });
-
-  const railMat = isNeon
-    ? glowMat(color, 1.4)
-    : isNight
-    ? new THREE.MeshStandardMaterial({
-        color: 0xd4af37,
-        metalness: 0.85,
-        roughness: 0.25,
-        emissive: 0x553805,
-        emissiveIntensity: 0.3,
-      })
-    : new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-        metalness: 0.85,
-        roughness: 0.2,
-      });
-
-  const frameMat = isNeon
-    ? new THREE.MeshStandardMaterial({
-        color: 0x121528,
-        metalness: 0.85,
-        roughness: 0.3,
-      })
-    : isNight
-    ? new THREE.MeshStandardMaterial({
-        color: 0x242426,
-        metalness: 0.6,
-        roughness: 0.45,
-      })
-    : new THREE.MeshStandardMaterial({
-        color: 0xe6e6e8,
-        metalness: 0.5,
-        roughness: 0.35,
-      });
-
-  // A) Suelo de la pista (Track Bed)
-  const bedGeo = buildStrip((k) => [slices[k].bL, slices[k].bR], slices.length);
-  const bedMesh = new THREE.Mesh(bedGeo, trackBedMat);
-  bedMesh.receiveShadow = true;
-  g.add(bedMesh);
-
-  // B) Bordillos interiores y superiores
-  const inCurbL = buildStrip((k) => [slices[k].bL, slices[k].cInL], slices.length);
-  const inCurbR = buildStrip((k) => [slices[k].cInR, slices[k].bR], slices.length);
-  const topCurbL = buildStrip((k) => [slices[k].cInL, slices[k].cTopL], slices.length);
-  const topCurbR = buildStrip((k) => [slices[k].cTopR, slices[k].cInR], slices.length);
-  g.add(
-    new THREE.Mesh(inCurbL, curbMat),
-    new THREE.Mesh(inCurbR, curbMat),
-    new THREE.Mesh(topCurbL, curbMat),
-    new THREE.Mesh(topCurbR, curbMat)
-  );
-
-  // C) Casco exterior inferior y laterales
-  const outHullL = buildStrip((k) => [slices[k].cTopL, slices[k].hBotL], slices.length);
-  const outHullR = buildStrip((k) => [slices[k].hBotR, slices[k].cTopR], slices.length);
-  const keelL = buildStrip((k) => [slices[k].hBotL, slices[k].hKeel], slices.length);
-  const keelR = buildStrip((k) => [slices[k].hKeel, slices[k].hBotR], slices.length);
-  const hullMesh = new THREE.Mesh(outHullL, hullMat);
-  hullMesh.castShadow = true;
-  g.add(
-    hullMesh,
-    new THREE.Mesh(outHullR, hullMat),
-    new THREE.Mesh(keelL, hullMat),
-    new THREE.Mesh(keelR, hullMat)
-  );
-
-  // D) Cheurones de avance animados en el centro de la pista
-  const chevronTex = loopChevronTexture(color, style.kind);
-  const chevronMat = new THREE.MeshStandardMaterial({
-    map: chevronTex,
+  const iceMat = new THREE.MeshStandardMaterial({
+    color: 0x4fc3f0,
+    emissive: 0x1f9be0,
+    emissiveIntensity: isNeon ? 0.5 : isNight ? 0.4 : 0.28,
+    roughness: 0.1,
+    metalness: 0.1,
     transparent: true,
-    opacity: 0.85,
-    emissive: color,
-    emissiveIntensity: isNeon ? 0.45 : (isNight ? 0.3 : 0.2),
-    roughness: 0.3,
+    opacity: 0.6,
+    side: THREE.DoubleSide,
     depthWrite: false,
+    flatShading: true,
   });
-  const chevronW = 0.12;
-  const chevronGeo = buildStrip((k) => {
-    const s = slices[k];
-    const offY = 0.003;
-    const p1 = [s.cx - s.lx * chevronW + s.nx * offY, s.cy - s.ly * chevronW + s.ny * offY, s.cz - s.lz * chevronW + s.nz * offY];
-    const p2 = [s.cx + s.lx * chevronW + s.nx * offY, s.cy + s.ly * chevronW + s.ny * offY, s.cz + s.lz * chevronW + s.nz * offY];
-    return [p1, p2];
-  }, slices.length);
-  g.add(new THREE.Mesh(chevronGeo, chevronMat));
+  const ring = new THREE.Mesh(geo, iceMat);
+  ring.renderOrder = 2;
+  g.add(ring);
 
-  // E) Raíles tubulares continuos con pilaretes de sujeción
-  const railGeoL = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(railPtsL), 140, 0.024, 8);
-  const railGeoR = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(railPtsR), 140, 0.024, 8);
-  const meshRailL = new THREE.Mesh(railGeoL, railMat);
-  const meshRailR = new THREE.Mesh(railGeoR, railMat);
-  meshRailL.castShadow = meshRailR.castShadow = true;
-  g.add(meshRailL, meshRailR);
+  // aristas claras de las facetas, como hielo tallado
+  const edgeMat = new THREE.LineBasicMaterial({ color: 0xeefbff, transparent: true, opacity: isNeon || isNight ? 0.8 : 0.7, depthWrite: false });
+  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 20), edgeMat);
+  edges.renderOrder = 3;
+  g.add(edges);
 
-  // Pilaretes metálicos que anclan los raíles al bordillo
-  const stanchionStep = 10;
-  for (let k = 4; k < slices.length - 4; k += stanchionStep) {
-    const sl = slices[k];
-    const h = 0.038;
-    for (const [pt, topPt] of [[sl.cTopL, railPtsL[k]], [sl.cTopR, railPtsR[k]]]) {
-      const stanchion = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.014, h, 8), frameMat);
-      stanchion.position.set((pt[0] + topPt.x) / 2, (pt[1] + topPt.y) / 2, (pt[2] + topPt.z) / 2);
-      stanchion.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(sl.nx, sl.ny, sl.nz));
-      g.add(stanchion);
-    }
-  }
-
-  // 3. Estructura portante realista en celosía y zapatas de apoyo
-  // Puntos clave de apoyo: hombro delantero (~32%) y hombro trasero (~68%)
-  const supportIndices = [Math.floor(N * 0.32), Math.floor(N * 0.68)];
-  for (const idx of supportIndices) {
-    const s = slices[idx];
-    const groundY = 0.01;
-
-    // Patas en "A" que bajan desde la quilla y los lados del casco hasta el suelo
-    for (const side of [-1, 1]) {
-      const anchorX = s.cx + s.lx * (side * (halfW + 0.08)) - s.nx * thk;
-      const anchorY = s.cy + s.ly * (side * (halfW + 0.08)) - s.ny * thk;
-      const anchorZ = s.cz + s.lz * (side * (halfW + 0.08)) - s.nz * thk;
-
-      const footX = s.cx + s.lx * (side * (halfW + 0.28));
-      const footZ = s.cz + s.lz * (side * (halfW + 0.28));
-
-      // Columna diagonal de soporte
-      const legVec = new THREE.Vector3(footX - anchorX, groundY - anchorY, footZ - anchorZ);
-      const legLen = legVec.length();
-      if (legLen > 0.05) {
-        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, legLen, 10), frameMat);
-        leg.position.set(anchorX + legVec.x * 0.5, anchorY + legVec.y * 0.5, anchorZ + legVec.z * 0.5);
-        leg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), legVec.clone().normalize());
-        leg.castShadow = true;
-        g.add(leg);
-
-        // Zapata / placa base empernada al suelo
-        const base = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.04, 12), frameMat);
-        base.position.set(footX, groundY + 0.02, footZ);
-        base.castShadow = true;
-        g.add(base);
-
-        // Anillos decorativos luminosos en las uniones de las patas (Neón)
-        if (isNeon) {
-          const ring = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.014, 8, 16), glowMat(color, 1.2));
-          ring.position.set(footX, groundY + 0.05, footZ);
-          ring.rotation.x = Math.PI / 2;
-          g.add(ring);
-        }
-      }
-    }
-
-    // Viga transversal de arriostramiento entre las dos patas
-    const crossBar = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, halfW * 2 + 0.36, 8), frameMat);
-    const midY = (s.cy + groundY) * 0.5;
-    crossBar.position.set(s.cx, midY, s.cz);
-    crossBar.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(s.lx, s.ly, s.lz));
-    g.add(crossBar);
-
-    // Costilla de refuerzo que abraza la parte exterior del carril
-    const rib = new THREE.Mesh(new THREE.BoxGeometry(halfW * 2 + curbW * 2 + 0.08, 0.06, 0.1), frameMat);
-    rib.position.set(s.cx - s.nx * (thk + 0.02), s.cy - s.ny * (thk + 0.02), s.cz - s.nz * (thk + 0.02));
-    rib.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), new THREE.Vector3(s.lx, s.ly, s.lz));
-    g.add(rib);
-  }
-
-  // 4. Pórtico y Corona de la Cima (Apex Crown & Light)
-  const topSlice = slices[Math.floor(N / 2)];
-  const apexRib = new THREE.Mesh(new THREE.BoxGeometry(halfW * 2 + curbW * 2 + 0.12, 0.07, 0.12), frameMat);
-  apexRib.position.set(topSlice.cx - topSlice.nx * (thk + 0.02), topSlice.cy - topSlice.ny * (thk + 0.02), topSlice.cz - topSlice.nz * (thk + 0.02));
-  apexRib.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), new THREE.Vector3(topSlice.lx, topSlice.ly, topSlice.lz));
-  g.add(apexRib);
-
-  // Iluminación ambiental y baliza superior
+  // brillo frío dentro del anillo de noche y en neón
   let loopLight = null;
-  const baseLightIntensity = isNeon ? 2.2 : (isNight ? 1.8 : 1.0);
+  const baseLightIntensity = isNeon ? 1.6 : 1.2;
   if (style.kind !== 'day') {
-    loopLight = new THREE.PointLight(color, baseLightIntensity, 5.5, 1.4);
-    loopLight.position.set(topSlice.cx, topSlice.cy * 0.55, topSlice.cz);
+    loopLight = new THREE.PointLight(0x7fd8ff, baseLightIntensity, 4.5, 1.6);
+    loopLight.position.set(loop.x, R, loop.z);
     g.add(loopLight);
-
-    // Balizas en la cima
-    for (const side of [-1, 1]) {
-      const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.075, 12, 8), glowMat(color, 1.6));
-      beacon.position.set(
-        topSlice.cx + topSlice.lx * side * (halfW + 0.08),
-        topSlice.cy + 0.06,
-        topSlice.cz + topSlice.lz * side * (halfW + 0.08)
-      );
-      g.add(beacon);
-    }
   }
-
-  // Guirnalda de bombillas cálidas estilo feria clásica para mapas nocturnos
-  if (isNight) {
-    const bulbMat = new THREE.MeshStandardMaterial({
-      color: 0xffe6a3,
-      emissive: 0xffa020,
-      emissiveIntensity: 0.9,
-      roughness: 0.2,
-    });
-    for (let k = 10; k <= N - 10; k += 14) {
-      const sl = slices[k];
-      for (const side of [-1, 1]) {
-        const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), bulbMat);
-        bulb.position.set(
-          sl.cTopL[0] * (side === -1 ? 1 : 0) + sl.cTopR[0] * (side === 1 ? 1 : 0) + sl.nx * 0.07,
-          sl.cTopL[1] * (side === -1 ? 1 : 0) + sl.cTopR[1] * (side === 1 ? 1 : 0) + sl.ny * 0.07,
-          sl.cTopL[2] * (side === -1 ? 1 : 0) + sl.cTopR[2] * (side === 1 ? 1 : 0) + sl.nz * 0.07
-        );
-        g.add(bulb);
-      }
-    }
-  }
-
-  // 5. Placas metálicas de transición y embudos en Entrada y Salida
-  const plateTex = metalPlateTexture();
-  const plateMat = new THREE.MeshStandardMaterial({
-    map: plateTex,
-    roughness: 0.45,
-    metalness: 0.65,
-  });
-
-  const entrySlice = slices[0];
-  const exitSlice = slices[slices.length - 1];
-
-  for (const sl of [entrySlice, exitSlice]) {
-    const plateW = loop.w * 0.95, plateD = 0.55;
-    const plate = new THREE.Mesh(new THREE.BoxGeometry(plateW, 0.016, plateD), plateMat);
-    plate.position.set(sl.cx, 0.008, sl.cz);
-    plate.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), new THREE.Vector3(sl.lx, 0, sl.lz).normalize());
-    plate.receiveShadow = true;
-    g.add(plate);
-
-    // Bordes biselados de entrada
-    const lip = new THREE.Mesh(new THREE.BoxGeometry(plateW + 0.06, 0.024, 0.04), frameMat);
-    lip.position.set(sl.cx, 0.012, sl.cz);
-    lip.quaternion.copy(plate.quaternion);
-    g.add(lip);
-  }
-
-  // 6. Pórtico de Entrada con Arco Luminoso / Señalización
-  const gateH = 1.35;
-  const gateSpan = halfW * 2 + 0.28;
-  const gateMat = isNeon
-    ? new THREE.MeshStandardMaterial({ color: 0x14182e, metalness: 0.8, roughness: 0.3 })
-    : frameMat;
-
-  for (const s of [-1, 1]) {
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, gateH, 12), gateMat);
-    post.position.set(entrySlice.cx + entrySlice.lx * (s * gateSpan / 2), gateH / 2, entrySlice.cz + entrySlice.lz * (s * gateSpan / 2));
-    post.castShadow = true;
-    g.add(post);
-
-    if (isNeon) {
-      const postGlow = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.048, 0.08, 12), glowMat(color, 1.8));
-      postGlow.position.set(post.position.x, gateH * 0.7, post.position.z);
-      g.add(postGlow);
-    }
-  }
-
-  // Dintel superior del arco de entrada
-  const header = new THREE.Mesh(new THREE.BoxGeometry(gateSpan + 0.12, 0.09, 0.09), gateMat);
-  header.position.set(entrySlice.cx, gateH, entrySlice.cz);
-  header.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), new THREE.Vector3(entrySlice.lx, 0, entrySlice.lz).normalize());
-  g.add(header);
-
-  // Cartel luminoso / cheurón en el arco de entrada
-  const signMat = isNeon
-    ? glowMat(style.colors[1] || color, 1.8)
-    : isNight
-    ? new THREE.MeshStandardMaterial({ color: 0xffd066, emissive: 0xff9900, emissiveIntensity: 0.6 })
-    : new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xcccccc, emissiveIntensity: 0.3 });
-  const sign = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.14, 0.03), signMat);
-  sign.position.set(entrySlice.cx, gateH + 0.1, entrySlice.cz);
-  sign.quaternion.copy(header.quaternion);
-  g.add(sign);
 
   scene.add(g);
 
-  // 7. Gestión unificada de transparencia ante obstrucción de cámara
-  const fadeMats = [];
-  g.traverse((o) => {
-    if (o.isMesh && o.material) {
-      const mats = Array.isArray(o.material) ? o.material : [o.material];
-      for (const m of mats) {
-        if (m && !fadeMats.some((e) => e.mat === m)) {
-          m.transparent = true;
-          fadeMats.push({
-            mat: m,
-            baseOpacity: m.opacity != null ? m.opacity : 1.0,
-            baseEmissive: m.emissiveIntensity != null ? m.emissiveIntensity : 0,
-          });
-        }
-      }
-    }
-  });
-
+  const fadeMats = [
+    { mat: iceMat, baseOpacity: iceMat.opacity },
+    { mat: edgeMat, baseOpacity: edgeMat.opacity },
+  ];
   let currentOpacity = 1.0;
+  const reachR = R + RING_THICK + 0.3;
 
   return {
     update(t, ball, cameraPos) {
-      // Animación continua de los cheurones de avance a lo largo del carril
-      chevronTex.offset.y = -t * 1.6;
-
-      // Detección de obstrucción entre la cámara y la bola
+      // si el anillo tapa la bola desde la cámara, se aclara aún más
       let blocksBall = false;
-      const midPoint = topSlice;
-      const reachR = loop.radius + 0.45;
-
       if (ball && cameraPos) {
-        // Verificar si la bola está en el interior del volumen del looping
-        const dCenter = Math.hypot(ball.x - midPoint.cx, ball.z - midPoint.cz);
-        const inside = dCenter < reachR && ball.y < topSlice.cy + 0.2;
-
-        if (inside) {
-          blocksBall = true;
-        } else {
-          // Raycast analítico cámara -> bola respecto al cilindro aproximado del looping
-          const dx = ball.x - cameraPos.x, dz = ball.z - cameraPos.z;
-          const lenSq = dx * dx + dz * dz;
-          if (lenSq > 1e-4) {
-            const tRay = ((midPoint.cx - cameraPos.x) * dx + (midPoint.cz - cameraPos.z) * dz) / lenSq;
-            if (tRay > 0.03 && tRay < 0.97) {
-              const rx = cameraPos.x + tRay * dx, rz = cameraPos.z + tRay * dz;
-              if (Math.hypot(midPoint.cx - rx, midPoint.cz - rz) < reachR) {
-                const ballY = ball.y != null ? ball.y : 0.05;
-                const rayY = cameraPos.y + tRay * (ballY - cameraPos.y);
-                if (rayY >= -0.1 && rayY <= topSlice.cy + 0.3) {
-                  blocksBall = true;
-                }
-              }
-            }
+        const dx = ball.x - cameraPos.x, dz = ball.z - cameraPos.z;
+        const lenSq = dx * dx + dz * dz;
+        if (lenSq > 1e-4) {
+          const tRay = ((loop.x - cameraPos.x) * dx + (loop.z - cameraPos.z) * dz) / lenSq;
+          if (tRay > 0.03 && tRay < 0.97) {
+            const rx = cameraPos.x + tRay * dx, rz = cameraPos.z + tRay * dz;
+            const ballY = ball.y != null ? ball.y : 0.05;
+            const rayY = cameraPos.y + tRay * (ballY - cameraPos.y);
+            blocksBall = Math.hypot(loop.x - rx, loop.z - rz) < reachR && rayY >= -0.1 && rayY <= 2 * R + 0.3;
           }
         }
       }
-
-      // Suavizado elegante de opacidad (90% invisible = 0.1 de opacidad)
-      const targetOpacity = blocksBall ? 0.1 : 1.0;
+      const targetOpacity = blocksBall ? 0.55 : 1.0;
       currentOpacity += (targetOpacity - currentOpacity) * 0.2;
-
-      for (const entry of fadeMats) {
-        entry.mat.opacity = currentOpacity * entry.baseOpacity;
-        entry.mat.depthWrite = currentOpacity > 0.95;
-        if (entry.baseEmissive > 0) {
-          entry.mat.emissiveIntensity = entry.baseEmissive * (0.15 + 0.85 * (currentOpacity - 0.1) / 0.9);
-        }
-      }
-
-      if (loopLight) {
-        loopLight.intensity = baseLightIntensity * (0.15 + 0.85 * (currentOpacity - 0.1) / 0.9);
-      }
+      for (const entry of fadeMats) entry.mat.opacity = currentOpacity * entry.baseOpacity;
+      if (loopLight) loopLight.intensity = baseLightIntensity * currentOpacity;
     },
   };
 }
