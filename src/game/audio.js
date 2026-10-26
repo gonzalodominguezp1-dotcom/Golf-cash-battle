@@ -9,6 +9,7 @@ let muted = false;
 const buffers = {};
 let roll = null;
 let ambient = null;
+let finale = false; // fin de partida: solo suena la melodía final
 
 const SR = 44100;
 
@@ -205,7 +206,7 @@ export function isMuted() {
 }
 
 function play(name, { vol = 1, rate = 1, wet = true, pan = 0 } = {}) {
-  if (!ctx || !buffers[name]) return;
+  if (!ctx || !buffers[name] || finale) return;
   const src = ctx.createBufferSource();
   src.buffer = buffers[name];
   src.playbackRate.value = rate;
@@ -583,7 +584,7 @@ const SKIN_SETS = {
 
 /** Sonido de skin: sfx.skin('neon', 'hit', { power: 0.8 }). Eventos: hit, wall, sink, roll. */
 function playSkin(set, event, { power = 0.5 } = {}) {
-  if (!ctx || isMuted()) return;
+  if (!ctx || isMuted() || finale) return;
   const voice = SKIN_SETS[set]?.[event];
   if (typeof voice !== 'function' || skinActive >= SKIN_MAX_ACTIVE) return;
   const p = Number.isFinite(power) ? Math.min(1, Math.max(0, power)) : 0.5;
@@ -607,7 +608,7 @@ const R_NOTES = [0, 4, 7, 12, 16, 19, 24]; // acorde mayor en capas
 /** Zumbido que crece mientras mantienes pulsado (p de 0 a 1; null = apagar). */
 let holdVoice = null;
 function holdCharge(p) {
-  if (!ctx || isMuted()) return;
+  if (!ctx || isMuted() || finale) return;
   if (p == null || p <= 0) {
     if (holdVoice) {
       const t = ctx.currentTime;
@@ -797,7 +798,7 @@ export const sfx = {
 
 /** Rodar de la bola: ruido grave cuyo volumen sigue a la velocidad. */
 export function setRolling(speed, onSand) {
-  if (!ctx) return;
+  if (!ctx || finale) return;
   if (!roll) {
     const n = SR * 2;
     const b = ctx.createBuffer(1, n, SR);
@@ -827,7 +828,7 @@ export function setRolling(speed, onSand) {
 let charge = null;
 /** Tono que sube mientras cargas el golpe (0 = apagado). */
 export function setCharge(power) {
-  if (!ctx) return;
+  if (!ctx || finale) return;
   if (!charge) {
     // tono suave: senos (fundamental y octava) por un filtro paso bajo, sin
     // los armónicos ásperos de la triangular; agudo justo para oírse en el
@@ -873,7 +874,7 @@ export function setCharge(power) {
 /** Sonido ambiente según el hoyo: pájaros, olas o grillos. */
 export function setAmbient(kind) {
   stopAmbient();
-  if (!ctx || !kind) return;
+  if (!ctx || !kind || finale) return;
   const g = ctx.createGain();
   g.gain.value = 0;
   g.gain.setTargetAtTime(0.12, ctx.currentTime, 1);
@@ -963,4 +964,21 @@ export function stopAmbient() {
 
 export function stopRolling() {
   if (roll && ctx) roll.g.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
+}
+
+/** Fin de partida: corta lo que sigue sonando y no deja entrar nada más salvo endJingle. */
+export function enterFinale() {
+  holdCharge(null);
+  stopAmbient();
+  stopRolling();
+  if (charge && ctx) {
+    charge.g.gain.cancelScheduledValues(ctx.currentTime);
+    charge.g.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
+  }
+  finale = true;
+}
+
+/** Vuelve al sonido normal (nueva partida o lobby). */
+export function leaveFinale() {
+  finale = false;
 }

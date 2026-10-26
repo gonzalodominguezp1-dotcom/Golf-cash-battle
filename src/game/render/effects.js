@@ -573,6 +573,13 @@ export class Shockwaves {
     it.m.visible = true;
   }
 
+  /** Anillos vivos ahora (sin asignar). */
+  activeCount() {
+    let c = 0;
+    for (const it of this.items) if (it.life > 0) c++;
+    return c;
+  }
+
   update(dt) {
     for (const it of this.items) {
       if (it.life <= 0) continue;

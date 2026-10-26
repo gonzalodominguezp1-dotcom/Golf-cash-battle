@@ -25,6 +25,11 @@ export const PATTERN_IDS = [
   'event_horizon',
   'holo',
   'midas_touch',
+  'antimatter_void',
+  'tormenta_voltaica',
+  'anima_errante',
+  'cronometro_laton',
+  'abyssal_tide',
 ];
 
 function stub(id) {

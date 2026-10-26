@@ -62,3 +62,34 @@ test('los desafíos wins50 y aces5 desbloquean las míticas', () => {
   assert.deepEqual(skinById('midas_touch').unlock, { challenge: 'aces5' });
   for (const s of SKINS) if (s.unlock?.challenge) assert.ok(CHALLENGES.some((c) => c.id === s.unlock.challenge), s.id);
 });
+
+const NEW_SKINS = [
+  { id: 'antimatter_void', tier: 'legendary', pattern: 'void_cracks', unlock: { challenge: 'bigwins5' } },
+  { id: 'tormenta_voltaica', tier: 'epic', pattern: 'plasma', unlock: { level: 15 } },
+  { id: 'anima_errante', tier: 'mythic', pattern: 'spirit', unlock: { challenge: 'matches150' } },
+  { id: 'cronometro_laton', tier: 'epic', pattern: 'clockwork', unlock: { challenge: 'matches50' } },
+  { id: 'abyssal_tide', tier: 'mythic', pattern: 'abyss_veins', unlock: { challenge: 'birdies50' } },
+];
+
+test('las 5 skins nuevas: tier, desbloqueo, shader propio y tope de partículas', () => {
+  for (const n of NEW_SKINS) {
+    const s = skinById(n.id);
+    assert.equal(s.id, n.id);
+    assert.equal(s.tier, n.tier, n.id);
+    assert.equal(s.pattern, n.pattern, n.id);
+    assert.deepEqual(s.unlock, n.unlock, n.id);
+    assert.equal(s.shader, n.id, `${n.id}: shader obligatorio`);
+    assert.ok(s.fx.maxParticles > 0 && s.fx.maxParticles <= 20, `${n.id}: ≤ 20 partículas`);
+    assert.ok(s.fx.trailRate > 0, `${n.id}: trailRate`);
+    assert.ok(s.lore.length > 0, `${n.id}: lore`);
+  }
+});
+
+test('cada desafío nuevo desbloquea una sola skin', () => {
+  const ids = ['bigwins5', 'matches50', 'matches150', 'birdies50'];
+  for (const id of ids) {
+    assert.ok(CHALLENGES.some((c) => c.id === id), id);
+    assert.equal(SKINS.filter((s) => s.unlock?.challenge === id).length, 1, id);
+  }
+  for (const c of CHALLENGES) assert.ok(SKINS.filter((s) => s.unlock?.challenge === c.id).length <= 1, `${c.id}: una recompensa`);
+});

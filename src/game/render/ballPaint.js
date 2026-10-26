@@ -92,6 +92,21 @@ export function paintBall(g, n, skin, opts = {}) {
         }
       g.globalAlpha = 1;
       break;
+    case 'void_cracks':
+      paintVoidCracks(g, w, h, skin);
+      break;
+    case 'plasma':
+      paintPlasma(g, w, h, skin);
+      break;
+    case 'spirit':
+      paintSpirit(g, w, h, skin);
+      break;
+    case 'clockwork':
+      paintClockwork(g, w, h, skin);
+      break;
+    case 'abyss_veins':
+      paintAbyssVeins(g, w, h, skin);
+      break;
     default:
       break;
   }
@@ -317,6 +332,181 @@ function star(g, x, y, r) {
     g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
   }
   g.fill();
+}
+
+// ---------- skins nuevas (docs: ideas_skins/_plan/spec-skins.md) ----------
+// Solo trazos de canvas (sin bucle por píxel y sin sombras): el brillo es un trazo ancho translúcido
+// bajo uno fino. Cada motivo principal va centrado en (w/2, h/2), el frente de la bola (+X).
+
+function seeded(seed) {
+  let s = seed >>> 0 || 1;
+  return () => {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
+
+function rgba(hex, a) {
+  const n = parseInt(String(hex ?? '#ffffff').replace('#', '').slice(0, 6), 16) || 0;
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+/** Traza una polilínea una vez y la pinta con varias capas [color, ancho, opacidad]. */
+function strokeLayers(g, pts, layers) {
+  g.lineCap = g.lineJoin = 'round';
+  g.beginPath();
+  g.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0], pts[i][1]);
+  for (const [color, width, alpha] of layers) {
+    g.globalAlpha = alpha;
+    g.strokeStyle = color;
+    g.lineWidth = width;
+    g.stroke();
+  }
+  g.globalAlpha = 1;
+}
+
+function paletteOf(skin) {
+  const p = skin.palette;
+  return { base: p?.base ?? skin.base, accent: p?.accent ?? skin.accent, secondary: p?.secondary ?? skin.secondary ?? skin.accent, glow: p?.glow ?? skin.shimmer ?? skin.accent };
+}
+
+function dots(g, rnd, n, cx, cy, radius, size, color) {
+  g.fillStyle = color;
+  for (let i = 0; i < n; i++) {
+    const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * radius;
+    circle(g, cx + Math.cos(a) * r, cy + Math.sin(a) * r, size * (0.6 + 0.8 * rnd()));
+  }
+}
+
+function hexPath(g, cx, cy, R) {
+  g.beginPath();
+  for (let k = 0; k < 6; k++) g[k ? 'lineTo' : 'moveTo'](cx + Math.cos((k * Math.PI) / 3) * R, cy + Math.sin((k * Math.PI) / 3) * R);
+  g.closePath();
+}
+
+/** Antimateria del Vacío: grietas quebradas con borde incandescente sobre la cáscara índigo. */
+function paintVoidCracks(g, w, h, skin) {
+  const { accent, glow } = paletteOf(skin);
+  const rnd = seeded(0x51ed);
+  for (let i = 0; i < 6; i++) {
+    let x = i === 0 ? w * 0.5 : w * (0.3 + rnd() * 0.4);
+    let y = i === 0 ? h * 0.22 : h * (0.12 + rnd() * 0.76);
+    let a = i === 0 ? Math.PI / 2 : rnd() * Math.PI * 2;
+    const pts = [[x, y]];
+    for (let k = 0; k < 7; k++) {
+      a += (rnd() - 0.5) * 1.4;
+      const len = 18 + rnd() * 20;
+      x += Math.cos(a) * len;
+      y += Math.sin(a) * len;
+      pts.push([x, y]);
+    }
+    strokeLayers(g, pts, [[accent, 9, 0.35], ['#000000', 4, 1], [glow, 1.2, 1]]);
+  }
+}
+
+/** Tormenta Voltaica: núcleo violeta del que salen 8 rayos en zigzag. */
+function paintPlasma(g, w, h, skin) {
+  const { base, accent, secondary } = paletteOf(skin);
+  const cx = w / 2, cy = h / 2;
+  const rnd = seeded(0x7014);
+  const gr = g.createRadialGradient(cx, cy, 0, cx, cy, h / 2);
+  gr.addColorStop(0, base);
+  gr.addColorStop(1, secondary);
+  g.fillStyle = gr;
+  g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 8; i++) {
+    const ang = (i * Math.PI) / 4 + 0.2;
+    const c = Math.cos(ang), s = Math.sin(ang);
+    const pts = [[cx, cy]];
+    for (let k = 1; k <= 5; k++) {
+      const r = k * 22, off = (rnd() - 0.5) * 14;
+      pts.push([cx + c * r - s * off, cy + s * r + c * off]);
+    }
+    strokeLayers(g, pts, [[accent, 6, 0.4], [accent, 2.6, 1], ['#ffffff', 1.1, 1]]);
+  }
+  g.fillStyle = accent;
+  circle(g, cx, cy, 11);
+  g.fillStyle = '#ffffff';
+  circle(g, cx, cy, 4);
+}
+
+/** Ánima Errante: remolino violeta y cian con el centro blanco y estrellas sobre la esfera lavanda. */
+function paintSpirit(g, w, h, skin) {
+  const { accent, secondary } = paletteOf(skin);
+  const cx = w / 2, cy = h / 2;
+  const rnd = seeded(0xa11a);
+  const gr = g.createRadialGradient(cx, cy, 0, cx, cy, 112);
+  gr.addColorStop(0, rgba(accent, 0.6));
+  gr.addColorStop(1, rgba(accent, 0));
+  g.fillStyle = gr;
+  g.fillRect(0, 0, w, h);
+  for (let arm = 0; arm < 2; arm++) {
+    const color = arm ? accent : secondary;
+    const pts = [];
+    for (let k = 0; k <= 18; k++) {
+      const t = k / 18, th = arm * Math.PI + t * Math.PI * 3.6, r = 6 + t * 96;
+      pts.push([cx + Math.cos(th) * r, cy + Math.sin(th) * r]);
+    }
+    strokeLayers(g, pts, [[color, 7, 0.3], [color, 3, 0.9], ['#ffffff', 1, 0.8]]);
+  }
+  dots(g, rnd, 25, cx, cy, 108, 1.7, '#ffffff');
+  const core = g.createRadialGradient(cx, cy, 0, cx, cy, 14);
+  core.addColorStop(0, '#ffffff');
+  core.addColorStop(1, rgba('#ffffff', 0));
+  g.fillStyle = core;
+  circle(g, cx, cy, 14);
+}
+
+/** Cronómetro de Latón: tres ventanas hexagonales (engranaje y dos agujas) sobre el latón. */
+function paintClockwork(g, w, h, skin) {
+  const { base, accent, secondary, glow } = paletteOf(skin);
+  const cy = h / 2;
+  for (const cx of [w * 0.25, w * 0.5, w * 0.75]) {
+    g.fillStyle = accent;
+    hexPath(g, cx, cy, 58);
+    g.fill();
+    g.fillStyle = secondary;
+    hexPath(g, cx, cy, 48);
+    g.fill();
+    // remaches en los vértices del marco
+    g.fillStyle = glow;
+    for (let k = 0; k < 6; k++) circle(g, cx + Math.cos((k * Math.PI) / 3) * 53, cy + Math.sin((k * Math.PI) / 3) * 53, 2.6);
+    // engranaje de 10 dientes
+    g.fillStyle = base;
+    g.beginPath();
+    for (let k = 0; k < 40; k++) {
+      const th = (k / 40) * Math.PI * 2, r = 20 + (Math.cos(10 * th) > 0 ? 5 : 0);
+      g[k ? 'lineTo' : 'moveTo'](cx + 6 + Math.cos(th) * r, cy + 4 + Math.sin(th) * r);
+    }
+    g.closePath();
+    g.fill();
+    g.fillStyle = secondary;
+    circle(g, cx + 6, cy + 4, 5);
+    // agujas
+    strokeLayers(g, [[cx, cy], [cx + 18, cy - 33]], [[glow, 3, 1]]);
+    strokeLayers(g, [[cx, cy], [cx - 17, cy - 11]], [[glow, 4, 1]]);
+    g.fillStyle = accent;
+    circle(g, cx, cy, 3.5);
+  }
+}
+
+/** Marea Abisal: venas turquesa onduladas, más azules hacia abajo, con puntos de plancton. */
+function paintAbyssVeins(g, w, h, skin) {
+  const { accent, secondary, glow } = paletteOf(skin);
+  const rnd = seeded(0xabb5);
+  const gr = g.createLinearGradient(0, h * 0.4, 0, h);
+  gr.addColorStop(0, rgba(secondary, 0));
+  gr.addColorStop(1, rgba(secondary, 0.55));
+  g.fillStyle = gr;
+  g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 10; i++) {
+    const x0 = ((i + 0.5) * w) / 10, amp = 10 + rnd() * 10, fr = 0.03 + rnd() * 0.03, ph = rnd() * Math.PI * 2;
+    const pts = [];
+    for (let y = 0; y <= h; y += 8) pts.push([x0 + Math.sin(y * fr + ph) * amp, y]);
+    strokeLayers(g, pts, [[accent, 7, 0.25], [accent, 2.6, 0.9], [glow, 1, 0.9]]);
+  }
+  dots(g, rnd, 30, w / 2, h / 2, 150, 1.3, glow);
 }
 
 function mix(a, b, t) {
