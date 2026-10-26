@@ -1378,9 +1378,10 @@ export class GolfGame {
       this.aimDots.showRing(this.ballRoot.position, this.t);
     } else this.aimDots.hide();
 
-    const sun = this.env.sun;
-    sun.position.set(this.ball.x, 0, this.ball.z).addScaledVector(this.env.sunDir, 30);
-    sun.target.position.set(this.ball.x, 0, this.ball.z);
+    // la sombra sigue a la bola, salvo si el entorno la deja fija sobre la pista
+    const sun = this.env.sun, at = this.env.shadowAnchor ?? this.ball;
+    sun.position.set(at.x, 0, at.z).addScaledVector(this.env.sunDir, 30);
+    sun.target.position.set(at.x, 0, at.z);
 
     this.env.update(this.t, dt);
     this.#placeCamera(realDt);

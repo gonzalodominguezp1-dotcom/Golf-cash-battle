@@ -599,6 +599,177 @@ function playSkin(set, event, { power = 0.5 } = {}) {
   }, (dur + 0.3) * 1000);
 }
 
+// ---- apertura de recompensas: síntesis en tiempo real, pensada para impactar ----
+// order: 0 común … 5 mítica. Todo pasa por el bus de skins (compresor + reverb).
+
+const R_NOTES = [0, 4, 7, 12, 16, 19, 24]; // acorde mayor en capas
+
+/** Zumbido que crece mientras mantienes pulsado (p de 0 a 1; null = apagar). */
+let holdVoice = null;
+function holdCharge(p) {
+  if (!ctx || isMuted()) return;
+  if (p == null || p <= 0) {
+    if (holdVoice) {
+      const t = ctx.currentTime;
+      holdVoice.g.gain.cancelScheduledValues(t);
+      holdVoice.g.gain.setTargetAtTime(0, t, 0.06);
+      const v = holdVoice;
+      holdVoice = null;
+      setTimeout(() => v.stop(), 400);
+    }
+    return;
+  }
+  if (!holdVoice) {
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    const f = ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.Q.value = 2.5;
+    f.connect(g).connect(skinOut());
+    const oscs = [-9, 0, 9].map((detune) => {
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.detune.value = detune;
+      o.connect(f);
+      o.start();
+      return o;
+    });
+    const sub = ctx.createOscillator();
+    sub.type = 'sine';
+    const sg = ctx.createGain();
+    sg.gain.value = 0.9;
+    sub.connect(sg).connect(f);
+    sub.start();
+    const n = ctx.createBufferSource();
+    n.buffer = noiseSrc();
+    n.loop = true;
+    const nf = ctx.createBiquadFilter();
+    nf.type = 'bandpass';
+    nf.Q.value = 1.2;
+    const ng = ctx.createGain();
+    ng.gain.value = 0;
+    n.connect(nf).connect(ng).connect(skinOut());
+    n.start();
+    holdVoice = {
+      g, f, oscs, sub, nf, ng,
+      stop() {
+        [...oscs, sub].forEach((o) => { try { o.stop(); } catch { } });
+        try { n.stop(); } catch { }
+      },
+    };
+  }
+  const t = ctx.currentTime;
+  const base = 70 * Math.pow(2, p * 2.2); // sube más de dos octavas
+  holdVoice.oscs.forEach((o) => o.frequency.setTargetAtTime(base, t, 0.05));
+  holdVoice.sub.frequency.setTargetAtTime(base / 2, t, 0.05);
+  holdVoice.f.frequency.setTargetAtTime(250 + p * p * 5200, t, 0.05);
+  holdVoice.g.gain.setTargetAtTime(0.1 + p * 0.5, t, 0.04);
+  holdVoice.nf.frequency.setTargetAtTime(800 + p * 6000, t, 0.05);
+  holdVoice.ng.gain.setTargetAtTime(p * p * 0.35, t, 0.05);
+}
+
+/** Tic de carga que sube de tono con el progreso. */
+function rewardTick(p = 0) {
+  if (!ctx || isMuted()) return;
+  const t = ctx.currentTime;
+  tone(t, 0.12, 0.25 + p * 0.25, 900 * Math.pow(2, p * 2), { type: 'triangle' });
+  glass(t, 1800 * Math.pow(2, p * 1.5), 0.25, 0.08 + p * 0.1);
+}
+
+/** Riser de tensión (secs) previo al estallido. */
+function rewardRiser(secs, order = 0) {
+  if (!ctx || isMuted()) return 0;
+  const t = ctx.currentTime + 0.01;
+  const k = 1 + order * 0.15;
+  tone(t, secs, 0.28 * k, 110, { type: 'sawtooth', to: 880, toT: secs, attack: secs * 0.9, filter: { type: 'lowpass', f: 300, to: 7000, q: 3 } });
+  tone(t, secs, 0.22 * k, 112.5, { type: 'sawtooth', to: 887, toT: secs, attack: secs * 0.9, filter: { type: 'lowpass', f: 300, to: 7000, q: 3 } });
+  air(t, secs, 0.5 * k, { type: 'bandpass', f: 500, to: 9000, q: 1.5 }, secs * 0.95);
+  for (let i = 0; i < 8 + order * 2; i++) {
+    const at = t + secs * (1 - Math.pow(1 - i / (8 + order * 2), 1.6)); // pulsos que se aceleran
+    clink(at, 1800 + i * 160, 0.1 + i * 0.012);
+  }
+  return secs;
+}
+
+/** El estallido: impacto, coro de acorde, arpegio de cristal y chispas. */
+function rewardReveal(order = 0) {
+  if (!ctx || isMuted()) return 0;
+  const t = ctx.currentTime + 0.005;
+  const k = 0.7 + order * 0.1;
+  // golpe: sub que cae + crujido de ruido
+  tone(t, 1.8, 0.95 * k, 90, { type: 'sine', to: 28, toT: 1.2, attack: 0.002 });
+  tone(t, 0.5, 0.5 * k, 160, { type: 'triangle', to: 50, toT: 0.3, attack: 0.001 });
+  air(t, 1.0, 0.9 * k, { type: 'lowpass', f: 9000, to: 250, q: 0.7 }, 0.002);
+  air(t, 0.35, 0.6 * k, { type: 'highpass', f: 3000, q: 0.5 }, 0.001);
+  // coro de acorde con swell (más capas cuanto más rara)
+  const root = 48 + (order >= 4 ? 0 : 3);
+  const layers = Math.min(R_NOTES.length, 3 + order);
+  for (let n = 0; n < layers; n++) {
+    const f = note(root + R_NOTES[n]);
+    for (const detune of [-11, 0, 11]) {
+      tone(t + 0.05, 2.6 + order * 0.35, 0.16 * k, f, {
+        type: 'sawtooth', detune, attack: 0.5,
+        filter: { type: 'lowpass', f: 700, to: 3800, q: 0.8 },
+      });
+    }
+    tone(t + 0.05, 3.2, 0.1 * k, f * 2, { type: 'sine', attack: 0.4 });
+  }
+  // arpegio de cristal subiendo
+  const arp = [72, 76, 79, 84, 88, 91, 96, 100];
+  const count = 5 + order;
+  for (let i = 0; i < count; i++) glass(t + 0.12 + i * 0.075, note(arp[i % arp.length]), 1.4, 0.2 * k);
+  // lluvia de chispas
+  crackle(t + 0.15, 14 + order * 10, 1.2 + order * 0.2, 0.4 * k, { type: 'highpass', f: 5000, q: 0.6 });
+  if (order >= 3) {
+    // barrido ascendente final para legendarias y míticas
+    tone(t + 0.3, 1.4, 0.3, 300, { type: 'sawtooth', to: 2400, toT: 1.2, attack: 0.5, filter: { type: 'lowpass', f: 1200, to: 6000, q: 1 } });
+  }
+  if (order >= 5) {
+    for (const f of [note(36), note(43)]) tone(t, 3.4, 0.5, f, { type: 'sine', attack: 0.01 });
+  }
+  return 3.5;
+}
+
+/**
+ * Melodía de final de partida (~5 s). Victoria: fanfarria con metales, redoble y acorde final;
+ * resto de puestos: motivo más suave y esperanzador que invita a la revancha.
+ */
+function endJingle(won = false, position = 2) {
+  if (!ctx || isMuted()) return 0;
+  const t = ctx.currentTime + 0.05;
+  const brass = (at, dur, midi, vol = 0.22) => {
+    const f = note(midi);
+    for (const detune of [-8, 0, 8]) tone(at, dur, vol, f, { type: 'sawtooth', detune, attack: 0.02, filter: { type: 'lowpass', f: 900, to: 3200, q: 0.9 } });
+    tone(at, dur, vol * 0.6, f / 2, { type: 'triangle', attack: 0.02 });
+  };
+  const bass = (at, dur, midi) => tone(at, dur, 0.4, note(midi - 12), { type: 'sine', attack: 0.01 });
+  if (won) {
+    // redoble de caja que sube
+    for (let i = 0; i < 12; i++) air(t + i * 0.05, 0.05, 0.1 + i * 0.03, { type: 'bandpass', f: 3500, q: 0.8 }, 0.002);
+    // C4 C4 C4 · E4 G4 · C5 (ta-ta-ta-TAAA)
+    const m = [[0.6, 0.14, 60], [0.78, 0.14, 60], [0.96, 0.14, 60], [1.14, 0.3, 64], [1.5, 0.3, 67], [1.9, 1.7, 72]];
+    for (const [d, dur, midi] of m) { brass(t + d, dur, midi); bass(t + d, dur, midi); }
+    // acorde final grande + golpe + chispas
+    const end = t + 1.9;
+    for (const n of [76, 79, 84]) brass(end, 2.6, n, 0.14);
+    tone(end, 1.6, 0.9, 85, { type: 'sine', to: 32, toT: 1.2, attack: 0.002 });
+    air(end, 0.7, 0.6, { type: 'lowpass', f: 8000, to: 300, q: 0.7 }, 0.002);
+    [84, 88, 91, 96, 100, 103, 108].forEach((m2, i) => glass(end + 0.1 + i * 0.09, note(m2), 1.5, 0.16));
+    crackle(end + 0.1, 30, 1.8, 0.4, { type: 'highpass', f: 5500, q: 0.6 });
+    return 4.5;
+  }
+  // sin victoria: motivo cálido (La menor → Do mayor) con campanas
+  const mel = position <= 3 ? [69, 72, 76, 74, 72, 79] : [64, 67, 71, 69, 67, 72];
+  mel.forEach((midi, i) => {
+    glass(t + 0.3 + i * 0.28, note(midi + 12), 1.4, 0.22);
+    tone(t + 0.3 + i * 0.28, 0.9, 0.12, note(midi), { type: 'triangle', attack: 0.02, filter: { type: 'lowpass', f: 1800, q: 0.6 } });
+  });
+  for (const n of [57, 60, 64]) tone(t + 0.3, 2.2, 0.1, note(n), { type: 'sine', attack: 0.4 });
+  for (const n of [60, 64, 67, 72]) tone(t + 2.1, 2.6, 0.11, note(n), { type: 'sine', attack: 0.3 });
+  glass(t + 2.1, note(96), 2, 0.12);
+  return 4.5;
+}
+
 export const sfx = {
   hit: (power) => play('putt', { vol: 0.35 + power * 0.65, rate: vary() * (0.94 + power * 0.12) }),
   wall: (strength) => play('wall', { vol: Math.min(1, 0.15 + strength / 9), rate: vary(0.1) }),
@@ -615,6 +786,13 @@ export const sfx = {
   rivalCup: (pan) => play('rivalCup', { vol: 0.5, pan }),
   rivalHit: (dist, pan) => play('putt', { vol: Math.max(0.05, 0.25 - dist * 0.02), rate: vary(0.1), pan }),
   skin: playSkin,
+  reward: {
+    hold: holdCharge,
+    riser: rewardRiser,
+    reveal: rewardReveal,
+    tick: rewardTick,
+  },
+  endJingle,
 };
 
 /** Rodar de la bola: ruido grave cuyo volumen sigue a la velocidad. */

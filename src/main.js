@@ -273,6 +273,7 @@ async function showLobby() {
   }
   await shell(view);
   if (backend.tournaments) showMyTournaments(view.querySelector('.my-tournaments'));
+  claimRewards();
 }
 
 // ---------- skins ----------
@@ -850,13 +851,13 @@ async function showWallet() {
 
 // ---------- matchmaking ----------
 
-async function startMatch(tier) {
+async function startMatch(tier, rematchOf = null) {
   // #hoyo3 en la URL: la práctica empieza por ese hoyo (útil para probar);
   // #hoyo3-empate además fuerza el desempate al final
   const forced = tier.entryFee === 0 && /^#hoyo(\d+)(-empate)?$/.exec(location.hash);
   // con servidor, las mesas de pago son torneos contra jugadores reales y la
   // práctica se juega en el móvil contra rivales simulados
-  if (!forced && tier.entryFee > 0 && backend.tournaments) return startTournament(tier);
+  if (!forced && tier.entryFee > 0 && backend.tournaments) return startTournament(tier, rematchOf);
   const service = forced || backend.tournaments ? practice : matches;
   let match;
   try {
@@ -1435,29 +1436,83 @@ async function showResults(match, tiebreak = {}) {
   const won = result.me.position === 1 || result.me.payout > 0;
   const tiebreakWon = won && tiebreak.me !== undefined;
   const gained = progress.recordMatch({ position: result.me.position, won, entryFee: match.tier.entryFee, holes: match.myHoles.filter(Boolean), tiebreakWon });
-  const levelUp = gained.level.level > gained.levelBefore;
   screen = 'lobby';
-  await showSkinReveal(gained.newSkins, { progress });
-  const view = h(`
-    <main class="screen results ${won ? 'won' : ''}">
-      ${won ? '<div class="rays"></div>' : ''}
-      <div class="trophy">${won ? 'Victoria' : `Puesto #${result.me.position}`}</div>
-      <h1 class="score-title">${won ? '¡Has ganado!' : `Posición ${result.me.position} de ${PLAYERS_PER_MATCH}`}</h1>
-      <p class="sub">${match.tier.entryFee ? (won ? `Premio ${coin(result.me.payout)}` : `Bote ${coin(result.pot)} para el ganador`) : 'Partida de práctica'}</p>
-      <div class="xp-card">
-        <div class="xp-head"><b>+${gained.xp} XP</b><span>${levelUp ? `¡Nivel ${gained.level.level}!` : `Nivel ${gained.level.level}`}</span></div>
-        <span class="bar"><i style="--to:${(gained.level.into / gained.level.need) * 100}%"></i></span>
+  showEndOverlay({
+    onRematch: () => startMatch(match.tier),
+    won,
+    position: result.me.position,
+    total: PLAYERS_PER_MATCH,
+    prize: match.tier.entryFee ? (won ? `Premio ${coin(result.me.payout)}` : `Bote ${coin(result.pot)} para el ganador`) : 'Partida de práctica',
+    ranking: result.ranking,
+    legal: match.tier.entryFee ? `Bote ${fmt(result.pot)} · comisión ${fmt(result.commission)} · premio ${fmt(result.prize)}` : '',
+    holes: match.myHoles.filter(Boolean),
+    gained,
+  });
+}
+
+// Final de partida: 1) resultado con XP y aviso de recompensas, sobre el propio juego;
+// 2) recompensas, ya fuera del juego, al salir hacia el menú; 3) menú principal.
+let rewardsOpen = false;
+
+async function claimRewards() {
+  const list = progress.claimable;
+  if (!list.length || rewardsOpen) return;
+  rewardsOpen = true;
+  try {
+    await showSkinReveal(list, { progress });
+    list.forEach((sk) => progress.claim(sk.id));
+  } finally {
+    rewardsOpen = false;
+  }
+}
+
+function showEndOverlay({ won, position, total, prize, ranking, legal, holes, gained, onRematch }) {
+  app.querySelector('.overlay')?.remove();
+  const levelUp = gained.level.level > gained.levelBefore;
+  const pending = progress.claimable.length;
+  const overlay = h(`
+    <div class="overlay end-overlay">
+      <div class="card end-card ${won ? 'good' : ''}">
+        <div class="trophy">${won ? 'Victoria' : `Puesto #${position}`}</div>
+        <h2 class="score-title">${won ? '¡Has ganado!' : `Posición ${position} de ${total}`}</h2>
+        <p class="sub">${prize}</p>
+        <div class="xp-card">
+          <div class="xp-head"><b>+${gained.xp} XP</b><span>${levelUp ? `¡Nivel ${gained.level.level}!` : `Nivel ${gained.level.level}`}</span></div>
+          <span class="bar"><i style="--to:${(gained.level.into / gained.level.need) * 100}%"></i></span>
+        </div>
+        ${pending ? `<p class="reward-note"><i></i>${pending === 1 ? 'Tienes 1 recompensa por reclamar' : `Tienes ${pending} recompensas por reclamar`}</p>` : ''}
+        ${statsGrid(holes)}
+        ${standingsTable(ranking, true)}
+        ${legal ? `<p class="legal">${legal}</p>` : ''}
+        <div class="row">
+          <button class="primary again">Revancha</button>
+          <button class="ghost next">${pending ? 'Reclamar y salir' : 'Salir'}</button>
+        </div>
       </div>
-      ${standingsTable(result.ranking, true)}
-      ${match.tier.entryFee ? `<p class="legal">Bote ${fmt(result.pot)} · comisión ${fmt(result.commission)} · premio ${fmt(result.prize)}</p>` : ''}
-      <div class="row">
-        <button class="primary again">Revancha</button>
-        <button class="ghost" data-go="lobby">Lobby</button>
-      </div>
-    </main>`);
-  view.querySelector('.again').addEventListener('click', () => startMatch(match.tier));
-  await shell(view, { nav: false });
-  if (won || gained.newSkins.length) sfx.coins();
+    </div>`);
+  overlay.querySelector('.again').addEventListener('click', (e) => {
+    e.target.disabled = true;
+    overlay.remove();
+    onRematch();
+  });
+  overlay.querySelector('.next').addEventListener('click', () => showLobby());
+  app.append(overlay);
+  sfx.endJingle(won, position);
+}
+
+function statsGrid(holes) {
+  if (!holes.length) return '';
+  const strokes = holes.reduce((a, x) => a + x.strokes, 0);
+  const diff = strokes - holes.reduce((a, x) => a + x.par, 0);
+  const birdies = holes.filter((x) => x.strokes < x.par).length;
+  const best = holes.reduce((a, x) => (x.strokes - x.par < a.strokes - a.par ? x : a));
+  const cell = (k, v) => `<div><b>${v}</b><span>${k}</span></div>`;
+  return `<div class="stats-grid">
+    ${cell('Golpes', strokes)}
+    ${cell('Vs par', diff > 0 ? `+${diff}` : diff === 0 ? 'E' : diff)}
+    ${cell('Birdies', birdies)}
+    ${cell('Mejor hoyo', scoreLabel(best.strokes, best.par).replace('¡', '').replace('!', ''))}
+  </div>`;
 }
 
 // ---------- torneos contra jugadores reales ----------
@@ -1467,10 +1522,14 @@ async function showResults(match, tiebreak = {}) {
 
 const POLL_MS = 5000;
 
-async function startTournament(tier) {
+async function startTournament(tier, rematchOf = null) {
   let match;
   try {
-    match = await backend.tournaments.join(tier, TIERS);
+    // revancha: el servidor junta en la misma sala a quienes la piden; si ya no vale, mesa normal
+    match = await backend.tournaments.join(tier, TIERS, rematchOf).catch((e) => {
+      if (e.code === 'rematch_invalid') return backend.tournaments.join(tier, TIERS);
+      throw e;
+    });
   } catch (e) {
     if (e instanceof InsufficientFundsError) return showWallet();
     if (e.blocked) {
@@ -1499,6 +1558,7 @@ function showTournamentLobby(match) {
       <h1>Torneo ${tier.name}</h1>
       <p class="sub count"></p>
       <div class="seats"></div>
+      ${match.rematchOf ? '<p class="legal">Revancha: quienes pidan revancha como tú entrarán juntos en esta sala.</p>' : ''}
       <p class="legal">Todos jugáis los mismos ${match.holes} hoyos, cada uno a su ritmo. Cuando terminéis todos (o se cierre la inscripción) gana quien menos golpes haga y se reparte el bote. El servidor repite cada golpe para que nadie pueda hacer trampas.</p>
       <button class="primary start">Empezar a jugar</button>
       <button class="ghost cancel">Salir y recuperar entrada</button>
@@ -1659,7 +1719,19 @@ async function showOnlineResults(match) {
   const waiting = match.players.filter((p) => !p.finished).length;
   const gained = match.status === 'settled' ? recordOnce(match) : null;
   const ranking = [...match.players].sort((a, b) => (a.position ?? 99) - (b.position ?? 99) || (a.total ?? 999) - (b.total ?? 999));
-  if (gained?.newSkins.length) await showSkinReveal(gained.newSkins, { progress });
+  if (gained) {
+    return showEndOverlay({
+      onRematch: () => startMatch(tier, match.id),
+      won,
+      position: me.position,
+      total: match.players.length,
+      prize: won ? `Premio ${coin(me.payout)}` : `Bote ${coin(match.pot)} para el ganador`,
+      ranking,
+      legal: `Bote ${fmt(match.pot)} · comisión ${fmt(match.commission)} · premio ${fmt(match.prize)}`,
+      holes: me.scores.map((strokes, i) => ({ strokes, par: COURSES[match.courses[i]].par })),
+      gained,
+    });
+  }
   let title, sub;
   if (open) {
     title = 'Esperando a los demás';

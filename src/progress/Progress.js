@@ -30,7 +30,22 @@ export class Progress {
     this.state.inventory = sanitizeInventory(this.state.inventory);
     // estado antiguo sin inventario: se crean las instancias de lo ya desbloqueado
     if (!this.state.deviceId) this.state.deviceId = newDeviceId();
-    if (this.#sync()) this.#persistLocal();
+    // recompensas ya abiertas: lo que ya estaba desbloqueado antes de existir este registro cuenta como reclamado
+    const migrated = !Array.isArray(this.state.claimed);
+    if (migrated) this.state.claimed = SKINS.filter((s) => this.isUnlocked(s)).map((s) => s.id);
+    if (this.#sync() || migrated) this.#persistLocal();
+  }
+
+  /** Skins desbloqueadas cuya recompensa aún no se ha abierto. */
+  get claimable() {
+    return SKINS.filter((s) => this.isUnlocked(s) && !this.state.claimed.includes(s.id));
+  }
+
+  claim(id) {
+    if (!this.state.claimed.includes(id)) {
+      this.state.claimed.push(id);
+      this.#persistLocal();
+    }
   }
 
   /** Clave de la que sale el seed: la cuenta, o el dispositivo si aún no hay. */
@@ -58,6 +73,8 @@ export class Progress {
     const other = this.state.owner && this.state.owner !== owner;
     const deviceId = this.state.deviceId;
     const mine = this.state.inventory;
+    const claimed = this.state.claimed ?? [];
+    const claimedXp = this.state.xp;
     if (other || (r.xp ?? 0) > this.state.xp) {
       this.state = { ...fresh(), ...r };
       this.state.inventory = sanitizeInventory(r.inventory);
@@ -78,6 +95,8 @@ export class Progress {
       }
     }
     this.state.deviceId = deviceId;
+    // el servidor no guarda las recompensas abiertas: lo ya desbloqueado al entrar en la cuenta no se vuelve a ofrecer
+    this.state.claimed = [...new Set([...claimed, ...(other || (r.xp ?? 0) > claimedXp ? SKINS.filter((sk) => this.isUnlocked(sk)).map((sk) => sk.id) : [])])];
     this.state.owner = owner;
     this.remote = save;
     this.#sync();

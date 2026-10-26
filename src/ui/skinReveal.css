@@ -121,7 +121,7 @@
 .sr-meta b { font-variant-numeric: tabular-nums; color: #fff; }
 .sr-rare { color: var(--c); font-weight: 800; }
 .sr-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 8px; width: 100%; pointer-events: none; }
-.sr-actions button { min-height: 46px; padding: 0 20px; font-weight: 800; flex: 1 1 130px; max-width: 200px; }
+.sr-actions button { margin: 0; flex: 1 1 130px; max-width: 200px; }
 .sr-stage.sr-done .sr-actions { pointer-events: auto; }
 .sr-actions .sr-equip:disabled { opacity: 0.75; }
 
@@ -131,7 +131,7 @@
 /* inspección dentro del reveal */
 .sr-insp { position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column; background: #080b10; padding-top: env(safe-area-inset-top, 0); cursor: default; animation: sr-in 0.2s ease-out both; }
 .sr-insp-bar { flex: none; display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--line, rgba(255, 255, 255, 0.1)); background: rgba(14, 19, 28, 0.95); font: 800 17px var(--display); }
-.sr-insp-bar .ghost { flex: none; min-height: 40px; padding: 0 14px; }
+.sr-insp-bar .ghost { flex: none; width: auto; margin: 0; min-height: 40px; padding: 0 14px; font-size: 14px; }
 .sr-insp-stage { position: relative; flex: 1 1 auto; min-height: 0; display: flex; }
 .sr-insp-stage > .sk-insp { flex: 1 1 auto; min-width: 0; border-radius: 0; }
 
@@ -145,3 +145,108 @@
   .sr-root, .sr-insp { animation: none; }
   .sr-root.sr-out { transition: none; }
 }
+
+/* puerta: recompensa sellada que se abre manteniendo pulsado */
+.sr-gate { gap: 18px; cursor: default; }
+.sr-kicker-gate { animation: sr-pop 0.5s var(--ease-out, ease-out) both; }
+.sr-vignette-gate { animation: sr-dark 0.4s ease-out both; }
+.sr-orb {
+  position: relative; width: clamp(170px, 52vw, 230px); aspect-ratio: 1; padding: 0; border: 0; border-radius: 50%;
+  background: none; cursor: pointer; touch-action: none; outline: none;
+  transform: scale(calc(1 + var(--p) * 0.22));
+  animation: sr-orb-float 2.4s ease-in-out infinite, sr-orb-in 0.6s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.sr-orb:focus-visible { outline: 3px solid #fff; outline-offset: 6px; }
+.sr-orb-core {
+  position: absolute; inset: 14%; border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 30%, #fff 0%, color-mix(in srgb, var(--c) 70%, #fff) 18%, var(--c) 48%, color-mix(in srgb, var(--c) 40%, #000) 100%);
+  box-shadow:
+    0 0 calc(30px + var(--p) * 90px) calc(var(--p) * 14px) color-mix(in srgb, var(--c) 75%, transparent),
+    inset 0 0 40px rgba(255, 255, 255, calc(0.15 + var(--p) * 0.6));
+  filter: brightness(calc(0.85 + var(--p) * 0.9));
+  animation: sr-orb-shake 0.09s linear infinite;
+}
+.sr-orb-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
+.sr-orb-ring circle {
+  fill: none; stroke: #fff; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: calc(100 - var(--p) * 100);
+  filter: drop-shadow(0 0 6px var(--c)) drop-shadow(0 0 14px var(--c));
+}
+.sr-hint { margin: 0; font: 800 14px var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255, 255, 255, 0.75); animation: sr-hint 1.6s ease-in-out infinite; }
+.sr-gate-on { cursor: default; }
+@keyframes sr-orb-in { from { opacity: 0; transform: scale(0.3); } }
+@keyframes sr-orb-float { 0%, 100% { translate: 0 0; } 50% { translate: 0 -8px; } }
+@keyframes sr-orb-shake {
+  0% { translate: 0 0; } 25% { translate: calc(var(--p) * 4px) calc(var(--p) * -3px); }
+  50% { translate: calc(var(--p) * -4px) calc(var(--p) * 3px); } 75% { translate: calc(var(--p) * 3px) calc(var(--p) * 4px); } 100% { translate: 0 0; }
+}
+@keyframes sr-hint { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+
+.sr-calm .sr-orb, .sr-calm .sr-orb-core { animation: none; transform: none; }
+.sr-calm .sr-shake .sr-stage, .sr-calm.sr-shake .sr-stage { animation: none; }
+
+/* ---- efectos por tier: cuanto más rara, más espectáculo (--k = 0 común … 5 mítica) ---- */
+.sr-rays {
+  position: absolute; left: 50%; top: 46%; width: 190vmax; height: 190vmax; margin: -95vmax 0 0 -95vmax; pointer-events: none; opacity: 0; mix-blend-mode: screen;
+  background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--c) 75%, #fff) 0 4deg, transparent 4deg 15deg);
+  -webkit-mask-image: radial-gradient(circle, #000 0%, transparent 38%); mask-image: radial-gradient(circle, #000 0%, transparent 38%);
+  animation: sr-rays-in 1.6s ease-out var(--s4) both, sr-spin calc(26s - var(--k) * 3s) linear var(--s4) infinite;
+}
+@keyframes sr-rays-in { 0% { opacity: 0; transform: scale(0.3); } 25% { opacity: calc(0.25 + var(--k) * 0.1); } 100% { opacity: calc(0.12 + var(--k) * 0.06); transform: scale(1); } }
+@keyframes sr-spin { to { rotate: 360deg; } }
+.sr-common .sr-rays, .sr-uncommon .sr-rays { display: none; }
+.sr-mythic .sr-rays { background: repeating-conic-gradient(from 0deg, #f59e0b 0 4deg, transparent 4deg 9deg, #ef4444 9deg 13deg, transparent 13deg 20deg); }
+
+/* ondas de choque del golpe */
+.sr-ring {
+  position: absolute; left: 50%; top: 46%; width: 40vmin; height: 40vmin; margin: -20vmin 0 0 -20vmin; border-radius: 50%; pointer-events: none; opacity: 0; display: none;
+  border: calc(2px + var(--k) * 1px) solid color-mix(in srgb, var(--c) 70%, #fff);
+  box-shadow: 0 0 24px var(--c), inset 0 0 24px var(--c);
+  animation: sr-ring 0.9s cubic-bezier(0.1, 0.7, 0.3, 1) var(--s4) both;
+}
+.sr-ring-2 { animation-delay: calc(var(--s4) + 0.14s); }
+.sr-ring-3 { animation-delay: calc(var(--s4) + 0.3s); }
+@keyframes sr-ring { 0% { opacity: 0.95; transform: scale(0.1); } 100% { opacity: 0; transform: scale(4.2); } }
+.sr-rare .sr-ring:not(.sr-ring-2):not(.sr-ring-3), .sr-epic .sr-ring:not(.sr-ring-3), .sr-legendary .sr-ring, .sr-mythic .sr-ring { display: block; }
+.sr-mythic .sr-ring-2 { border-color: #ef4444; box-shadow: 0 0 30px #ef4444, inset 0 0 30px #ef4444; }
+
+/* sacudida y destello escalan con el tier */
+.sr-shake .sr-stage { animation: sr-quake calc(0.35s + var(--k) * 0.12s) cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+@keyframes sr-quake {
+  0% { transform: translate(0, 0); }
+  10% { transform: translate(calc(var(--k) * -3px - 3px), calc(var(--k) * 2px + 2px)); }
+  22% { transform: translate(calc(var(--k) * 3px + 3px), calc(var(--k) * -2px - 2px)); }
+  38% { transform: translate(calc(var(--k) * -2px - 2px), calc(var(--k) * 2px + 1px)); }
+  55% { transform: translate(calc(var(--k) * 1.5px + 1px), calc(var(--k) * -1px)); }
+  75% { transform: translate(calc(var(--k) * -0.5px), calc(var(--k) * 0.5px)); }
+  100% { transform: none; }
+}
+.sr-vignette::after { animation-duration: calc(0.3s + var(--k) * 0.14s); }
+.sr-epic .sr-seal, .sr-legendary .sr-seal, .sr-mythic .sr-seal { animation-name: sr-stamp, sr-glow; animation-duration: var(--d4), 1.8s; animation-delay: var(--s4), calc(var(--s4) + var(--d4)); animation-iteration-count: 1, infinite; animation-fill-mode: both, none; }
+@keyframes sr-glow { 50% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 60%, transparent), 0 6px 46px var(--c); } }
+
+/* la bola de las raras o mejores flota y brilla al terminar */
+.sr-rare .sr-stage.sr-done .sr-ball img, .sr-epic .sr-stage.sr-done .sr-ball img, .sr-legendary .sr-stage.sr-done .sr-ball img, .sr-mythic .sr-stage.sr-done .sr-ball img {
+  animation: sr-float 3s ease-in-out infinite;
+}
+@keyframes sr-float { 50% { transform: translateY(-8px) scale(1.03); } }
+
+/* nombre: dorado brillante (legendaria), carmesí-oro con parpadeo (mítica) */
+.sr-legendary .sr-name, .sr-mythic .sr-name {
+  background: linear-gradient(100deg, #fff 0%, var(--c) 30%, #fff 50%, var(--c) 70%, #fff 100%); background-size: 250% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent;
+  animation: sr-shimmer 2.4s linear infinite; text-shadow: none; filter: drop-shadow(0 0 14px var(--c));
+}
+.sr-mythic .sr-name { background-image: linear-gradient(100deg, #fde68a 0%, #ef4444 30%, #fff 50%, #f59e0b 70%, #fde68a 100%); }
+@keyframes sr-shimmer { to { background-position: -250% 0; } }
+.sr-epic .sr-kicker, .sr-legendary .sr-kicker, .sr-mythic .sr-kicker { color: var(--c); letter-spacing: 0.24em; font-size: 15px; text-shadow: 0 0 18px var(--c); }
+.sr-mythic .sr-vignette::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 50% 46%, transparent 30%, rgba(239, 68, 68, 0.35) 100%); animation: sr-pulse-red 1.6s ease-in-out var(--s4) infinite; opacity: 0; }
+@keyframes sr-pulse-red { 50% { opacity: 1; } }
+
+.sr-calm .sr-rays, .sr-calm .sr-ring { display: none; }
+.sr-calm .sr-name { animation: none; }
+@media (prefers-reduced-motion: reduce) { .sr-rays, .sr-ring { display: none; } }
+
+/* acciones: misma rejilla y mismo tamaño para todos los botones */
+.sr-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.sr-actions button { width: 100%; max-width: none; flex: none; }

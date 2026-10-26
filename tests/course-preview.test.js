@@ -4,9 +4,9 @@ import { COURSES, TIEBREAK_COURSE } from '../src/game/courses.js';
 import { getCoursePreview, getCourseDistance, preloadCoursePreviews } from '../src/game/render/coursePreview.js';
 
 test('cálculo de distancia tee-hoyo para todos los mapas', () => {
-  // Hoyo 1: La Recta (tee [0, 8], cup [0, -8] => 16m)
+  // Hoyo 1: La Recta (tee [0, 11.5], cup [0, -11] => 22.5m)
   const d1 = getCourseDistance(COURSES[0]);
-  assert.equal(d1, 16);
+  assert.equal(d1, 22.5);
 
   // Desempate: tee [0, 9], cup [0, -6] => 15m
   const dtb = getCourseDistance(TIEBREAK_COURSE);

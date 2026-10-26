@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { courseBounds } from './environment.js';
-import { buildCourse } from './course.js';
+import { buildCourse, collarGeometry } from './course.js';
+import { roughTone } from './textures.js';
 import { BALL_R, CUP_R } from '../physics.js';
 import { THEMES } from '../themes.js';
 import { groundHeight, hasRelief } from './terrain.js';
@@ -233,6 +234,16 @@ export function getCoursePreview(course, { width = 480, height = 270, format = '
 
     // --- Construir la pista 3D real ---
     buildCourse(scene, course, theme);
+    if (course.grounded && !isNeon) {
+      // sin terreno en la tarjeta: un poco de prado bajo el antegreen para que el
+      // green no parezca una lámina flotando; se deshace en el fondo
+      const ground = new THREE.Mesh(
+        collarGeometry(course.outline, [[0, -0.04, 1], [2.2, -0.04, 0.75], [4, -0.04, 0]]),
+        new THREE.MeshLambertMaterial({ color: roughTone(theme).multiplyScalar(0.6), vertexColors: true, transparent: true, depthWrite: false }),
+      );
+      ground.renderOrder = -1; // antes que el antegreen, que también es transparente
+      scene.add(ground);
+    }
 
     // --- Marcador de Salida (Tee) con bola blanca ---
     const [tx, tz] = course.tee;

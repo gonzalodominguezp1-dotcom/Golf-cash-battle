@@ -2,12 +2,16 @@ import * as THREE from 'three';
 import { BALL_R, CUP_R, WALL_HALF, moverPos, segmentsOf } from '../physics.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { chevronTexture, crateTexture, dirtMaps, grassMaps, sandMaps, slopeArrowTexture, slopeShadeTexture, softDotTexture, stripeTexture, swirlTexture, woodMaps } from './textures.js';
+import { chevronTexture, crateTexture, dirtMaps, grassMaps, roughTone, sandMaps, slopeArrowTexture, slopeShadeTexture, softDotTexture, stripeTexture, swirlTexture, woodMaps } from './textures.js';
 import { groundHeight, hasRelief } from './terrain.js';
 import { attractionStyle, buildLoop, buildTube, buildTunnel, buildWindmill, neonGridTexture } from './attractions.js';
 
 const WALL_H = 0.32;
 const PLATFORM_DEPTH = 2.4;
+// pistas a ras de suelo (course.grounded): paredes y postes se hunden un poco en la tierra
+const GROUND_SINK = 0.05;
+// antegreen: [desplazamiento hacia fuera, altura, opacidad] de cada anillo
+const COLLAR_RINGS = [[0, -0.012, 1], [0.7, -0.016, 1], [1.0, -0.021, 0.6], [1.25, -0.026, 0.2], [1.45, -0.03, 0]];
 const BUMPER_COLORS = [0x4b7bec, 0xff6b6b, 0xffc145, 0x9b59b6];
 const outlineMat = new THREE.MeshBasicMaterial({ color: 0x1a1a1a, side: THREE.BackSide });
 const glowMat = (color) => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.35 });
@@ -39,21 +43,29 @@ export function buildCourse(scene, course, theme) {
     hole.absarc(hx, -hz, CUP_R, 0, Math.PI * 2, true);
     shape.holes.push(hole);
   }
-  const geo = new THREE.ExtrudeGeometry(shape, { depth: PLATFORM_DEPTH, bevelEnabled: false, curveSegments: 32 });
+  // a ras del terreno el green es una lámina (sin losa ni laterales de tierra)
+  const grounded = !!course.grounded;
+  const sink = grounded ? GROUND_SINK : 0;
+  const geo = grounded ? new THREE.ShapeGeometry(shape, 32) : new THREE.ExtrudeGeometry(shape, { depth: PLATFORM_DEPTH, bevelEnabled: false, curveSegments: 32 });
   geo.rotateX(-Math.PI / 2);
-  geo.translate(0, -PLATFORM_DEPTH, 0);
+  if (!grounded) geo.translate(0, -PLATFORM_DEPTH, 0);
   const grassM = neon ? { map: neonGridTexture(theme.grass, '#' + new THREE.Color(neon[0]).getHexString()) } : grassMaps(theme.grass);
   const grass = grassM.map;
   grass.repeat.set(0.5, 0.5);
-  // lateral de la maqueta: corte de terreno con capas de tierra y roca
-  const dirtM = dirtMaps(!!neon);
-  dirtM.map.repeat.set(0.5, 1 / PLATFORM_DEPTH);
   const grassMat = neon
     ? new THREE.MeshStandardMaterial({ map: grass, emissiveMap: grass, emissive: 0xffffff, emissiveIntensity: 0.22, roughness: 0.6, metalness: 0.2 })
     : new THREE.MeshStandardMaterial({ map: grass, normalMap: grassM.normalMap, normalScale: new THREE.Vector2(0.6, 0.6), roughness: 0.92 });
-  const platform = new THREE.Mesh(geo, [grassMat, new THREE.MeshStandardMaterial({ ...dirtM, roughness: 1 })]);
+  let platformMat = grassMat;
+  if (!grounded) {
+    // lateral de la maqueta: corte de terreno con capas de tierra y roca
+    const dirtM = dirtMaps(!!neon);
+    dirtM.map.repeat.set(0.5, 1 / PLATFORM_DEPTH);
+    platformMat = [grassMat, new THREE.MeshStandardMaterial({ ...dirtM, roughness: 1 })];
+  }
+  const platform = new THREE.Mesh(geo, platformMat);
   platform.receiveShadow = true;
   scene.add(platform);
+  if (grounded && !neon) scene.add(collarMesh(course, theme));
   if (relief) {
     // el césped de verdad es una malla con relieve; la plataforma queda debajo
     geo.translate(0, -0.03, 0);
@@ -102,6 +114,8 @@ export function buildCourse(scene, course, theme) {
   const wood = woodMaps();
   const walls = [];
   const aoStrips = [];
+  // a ras de suelo, normal hacia fuera de cada lado del contorno (para la sombra exterior)
+  const outward = grounded ? outwardNormals(course.outline) : [];
   segmentsOf(course).forEach(([[ax, az], [bx, bz]], i) => {
     // materiales propios para poder transparentar la pared que tapa la bola
     const wallMat = neon
@@ -117,19 +131,24 @@ export function buildCourse(scene, course, theme) {
     const segs = relief ? Math.max(1, Math.ceil(len / 0.2)) : 1;
     // sin relieve las paredes llevan los cantos redondeados (con relieve hace
     // falta una caja troceada a lo largo para seguir el césped)
-    const bodyGeo = relief ? new THREE.BoxGeometry(len, WALL_H, WALL_HALF * 2, segs) : new RoundedBoxGeometry(len, WALL_H, WALL_HALF * 2, 2, 0.03);
+    // a ras de suelo la base queda enterrada: el bordillo asienta sin dejar rendija
+    const bodyGeo = relief ? new THREE.BoxGeometry(len, WALL_H + sink, WALL_HALF * 2, segs) : new RoundedBoxGeometry(len, WALL_H + sink, WALL_HALF * 2, 2, 0.03);
     scaleUV(bodyGeo, len / 1.5, 1);
-    bodyGeo.translate(0, WALL_H / 2, 0);
+    bodyGeo.translate(0, (WALL_H - sink) / 2, 0);
     const capGeo = relief ? new THREE.BoxGeometry(len + 0.02, 0.05, WALL_HALF * 2 + 0.04, segs) : new RoundedBoxGeometry(len + 0.02, 0.06, WALL_HALF * 2 + 0.04, 2, 0.025);
     capGeo.translate(0, WALL_H + 0.02, 0);
     // sombra de contacto: una franja oscura y difuminada al pie de la pared
-    const ao = new THREE.PlaneGeometry(len, WALL_HALF * 2 + 0.5, relief ? segs : 1, 1);
+    const out = outward[i];
+    const ao = new THREE.PlaneGeometry(len, WALL_HALF * 2 + 0.5, relief ? segs : 1, out ? 2 : 1);
     ao.rotateX(-Math.PI / 2);
     ao.rotateY(-Math.atan2(bz - az, bx - ax));
     ao.translate((ax + bx) / 2, 0.006, (az + bz) / 2);
-    if (relief) {
-      const p = ao.attributes.position;
-      for (let k = 0; k < p.count; k++) p.setY(k, p.getY(k) + lift(p.getX(k), p.getZ(k)));
+    const p = ao.attributes.position;
+    for (let k = 0; k < p.count; k++) {
+      let y = p.getY(k) + lift(p.getX(k), p.getZ(k));
+      // por fuera la franja baja hasta el antegreen para que la pared asiente también ahí
+      if (out && (p.getX(k) - (ax + bx) / 2) * out[0] + (p.getZ(k) - (az + bz) / 2) * out[1] > 0.01) y += COLLAR_RINGS[0][1] - 0.003;
+      p.setY(k, y);
     }
     aoStrips.push(ao);
     // se colocan en el mundo y siguen el relieve a lo largo de la pared: la base
@@ -177,8 +196,8 @@ export function buildCourse(scene, course, theme) {
       : new THREE.MeshStandardMaterial({ color: 0xff5a4e, emissive: 0xff3a2e, emissiveIntensity: night ? 0.35 : 0.15, transparent: true });
     const baseEmissive = ballMat.emissiveIntensity || 0;
 
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(WALL_HALF * 1.25, WALL_HALF * 1.3, WALL_H + 0.12 + h, 20), postMat);
-    post.position.set(x, (WALL_H + 0.12 + h) / 2, z);
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(WALL_HALF * 1.25, WALL_HALF * 1.3, WALL_H + 0.12 + h + sink, 20), postMat);
+    post.position.set(x, (WALL_H + 0.12 + h - sink) / 2, z);
     post.castShadow = true;
     const ball = new THREE.Mesh(
       new THREE.SphereGeometry(WALL_HALF * 1.1, 20, 14),
@@ -754,6 +773,114 @@ function cupCollar(hx, hz, y, material) {
   const m = new THREE.Mesh(geo, material);
   m.receiveShadow = true;
   return m;
+}
+
+function signedArea(outline) {
+  let a = 0;
+  outline.forEach(([ax, az], i) => {
+    const [bx, bz] = outline[(i + 1) % outline.length];
+    a += ax * bz - bx * az;
+  });
+  return a / 2;
+}
+
+/** Normal hacia fuera de cada lado del contorno (lado i: del punto i al i+1), gire como gire. */
+function outwardNormals(outline) {
+  const s = signedArea(outline) > 0 ? 1 : -1;
+  return outline.map(([ax, az], i) => {
+    const [bx, bz] = outline[(i + 1) % outline.length];
+    const l = Math.hypot(bx - ax, bz - az) || 1;
+    return [(s * (bz - az)) / l, (-s * (bx - ax)) / l];
+  });
+}
+
+/**
+ * Contorno desplazado `off` hacia fuera: las esquinas exteriores son arcos (no
+ * picos) y las interiores, ingletes. Da el mismo número de puntos para
+ * cualquier `off`, así los anillos se cosen punto a punto.
+ */
+function offsetOutline(outline, normals, off) {
+  const n = outline.length, pts = [];
+  for (let i = 0; i < n; i++) {
+    const [px, pz] = outline[i], [qx, qz] = outline[(i + 1) % n];
+    const [ax, az] = normals[(i + n - 1) % n], [bx, bz] = normals[i];
+    if (ax * (qx - px) + az * (qz - pz) < -1e-9) {
+      // esquina exterior: el lado siguiente se mete hacia dentro
+      const a0 = Math.atan2(az, ax), da = Math.atan2(ax * bz - az * bx, ax * bx + az * bz);
+      const k = Math.max(1, Math.ceil(Math.abs(da) / (Math.PI / 12)));
+      for (let j = 0; j <= k; j++) {
+        const a = a0 + (da * j) / k;
+        pts.push([px + Math.cos(a) * off, pz + Math.sin(a) * off]);
+      }
+    } else {
+      const mx = ax + bx, mz = az + bz, ml = Math.hypot(mx, mz) || 1;
+      const m = off / Math.max(0.5, ml / 2);
+      pts.push([px + (mx / ml) * m, pz + (mz / ml) * m]);
+    }
+  }
+  return pts;
+}
+
+/**
+ * Franja alrededor del contorno hecha de anillos [desplazamiento, altura,
+ * opacidad]; la opacidad va en el color por vértice para fundirla con el suelo.
+ */
+export function collarGeometry(outline, rings) {
+  const normals = outwardNormals(outline);
+  const loops = rings.map(([off]) => offsetOutline(outline, normals, off));
+  const m = loops[0].length;
+  const pos = [], uv = [], col = [], idx = [];
+  loops.forEach((loop, r) => {
+    for (const [x, z] of loop) {
+      pos.push(x, rings[r][1], z);
+      uv.push(x, -z);
+      col.push(1, 1, 1, rings[r][2]);
+    }
+  });
+  // el orden de los vértices depende del sentido del contorno: la cara mira arriba
+  const ccw = signedArea(outline) > 0;
+  for (let r = 0; r + 1 < loops.length; r++) {
+    for (let i = 0; i < m; i++) {
+      const a = r * m + i, b = r * m + ((i + 1) % m), c = a + m, d = b + m;
+      if (ccw) idx.push(a, b, c, b, d, c);
+      else idx.push(a, c, b, b, c, d);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 4));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/**
+ * Antegreen: césped segado más alto, más oscuro y apagado que el green, un pelo
+ * por debajo de él, que se deshace en el terreno sin borde duro.
+ */
+function collarMesh(course, theme) {
+  const tone = roughTone(theme);
+  const hex = (c) => '#' + c.getHexString();
+  // sin franjas de corte: los dos tonos casi iguales
+  const maps = grassMaps([hex(tone.clone().offsetHSL(0, 0, 0.02)), hex(tone.clone().offsetHSL(0, 0, -0.01))]);
+  // briznas más gruesas que en el green
+  maps.map.repeat.set(0.35, 0.35);
+  const mat = new THREE.MeshStandardMaterial({
+    ...maps,
+    normalScale: new THREE.Vector2(1, 1),
+    roughness: 1,
+    vertexColors: true,
+    transparent: true,
+    depthWrite: false,
+    // el terreno queda solo un centímetro por debajo
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -2,
+  });
+  const mesh = new THREE.Mesh(collarGeometry(course.outline, COLLAR_RINGS), mat);
+  mesh.receiveShadow = true;
+  return mesh;
 }
 
 /** Pasa la malla a coordenadas del mundo y la pega al relieve. */

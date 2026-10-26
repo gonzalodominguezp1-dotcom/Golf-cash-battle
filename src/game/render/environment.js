@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { softDotTexture } from './textures.js';
+import { roughTone, softDotTexture } from './textures.js';
 import { addWind, bakeStatic } from './batch.js';
 import { quality } from './quality.js';
+import { CUP_R } from '../physics.js';
 import {
   getCyberGridTexture,
   makeHoloCrystal,
@@ -12,6 +13,8 @@ import {
 
 // tiempo compartido por los sombreadores animados (viento, agua)
 const windUniforms = { uTime: { value: 0 } };
+// altura del terreno junto a una pista a ras de suelo (el green está a 0)
+const GROUND_Y = -0.04;
 
 // Cielo, terreno, agua y decorado low-poly alrededor del hoyo.
 
@@ -45,6 +48,8 @@ export function buildEnvironment(scene, course, theme, rng) {
   // todo lo que no se mueve va aquí y al final se junta en pocas mallas
   const decor = new THREE.Group();
   const isNeon = !!theme.neon;
+  // pista a ras de suelo: el terreno llega plano hasta las paredes (ver course.grounded)
+  const grounded = !!course.grounded && !isNeon;
 
   // --- cielo con degradado y sol ---
   const sunDir = new THREE.Vector3(...theme.sunDir).normalize();
@@ -82,7 +87,11 @@ export function buildEnvironment(scene, course, theme, rng) {
   sun.shadow.bias = -0.0005;
   sun.shadow.normalBias = 0.02;
   // la sombra cubre el hoyo entero (y no más: cuanto más ajustada, más nítida)
-  const half = Math.max(8, Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ) * 0.6 + 2);
+  const span = Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ);
+  // a ras de suelo la sombra se queda fija sobre el centro de la pista (shadowAnchor):
+  // con una pista larga, centrada en la bola dejaba sin sombras el otro extremo
+  const half = grounded ? Math.max(8, span * 0.5 + 2.5) : Math.max(8, span * 0.6 + 2);
+  const shadowAnchor = grounded ? { x: (bounds.minX + bounds.maxX) / 2, z: (bounds.minZ + bounds.maxZ) / 2 } : null;
   Object.assign(sun.shadow.camera, { left: -half, right: half, top: half, bottom: -half, near: 1, far: 80 });
   scene.add(sun, sun.target);
   // contraluces de color a ambos lados: dan los bordes rosa/cian que hacen vibrar la escena
@@ -115,12 +124,27 @@ export function buildEnvironment(scene, course, theme, rng) {
       const sharpPeak = Math.pow(ridge1, 2.6) * 16.0 + Math.pow(ridge2, 2.2) * 6.0;
       return theme.terrainOffset - 0.6 + (sharpPeak - 4.5) * ramp;
     }
+    if (grounded) {
+      // meseta plana junto a la pista (la rejilla es de 2 m: con margen para no
+      // asomar entre las paredes) y luego lomas suaves hasta las mismas colinas de
+      // fondo que el resto de hoyos, sin bajar hacia el agua
+      const far = theme.terrainOffset * 0.7 - 1.25 + fbm(x * 0.06, z * 0.06) * 9;
+      return GROUND_Y + (far - GROUND_Y) * THREE.MathUtils.smoothstep(d, 3.2, 26);
+    }
     const ramp = THREE.MathUtils.smoothstep(d, 2, 16);
     return theme.terrainOffset * (1 - ramp * 0.3) - 0.55 + fbm(x * 0.06, z * 0.06) * 9 * ramp - 2.2 * ramp + ramp * ramp * 1.5;
   };
   for (let i = 0; i < pos.count; i++) pos.setY(i, heightAt(pos.getX(i), pos.getZ(i)));
+  if (grounded && !course.noCup) {
+    // sin losa debajo, el terreno se vería dentro del agujero: se hunden los
+    // vértices de las celdas que tocan el hoyo (quedan tapados por el green)
+    const [hx, hz] = course.cup, cell = size / seg + CUP_R + 0.02;
+    for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getX(i) - hx) < cell && Math.abs(pos.getZ(i) - hz) < cell) pos.setY(i, -0.6);
+  }
   const colors = new Float32Array(pos.count * 3);
   const low = new THREE.Color(theme.groundLow), mid = new THREE.Color(theme.groundMid), high = new THREE.Color(theme.groundHigh);
+  // prado junto a la pista: enlaza con el antegreen
+  const lawn = grounded ? roughTone(theme).multiplyScalar(0.6) : null;
   const c = new THREE.Color();
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
@@ -140,6 +164,7 @@ export function buildEnvironment(scene, course, theme, rng) {
     if (y < 2.5) c.copy(mid).lerp(high, THREE.MathUtils.clamp((y - 0.5) / 3, 0, 1));
     else c.copy(high).lerp(new THREE.Color(0x8a8f86), THREE.MathUtils.clamp((y - 4) / 4, 0, 0.7));
     c.lerp(low, 1 - shore);
+    if (lawn) c.lerp(lawn, 0.85 * (1 - THREE.MathUtils.smoothstep(distToBounds(bounds, x, z), 1.5, 9)));
     // manchas grandes y suaves: prados más claros y más oscuros
     c.offsetHSL(0, 0, (noise(x * 0.15 + 3, z * 0.15) - 0.5) * 0.08 + (hash(x, z) - 0.5) * 0.015);
     c.toArray(colors, i * 3);
@@ -181,7 +206,8 @@ export function buildEnvironment(scene, course, theme, rng) {
   waterShader(waterMat, theme);
   const water = new THREE.Mesh(waterGeo, waterMat);
   water.position.y = theme.waterLevel;
-  scene.add(water);
+  // a ras de suelo el terreno no baja hasta el agua: no se dibuja
+  if (!grounded) scene.add(water);
   if (theme.lava) animated.push((t) => (water.material.emissiveIntensity = 0.9 + Math.sin(t * 1.7) * 0.25));
   else if (isNeon) animated.push((t) => (water.material.emissiveIntensity = 0.22 + Math.sin(t * 2.2) * 0.06));
 
@@ -210,19 +236,23 @@ export function buildEnvironment(scene, course, theme, rng) {
     setupCyberpunkEnvironment(scene, decor, bounds, theme, rng, animated, q);
   } else {
     const leaves = theme.leaves?.map((color) => addWind(new THREE.MeshLambertMaterial({ color, flatShading: true }), windUniforms, WIND));
-    place(2.2, 40, 140, (x, y, z) => {
+    // a ras de suelo nada pisa el antegreen, y detrás del tee queda un claro para la cámara
+    const [tx, tz] = course.tee;
+    const clear = (x, z) => !grounded || Math.hypot(x - tx, z - tz) > 9;
+    place(grounded ? 4.5 : 2.2, 40, 140, (x, y, z) => {
+      if (!clear(x, z)) return;
       const tree = makeTree(theme.trees[Math.floor(rng() * theme.trees.length)], rng, x, y, z, leaves);
       // los árboles se mecen con el viento (en el sombreador, ver addWind)
       tree.userData.swayRoot = true;
       decor.add(tree);
     });
-    place(1.8, 30, 40, (x, y, z) => decor.add(makeRock(rng, x, y, z)));
-    if (theme.flowers) place(1.2, 12, 110, (x, y, z) => decor.add(makeFlower(rng, x, y, z)));
-    place(1, 14, 90, (x, y, z) => decor.add(makeTuft(rng, x, y, z, theme)));
+    place(grounded ? 2.8 : 1.8, 30, 40, (x, y, z) => clear(x, z) && decor.add(makeRock(rng, x, y, z)));
+    if (theme.flowers) place(grounded ? 1.6 : 1.2, 12, 110, (x, y, z) => decor.add(makeFlower(rng, x, y, z)));
+    place(grounded ? 1.6 : 1, 14, 90, (x, y, z) => decor.add(makeTuft(rng, x, y, z, theme)));
     if (theme.lanterns) {
       // farolillos alrededor de la pista; solo unos pocos llevan luz real (cada luz cuesta en el móvil)
-      const spots = theme.lanterns === 'many' ? perimeterSpots(course, 1.3, 3.2) : [];
-      if (!spots.length) place(1.2, 3, 30, (x, y, z) => spots.length < 4 && spots.push([x, z]));
+      const spots = theme.lanterns === 'many' ? perimeterSpots(course, grounded ? 1.7 : 1.3, 3.2) : [];
+      if (!spots.length) place(grounded ? 1.7 : 1.2, grounded ? 3.5 : 3, 30, (x, y, z) => spots.length < 4 && spots.push([x, z]));
       const lamps = spots.map(([x, z], i) => {
         const lamp = theme.torches && i % 2 ? makeTorch(x, heightAt(x, z), z, i < 6) : makeLantern(x, heightAt(x, z), z, i, i < 6);
         decor.add(lamp);
@@ -320,7 +350,7 @@ export function buildEnvironment(scene, course, theme, rng) {
   }
 
   bakeStatic(decor, scene);
-  return { sun, sunDir, update: (t, dt) => animated.forEach((f) => f(t, dt)) };
+  return { sun, sunDir, shadowAnchor, update: (t, dt) => animated.forEach((f) => f(t, dt)) };
 }
 
 const WIND = 0.025;

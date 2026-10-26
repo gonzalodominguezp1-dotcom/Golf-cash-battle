@@ -70,6 +70,11 @@ export function grassMaps([a, b]) {
   return withNormals(grassTexture([a, b]), 1.6);
 }
 
+/** Tono del antegreen: el césped del green más oscuro y apagado, tirando al del prado. */
+export function roughTone(theme) {
+  return new THREE.Color(theme.grass[1]).lerp(new THREE.Color(theme.groundHigh), 0.55).offsetHSL(0, -0.12, -0.02);
+}
+
 export function grassTexture([a, b]) {
   return canvasTexture(detailSize(256), (g, n) => {
     // dos franjas de corte por tesela con el borde difuminado
