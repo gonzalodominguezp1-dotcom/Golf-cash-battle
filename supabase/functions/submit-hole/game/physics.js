@@ -173,6 +173,101 @@ export function windmillBlocks(wm, t) {
 }
 export const WINDMILL_GATE_HALF = 0.08;
 
+// ---------- lava y rampas ----------
+//
+// La lava son polígonos: la bola que la toca (con el centro dentro) se quema
+// y vuelve, parada, al sitio desde el que se golpeó (ball.from). El golpe
+// cuenta: esa es la penalización.
+// Una rampa es un rectángulo que sube h a lo largo de dir (como una pendiente
+// pero hacia arriba). Si la bola pasa por el labio de arriba sale volando con
+// el ángulo del labio (lift, la tangente; más empinado que la cuña):
+// ball.air = { y, vy } mientras está en el aire, sin rozamiento y por encima
+// de la lava, las setas y las aspas. Al caer bota una vez y sigue rodando.
+
+const LAND_KEEP = 0.8; // velocidad que conserva al tocar el suelo tras un salto
+const HOP_KEEP = 0.3; // el bote: parte de la velocidad vertical que devuelve el suelo
+const HOP_MIN = 1.6; // por debajo de esta velocidad de caída ya no bota
+
+/** ¿Está (x, z) dentro del polígono? (regla par-impar, solo + - * /). */
+export function insidePoly(poly, x, z) {
+  let ok = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, zi] = poly[i], [xj, zj] = poly[j];
+    if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) ok = !ok;
+  }
+  return ok;
+}
+
+/** La lava en la que está el centro de la bola (o undefined). */
+export const inLava = (course, x, z) => (course.lava ?? []).find((l) => insidePoly(l.poly, x, z));
+
+export const onRamp = (course, x, z) => (course.ramps ?? []).find((r) => inRect(r, x, z));
+const rampLen = (r) => (r.dir[0] !== 0 ? r.w : r.d);
+/** Lo recorrido desde el pie de la rampa (0) hasta el labio (su largo). */
+export const rampAlong = (r, x, z) => (x - r.x) * r.dir[0] + (z - r.z) * r.dir[1] + rampLen(r) / 2;
+/** Altura de la rampa en (x, z) (0 fuera). */
+export function rampHeight(course, x, z) {
+  const r = onRamp(course, x, z);
+  return r ? (r.h * rampAlong(r, x, z)) / rampLen(r) : 0;
+}
+/** Lo que frena la rampa al subirla: g · inclinación. */
+export const rampAccel = (r) => (GRAVITY * r.h) / rampLen(r);
+
+/** ¿Ha pasado la bola (de p a ball) por el labio de una rampa hacia delante? */
+function rampLaunch(course, ball, px, pz) {
+  for (const r of course.ramps ?? []) {
+    const len = rampLen(r);
+    const lat = (px - r.x) * r.dir[1] - (pz - r.z) * r.dir[0];
+    const across = r.dir[0] !== 0 ? r.d : r.w;
+    if (lat > across / 2 || lat < -across / 2) continue;
+    const u = ball.vx * r.dir[0] + ball.vz * r.dir[1];
+    if (u > 0 && rampAlong(r, px, pz) < len && rampAlong(r, ball.x, ball.z) >= len) {
+      // el labio levanta la bola con la pendiente lift (tangente del ángulo de salida)
+      const lift = r.lift ?? r.h / len;
+      const k = 1 / Math.sqrt(1 + lift * lift);
+      ball.vx *= k;
+      ball.vz *= k;
+      return { y: r.h, vy: u * lift * k };
+    }
+  }
+  return null;
+}
+
+/** La bola cae en la lava: vuelve parada al sitio del golpe. */
+function burn(course, ball) {
+  const at = [ball.x, ball.z];
+  const [x, z] = ball.from ?? course.tee;
+  Object.assign(ball, { x, z, vx: 0, vz: 0, air: null, from: null });
+  return at;
+}
+
+/** Un paso en el aire: vuelo parabólico; las paredes siguen parando la bola. */
+function airStep(course, segs, ball, dt) {
+  const a = ball.air;
+  const vy = a.vy - GRAVITY * dt;
+  const y = a.y + vy * dt;
+  ball.x += ball.vx * dt;
+  ball.z += ball.vz * dt;
+  let hit = 0;
+  for (const seg of segs) hit = Math.max(hit, collideSegment(ball, seg, 0, 0));
+  const out = { sunk: false, hit, bumper: -1, portal: -1, air: true, landed: false };
+  if (y > 0) {
+    ball.air = { y, vy };
+    return out;
+  }
+  // toca el suelo: si cae en lava se quema; si no, bota o se queda rodando
+  out.landed = true;
+  out.impact = -vy;
+  if (inLava(course, ball.x, ball.z)) {
+    out.lava = burn(course, ball);
+    return out;
+  }
+  ball.vx *= LAND_KEEP;
+  ball.vz *= LAND_KEEP;
+  ball.air = -vy > HOP_MIN ? { y: 0, vy: -vy * HOP_KEEP } : null;
+  return out;
+}
+
 // ---------- loopings y tubos: tramos en los que la bola va por un carril ----------
 //
 // Mientras la bola va por un carril lleva ball.track = { kind, i, s, u, lat }:
@@ -464,6 +559,9 @@ export function step(course, segs, ball, t, dt) {
   let hit = 0;
   let bumper = -1;
   let portal = -1;
+  // de dónde sale el golpe: allí vuelve la bola si cae en la lava
+  if (!ball.from && course.lava && (ball.vx !== 0 || ball.vz !== 0)) ball.from = [ball.x, ball.z];
+  if (ball.air) return airStep(course, segs, ball, dt);
   if (ball.track) {
     const ev = trackStep(course, ball, dt);
     return { sunk: false, hit, bumper, portal, track: ball.track?.kind ?? null, trackExit: ev === 'exit' };
@@ -501,9 +599,22 @@ export function step(course, segs, ball, t, dt) {
     ball.vx += (dx / d) * incline * dt;
     ball.vz += (dz / d) * incline * dt;
   }
+  const ramp = slope || mound ? null : onRamp(course, ball.x, ball.z);
+  if (ramp) {
+    // subir la rampa frena (y sin fuerza la bola vuelve rodando hacia abajo)
+    incline = rampAccel(ramp);
+    ball.vx -= ramp.dir[0] * incline * dt;
+    ball.vz -= ramp.dir[1] * incline * dt;
+  }
   const px = ball.x, pz = ball.z;
   ball.x += ball.vx * dt;
   ball.z += ball.vz * dt;
+
+  const air = ramp ? rampLaunch(course, ball, px, pz) : null;
+  if (air) {
+    ball.air = air;
+    return { sunk: false, hit, bumper, portal, launch: true };
+  }
 
   const loop = course.loops ? enterLoop(course, ball, px, pz) : null;
   if (loop) {
@@ -552,6 +663,8 @@ export function step(course, segs, ball, t, dt) {
     ball.z = p.b[1];
   }
 
+  if (course.lava && inLava(course, ball.x, ball.z)) return { sunk: false, hit, bumper, portal, lava: burn(course, ball) };
+
   const [hx, hz] = course.cup;
   const toCup = hyp(ball.x - hx, ball.z - hz);
   const v = hyp(ball.vx, ball.vz);
@@ -563,9 +676,10 @@ export function step(course, segs, ball, t, dt) {
   }
   const rolls = incline > ROLL_DECEL * (inSand(course, ball.x, ball.z) ? SAND_FACTOR : 1);
   if (v < STOP_SPEED && !rolls) ball.vx = ball.vz = 0;
+  if (ball.from && ball.vx === 0 && ball.vz === 0) ball.from = null;
   return { sunk: false, hit, bumper, portal };
 }
 
 export function isMoving(ball) {
-  return ball.vx !== 0 || ball.vz !== 0 || !!ball.track;
+  return ball.vx !== 0 || ball.vz !== 0 || !!ball.track || !!ball.air;
 }

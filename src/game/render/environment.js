@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { softDotTexture } from './textures.js';
 import { addWind, bakeStatic } from './batch.js';
 import { quality } from './quality.js';
+import { lavaMaterial } from './lava.js';
 
 // tiempo compartido por los sombreadores animados (viento, agua)
 const windUniforms = { uTime: { value: 0 } };
@@ -127,10 +128,13 @@ export function buildEnvironment(scene, course, theme, rng) {
     ? new THREE.MeshPhongMaterial({ color: theme.water, emissive: 0xff3a0a, emissiveIntensity: 0.9, shininess: 30, flatShading: true })
     : new THREE.MeshPhongMaterial({ color: theme.water ?? 0x2bb3e6, shininess: 110, specular: 0xffffff, transparent: true, opacity: 0.86, flatShading: true });
   waterShader(waterMat, theme);
-  const water = new THREE.Mesh(waterGeo, waterMat);
+  // dentro del volcán el lago es lava de verdad: costra que se mueve y se rompe
+  const lake = theme.caldera ? lavaMaterial({ flow: [0.15, 0.1], scale: 0.35, heat: -0.08 }) : null;
+  const water = new THREE.Mesh(waterGeo, lake ?? waterMat);
   water.position.y = theme.waterLevel;
   scene.add(water);
-  if (theme.lava) animated.push((t) => (water.material.emissiveIntensity = 0.9 + Math.sin(t * 1.7) * 0.25));
+  if (lake) animated.push((t) => (lake.uniforms.uTime.value = t));
+  else if (theme.lava) animated.push((t) => (water.material.emissiveIntensity = 0.9 + Math.sin(t * 1.7) * 0.25));
 
   // --- decorado ---
   const place = (minD, maxD, tries, fn) => {
@@ -172,7 +176,8 @@ export function buildEnvironment(scene, course, theme, rng) {
       }
     });
   }
-  if (theme.lava) volcanoBackdrop(scene, course, bounds, heightAt, animated, rng);
+  if (theme.caldera) calderaWalls(scene, bounds, animated);
+  else if (theme.lava) volcanoBackdrop(scene, course, bounds, heightAt, animated, rng);
 
   // --- nubes ---
   // nubes de algodón: varias bolas redondas juntadas en una sola malla por nube
@@ -608,6 +613,61 @@ function festoon(lamps) {
   for (let i = 0; i + 1 < wire.length; i++) if (wire[i].distanceTo(wire[i + 1]) < 1.2) segs.push(wire[i], wire[i + 1]);
   g.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(segs), new THREE.LineBasicMaterial({ color: 0x222222 })));
   return g;
+}
+
+// Dentro del volcán: pared de roca alrededor que se cierra hacia arriba hasta
+// la boca del cráter, con cascadas de lava que caen al lago
+function calderaWalls(scene, bounds, animated) {
+  const cx = (bounds.minX + bounds.maxX) / 2, cz = (bounds.minZ + bounds.maxZ) / 2;
+  const rx = (bounds.maxX - bounds.minX) / 2 + 12, rz = (bounds.maxZ - bounds.minZ) / 2 + 9;
+  const H = 34, bottom = -5;
+  const geo = new THREE.CylinderGeometry(0.42, 1, H, 120, 16, true).toNonIndexed();
+  const pos = geo.attributes.position;
+  // roca irregular: cada vértice sale o entra según el ruido (igual en los vértices repetidos)
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const k = 1 + (noise(x * 2.2 + 5, z * 2.2 + y * 0.18) - 0.5) * 0.22 + (noise(x * 7, z * 7 + y * 0.6) - 0.5) * 0.06;
+    pos.setXYZ(i, x * rx * k, y + (noise(x * 3, z * 3) - 0.5) * 1.5, z * rz * k);
+  }
+  // cascadas de lava (franjas que bajan) y la base al rojo por el lago
+  const falls = [0.35, 1.3, 2.15, 3.4, 4.2, 5.05, 5.8];
+  const colors = new Float32Array(pos.count * 3);
+  const rock = new THREE.Color(0x241b1d), hot = new THREE.Color(0xff5a14), c = new THREE.Color();
+  // color por vértice (igual en los vértices repetidos): las cascadas son
+  // franjas suaves, no dientes de sierra
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const a = Math.atan2(z / rz, x / rx) + Math.PI;
+    const h = (y + H / 2) / H;
+    const fall = falls.some((f, j) => Math.abs(((a - f + Math.PI * 3) % (Math.PI * 2)) - Math.PI) < 0.03 && h < 0.5 + (j % 3) * 0.12);
+    c.copy(rock).offsetHSL(0, 0, (noise(x * 0.4, z * 0.4 + y * 0.3) - 0.5) * 0.06 + h * 0.03);
+    if (fall) c.copy(hot).lerp(new THREE.Color(0xffc040), 0.2 + noise(y * 0.5, a * 3) * 0.3);
+    else if (h < 0.12) c.lerp(hot, (0.12 - h) * 4);
+    c.toArray(colors, i * 3);
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geo.computeVertexNormals();
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95, side: THREE.BackSide });
+  mat.onBeforeCompile = (sh) => {
+    sh.fragmentShader = sh.fragmentShader.replace(
+      '#include <emissivemap_fragment>',
+      '#include <emissivemap_fragment>\n totalEmissiveRadiance += vColor * smoothstep(0.35, 0.6, vColor.r - vColor.b) * 1.4;',
+    );
+  };
+  const wall = new THREE.Mesh(geo, mat);
+  wall.position.set(cx, bottom + H / 2, cz);
+  scene.add(wall);
+  // la boca del cráter brilla arriba y el lago ilumina la cueva desde abajo
+  const glow = haloSprite(0xff7a2a, 26);
+  glow.position.set(cx, bottom + H + 2, cz);
+  glow.material.opacity = 0.35;
+  const under = new THREE.PointLight(0xff5a14, 8, 40, 1.4);
+  under.position.set(cx, -0.2, cz);
+  scene.add(glow, under);
+  animated.push((t) => {
+    under.intensity = 8 + Math.sin(t * 1.9) * 1.5 + Math.sin(t * 5.3) * 0.6;
+    glow.material.opacity = 0.3 + Math.sin(t * 0.8) * 0.06;
+  });
 }
 
 // Volcán de verdad detrás del hoyo: cono de roca, cráter de lava, coladas y humo

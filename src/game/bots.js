@@ -1,4 +1,4 @@
-import { BALL_R, MAX_SHOT_SPEED, isMoving, step } from './physics.js';
+import { BALL_R, MAX_SHOT_SPEED, WALL_HALF, insidePoly, isMoving, step } from './physics.js';
 import { MAX_STROKES_PER_HOLE } from '../config.js';
 
 // Rivales simulados que juegan el mismo hoyo con la misma física que tú.
@@ -18,6 +18,7 @@ function segBlocked(ax, az, bx, bz, segs, course) {
     const pad = 0.35 / Math.hypot(sx, sz);
     if (t > 0 && t < 1 && u > -pad && u < 1 + pad) return true;
   }
+  if (lavaBlocks(ax, az, bx, bz, course)) return true;
   for (const b of course.bumpers) {
     const len2 = rx * rx + rz * rz;
     const t = Math.max(0, Math.min(1, ((b.x - ax) * rx + (b.z - az) * rz) / len2));
@@ -25,6 +26,48 @@ function segBlocked(ax, az, bx, bz, segs, course) {
   }
   return false;
 }
+
+// tras el labio de una rampa la bola vuela este trecho: la lava que se cruce ahí no cuenta
+const JUMP_REACH = 2.6;
+
+/**
+ * ¿La línea de a a b pasa por lava? No cuenta la que cruza justo después de
+ * subir por una rampa (la salta), ni la de la lava en la que ya está a.
+ */
+function lavaBlocks(ax, az, bx, bz, course) {
+  if (!course.lava) return false;
+  const rx = bx - ax, rz = bz - az, len = Math.hypot(rx, rz);
+  if (len < 1e-6) return false;
+  // dónde pasa la línea por el labio de cada rampa (en metros desde a)
+  const lips = [];
+  for (const r of course.ramps ?? []) {
+    const u = (rx * r.dir[0] + rz * r.dir[1]) / len;
+    if (u <= 0.5) continue; // de lado o hacia atrás no se salta
+    const half = (r.dir[0] !== 0 ? r.w : r.d) / 2, across = (r.dir[0] !== 0 ? r.d : r.w) / 2 - WALL_PAD;
+    const lipX = r.x + r.dir[0] * half, lipZ = r.z + r.dir[1] * half;
+    const s = ((lipX - ax) * r.dir[0] + (lipZ - az) * r.dir[1]) / u;
+    if (s < 0 || s > len) continue;
+    const lat = (ax + (rx / len) * s - r.x) * r.dir[1] - (az + (rz / len) * s - r.z) * r.dir[0];
+    if (Math.abs(lat) < across) lips.push(s);
+  }
+  const cross = (ux, uz, vx, vz) => ux * vz - uz * vx;
+  for (const { poly } of course.lava) {
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [cx, cz] = poly[j], [dx, dz] = poly[i];
+      const sx = dx - cx, sz = dz - cz;
+      const den = cross(rx, rz, sx, sz);
+      if (Math.abs(den) < 1e-9) continue;
+      const t = cross(cx - ax, cz - az, sx, sz) / den;
+      const u = cross(cx - ax, cz - az, rx, rz) / den;
+      if (t < 0 || t > 1 || u < 0 || u > 1) continue;
+      const s = t * len;
+      if (!lips.some((l) => s >= l && s - l < JUMP_REACH)) return true;
+    }
+    if (insidePoly(poly, bx, bz)) return true;
+  }
+  return false;
+}
+const WALL_PAD = WALL_HALF + BALL_R;
 
 function chooseTarget(ball, course, segs) {
   const targets = [...(course.waypoints ?? []), course.cup];
@@ -73,7 +116,7 @@ function landing(course, segs, from, dirX, dirZ, power) {
 const SEARCH_POWERS = Array.from({ length: 32 }, (_, i) => 0.06 + i * 0.03);
 
 /**
- * Con pendientes, montículos, loopings o portales la distancia no crece con la potencia, así que se
+ * Con pendientes, montículos, loopings, portales, rampas o lava la distancia no crece con la potencia, así que se
  * prueban potencias (una por paso de física, para no trabar la imagen) y se
  * elige la que deja la bola más cerca, o la del medio de las que entran.
  */
@@ -121,7 +164,7 @@ export class Bot {
     const miss = 1 - this.player.skill;
     const ang = Math.atan2(dx, -dz) + gauss(rng) * (0.015 + miss * 0.09);
     const dirX = Math.sin(ang), dirZ = -Math.cos(ang);
-    if (course.slopes || course.mounds || course.loops || course.portals) return { dirX, dirZ, search: new PowerSearch(course, segs, ball, dirX, dirZ, target) };
+    if (course.slopes || course.mounds || course.loops || course.portals || course.lava || course.ramps) return { dirX, dirZ, search: new PowerSearch(course, segs, ball, dirX, dirZ, target) };
     const firm = target.isCup && !course.noCup;
     let power = powerFor(course, segs, ball, dirX, dirZ, firm ? dist + 0.4 : dist);
     // al hoyo se le pega con firmeza: la búsqueda da justo el mínimo para llegar

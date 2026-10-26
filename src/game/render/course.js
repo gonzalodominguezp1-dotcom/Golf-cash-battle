@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import { BALL_R, CUP_R, WALL_HALF, moverPos, segmentsOf } from '../physics.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { chevronTexture, crateTexture, dirtMaps, grassMaps, sandMaps, slopeArrowTexture, slopeShadeTexture, softDotTexture, stripeTexture, swirlTexture, woodMaps } from './textures.js';
+import { chevronTexture, crateTexture, dirtMaps, grassMaps, rockFloorMaps, sandMaps, slopeArrowTexture, slopeShadeTexture, softDotTexture, stripeTexture, swirlTexture, woodMaps } from './textures.js';
 import { groundHeight, hasRelief } from './terrain.js';
+import { lavaMaterial } from './lava.js';
 import { attractionStyle, buildLoop, buildTube, buildTunnel, buildWindmill, neonGridTexture } from './attractions.js';
 
 const WALL_H = 0.32;
@@ -38,14 +39,16 @@ export function buildCourse(scene, course, theme) {
     hole.absarc(hx, -hz, CUP_R, 0, Math.PI * 2, true);
     shape.holes.push(hole);
   }
+  // la lava va en canales recortados en la plataforma
+  for (const l of course.lava ?? []) shape.holes.push(new THREE.Path(l.poly.map(([x, z]) => new THREE.Vector2(x, -z))));
   const geo = new THREE.ExtrudeGeometry(shape, { depth: PLATFORM_DEPTH, bevelEnabled: false, curveSegments: 32 });
   geo.rotateX(-Math.PI / 2);
   geo.translate(0, -PLATFORM_DEPTH, 0);
-  const grassM = neon ? { map: neonGridTexture(theme.grass, '#' + new THREE.Color(neon[0]).getHexString()) } : grassMaps(theme.grass);
+  const grassM = neon ? { map: neonGridTexture(theme.grass, '#' + new THREE.Color(neon[0]).getHexString()) } : theme.rockFloor ? rockFloorMaps(theme.grass) : grassMaps(theme.grass);
   const grass = grassM.map;
   grass.repeat.set(0.5, 0.5);
   // lateral de la maqueta: corte de terreno con capas de tierra y roca
-  const dirtM = dirtMaps(!!neon);
+  const dirtM = dirtMaps(!!neon, !!theme.rockFloor);
   dirtM.map.repeat.set(0.5, 1 / PLATFORM_DEPTH);
   const grassMat = neon
     ? new THREE.MeshStandardMaterial({ map: grass, emissiveMap: grass, emissive: 0xffffff, emissiveIntensity: 0.22, roughness: 0.6, metalness: 0.2 })
@@ -78,6 +81,9 @@ export function buildCourse(scene, course, theme) {
   if (lavaCup) lavaCup.group.position.y = hc;
   else if (relief && !course.noCup) scene.add(cupCollar(hx, hz, hc, grassMat));
 
+  // ríos y charcos de lava que corren por los canales
+  const lavaMats = (course.lava ?? []).map((l) => buildLava(scene, l));
+
   // arena con bordes redondeados
   const sandM = course.sand.length ? sandMaps() : null;
   if (sandM) sandM.map.repeat.set(0.6, 0.6);
@@ -99,13 +105,16 @@ export function buildCourse(scene, course, theme) {
   const night = !!theme.rim && theme.sunIntensity < 2;
   let segIndex = 0;
   const wood = woodMaps();
+  const rockWall = theme.rockFloor ? rockFloorMaps(theme.grass) : null;
   const walls = [];
   const aoStrips = [];
   segmentsOf(course).forEach(([[ax, az], [bx, bz]], i) => {
     // materiales propios para poder transparentar la pared que tapa la bola
     const wallMat = neon
       ? new THREE.MeshStandardMaterial({ color: 0x0d0c1c, roughness: 0.4, metalness: 0.5, transparent: true })
-      : new THREE.MeshStandardMaterial({ ...wood, roughness: 0.75, transparent: true });
+      : theme.rockFloor
+        ? new THREE.MeshStandardMaterial({ ...rockWall, color: 0x8a7470, roughness: 0.95, transparent: true })
+        : new THREE.MeshStandardMaterial({ ...wood, roughness: 0.75, transparent: true });
     const capMat = neon
       ? new THREE.MeshStandardMaterial({ color: neonColor(i), emissive: neonColor(i), emissiveIntensity: 1.1, roughness: 0.3, transparent: true })
       : new THREE.MeshStandardMaterial({ color: 0xeeeeea, roughness: 0.75, envMapIntensity: 0.4, transparent: true });
@@ -184,12 +193,16 @@ export function buildCourse(scene, course, theme) {
   // setas rebotadoras
   const bumpers = course.bumpers.map((b, i) => {
     const g = new THREE.Group();
-    const color = BUMPER_COLORS[i % BUMPER_COLORS.length];
-    const stem = new THREE.Mesh(new THREE.CylinderGeometry(b.r, b.r * 1.05, 0.3, 32), new THREE.MeshStandardMaterial({ color: 0xfff3dc, roughness: 0.7 }));
+    const color = theme.lava ? 0x2e2224 : BUMPER_COLORS[i % BUMPER_COLORS.length];
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(b.r, b.r * 1.05, 0.3, theme.lava ? 7 : 32), new THREE.MeshStandardMaterial({ color: theme.lava ? 0x1e1618 : 0xfff3dc, roughness: theme.lava ? 1 : 0.7, flatShading: !!theme.lava }));
     stem.position.y = 0.15;
     const top = new THREE.Mesh(
       new THREE.SphereGeometry(b.r * 1.25, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2),
-      neon ? new THREE.MeshStandardMaterial({ color: neonColor(i), emissive: neonColor(i), emissiveIntensity: 0.55, roughness: 0.3 }) : new THREE.MeshStandardMaterial({ color, roughness: 0.3, emissive: color, emissiveIntensity: night ? 0.45 : 0.08 }),
+      neon
+        ? new THREE.MeshStandardMaterial({ color: neonColor(i), emissive: neonColor(i), emissiveIntensity: 0.55, roughness: 0.3 })
+        : theme.lava
+          ? new THREE.MeshStandardMaterial({ color, roughness: 0.9, emissive: 0xff4a10, emissiveIntensity: 0.35, flatShading: true })
+          : new THREE.MeshStandardMaterial({ color, roughness: 0.3, emissive: color, emissiveIntensity: night ? 0.45 : 0.08 }),
     );
     top.scale.y = 0.6;
     top.position.y = 0.3;
@@ -204,7 +217,7 @@ export function buildCourse(scene, course, theme) {
       d.translate(Math.cos(a) * b.r * 0.75, 0.3 + b.r * 0.42, Math.sin(a) * b.r * 0.75);
       dotGeos.push(d);
     }
-    const dots = new THREE.Mesh(mergeGeometries(dotGeos), dotMat(night));
+    const dots = new THREE.Mesh(mergeGeometries(dotGeos), theme.lava ? emberMat : dotMat(night));
     // sombra de contacto suave bajo la seta
     const contact = new THREE.Mesh(new THREE.PlaneGeometry(b.r * 3.6, b.r * 3.6), contactMat);
     contact.rotation.x = -Math.PI / 2;
@@ -272,6 +285,9 @@ export function buildCourse(scene, course, theme) {
     return { tex, speed: sl.accel * 0.12 };
   });
 
+  // rampas de salto: cuña de hierro con flechas que suben hacia el labio
+  const rampTextures = (course.ramps ?? []).map((r) => buildRamp(scene, r, lift(r.x, r.z)));
+
   // atracciones
   const attractions = [
     ...(course.loops ?? []).map((l, i) => buildLoop(scene, l, style, i)),
@@ -324,10 +340,12 @@ export function buildCourse(scene, course, theme) {
     bumpers,
     flag: { pole, cloth },
     update(t, cameraPos, ballPos) {
-      attractions.forEach((a) => a.update(t, ballPos));
+      attractions.forEach((a) => a.update(t, ballPos, cameraPos));
       tubes.forEach((tb) => tb?.update(t));
       lavaCup?.update(t);
       boostTextures.forEach((tex) => (tex.offset.y = -t * 1.5));
+      rampTextures.forEach((tex) => (tex.offset.y = -t * 0.9));
+      lavaMats.forEach((m) => m.update(t));
       slopeTextures.forEach((s) => (s.tex.offset.y = -t * s.speed));
       portals.forEach((p, i) => {
         p.disc.rotation.z = t * (i % 2 ? -2 : 3);
@@ -393,6 +411,79 @@ function portalMesh(scene, [x, z], r, css, color, y = 0) {
   g.position.set(x, y, z);
   scene.add(g);
   return { disc, ring, beam };
+}
+
+/** Río o charco de lava en su canal, con una luz que parpadea. */
+function buildLava(scene, l) {
+  const shape = new THREE.Shape(l.poly.map(([x, z]) => new THREE.Vector2(x, -z)));
+  const geo = new THREE.ShapeGeometry(shape);
+  geo.rotateX(-Math.PI / 2);
+  const mat = lavaMaterial({ flow: l.flow, heat: 0.06 });
+  const lava = new THREE.Mesh(geo, mat);
+  lava.position.y = -0.09;
+  scene.add(lava);
+  // la lava ilumina los bordes del canal y lo que tiene cerca
+  const xs = l.poly.map((p) => p[0]), zs = l.poly.map((p) => p[1]);
+  const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cz = (Math.min(...zs) + Math.max(...zs)) / 2;
+  const size = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs));
+  const light = new THREE.PointLight(0xff5a14, 1.5 + size * 0.4, 2.5 + size * 0.6, 1.6);
+  light.position.set(cx, 0.5, cz);
+  scene.add(light);
+  const base = light.intensity, phase = cx * 1.7 + cz;
+  return {
+    update(t) {
+      mat.uniforms.uTime.value = t;
+      light.intensity = base * (1 + Math.sin(t * 3.1 + phase) * 0.12 + Math.sin(t * 7.3 + phase * 2) * 0.05);
+    },
+  };
+}
+
+/** Rampa: cuña de hierro oscuro, cubierta con flechas y franjas de peligro en el labio. */
+function buildRamp(scene, r, y = 0) {
+  const along = r.dir[0] !== 0;
+  const L = along ? r.w : r.d, W = along ? r.d : r.w, h = r.h;
+  // en local la rampa sube hacia -z (el labio queda en z = -L/2)
+  const FL = [-W / 2, 0, L / 2], FR = [W / 2, 0, L / 2];
+  const LLb = [-W / 2, 0, -L / 2], LRb = [W / 2, 0, -L / 2], LLt = [-W / 2, h, -L / 2], LRt = [W / 2, h, -L / 2];
+  const tris = [FL, FR, LRt, FL, LRt, LLt, FL, LLt, LLb, FR, LRb, LRt];
+  const body = new THREE.BufferGeometry();
+  body.setAttribute('position', new THREE.Float32BufferAttribute(tris.flat(), 3));
+  body.computeVertexNormals();
+  const g = new THREE.Group();
+  const bodyMesh = new THREE.Mesh(body, new THREE.MeshStandardMaterial({ color: 0x2a2428, roughness: 0.55, metalness: 0.6 }));
+  bodyMesh.castShadow = bodyMesh.receiveShadow = true;
+  // labio: franjas amarillas y negras de aviso
+  const stripes = stripeTexture('#ffb020', '#1a1414');
+  stripes.repeat.set(W * 2, 1);
+  const lip = new THREE.Mesh(new THREE.PlaneGeometry(W, h), new THREE.MeshStandardMaterial({ map: stripes, roughness: 0.5, emissive: 0xff8a20, emissiveIntensity: 0.25, emissiveMap: stripes }));
+  lip.rotation.y = Math.PI;
+  lip.position.set(0, h / 2, -L / 2 - 0.002);
+  // cubierta con flechas que corren hacia el labio
+  const tex = chevronTexture('#2a1a14', '#ffb020');
+  const slope = Math.hypot(L, h);
+  tex.repeat.set(1, slope / (W - 0.3));
+  const deckGeo = new THREE.PlaneGeometry(W - 0.3, slope);
+  deckGeo.rotateX(-Math.PI / 2);
+  deckGeo.rotateX(Math.atan2(h, L));
+  deckGeo.translate(0, h / 2 + 0.004, 0);
+  const deck = new THREE.Mesh(deckGeo, new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.35, roughness: 0.5 }));
+  deck.receiveShadow = true;
+  // remaches a lo largo de los bordes
+  const rivets = [];
+  for (let k = 0; k <= 4; k++) {
+    for (const s of [-1, 1]) {
+      const z = L / 2 - (k / 4) * L;
+      const rv = new THREE.SphereGeometry(0.03, 6, 4);
+      rv.translate(s * (W / 2 - 0.08), (h * k) / 4 + 0.012, z);
+      rivets.push(rv);
+    }
+  }
+  const rivetMesh = new THREE.Mesh(mergeGeometries(rivets), new THREE.MeshStandardMaterial({ color: 0x9a8a80, metalness: 0.8, roughness: 0.3 }));
+  g.add(bodyMesh, lip, deck, rivetMesh);
+  g.rotation.y = Math.atan2(-r.dir[0], -r.dir[1]);
+  g.position.set(r.x, y, r.z);
+  scene.add(g);
+  return tex;
 }
 
 function lavaCrater(scene, hx, hz, cupInside, cupBottom) {
@@ -586,6 +677,7 @@ function scaleUV(geo, su, sv) {
 
 const sandEdgeMat = new THREE.MeshStandardMaterial({ color: 0xc9a861, roughness: 1 });
 const contactMat = new THREE.MeshBasicMaterial({ map: softDotTexture(), color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false });
+const emberMat = new THREE.MeshStandardMaterial({ color: 0xff6a1a, emissive: 0xff5a14, emissiveIntensity: 1.6 });
 const dotMats = {};
 const dotMat = (night) => (dotMats[night] ??= new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: night ? 1.2 : 0.2 }));
 

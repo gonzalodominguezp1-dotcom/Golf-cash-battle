@@ -107,6 +107,50 @@ export function grassTexture([a, b]) {
   });
 }
 
+/** Suelo de la cámara de magma: basalto con losas, grietas y alguna veta encendida. */
+export function rockFloorMaps([a, b]) {
+  return withNormals(rockFloorTexture([a, b]), 2.6);
+}
+
+export function rockFloorTexture([a, b]) {
+  return canvasTexture(detailSize(256), (g, n) => {
+    const k = n / 256;
+    const r = rand(11);
+    g.fillStyle = a;
+    g.fillRect(0, 0, n, n);
+    // manchas grandes: el basalto nunca es de un color plano
+    for (let i = 0; i < 40; i++) {
+      const x = r() * n, y = r() * n, rad = n * (0.06 + r() * 0.16);
+      const spot = g.createRadialGradient(x, y, 0, x, y, rad);
+      spot.addColorStop(0, r() > 0.5 ? b : 'rgba(20,12,12,0.5)');
+      spot.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = spot;
+      g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+    }
+    // grano fino
+    for (let i = 0; i < 3000 * k * k; i++) {
+      g.fillStyle = r() > 0.5 ? 'rgba(255,230,210,0.06)' : 'rgba(0,0,0,0.12)';
+      g.fillRect(r() * n, r() * n, (1 + r() * 2) * k, (1 + r() * 2) * k);
+    }
+    // grietas entre losas (alguna con el brillo de la lava de debajo)
+    const crack = (x, y, len, glow) => {
+      g.beginPath();
+      g.moveTo(x, y);
+      let ang = r() * Math.PI * 2;
+      for (let s = 0; s < len; s++) {
+        ang += (r() - 0.5) * 0.9;
+        x += Math.cos(ang) * 6 * k;
+        y += Math.sin(ang) * 6 * k;
+        g.lineTo(x, y);
+      }
+      g.strokeStyle = glow ? 'rgba(255,110,30,0.55)' : 'rgba(10,6,6,0.6)';
+      g.lineWidth = (glow ? 1.4 : 1.8) * k;
+      g.stroke();
+    };
+    for (let i = 0; i < 26; i++) crack(r() * n, r() * n, 6 + Math.floor(r() * 10), i % 7 === 0);
+  });
+}
+
 export function woodMaps() {
   return withNormals(woodTexture(), 2.4);
 }
@@ -179,20 +223,22 @@ export function sandTexture() {
   }, false);
 }
 
-export function dirtMaps(neon = false) {
-  return withNormals(dirtTexture(neon), 3);
+export function dirtMaps(neon = false, rock = false) {
+  return withNormals(dirtTexture(neon, rock), 3);
 }
 
 /**
  * Lateral de la maqueta: labio de césped arriba y capas de tierra, grava y
  * roca debajo, como un corte de terreno.
  */
-export function dirtTexture(neon = false) {
+export function dirtTexture(neon = false, rock = false) {
   return canvasTexture(detailSize(128), (g, n) => {
     const k = n / 128;
     const layers = neon
       ? ['#2a1d48', '#22173d', '#1b1232', '#140d27']
-      : ['#8a5a34', '#74492a', '#9a7a5a', '#6a6460'];
+      : rock
+        ? ['#3a2c2a', '#2a2022', '#4a2a1e', '#1e1618']
+        : ['#8a5a34', '#74492a', '#9a7a5a', '#6a6460'];
     const r = rand(5);
     // capas con el borde ondulado
     let y0 = 0;
@@ -214,6 +260,19 @@ export function dirtTexture(neon = false) {
       g.beginPath();
       g.ellipse(r() * n, y, (1.5 + r() * (2 + deep * 6)) * k, (1.2 + r() * 2.5) * k, r() * 3, 0, Math.PI * 2);
       g.fill();
+    }
+    // roca volcánica: sin césped, con vetas de magma
+    if (rock) {
+      for (let i = 0; i < 10; i++) {
+        g.strokeStyle = 'rgba(255,100,25,0.5)';
+        g.lineWidth = k;
+        g.beginPath();
+        let x = r() * n, y = n * (0.2 + r() * 0.8);
+        g.moveTo(x, y);
+        for (let s = 0; s < 5; s++) g.lineTo((x += (r() - 0.5) * 14 * k), (y += (r() - 0.3) * 10 * k));
+        g.stroke();
+      }
+      return;
     }
     // labio de césped con flecos
     g.fillStyle = neon ? '#ff3df0' : '#4caf3f';
@@ -269,11 +328,11 @@ export function softDotTexture() {
   );
 }
 
-export function chevronTexture() {
+export function chevronTexture(bg = '#1d3b8f', fg = '#5fd0ff') {
   return canvasTexture(128, (g, n) => {
-    g.fillStyle = '#1d3b8f';
+    g.fillStyle = bg;
     g.fillRect(0, 0, n, n);
-    g.fillStyle = '#5fd0ff';
+    g.fillStyle = fg;
     g.lineJoin = 'round';
     for (let y = -n / 2; y < n * 1.5; y += n / 2) {
       g.beginPath();

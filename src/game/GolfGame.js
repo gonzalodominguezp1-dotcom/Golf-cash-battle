@@ -54,7 +54,8 @@ export class GolfGame {
   #onClickCanvas = null;
   #onBlur = null;
 
-  constructor(container, { onStroke, onSunk, onAim, onRest, onCup, onRival, onLip, onOpenSettings, onOverviewChange, onTimer, onTimeUp } = {}) {
+  constructor(container, { onStroke, onSunk, onAim, onRest, onCup, onRival, onLip, onLava, onOpenSettings, onOverviewChange, onTimer, onTimeUp } = {}) {
+    this.onLava = onLava;
     this.container = container;
     this.onTimer = onTimer;
     this.onTimeUp = onTimeUp;
@@ -1029,6 +1030,7 @@ export class GolfGame {
       const pan = THREE.MathUtils.clamp((dx * right.x + dz * right.z) / 4, -1, 1);
       if (r.shot) sfx.rivalHit(dist, pan);
       if (r.portal >= 0) this.particles.puff(new THREE.Vector3(b.ball.x, 0.1, b.ball.z), 0xffb020, 8, 1.2, 0.16);
+      if (r.lava) this.particles.puff(new THREE.Vector3(r.lava[0], 0, r.lava[1]), 0xffa030, 10, 1.6, 0.12);
       if (r.sunk) {
         b.sunk = true;
         this.#noteSunk(this.tick);
@@ -1087,6 +1089,32 @@ export class GolfGame {
         this.camLook?.add(jump);
         this.#addShake(0.25);
         navigator.vibrate?.(20);
+      }
+      if (r.launch) {
+        // sale volando por el labio de la rampa
+        sfx.boost();
+        this.particles.puff(pos, 0xffb020, 10, 1.4, 0.16);
+        this.squash = Math.max(this.squash, 0.2);
+        this.#addShake(0.15);
+        navigator.vibrate?.(12);
+      }
+      if (r.landed && !r.lava) {
+        sfx.wall(Math.min(9, r.impact * 1.6));
+        this.particles.puff(new THREE.Vector3(pose.x, pose.ground + 0.03, pose.z), 0x8a7470, 8, 1, 0.16);
+        this.squash = Math.max(this.squash, Math.min(0.3, r.impact * 0.08));
+        this.#addShake(Math.min(0.3, r.impact * 0.06));
+      }
+      if (r.lava) {
+        // se quema en la lava: chispas y humo donde ha caído y vuelve a su sitio
+        const [lx, lz] = r.lava;
+        const at = new THREE.Vector3(lx, 0, lz);
+        sfx.lava();
+        this.particles.puff(at, 0xffa030, 18, 2.2, 0.14);
+        this.particles.puff(at.clone().setY(0.2), 0x3a3036, 10, 1.2, 0.35);
+        this.waves.emit(lx, lz, 0xff6a1a, 1.2, 2.2);
+        this.#addShake(0.35);
+        navigator.vibrate?.([40, 30, 40]);
+        this.onLava?.();
       }
       if (r.bumper >= 0) {
         this.courseView.bumpers[r.bumper].userData.squash = 0.18;

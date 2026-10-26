@@ -1,4 +1,4 @@
-import { BALL_R, GRAVITY, LOOP_RATIO, loopTable, sampleAt, tubeTable } from '../physics.js';
+import { BALL_R, GRAVITY, LOOP_RATIO, loopTable, rampHeight, sampleAt, tubeTable } from '../physics.js';
 
 // Relieve que se ve: la física es plana (x, z) y aquí se saca la altura del
 // césped a partir de las pendientes y montículos del hoyo, para levantar la
@@ -104,6 +104,7 @@ export function ballPose(course, ball) {
     const q = sampleAt(tubeTable(course.portals[tr.i]), tr.s);
     return { x: q.x, y: q.y, z: q.z, ground: groundHeight(course, q.x, q.z), onTrack: true };
   }
-  const g = groundHeight(course, ball.x, ball.z);
-  return { x: ball.x, y: g + BALL_R, z: ball.z, ground: g, onTrack: false };
+  // las rampas son una cuña encima del césped; en el aire la bola va por encima
+  const g = groundHeight(course, ball.x, ball.z) + (course.ramps ? rampHeight(course, ball.x, ball.z) : 0);
+  return { x: ball.x, y: g + BALL_R + (ball.air?.y ?? 0), z: ball.z, ground: g, onTrack: false };
 }

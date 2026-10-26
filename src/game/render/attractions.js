@@ -8,6 +8,7 @@ import { loopPoint } from './terrain.js';
 /** Estilo de las atracciones según el tema del hoyo. */
 export function attractionStyle(theme) {
   if (theme.neon) return { kind: 'neon', colors: theme.neon };
+  if (theme.caldera) return { kind: 'lava', colors: [0xff6a1a, 0xffa040, 0xff3d1a] };
   if (theme.lanterns || theme.stars) return { kind: 'night', colors: [0xffc46b, 0x6bd5ff, 0xff7ad9] };
   return { kind: 'day', colors: [0xff5a4e, 0x3d8bff, 0xffc145] };
 }
@@ -231,13 +232,14 @@ export function buildTunnel(scene, tn, style, lift = 0, i = 0) {
   const mat =
     style.kind === 'neon'
       ? new THREE.MeshStandardMaterial({ color: 0x12102a, emissive: color, emissiveIntensity: 0.25, roughness: 0.4, transparent: true })
-      : new THREE.MeshStandardMaterial({ color: style.kind === 'night' ? 0x7a6a5a : 0xb5763f, roughness: 0.9, transparent: true });
+      : new THREE.MeshStandardMaterial({ color: { night: 0x7a6a5a, lava: 0x2e2426 }[style.kind] ?? 0xb5763f, roughness: 0.9, flatShading: style.kind === 'lava', transparent: true });
   const arch = new THREE.Mesh(geo, mat);
   arch.castShadow = true;
   arch.position.set(tn.x, lift, tn.z);
   scene.add(arch);
   // aros de luz en las dos bocas
   const ringMat = style.kind === 'day' ? new THREE.MeshStandardMaterial({ color: 0xffc145, roughness: 0.5 }) : glowMat(color, 2.2);
+  ringMat.transparent = true;
   for (const s of [-1, 1]) {
     const ring = new THREE.Mesh(new THREE.TorusGeometry(ro, 0.04, 8, 32, Math.PI), ringMat);
     ring.position.set(tn.x, lift + 0.12, tn.z + (s * tn.d) / 2);
@@ -250,11 +252,15 @@ export function buildTunnel(scene, tn, style, lift = 0, i = 0) {
   }
   let opacity = 1;
   return {
-    update(t, ball) {
-      const inside = Math.abs(ball.x - tn.x) < tn.w / 2 + 0.4 && Math.abs(ball.z - tn.z) < tn.d / 2 + 0.6;
+    update(t, ball, cam) {
+      // se transparenta con la bola dentro, o con la cámara dentro (taparía todo)
+      const near = (p, m) => p && Math.abs(p.x - tn.x) < tn.w / 2 + m && Math.abs(p.z - tn.z) < tn.d / 2 + m + 0.2;
+      const inside = near(ball, 0.4) || near(cam, 0.6);
       opacity += ((inside ? 0.2 : 1) - opacity) * 0.2;
-      mat.opacity = opacity;
-      mat.depthWrite = opacity > 0.95;
+      for (const m of [mat, ringMat]) {
+        m.opacity = opacity;
+        m.depthWrite = opacity > 0.95;
+      }
     },
   };
 }

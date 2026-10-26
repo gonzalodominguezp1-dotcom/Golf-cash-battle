@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DT, MIN_SLOPE_ACCEL, inSand, isMoving, onMound, portalAt, quantizeShot, segmentsOf, shotVelocity, step, windmillBlocks } from '../src/game/physics.js';
+import { DT, MIN_SLOPE_ACCEL, inLava, inSand, isMoving, onMound, onRamp, portalAt, quantizeShot, rampAccel, segmentsOf, shotVelocity, step, windmillBlocks } from '../src/game/physics.js';
+import { ballPose } from '../src/game/render/terrain.js';
 import { groundHeight, hasRelief } from '../src/game/render/terrain.js';
 import { replayHole } from '../src/game/replay.js';
 import { COURSES } from '../src/game/courses.js';
@@ -20,6 +21,12 @@ test('los hoyos están bien hechos', () => {
       assert.ok(!inSlope(c, c.cup), `${c.name}: hoyo en pendiente`);
     }
     for (const p of c.portals ?? []) assert.equal(portalAt(c, p.b[0], p.b[1]), -1, `${c.name}: la salida cae en otro portal`);
+    assert.ok(!inLava(c, ...c.tee) && !inLava(c, ...c.cup), `${c.name}: salida u hoyo en la lava`);
+    for (const r of c.ramps ?? []) {
+      // como las pendientes: la bola nunca se queda quieta en la rampa
+      assert.ok(rampAccel(r) >= MIN_SLOPE_ACCEL, `${c.name}: rampa demasiado suave`);
+      assert.equal(Math.hypot(...r.dir), 1, `${c.name}: dir unitaria`);
+    }
     assert.ok(!inSlope(c, c.tee), `${c.name}: salida en pendiente`);
   }
 });
@@ -212,4 +219,62 @@ test('volcán: la ladera echa la bola hacia fuera y la cima es llana', () => {
   // el relieve que se dibuja: cima arriba, base abajo
   assert.ok(groundHeight(c, ...c.cup) > 1);
   assert.equal(groundHeight(c, ...c.tee), 0);
+});
+
+// tiro recto desde (x, z) hacia -z: eventos y dónde para
+function rollFrom(c, x, z, v) {
+  const segs = segmentsOf(c);
+  const ball = { x, z, vx: 0, vz: -v };
+  const ev = { launch: false, lava: null, maxY: 0 };
+  let t = 0;
+  while (isMoving(ball) && t < 120 * 30) {
+    const r = step(c, segs, ball, ++t * DT, DT);
+    ev.launch ||= !!r.launch;
+    ev.lava ??= r.lava ?? null;
+    ev.maxY = Math.max(ev.maxY, ballPose(c, ball).y);
+  }
+  return { ball, ...ev };
+}
+
+test('dentro del volcán: la lava devuelve la bola al sitio del golpe', () => {
+  const c = COURSES.find((x) => x.name === 'Dentro del Volcán');
+  // de lado a la rampa, directo al primer río
+  const r = rollFrom(c, 2.6, 6.4, 6);
+  assert.ok(r.lava, 'cae en la lava');
+  assert.ok(inLava(c, ...r.lava));
+  assert.deepEqual([r.ball.x, r.ball.z, r.ball.vx, r.ball.vz], [2.6, 6.4, 0, 0]);
+  assert.ok(!r.ball.from && !r.ball.air);
+  // por el puente de roca se cruza sin quemarse
+  const bridge = rollFrom(c, -3.25, 6.4, 7);
+  assert.equal(bridge.lava, null);
+  assert.ok(bridge.ball.z < 2.4, 'cruza el puente');
+});
+
+test('dentro del volcán: la rampa hace saltar el río; flojo vuelve rodando', () => {
+  const c = COURSES.find((x) => x.name === 'Dentro del Volcán');
+  const [r1] = c.ramps;
+  const foot = r1.z + r1.d / 2 + 0.6;
+  // sin fuerza no llega arriba: rueda hacia atrás y se para fuera de la rampa
+  const weak = rollFrom(c, r1.x, foot, 2.5);
+  assert.ok(!weak.launch && !weak.lava);
+  assert.ok(!onRamp(c, weak.ball.x, weak.ball.z) && weak.ball.z > r1.z);
+  // con fuerza vuela por encima de la lava y cae al otro lado
+  const jump = rollFrom(c, r1.x, foot, 7.5);
+  assert.ok(jump.launch, 'despega');
+  assert.equal(jump.lava, null, 'no se quema');
+  assert.ok(jump.ball.z < 2.5 && jump.ball.z > -2.6, `cae entre los dos ríos (${jump.ball.z.toFixed(2)})`);
+  assert.ok(jump.maxY > r1.h + 0.2, 'se ve volar');
+  // a medio gas despega pero cae dentro del río
+  const short = rollFrom(c, r1.x, foot, 5.6);
+  assert.ok(short.launch && short.lava);
+});
+
+test('dentro del volcán: el servidor repite igual los saltos y la lava', () => {
+  const c = COURSES.find((x) => x.name === 'Dentro del Volcán');
+  for (const p of [0.7, 0.8, 0.95]) {
+    const shots = [{ tick: 10, ...quantizeShot(0, p) }];
+    const a = replayHole(c, shots, { maxStrokes: 1 }), b = replayHole(c, structuredClone(shots), { maxStrokes: 1 });
+    assert.ok(a.ok, `p=${p}`);
+    assert.deepEqual(a, b);
+  }
 });
