@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BALL_R, CUP_R, DT, MAX_SHOT_SPEED, inSand, isMoving, onBoost, quantizeShot, segmentsOf, shotVelocity, spinnerSegment, step } from './physics.js';
+import { BALL_R, CUP_R, DT, MAX_SHOT_SPEED, inSand, isMoving, onBoost, quantizeShot, segmentsOf, shotVelocity, spinnerSegment, step, tubeTable } from './physics.js';
 import { Bot } from './bots.js';
 import { THEMES } from './themes.js';
 import { buildEnvironment, courseBounds } from './render/environment.js';
@@ -64,7 +64,8 @@ export class GolfGame {
   #pos = new THREE.Vector3();
   #aimColor = new THREE.Color();
 
-  constructor(container, { onStroke, onSunk, onAim, onRest, onCup, onRival, onLip, onOpenSettings, onOverviewChange, onTimer, onTimeUp } = {}) {
+  constructor(container, { onStroke, onSunk, onAim, onRest, onCup, onRival, onLip, onLava, onOpenSettings, onOverviewChange, onTimer, onTimeUp } = {}) {
+    this.onLava = onLava;
     this.container = container;
     this.onTimer = onTimer;
     this.onTimeUp = onTimeUp;
@@ -572,6 +573,23 @@ export class GolfGame {
 
   // ---------- cámara ----------
 
+  /**
+   * Tubo de caída (la cueva del volcán): pasada la boca, la cámara espera
+   * dentro, frente al tobogán, y mira cómo baja la bola (detrás de la bola
+   * quedaría metida en la roca).
+   */
+  #dropTarget() {
+    const tr = this.ball.track;
+    const p = tr?.kind === 'tube' ? this.course.portals[tr.i] : null;
+    if (!p?.drop || tr.s < tubeTable(p).length * 0.3) return null;
+    const pose = ballPose(this.course, this.ball);
+    const [bx, bz] = p.b, [ox, oz] = p.out;
+    return {
+      pos: new THREE.Vector3(bx + ox * 5.5 + oz * 2, 3.2, bz + oz * 5.5 - ox * 2),
+      look: new THREE.Vector3(pose.x, pose.y - 0.3, pose.z),
+    };
+  }
+
   #followTarget() {
     const fwd = forwardOf(this.camYaw);
     const isWidescreen = (this.container.clientWidth || 1) >= (this.container.clientHeight || 1);
@@ -611,7 +629,7 @@ export class GolfGame {
     const b = this.bounds;
     const cam = new THREE.PerspectiveCamera(this.baseFov ?? 55, aspect, 0.1, 500);
     const corners = [];
-    for (const x of [b.minX - 0.4, b.maxX + 0.4]) for (const z of [b.minZ - 0.4, b.maxZ + 0.4]) for (const y of [0, 1.8]) corners.push(new THREE.Vector3(x, y, z));
+    for (const x of [b.minX - 0.4, b.maxX + 0.4]) for (const z of [b.minZ - 0.4, b.maxZ + 0.4]) for (const y of [0, 1.8 + (b.maxY ?? 0)]) corners.push(new THREE.Vector3(x, y, z));
     const fits = (d) => {
       cam.position.copy(look).addScaledVector(dir, d);
       cam.lookAt(look);
@@ -646,7 +664,13 @@ export class GolfGame {
       snap = true;
     } else if (this.sunk) target = this.#celebrateTarget();
     else if (this.overview) target = this.#overviewTarget();
-    else target = this.#followTarget();
+    else {
+      const drop = this.#dropTarget();
+      // al entrar en la cueva la cámara salta dentro del volcán de golpe (sin cruzar la roca)
+      if (drop && !this.inDrop) snap = true;
+      this.inDrop = !!drop;
+      target = drop ?? this.#followTarget();
+    }
 
     this.camPos ??= target.pos.clone();
     this.camLook ??= target.look.clone();
@@ -1160,6 +1184,7 @@ export class GolfGame {
         if (this.genericFx.hit) this.particles.puff(new THREE.Vector3(b.ball.x, 0.05, b.ball.z), 0x9be37f, 8 + Math.round(r.shot * 10), 1 + r.shot, 0.18);
       }
       if (r.portal >= 0) this.particles.puff(new THREE.Vector3(b.ball.x, 0.1, b.ball.z), 0xffb020, 8, 1.2, 0.16);
+      if (r.lava) this.particles.puff(new THREE.Vector3(r.lava[0], 0, r.lava[1]), 0xffa030, 10, 1.6, 0.12);
       if (r.bumper < 0 && r.hit > 2 && !r.shot) {
         if (this.genericFx.wall) this.particles.puff(new THREE.Vector3(b.ball.x, b.mesh.position.y, b.ball.z), 0xf3e3c3, 5, 0.8, 0.14);
       }
@@ -1223,6 +1248,32 @@ export class GolfGame {
         this.camLook?.add(jump);
         this.#addShake(0.25);
         navigator.vibrate?.(20);
+      }
+      if (r.launch) {
+        // sale volando por el labio de la rampa
+        sfx.boost();
+        this.particles.puff(pos, 0xffb020, 10, 1.4, 0.16);
+        this.squash = Math.max(this.squash, 0.2);
+        this.#addShake(0.15);
+        navigator.vibrate?.(12);
+      }
+      if (r.landed && !r.lava) {
+        sfx.wall(Math.min(9, r.impact * 1.6));
+        this.particles.puff(new THREE.Vector3(pose.x, pose.ground + 0.03, pose.z), 0x8a7470, 8, 1, 0.16);
+        this.squash = Math.max(this.squash, Math.min(0.3, r.impact * 0.08));
+        this.#addShake(Math.min(0.3, r.impact * 0.06));
+      }
+      if (r.lava) {
+        // se quema en la lava: chispas y humo donde ha caído y vuelve a su sitio
+        const [lx, lz] = r.lava;
+        const at = new THREE.Vector3(lx, 0, lz);
+        sfx.lava();
+        this.particles.puff(at, 0xffa030, 18, 2.2, 0.14);
+        this.particles.puff(at.clone().setY(0.2), 0x3a3036, 10, 1.2, 0.35);
+        this.waves.emit(lx, lz, 0xff6a1a, 1.2, 2.2);
+        this.#addShake(0.35);
+        navigator.vibrate?.([40, 30, 40]);
+        this.onLava?.();
       }
       if (r.bumper >= 0) {
         this.courseView.bumpers[r.bumper].userData.squash = 0.18;

@@ -12,7 +12,7 @@ test('cálculo de distancia tee-hoyo para todos los mapas', () => {
   const dtb = getCourseDistance(TIEBREAK_COURSE);
   assert.equal(dtb, 15);
 
-  // Verificar que todos los 18 hoyos tienen distancias positivas y coherentes
+  // Verificar que todos los hoyos tienen distancias positivas y coherentes
   for (let i = 0; i < COURSES.length; i++) {
     const dist = getCourseDistance(COURSES[i]);
     assert.ok(typeof dist === 'number' && dist >= 4 && dist < 35, `distancia de hoyo ${i + 1} debe ser coherente: ${dist}m`);
@@ -34,7 +34,7 @@ test('preloadCoursePreviews ejecuta sin errores en entornos seguros', () => {
   });
 });
 
-test('getCoursePreview devuelve rutas estáticas WebP para los 18 hoyos y el desempate (0 ms)', () => {
+test('getCoursePreview devuelve rutas estáticas WebP para los 19 hoyos y el desempate (0 ms)', () => {
   for (let i = 0; i < COURSES.length; i++) {
     const preview = getCoursePreview(COURSES[i]);
     assert.equal(preview, `/courses/course-${i + 1}.webp`, `El hoyo ${i + 1} (${COURSES[i].name}) debe usar /courses/course-${i + 1}.webp`);

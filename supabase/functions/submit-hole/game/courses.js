@@ -19,6 +19,29 @@ function windmill({ x, z, w = 0.9, depth = 1.4, face = 1, left, right, speed, bl
   return { windmill: { x, z, w, depth, face, left, right, speed, blades, phase, gateZ: z + face * 0.3 }, walls };
 }
 
+// Una rampa de salto: sube h a lo largo de dir (solo ejes) y lleva paredes a
+// los lados, así solo se entra por el pie. Al pasar por el labio la bola vuela
+// con salida lift (tangente del ángulo: el labio es un trampolín).
+function ramp({ x, z, w = 1.7, d = 1.6, dir = [0, -1], h = 0.32, lift = 0.42 }) {
+  const along = dir[0] !== 0;
+  const hw = along ? d / 2 : w / 2, hl = along ? w / 2 : d / 2;
+  // lados: paralelos a dir, a hw del centro
+  const sx = along ? 0 : hw, sz = along ? hw : 0, lx = dir[0] * hl, lz = dir[1] * hl;
+  const walls = [
+    [[x - sx - lx, z - sz - lz], [x - sx + lx, z - sz + lz]],
+    [[x + sx - lx, z + sz - lz], [x + sx + lx, z + sz + lz]],
+  ];
+  return { ramp: { x, z, w, d, dir, h, lift }, walls };
+}
+
+// Dentro del Volcán: se sale en un sendero de la ladera, la cueva lleva por un
+// tubo de lava que cae dentro, a una cámara en U con lava en medio. Al caer la
+// bola queda entre dos rampas: la de delante salta el río del brazo izquierdo
+// (el camino largo, por abajo) y la de la derecha cruza la U de un salto (atajo).
+const VOLCANO_RAMP_A = ramp({ x: -3.4, z: 4.2 });
+const VOLCANO_SHORTCUT = ramp({ x: -2.15, z: 6.2, w: 1.6, d: 1.7, dir: [1, 0] });
+const VOLCANO_RAMP_B = ramp({ x: 3.4, z: -4.6, dir: [0, 1] });
+
 const LOOP_A = { x: 0, z: 1, dir: [0, -1], len: 4.4, w: 1.6, radius: 0.8 };
 const LOOP_B1 = { x: -3.6, z: 3, dir: [0, -1], len: 4.4, w: 1.6, radius: 0.8 };
 const LOOP_B2 = { x: -0.2, z: -7.8, dir: [1, 0], len: 4.4, w: 1.6, radius: 0.8 };
@@ -332,6 +355,51 @@ export const COURSES = [
     loops: [LOOP_N],
     tunnels: [{ x: 0, z: -5, w: 0.9, d: 1.6 }],
     waypoints: [[0, -6.4]],
+  },
+  {
+    name: 'Dentro del Volcán',
+    tip: 'Entra por la cueva y, dentro, salta la lava: recto por el camino largo o a la derecha por el atajo',
+    par: 5,
+    theme: 'caldera',
+    tee: [-3.4, 26],
+    cup: [4.2, 2],
+    // la cámara de magma en U (dentro del volcán)
+    outline: [[-5.4, 10], [5.4, 10], [6.4, 9], [6.4, -11], [5.4, -12], [-5.4, -12], [-6.4, -11], [-6.4, 9]],
+    // el sendero de fuera, en la ladera, 4 m por encima del suelo de la cámara
+    tiers: [{ poly: [[-4.9, 16.2], [-1.9, 16.2], [-1.9, 26.6], [-2.6, 27.4], [-4.2, 27.4], [-4.9, 26.6]], h: 4 }],
+    walls: [...VOLCANO_RAMP_A.walls, ...VOLCANO_SHORTCUT.walls, ...VOLCANO_RAMP_B.walls],
+    bumpers: [
+      { x: -2.6, z: 23.2, r: 0.32 },
+      { x: -4.4, z: -6.4, r: 0.4 },
+      { x: 4.6, z: -9.2, r: 0.38 },
+      { x: 5.6, z: 6.4, r: 0.36 },
+    ],
+    sand: [],
+    // un aspa vigila el camino hacia la cueva
+    spinners: [{ x: -3.4, z: 20, len: 2.2, speed: 1.3 }],
+    movers: [{ x: 0, z: -6.2, w: 1.2, d: 0.6, axis: 'x', range: 2.6, speed: 1.1 }],
+    ramps: [VOLCANO_RAMP_A.ramp, VOLCANO_SHORTCUT.ramp, VOLCANO_RAMP_B.ramp],
+    // la cueva: tubo de lava que atraviesa la roca y cae dentro (drop: altura de la boca)
+    portals: [{ a: [-3.4, 17.2], b: [-3.4, 8.6], r: 0.45, out: [0, -1], tube: true, drop: 4, exit: 3 }],
+    // flow: hacia dónde corre la lava (solo se ve)
+    lava: [
+      // la lava del centro de la U con un río hacia cada brazo
+      {
+        poly: [
+          [-1.3, 9.9], [1.3, 9.9], [1.35, 7], [1.25, 4], [1.3, 0.5], [1.3, -2.25],
+          [2.4, -2.2], [3.4, -2.4], [4.2, -2.25], [5, -2.35], [5, -3.78], [2.4, -3.78], [1.6, -3.9],
+          [1.3, -4.2], [0.7, -4.6], [0, -4.7], [-0.7, -4.6], [-1.3, -4.2],
+          [-1.3, -1], [-1.25, 2], [-2.3, 1.95], [-4.2, 2], [-5, 2.1], [-5, 3.38], [-2.4, 3.38], [-1.3, 3.5], [-1.35, 6.5],
+        ],
+        flow: [0, -1],
+      },
+      // charcos: abajo, en la curva de la U, y antes del hoyo
+      { poly: [[-1.1, -8.6], [0.2, -8.3], [1.3, -8.8], [1.5, -9.9], [0.6, -10.6], [-0.7, -10.5], [-1.5, -9.8]], flow: [1, 0] },
+      { poly: [[-6.3, -10], [-5.2, -9.8], [-4.6, -10.6], [-5.2, -11.5], [-6.3, -11.2]], flow: [1, 0] },
+      { poly: [[1.6, 4.6], [2.4, 4.8], [2.9, 4.2], [2.7, 3.4], [2, 3.2], [1.5, 3.7]], flow: [0, -1] },
+    ],
+    // los rivales cogen el atajo
+    waypoints: [[-3.4, 17.2], [3.6, 6.2]],
   },
 ];
 
