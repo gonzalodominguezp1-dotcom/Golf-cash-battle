@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { BALL_R, CUP_R, WALL_HALF, moverPos, segmentsOf } from '../physics.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { chevronTexture, crateTexture, dirtMaps, grassMaps, roughTone, sandMaps, slopeArrowTexture, slopeShadeTexture, softDotTexture, stripeTexture, swirlTexture, woodMaps } from './textures.js';
+import { chevronTexture, crateTexture, dirtMaps, grassMaps, roughTone, sandMaps, slopeShadeTexture, softDotTexture, stripeTexture, swirlTexture, woodMaps } from './textures.js';
 import { groundHeight, hasRelief } from './terrain.js';
 import { attractionStyle, buildLoop, buildTube, buildTunnel, buildWindmill, neonGridTexture } from './attractions.js';
 
@@ -323,22 +323,16 @@ export function buildCourse(scene, course, theme) {
     return tex;
   });
 
-  // pendientes: sombreado de cuesta y flechas que bajan, pegados al relieve
-  const slopeTextures = (course.slopes ?? []).map((sl) => {
+  // pendientes: sombreado de cuesta pegado al relieve (el relieve ya muestra la inclinación, sin flechas)
+  (course.slopes ?? []).forEach((sl) => {
     const rot = -Math.atan2(sl.dir[0], -sl.dir[1]);
     const along = sl.dir[0] !== 0 ? sl.w : sl.d, across = sl.dir[0] !== 0 ? sl.d : sl.w;
     const n = relief ? Math.ceil(along / 0.2) : 1;
     const shade = new THREE.Mesh(new THREE.PlaneGeometry(across, along, 1, n), new THREE.MeshBasicMaterial({ map: slopeShadeTexture(), transparent: true, depthWrite: false }));
     shade.rotation.set(-Math.PI / 2, 0, rot);
     shade.position.set(sl.x, 0.0025, sl.z);
-    const tex = slopeArrowTexture();
-    tex.repeat.set(Math.max(1, Math.round(across / 1.2)), along / 1.2);
-    const arrows = new THREE.Mesh(new THREE.PlaneGeometry(across, along, 1, n), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
-    arrows.rotation.copy(shade.rotation);
-    arrows.position.set(sl.x, 0.0035, sl.z);
-    if (relief) [shade, arrows].forEach((m) => drape(m, lift));
-    scene.add(shade, arrows);
-    return { tex, speed: sl.accel * 0.12 };
+    if (relief) drape(shade, lift);
+    scene.add(shade);
   });
 
   // atracciones
@@ -410,7 +404,6 @@ export function buildCourse(scene, course, theme) {
       tubes.forEach((tb) => tb?.update(t));
       lavaCup?.update(t);
       boostTextures.forEach((tex) => (tex.offset.y = -t * 1.5));
-      slopeTextures.forEach((s) => (s.tex.offset.y = -t * s.speed));
       portals.forEach((p, i) => {
         p.disc.rotation.z = t * (i % 2 ? -2 : 3);
         p.beam.material.opacity = 0.25 + Math.sin(t * 4 + i) * 0.1;

@@ -294,24 +294,6 @@ export function chevronTexture() {
   });
 }
 
-/** Flechas blancas semitransparentes que marcan hacia dónde cae una pendiente. */
-export function slopeArrowTexture() {
-  const tex = canvasTexture(128, (g, n) => {
-    g.clearRect(0, 0, n, n);
-    g.fillStyle = 'rgba(255,255,255,0.5)';
-    g.beginPath();
-    g.moveTo(n * 0.3, n * 0.62);
-    g.lineTo(n * 0.5, n * 0.42);
-    g.lineTo(n * 0.7, n * 0.62);
-    g.lineTo(n * 0.7, n * 0.72);
-    g.lineTo(n * 0.5, n * 0.52);
-    g.lineTo(n * 0.3, n * 0.72);
-    g.closePath();
-    g.fill();
-  });
-  return tex;
-}
-
 /** Degradado de luz a sombra para que la pendiente parezca una cuesta. */
 export function slopeShadeTexture() {
   const tex = canvasTexture(64, (g, n) => {
