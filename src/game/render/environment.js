@@ -1,12 +1,21 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { softDotTexture } from './textures.js';
+import { roughTone, softDotTexture } from './textures.js';
 import { addWind, bakeStatic } from './batch.js';
 import { quality } from './quality.js';
 import { lavaMaterial } from './lava.js';
+import { CUP_R } from '../physics.js';
+import {
+  getCyberGridTexture,
+  makeHoloCrystal,
+  makeCyberPylon,
+  setupCyberpunkEnvironment,
+} from './cyberpunkEnvironment.js';
 
 // tiempo compartido por los sombreadores animados (viento, agua)
 const windUniforms = { uTime: { value: 0 } };
+// altura del terreno junto a una pista a ras de suelo (el green está a 0)
+const GROUND_Y = -0.04;
 
 // Cielo, terreno, agua y decorado low-poly alrededor del hoyo.
 
@@ -58,6 +67,9 @@ export function buildEnvironment(scene, course, theme, rng) {
   const q = quality();
   // todo lo que no se mueve va aquí y al final se junta en pocas mallas
   const decor = new THREE.Group();
+  const isNeon = !!theme.neon;
+  // pista a ras de suelo: el terreno llega plano hasta las paredes (ver course.grounded)
+  const grounded = !!course.grounded && !isNeon;
 
   // --- cielo con degradado y sol ---
   const sunDir = new THREE.Vector3(...theme.sunDir).normalize();
@@ -95,7 +107,11 @@ export function buildEnvironment(scene, course, theme, rng) {
   sun.shadow.bias = -0.0005;
   sun.shadow.normalBias = 0.02;
   // la sombra cubre el hoyo entero (y no más: cuanto más ajustada, más nítida)
-  const half = Math.max(8, Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ) * 0.6 + 2);
+  const span = Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ);
+  // a ras de suelo la sombra se queda fija sobre el centro de la pista (shadowAnchor):
+  // con una pista larga, centrada en la bola dejaba sin sombras el otro extremo
+  const half = grounded ? Math.max(8, span * 0.5 + 2.5) : Math.max(8, span * 0.6 + 2);
+  const shadowAnchor = grounded ? { x: (bounds.minX + bounds.maxX) / 2, z: (bounds.minZ + bounds.maxZ) / 2 } : null;
   Object.assign(sun.shadow.camera, { left: -half, right: half, top: half, bottom: -half, near: 1, far: 80 });
   scene.add(sun, sun.target);
   // contraluces de color a ambos lados: dan los bordes rosa/cian que hacen vibrar la escena
@@ -114,32 +130,81 @@ export function buildEnvironment(scene, course, theme, rng) {
   geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position;
   const volcano = theme.caldera ? volcanoShape(course) : null;
-  // fuera del volcán: llanura de ceniza con lomas al pie de la montaña
-  const heightAt = volcano
-    ? (x, z) => FOOT - 0.4 + fbm(x * 0.05, z * 0.05) * 5 * THREE.MathUtils.smoothstep(volcano.q(x, z), 2.8, 4.5)
-    : (x, z) => {
-        const d = distToBounds(bounds, x, z);
-        const ramp = THREE.MathUtils.smoothstep(d, 2, 16);
-        return theme.terrainOffset * (1 - ramp * 0.3) - 0.55 + fbm(x * 0.06, z * 0.06) * 9 * ramp - 2.2 * ramp + ramp * ramp * 1.5;
-      };
+  const heightAt = (x, z) => {
+    // fuera del volcán: llanura de ceniza con lomas al pie de la montaña
+    if (volcano) return FOOT - 0.4 + fbm(x * 0.05, z * 0.05) * 5 * THREE.MathUtils.smoothstep(volcano.q(x, z), 2.8, 4.5);
+    const d = distToBounds(bounds, x, z);
+    if (isNeon) {
+      // Zona del campo y alrededores despejada y plana para garantizar cero fallos de posición (d < 8)
+      const ramp = THREE.MathUtils.smoothstep(d, 8, 30);
+      // Montañas de estética cyberpunk con crestas y cimas afiladas ("final picudo")
+      const nx = x * 0.045, nz = z * 0.045;
+      const n1 = noise(nx + 1.7, nz + 3.1);
+      const ridge1 = 1.0 - Math.abs(n1 * 2 - 1);
+      const n2 = noise(nx * 2.2 + 5.8, nz * 2.2 + 8.4);
+      const ridge2 = 1.0 - Math.abs(n2 * 2 - 1);
+      // Exponencial para culminar en picos angulares y agujas puntiagudas estilo cyberpunk
+      const sharpPeak = Math.pow(ridge1, 2.6) * 16.0 + Math.pow(ridge2, 2.2) * 6.0;
+      return theme.terrainOffset - 0.6 + (sharpPeak - 4.5) * ramp;
+    }
+    if (grounded) {
+      // meseta plana junto a la pista (la rejilla es de 2 m: con margen para no
+      // asomar entre las paredes) y luego lomas suaves hasta las mismas colinas de
+      // fondo que el resto de hoyos, sin bajar hacia el agua
+      const far = theme.terrainOffset * 0.7 - 1.25 + fbm(x * 0.06, z * 0.06) * 9;
+      return GROUND_Y + (far - GROUND_Y) * THREE.MathUtils.smoothstep(d, 3.2, 26);
+    }
+    const ramp = THREE.MathUtils.smoothstep(d, 2, 16);
+    return theme.terrainOffset * (1 - ramp * 0.3) - 0.55 + fbm(x * 0.06, z * 0.06) * 9 * ramp - 2.2 * ramp + ramp * ramp * 1.5;
+  };
   for (let i = 0; i < pos.count; i++) pos.setY(i, heightAt(pos.getX(i), pos.getZ(i)));
+  if (grounded && !course.noCup) {
+    // sin losa debajo, el terreno se vería dentro del agujero: se hunden los
+    // vértices de las celdas que tocan el hoyo (quedan tapados por el green)
+    const [hx, hz] = course.cup, cell = size / seg + CUP_R + 0.02;
+    for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getX(i) - hx) < cell && Math.abs(pos.getZ(i) - hz) < cell) pos.setY(i, -0.6);
+  }
   const colors = new Float32Array(pos.count * 3);
   const low = new THREE.Color(theme.groundLow), mid = new THREE.Color(theme.groundMid), high = new THREE.Color(theme.groundHigh);
+  // prado junto a la pista: enlaza con el antegreen
+  const lawn = grounded ? roughTone(theme).multiplyScalar(0.6) : null;
   const c = new THREE.Color();
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    if (isNeon) {
+      // Gradiente oscuro de aleación metálica con aristas de neón en los picos altos
+      const peakH = THREE.MathUtils.clamp((y + 0.5) / 12, 0, 1);
+      c.setHex(theme.groundLow ?? 0x090b16);
+      c.lerp(new THREE.Color(theme.groundMid ?? 0x141828), peakH * 0.8);
+      if (peakH > 0.6) {
+        c.lerp(new THREE.Color(theme.neon[0]), (peakH - 0.6) * 0.7);
+      }
+      c.toArray(colors, i * 3);
+      continue;
+    }
     // la orilla pasa a arena con un degradado, no de golpe
     const shore = THREE.MathUtils.smoothstep(y, theme.waterLevel + 0.2, theme.waterLevel + 0.7);
     if (y < 2.5) c.copy(mid).lerp(high, THREE.MathUtils.clamp((y - 0.5) / 3, 0, 1));
     else c.copy(high).lerp(new THREE.Color(0x8a8f86), THREE.MathUtils.clamp((y - 4) / 4, 0, 0.7));
     c.lerp(low, 1 - shore);
+    if (lawn) c.lerp(lawn, 0.85 * (1 - THREE.MathUtils.smoothstep(distToBounds(bounds, x, z), 1.5, 9)));
     // manchas grandes y suaves: prados más claros y más oscuros
     c.offsetHSL(0, 0, (noise(x * 0.15 + 3, z * 0.15) - 0.5) * 0.08 + (hash(x, z) - 0.5) * 0.015);
     c.toArray(colors, i * 3);
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geo.computeVertexNormals();
-  const terrain = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
+  const terrainMat = isNeon
+    ? new THREE.MeshStandardMaterial({
+        map: getCyberGridTexture(theme.neon[0], theme.groundLow ?? 0x070814),
+        color: 0x14182a,
+        roughness: 0.45,
+        metalness: 0.65,
+        flatShading: true,
+        vertexColors: true,
+      })
+    : new THREE.MeshLambertMaterial({ vertexColors: true });
+  const terrain = new THREE.Mesh(geo, terrainMat);
   terrain.receiveShadow = true;
   scene.add(terrain);
 
@@ -160,12 +225,25 @@ export function buildEnvironment(scene, course, theme, rng) {
     waterGeo.rotateX(-Math.PI / 2);
     const waterMat = theme.lava
       ? new THREE.MeshPhongMaterial({ color: theme.water, emissive: 0xff3a0a, emissiveIntensity: 0.9, shininess: 30, flatShading: true })
+      : isNeon
+      ? new THREE.MeshPhongMaterial({
+          color: 0x07091e,
+          emissive: theme.neon[1],
+          emissiveIntensity: 0.22,
+          shininess: 90,
+          specular: theme.neon[0],
+          transparent: true,
+          opacity: 0.88,
+          flatShading: true,
+        })
       : new THREE.MeshPhongMaterial({ color: theme.water ?? 0x2bb3e6, shininess: 110, specular: 0xffffff, transparent: true, opacity: 0.86, flatShading: true });
     waterShader(waterMat, theme);
     const water = new THREE.Mesh(waterGeo, waterMat);
     water.position.y = theme.waterLevel;
-    scene.add(water);
+    // a ras de suelo el terreno no baja hasta el agua: no se dibuja
+    if (!grounded) scene.add(water);
     if (theme.lava) animated.push((t) => (water.material.emissiveIntensity = 0.9 + Math.sin(t * 1.7) * 0.25));
+    else if (isNeon) animated.push((t) => (water.material.emissiveIntensity = 0.22 + Math.sin(t * 2.2) * 0.06));
   }
 
   // --- decorado ---
@@ -181,66 +259,86 @@ export function buildEnvironment(scene, course, theme, rng) {
       fn(x, y, z, d);
     }
   };
-  const leaves = theme.leaves?.map((color) => addWind(new THREE.MeshLambertMaterial({ color, flatShading: true }), windUniforms, WIND));
-  place(2.2, 40, 140, (x, y, z) => {
-    const tree = makeTree(theme.trees[Math.floor(rng() * theme.trees.length)], rng, x, y, z, leaves);
-    // los árboles se mecen con el viento (en el sombreador, ver addWind)
-    tree.userData.swayRoot = true;
-    decor.add(tree);
-  });
-  place(1.8, 30, 40, (x, y, z) => decor.add(makeRock(rng, x, y, z)));
-  if (theme.flowers) place(1.2, 12, 110, (x, y, z) => decor.add(makeFlower(rng, x, y, z)));
-  place(1, 14, 90, (x, y, z) => decor.add(makeTuft(rng, x, y, z, theme)));
-  if (theme.lanterns) {
-    // farolillos alrededor de la pista; solo unos pocos llevan luz real (cada luz cuesta en el móvil)
-    const spots = theme.lanterns === 'many' ? perimeterSpots(course, 1.3, 3.2) : [];
-    if (!spots.length) place(1.2, 3, 30, (x, y, z) => spots.length < 4 && spots.push([x, z]));
-    const lamps = spots.map(([x, z], i) => {
-      const lamp = theme.torches && i % 2 ? makeTorch(x, heightAt(x, z), z, i < 6) : makeLantern(x, heightAt(x, z), z, i, i < 6);
-      decor.add(lamp);
-      return lamp;
+
+  if (isNeon) {
+    // Props perimetrales minimalistas, elegantes y bien separados del campo
+    place(3.0, 12, 12, (x, y, z) => {
+      decor.add(makeCyberPylon(x, y, z, theme.neon, rng() > 0.7));
     });
-    if (theme.festoon) decor.add(festoon(lamps));
-    animated.push((t) => {
-      for (const l of lamps) {
-        const f = 1 + Math.sin(t * 9 + l.userData.phase) * 0.06 + Math.sin(t * 23 + l.userData.phase * 3) * 0.04;
-        if (l.userData.light) l.userData.light.intensity = l.userData.base * f;
-        l.userData.halo.material.opacity = 0.55 * f;
-        if (l.userData.flame) l.userData.flame.scale.set(1, f * 1.1, 1);
-      }
+    place(3.5, 14, 8, (x, y, z) => {
+      decor.add(makeHoloCrystal(x, y, z, theme.neon, rng, animated));
     });
+
+    // Megaciudad de rascacielos lejanos, searchlights y tráfico aéreo limpio
+    setupCyberpunkEnvironment(scene, decor, bounds, theme, rng, animated, q);
+  } else {
+    const leaves = theme.leaves?.map((color) => addWind(new THREE.MeshLambertMaterial({ color, flatShading: true }), windUniforms, WIND));
+    // a ras de suelo nada pisa el antegreen, y detrás del tee queda un claro para la cámara
+    const [tx, tz] = course.tee;
+    const clear = (x, z) => !grounded || Math.hypot(x - tx, z - tz) > 9;
+    place(grounded ? 4.5 : 2.2, 40, 140, (x, y, z) => {
+      if (!clear(x, z)) return;
+      const tree = makeTree(theme.trees[Math.floor(rng() * theme.trees.length)], rng, x, y, z, leaves);
+      // los árboles se mecen con el viento (en el sombreador, ver addWind)
+      tree.userData.swayRoot = true;
+      decor.add(tree);
+    });
+    place(grounded ? 2.8 : 1.8, 30, 40, (x, y, z) => clear(x, z) && decor.add(makeRock(rng, x, y, z)));
+    if (theme.flowers) place(grounded ? 1.6 : 1.2, 12, 110, (x, y, z) => decor.add(makeFlower(rng, x, y, z)));
+    place(grounded ? 1.6 : 1, 14, 90, (x, y, z) => decor.add(makeTuft(rng, x, y, z, theme)));
+    if (theme.lanterns) {
+      // farolillos alrededor de la pista; solo unos pocos llevan luz real (cada luz cuesta en el móvil)
+      const spots = theme.lanterns === 'many' ? perimeterSpots(course, grounded ? 1.7 : 1.3, 3.2) : [];
+      if (!spots.length) place(grounded ? 1.7 : 1.2, grounded ? 3.5 : 3, 30, (x, y, z) => spots.length < 4 && spots.push([x, z]));
+      const lamps = spots.map(([x, z], i) => {
+        const lamp = theme.torches && i % 2 ? makeTorch(x, heightAt(x, z), z, i < 6) : makeLantern(x, heightAt(x, z), z, i, i < 6);
+        decor.add(lamp);
+        return lamp;
+      });
+      if (theme.festoon) decor.add(festoon(lamps));
+      animated.push((t) => {
+        for (const l of lamps) {
+          const f = 1 + Math.sin(t * 9 + l.userData.phase) * 0.06 + Math.sin(t * 23 + l.userData.phase * 3) * 0.04;
+          if (l.userData.light) l.userData.light.intensity = l.userData.base * f;
+          l.userData.halo.material.opacity = 0.55 * f;
+          if (l.userData.flame) l.userData.flame.scale.set(1, f * 1.1, 1);
+        }
+      });
+    }
   }
   if (volcano) volcanoShell(scene, course, volcano, animated);
   else if (theme.lava) volcanoBackdrop(scene, course, bounds, heightAt, animated, rng);
 
   // --- nubes ---
-  // nubes de algodón: varias bolas redondas juntadas en una sola malla por nube
-  const cloudMat = new THREE.MeshLambertMaterial({ color: theme.clouds, emissive: theme.clouds, emissiveIntensity: 0.3 });
-  const clouds = [];
-  for (let i = 0; i < 12; i++) {
-    const n = 3 + Math.floor(rng() * 4);
-    const parts = [];
-    for (let k = 0; k < n; k++) {
-      const r = 1.5 + rng() * 2;
-      const geo = new THREE.IcosahedronGeometry(r, 2);
-      geo.scale(1, 0.62, 1);
-      // la parte central más alta: forma de cúmulo
-      geo.translate(k * 2 - n, rng() * 1 + (k > 0 && k < n - 1 ? 0.6 : 0), rng() * 1.5);
-      parts.push(geo);
+  // nubes de algodón (solo para temas naturales, no en neón cyberpunk)
+  if (theme.clouds && !isNeon) {
+    const cloudMat = new THREE.MeshLambertMaterial({ color: theme.clouds, emissive: theme.clouds, emissiveIntensity: 0.3 });
+    const clouds = [];
+    for (let i = 0; i < 12; i++) {
+      const n = 3 + Math.floor(rng() * 4);
+      const parts = [];
+      for (let k = 0; k < n; k++) {
+        const r = 1.5 + rng() * 2;
+        const geo = new THREE.IcosahedronGeometry(r, 2);
+        geo.scale(1, 0.62, 1);
+        // la parte central más alta: forma de cúmulo
+        geo.translate(k * 2 - n, rng() * 1 + (k > 0 && k < n - 1 ? 0.6 : 0), rng() * 1.5);
+        parts.push(geo);
+      }
+      const g = new THREE.Mesh(mergeGeometries(parts), cloudMat);
+      const a = rng() * Math.PI * 2, r = 50 + rng() * 60;
+      g.position.set(Math.cos(a) * r, 18 + rng() * 22, Math.sin(a) * r);
+      g.userData.speed = 0.4 + rng() * 0.6;
+      clouds.push(g);
+      scene.add(g);
     }
-    const g = new THREE.Mesh(mergeGeometries(parts), cloudMat);
-    const a = rng() * Math.PI * 2, r = 50 + rng() * 60;
-    g.position.set(Math.cos(a) * r, 18 + rng() * 22, Math.sin(a) * r);
-    g.userData.speed = 0.4 + rng() * 0.6;
-    clouds.push(g);
-    scene.add(g);
+    animated.push((t, dt) => {
+      for (const cl of clouds) {
+        cl.position.x += cl.userData.speed * dt;
+        if (cl.position.x > 120) cl.position.x = -120;
+      }
+    });
   }
-  animated.push((t, dt) => {
-    for (const cl of clouds) {
-      cl.position.x += cl.userData.speed * dt;
-      if (cl.position.x > 120) cl.position.x = -120;
-    }
-  });
 
   if (theme.stars) {
     const n = 500;
@@ -253,9 +351,11 @@ export function buildEnvironment(scene, course, theme, rng) {
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     const stars = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 0.9, sizeAttenuation: true, fog: false, transparent: true }));
     scene.add(stars);
-    const moon = new THREE.Mesh(new THREE.SphereGeometry(6, 24, 16), new THREE.MeshBasicMaterial({ color: 0xf4f1dc, fog: false }));
-    moon.position.copy(sunDir).multiplyScalar(160);
-    scene.add(moon);
+    if (!isNeon) {
+      const moon = new THREE.Mesh(new THREE.SphereGeometry(6, 24, 16), new THREE.MeshBasicMaterial({ color: 0xf4f1dc, fog: false }));
+      moon.position.copy(sunDir).multiplyScalar(160);
+      scene.add(moon);
+    }
     animated.push((t) => (stars.material.opacity = 0.75 + Math.sin(t * 2) * 0.2));
   }
 
@@ -288,7 +388,7 @@ export function buildEnvironment(scene, course, theme, rng) {
   }
 
   bakeStatic(decor, scene);
-  return { sun, sunDir, update: (t, dt) => animated.forEach((f) => f(t, dt)) };
+  return { sun, sunDir, shadowAnchor, update: (t, dt) => animated.forEach((f) => f(t, dt)) };
 }
 
 const WIND = 0.025;
@@ -318,10 +418,10 @@ function waterShader(material, theme) {
         '#include <dithering_fragment>',
         `#include <dithering_fragment>
         // crestas más claras
-        gl_FragColor.rgb += vec3(${theme.lava ? '0.25, 0.08, 0.0' : '0.12, 0.16, 0.18'}) * smoothstep(0.35, 0.8, vWave);`,
+        gl_FragColor.rgb += vec3(${theme.lava ? '0.25, 0.08, 0.0' : theme.neon ? '0.25, 0.05, 0.3' : '0.12, 0.16, 0.18'}) * smoothstep(0.35, 0.8, vWave);`,
       );
   };
-  material.customProgramCacheKey = () => 'water' + (theme.lava ? 'lava' : '');
+  material.customProgramCacheKey = () => 'water' + (theme.lava ? 'lava' : theme.neon ? 'neon' : '');
 }
 
 const leafMats = [0x2f9e44, 0x3bb54a, 0x25803a, 0x4cc25a].map((color) => addWind(new THREE.MeshLambertMaterial({ color, flatShading: true }), windUniforms, WIND));

@@ -32,6 +32,56 @@ test('ganar un desempate en práctica desbloquea el desafío y la skin Sangre fr
   assert.equal(p.equip('ice'), true);
 });
 
+test('nuevas skins de desafío desbloquean con sus hitos específicos', () => {
+  const p = new Progress(null);
+  assert.equal(p.equip('zephyr_nacre'), false);
+  assert.equal(p.equip('supernova_solar'), false);
+  assert.equal(p.equip('crimson_dragon'), false);
+  assert.equal(p.equip('kintsugi_neon'), false);
+  assert.equal(p.equip('damascus_imperial'), false);
+
+  // 10 birdies para zephyr_nacre
+  for (let i = 0; i < 5; i++) {
+    p.recordMatch({ position: 2, won: false, entryFee: 1, holes: [{ strokes: 2, par: 3 }, { strokes: 2, par: 3 }] });
+  }
+  assert.equal(p.state.birdies, 10);
+  assert.equal(p.challenge('birdies10').done, true);
+  assert.equal(p.equip('zephyr_nacre'), true);
+  assert.equal(p.skin.id, 'zephyr_nacre');
+
+  // 5 victorias seguidas para supernova_solar
+  for (let i = 0; i < 5; i++) {
+    p.recordMatch({ position: 1, won: true, entryFee: 1, holes: [{ strokes: 3, par: 3 }] });
+  }
+  assert.equal(p.state.bestStreak, 5);
+  assert.equal(p.challenge('streak5').done, true);
+  assert.equal(p.equip('supernova_solar'), true);
+
+  // 3 big wins para crimson_dragon
+  for (let i = 0; i < 3; i++) {
+    p.recordMatch({ position: 1, won: true, entryFee: 10, holes: [{ strokes: 3, par: 3 }] });
+  }
+  assert.equal(p.state.bigWins, 3);
+  assert.equal(p.challenge('bigwins3').done, true);
+  assert.equal(p.equip('crimson_dragon'), true);
+
+  // 3 aces para kintsugi_neon (cada ace también es birdie ya que 1 < 3)
+  for (let i = 0; i < 3; i++) {
+    p.recordMatch({ position: 1, won: true, entryFee: 1, holes: [{ strokes: 1, par: 3 }] });
+  }
+  assert.equal(p.state.aces, 3);
+  assert.equal(p.challenge('aces3').done, true);
+  assert.equal(p.equip('kintsugi_neon'), true);
+
+  // 15 birdies en total para damascus_imperial (10 iniciales + 3 aces + 2 birdies más = 15)
+  for (let i = 0; i < 2; i++) {
+    p.recordMatch({ position: 2, won: false, entryFee: 1, holes: [{ strokes: 2, par: 3 }] });
+  }
+  assert.equal(p.state.birdies, 15);
+  assert.equal(p.challenge('birdies15').done, true);
+  assert.equal(p.equip('damascus_imperial'), true);
+});
+
 test('hoyo de desempate: la bola nunca entra y el bot tira una sola vez', () => {
   const segs = segmentsOf(TIEBREAK_COURSE);
   const ball = { x: 0, z: -6, vx: 0, vz: -0.5 };
@@ -61,4 +111,14 @@ test('el progreso de la cuenta gana si lleva más XP o el móvil era de otra cue
   p.attach('u2', { xp: 0 }, async () => {});
   assert.equal(p.state.xp, 0);
   assert.equal(p.state.owner, 'u2');
+});
+
+test('las míticas se desbloquean con wins50 y aces5', () => {
+  const p = new Progress(null);
+  assert.equal(p.equip('event_horizon'), false);
+  assert.equal(p.equip('midas_touch'), false);
+  p.state.wins = 50;
+  p.state.aces = 5;
+  assert.equal(p.equip('event_horizon'), true);
+  assert.equal(p.equip('midas_touch'), true);
 });

@@ -64,14 +64,15 @@ export const COURSES = [
     name: 'La Recta',
     par: 2,
     theme: 'meadow',
-    tee: [0, 8],
-    cup: [0, -8],
-    outline: [[-2.2, 9.5], [2.2, 9.5], [2.2, -9.5], [-2.2, -9.5]],
+    tee: [0, 11.5],
+    cup: [0, -11],
+    outline: [[-3.2, 13], [3.2, 13], [3.2, -13], [-3.2, -13]],
+    grounded: true, // la pista va a ras del terreno, sin plataforma de tierra
     walls: [],
-    bumpers: [{ x: 0, z: 0, r: 0.55 }, { x: -1.2, z: -4.5, r: 0.35 }, { x: 1.2, z: -4.5, r: 0.35 }],
+    bumpers: [{ x: 0, z: 0, r: 0.6 }, { x: -1.7, z: -6.5, r: 0.4 }, { x: 1.7, z: -6.5, r: 0.4 }],
     sand: [],
     spinners: [],
-    waypoints: [[-1.3, 0], [1.3, 0]], // alternativas para esquivar la seta central
+    waypoints: [[-1.9, 0], [1.9, 0]], // alternativas para esquivar la seta central
   },
   {
     name: 'El Codo',

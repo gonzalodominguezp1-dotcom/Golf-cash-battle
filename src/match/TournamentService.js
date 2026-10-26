@@ -27,11 +27,15 @@ export class TournamentService {
     return data;
   }
 
-  /** Entra en el torneo abierto de esa mesa. Si tenías uno a medias, lo devuelve para seguir. */
-  async join(tier, tiers) {
+  /**
+   * Entra en el torneo abierto de esa mesa. Si tenías uno a medias, lo devuelve para seguir.
+   * Con rematchOf (id del torneo que acabas de jugar) entras en el grupo de revancha de ese
+   * torneo; si no lo jugaste o es de otra mesa el servidor responde 'rematch_invalid'.
+   */
+  async join(tier, tiers, rematchOf = null) {
     let data;
     try {
-      data = await this.#rpc('join_tournament', { p_tier: tier.id });
+      data = await this.#rpc('join_tournament', { p_tier: tier.id, p_rematch: rematchOf });
     } catch (e) {
       if (e.code !== 'active_match') throw e;
       const open = (await this.mine(tiers)).find((m) => m.status === 'open' && !m.me.finished);
@@ -106,6 +110,7 @@ export function toMatch(t, tier) {
     pot: Number(t.pot),
     commission: Number(t.commission),
     prize: Number(t.prize),
+    rematchOf: t.rematch_of ?? null,
     players,
     me: players.find((p) => p.id === 'me'),
   };
