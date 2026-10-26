@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { BALL_R, CUP_R, WALL_HALF, moverPos, segmentsOf } from '../physics.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { chevronTexture, crateTexture, dirtMaps, grassMaps, sandMaps, slopeArrowTexture, slopeShadeTexture, softDotTexture, stripeTexture, swirlTexture, woodMaps } from './textures.js';
+import { chevronTexture, crateTexture, dirtMaps, grassMaps, sandMaps, slopeArrowTexture, slopeShadeTexture, softDotTexture, stripeTexture, woodMaps } from './textures.js';
+import { buildPortal } from './portal.js';
 import { groundHeight, hasRelief } from './terrain.js';
 import { attractionStyle, buildLoop, buildTube, buildTunnel, buildWindmill, neonGridTexture } from './attractions.js';
 
@@ -78,18 +79,17 @@ export function buildCourse(scene, course, theme) {
   if (lavaCup) lavaCup.group.position.y = hc;
   else if (relief && !course.noCup) scene.add(cupCollar(hx, hz, hc, grassMat));
 
-  // arena con bordes redondeados
+  // arena con bordes redondeados: hundida hacia el borde, donde el labio de césped la sombrea
   const sandM = course.sand.length ? sandMaps() : null;
-  if (sandM) sandM.map.repeat.set(0.6, 0.6);
-  const sandMat = sandM && new THREE.MeshStandardMaterial({ ...sandM, roughness: 1 });
+  if (sandM) sandM.map.repeat.set(0.5, 0.5);
   for (const s of course.sand) {
     const r = Math.min(s.w, s.d) * 0.35;
     const sh = roundedRect(s.w, s.d, r);
-    const m = new THREE.Mesh(new THREE.ShapeGeometry(sh, 12), sandMat);
+    const m = new THREE.Mesh(new THREE.ShapeGeometry(sh, 12), bunkerMaterial(sandM, s.w, s.d, r));
     m.rotation.x = -Math.PI / 2;
     m.position.set(s.x, lift(s.x, s.z) + 0.004, s.z);
     m.receiveShadow = true;
-    const edge = new THREE.Mesh(new THREE.ShapeGeometry(roundedRect(s.w + 0.14, s.d + 0.14, r + 0.07), 12), sandEdgeMat);
+    const edge = new THREE.Mesh(new THREE.ShapeGeometry(roundedRect(s.w + 0.1, s.d + 0.1, r + 0.05), 12), sandEdgeMat);
     edge.rotation.x = -Math.PI / 2;
     edge.position.set(s.x, lift(s.x, s.z) + 0.003, s.z);
     scene.add(edge, m);
@@ -280,10 +280,14 @@ export function buildCourse(scene, course, theme) {
   ];
   const tubes = (course.portals ?? []).map((p, i) => (p.tube ? buildTube(scene, p, style, i, lift(...p.a)) : null));
 
-  // portales: entrada morada y salida naranja, con remolino y columna de luz
+  // portales: entrada morada y salida naranja, con espiral de plasma y luz que tiembla
+  const portalTime = { value: 0 };
   const portals = (course.portals ?? [])
     .filter((p) => !p.tube)
-    .flatMap((p) => [portalMesh(scene, p.a, p.r, '#b46cff', 0xb46cff, lift(...p.a)), portalMesh(scene, p.b, p.r * 0.8, '#ffb020', 0xffb020, lift(...p.b))]);
+    .flatMap((p, i) => [
+      buildPortal(scene, p.a, p.r, 0xb46cff, lift(...p.a), portalTime, i * 2),
+      buildPortal(scene, p.b, p.r * 0.8, 0xffb020, lift(...p.b), portalTime, i * 2 + 1),
+    ]);
 
   // bloques que se mueven
   const crate = crateTexture();
@@ -329,11 +333,8 @@ export function buildCourse(scene, course, theme) {
       lavaCup?.update(t);
       boostTextures.forEach((tex) => (tex.offset.y = -t * 1.5));
       slopeTextures.forEach((s) => (s.tex.offset.y = -t * s.speed));
-      portals.forEach((p, i) => {
-        p.disc.rotation.z = t * (i % 2 ? -2 : 3);
-        p.beam.material.opacity = 0.25 + Math.sin(t * 4 + i) * 0.1;
-        p.ring.scale.setScalar(1 + Math.sin(t * 5 + i) * 0.05);
-      });
+      portalTime.value = t;
+      portals.forEach((p) => p.update(t));
       (course.movers ?? []).forEach((m, i) => {
         const p = moverPos(m, t);
         movers[i].position.x = p.x;
@@ -372,27 +373,6 @@ export function buildCourse(scene, course, theme) {
       bumpers.forEach((b) => (b.userData.squash = (b.userData.squash ?? 0) * 0.85));
     },
   };
-}
-
-function portalMesh(scene, [x, z], r, css, color, y = 0) {
-  const g = new THREE.Group();
-  const disc = new THREE.Mesh(new THREE.CircleGeometry(r, 40), new THREE.MeshBasicMaterial({ map: swirlTexture(css), transparent: true, depthWrite: false }));
-  disc.rotation.x = -Math.PI / 2;
-  disc.position.y = 0.006;
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.045, 10, 40), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.2, roughness: 0.3 }));
-  ring.rotation.x = -Math.PI / 2;
-  ring.position.y = 0.03;
-  const beam = new THREE.Mesh(
-    new THREE.CylinderGeometry(r * 0.9, r, 1.6, 24, 1, true),
-    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.3, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }),
-  );
-  beam.position.y = 0.8;
-  const light = new THREE.PointLight(color, 2, 3, 1.5);
-  light.position.y = 0.5;
-  g.add(disc, ring, beam, light);
-  g.position.set(x, y, z);
-  scene.add(g);
-  return { disc, ring, beam };
 }
 
 function lavaCrater(scene, hx, hz, cupInside, cupBottom) {
@@ -584,7 +564,34 @@ function scaleUV(geo, su, sv) {
   for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * su, uv.getY(i) * sv);
 }
 
-const sandEdgeMat = new THREE.MeshStandardMaterial({ color: 0xc9a861, roughness: 1 });
+const sandEdgeMat = new THREE.MeshStandardMaterial({ color: 0x9c7c45, roughness: 1 });
+
+/**
+ * Material de un búnker: la arena se oscurece y se inclina hacia el borde
+ * (distancia a un rectángulo redondeado), como si bajara desde el labio de
+ * césped, con una franja algo más clara justo donde empieza la pendiente.
+ */
+function bunkerMaterial(maps, w, d, r) {
+  const mat = new THREE.MeshStandardMaterial({ ...maps, roughness: 1, normalScale: new THREE.Vector2(0.9, 0.9) });
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uBunker = { value: new THREE.Vector3(w / 2, d / 2, r) };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vBunker;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvBunker = position.xy;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vBunker;\nuniform vec3 uBunker;')
+      .replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+        vec2 q = abs(vBunker) - uBunker.xy + uBunker.z;
+        float inside = -(length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - uBunker.z);
+        float lip = smoothstep(0.0, 0.28, inside);
+        diffuseColor.rgb *= mix(0.62, 1.0, lip) + 0.06 * exp(-pow((inside - 0.3) * 9.0, 2.0));`,
+      );
+  };
+  mat.customProgramCacheKey = () => 'bunker';
+  return mat;
+}
 const contactMat = new THREE.MeshBasicMaterial({ map: softDotTexture(), color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false });
 const dotMats = {};
 const dotMat = (night) => (dotMats[night] ??= new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: night ? 1.2 : 0.2 }));
