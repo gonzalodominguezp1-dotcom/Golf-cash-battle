@@ -710,7 +710,8 @@ function volcanoShell(scene, course, v, animated) {
       // terraza del sendero: la montaña se recorta por debajo de la zona elevada
       for (const t of course.tiers ?? []) {
         const near = t.poly.some(([px, pz]) => Math.hypot(px - x, pz - z) < 6) || pointInPoly(t.poly, x, z);
-        if (near && distPoly(t.poly, x, z) < 1.4 && y > t.h - 0.3) y = t.h - 0.3 - Math.max(0, distPoly(t.poly, x, z) - 1) * 2;
+        // (sin tocar el borde del cráter: detrás de la cueva queda la pared de roca)
+        if (near && qq > 1.3 && distPoly(t.poly, x, z) < 1.4 && y > t.h - 0.3) y = t.h - 0.3 - Math.max(0, distPoly(t.poly, x, z) - 1) * 2;
       }
       opos.push(x, y, z);
       // vetas de lava que bajan por la ladera
@@ -730,7 +731,9 @@ function volcanoShell(scene, course, v, animated) {
   outer.setIndex(idx);
   outer = outer.toNonIndexed();
   outer.computeVertexNormals();
-  const outerMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95, side: THREE.DoubleSide });
+  // solo la cara de fuera: con la cámara dentro de la roca (la bola cruzando por
+  // el tubo) la montaña no tapa la vista
+  const outerMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95 });
   emissive(outerMat, 1.2);
   const mountain = new THREE.Mesh(outer, outerMat);
   mountain.receiveShadow = true;

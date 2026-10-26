@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BALL_R, CUP_R, DT, MAX_SHOT_SPEED, inSand, isMoving, onBoost, quantizeShot, segmentsOf, shotVelocity, spinnerSegment, step } from './physics.js';
+import { BALL_R, CUP_R, DT, MAX_SHOT_SPEED, inSand, isMoving, onBoost, quantizeShot, segmentsOf, shotVelocity, spinnerSegment, step, tubeTable } from './physics.js';
 import { Bot } from './bots.js';
 import { THEMES } from './themes.js';
 import { buildEnvironment, courseBounds } from './render/environment.js';
@@ -449,6 +449,23 @@ export class GolfGame {
 
   // ---------- cámara ----------
 
+  /**
+   * Tubo de caída (la cueva del volcán): pasada la boca, la cámara espera
+   * dentro, frente al tobogán, y mira cómo baja la bola (detrás de la bola
+   * quedaría metida en la roca).
+   */
+  #dropTarget() {
+    const tr = this.ball.track;
+    const p = tr?.kind === 'tube' ? this.course.portals[tr.i] : null;
+    if (!p?.drop || tr.s < tubeTable(p).length * 0.3) return null;
+    const pose = ballPose(this.course, this.ball);
+    const [bx, bz] = p.b, [ox, oz] = p.out;
+    return {
+      pos: new THREE.Vector3(bx + ox * 3.2 + oz * 1.2, 2.2, bz + oz * 3.2 - ox * 1.2),
+      look: new THREE.Vector3(pose.x, pose.y - 0.3, pose.z),
+    };
+  }
+
   #followTarget() {
     const fwd = forwardOf(this.camYaw);
     const isWidescreen = (this.container.clientWidth || 1) >= (this.container.clientHeight || 1);
@@ -523,7 +540,13 @@ export class GolfGame {
       snap = true;
     } else if (this.sunk) target = this.#celebrateTarget();
     else if (this.overview) target = this.#overviewTarget();
-    else target = this.#followTarget();
+    else {
+      const drop = this.#dropTarget();
+      // al entrar en la cueva la cámara salta dentro del volcán de golpe (sin cruzar la roca)
+      if (drop && !this.inDrop) snap = true;
+      this.inDrop = !!drop;
+      target = drop ?? this.#followTarget();
+    }
 
     this.camPos ??= target.pos.clone();
     this.camLook ??= target.look.clone();

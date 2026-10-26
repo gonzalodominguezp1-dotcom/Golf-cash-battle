@@ -197,8 +197,10 @@ export function buildCourse(scene, course, theme) {
   for (const k of corners) {
     const [x, z] = k.split(',').map(Number);
     const h = lift(x, z);
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(WALL_HALF * 1.25, WALL_HALF * 1.3, WALL_H + 0.12 + h, 20), postMat);
-    post.position.set(x, (WALL_H + 0.12 + h) / 2, z);
+    // con relieve el poste baja hasta el suelo de la maqueta; en una zona elevada empieza en ella
+    const from = relief ? 0 : h, ph = WALL_H + 0.12 + h - from;
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(WALL_HALF * 1.25, WALL_HALF * 1.3, ph, 20), postMat);
+    post.position.set(x, from + ph / 2, z);
     post.castShadow = true;
     const ball = new THREE.Mesh(
       new THREE.SphereGeometry(WALL_HALF * 1.1, 20, 14),
