@@ -1207,6 +1207,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         setTimeout(() => finish(MAX_STROKES_PER_HOLE), 1600);
       },
       onLip: () => toast('¡Uy! Demasiado fuerte para entrar', '#ffffff'),
+      onLava: () => toast('🔥 ¡A la lava! Vuelves al sitio del golpe', '#ff8a3a'),
       onRest: (n) => {
         showDistance();
         if (tiebreak) {

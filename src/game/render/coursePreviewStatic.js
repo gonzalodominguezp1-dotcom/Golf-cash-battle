@@ -24,6 +24,7 @@ export const STATIC_COURSE_PREVIEWS = {
   'Molinos de Noche': '/courses/course-16.webp',
   'Las Tuberías': '/courses/course-17.webp',
   'Looping Nocturno': '/courses/course-18.webp',
+  'Dentro del Volcán': '/courses/course-19.webp',
   'Desempate': '/courses/tiebreak.webp',
 };
 
