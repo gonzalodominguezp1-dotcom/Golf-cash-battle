@@ -28,7 +28,7 @@ function segBlocked(ax, az, bx, bz, segs, course) {
 }
 
 // tras el labio de una rampa la bola vuela este trecho: la lava que se cruce ahí no cuenta
-const JUMP_REACH = 2.6;
+const JUMP_REACH = 3.2;
 
 /**
  * ¿La línea de a a b pasa por lava? No cuenta la que cruza justo después de
@@ -105,11 +105,14 @@ function powerFor(course, segs, from, dirX, dirZ, dist) {
   return (lo + hi) / 2;
 }
 
-/** Dónde para un tiro (o null si entra). */
-function landing(course, segs, from, dirX, dirZ, power) {
+/** Dónde para un tiro (o null si entra en el hoyo o, si se apunta a uno, en ese portal). */
+function landing(course, segs, from, dirX, dirZ, power, portal = -1) {
   const sim = { x: from.x, z: from.z, vx: dirX * power * MAX_SHOT_SPEED, vz: dirZ * power * MAX_SHOT_SPEED };
   const c = { ...course, spinners: [], movers: [], windmills: [] };
-  for (let i = 0; i < 3600 && isMoving(sim); i++) if (step(c, segs, sim, 0, DT).sunk) return null;
+  for (let i = 0; i < 3600 && isMoving(sim); i++) {
+    const r = step(c, segs, sim, 0, DT);
+    if (r.sunk || (portal >= 0 && r.portal === portal)) return null;
+  }
   return sim;
 }
 
@@ -123,6 +126,8 @@ const SEARCH_POWERS = Array.from({ length: 32 }, (_, i) => 0.06 + i * 0.03);
 class PowerSearch {
   constructor(course, segs, from, dirX, dirZ, target) {
     Object.assign(this, { course, segs, from: { ...from }, dirX, dirZ, target, i: 0, scored: [] });
+    // si el objetivo es la boca de un portal, meterse en él es acertar
+    this.portal = (course.portals ?? []).findIndex((p) => p.a[0] === target.x && p.a[1] === target.z);
   }
 
   get done() {
@@ -131,7 +136,7 @@ class PowerSearch {
 
   advance() {
     const p = SEARCH_POWERS[this.i++];
-    const end = landing(this.course, this.segs, this.from, this.dirX, this.dirZ, p);
+    const end = landing(this.course, this.segs, this.from, this.dirX, this.dirZ, p, this.portal);
     this.scored.push({ p, d: end ? Math.hypot(end.x - this.target.x, end.z - this.target.z) : 0 });
   }
 

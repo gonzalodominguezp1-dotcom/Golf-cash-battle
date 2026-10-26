@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { BALL_R, CUP_R, WALL_HALF, moverPos, segmentsOf } from '../physics.js';
+import { BALL_R, CUP_R, WALL_HALF, moverPos, segmentsOf, tubeTable } from '../physics.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { chevronTexture, crateTexture, dirtMaps, grassMaps, rockFloorMaps, sandMaps, slopeArrowTexture, slopeShadeTexture, softDotTexture, stripeTexture, swirlTexture, woodMaps } from './textures.js';
-import { groundHeight, hasRelief } from './terrain.js';
+import { groundHeight, hasRelief, tierHeight } from './terrain.js';
 import { lavaMaterial } from './lava.js';
 import { attractionStyle, buildLoop, buildTube, buildTunnel, buildWindmill, neonGridTexture } from './attractions.js';
 
@@ -26,7 +26,8 @@ function outline(mesh, grow = 0.035) {
 export function buildCourse(scene, course, theme) {
   const [hx, hz] = course.cup;
   const relief = hasRelief(course);
-  const lift = relief ? (x, z) => groundHeight(course, x, z) : () => 0;
+  // sin cuestas solo suben las zonas elevadas (tiers), que son llanas
+  const lift = relief ? (x, z) => groundHeight(course, x, z) : course.tiers ? (x, z) => tierHeight(course, x, z) : () => 0;
   const hc = lift(hx, hz);
   const style = attractionStyle(theme);
   const neon = theme.neon;
@@ -56,6 +57,19 @@ export function buildCourse(scene, course, theme) {
   const platform = new THREE.Mesh(geo, [grassMat, new THREE.MeshStandardMaterial({ ...dirtM, roughness: 1 })]);
   platform.receiveShadow = true;
   scene.add(platform);
+  // zonas elevadas: su propia plataforma, un bloque de roca que baja hasta el suelo
+  for (const t of course.tiers ?? []) {
+    const depth = t.h + 9;
+    const tg = new THREE.ExtrudeGeometry(new THREE.Shape(t.poly.map(([x, z]) => new THREE.Vector2(x, -z))), { depth, bevelEnabled: false });
+    tg.rotateX(-Math.PI / 2);
+    tg.translate(0, t.h - depth, 0);
+    const sideM = new THREE.MeshStandardMaterial({ ...dirtM, roughness: 1 });
+    sideM.map = dirtM.map.clone();
+    sideM.map.repeat.set(0.5, 1 / PLATFORM_DEPTH);
+    const tier = new THREE.Mesh(tg, [grassMat, sideM]);
+    tier.receiveShadow = tier.castShadow = true;
+    scene.add(tier);
+  }
   if (relief) {
     // el césped de verdad es una malla con relieve; la plataforma queda debajo
     geo.translate(0, -0.03, 0);
@@ -134,7 +148,9 @@ export function buildCourse(scene, course, theme) {
     const ao = new THREE.PlaneGeometry(len, WALL_HALF * 2 + 0.5, relief ? segs : 1, 1);
     ao.rotateX(-Math.PI / 2);
     ao.rotateY(-Math.atan2(bz - az, bx - ax));
-    ao.translate((ax + bx) / 2, 0.006, (az + bz) / 2);
+    // sin relieve la pared va entera a la altura de su zona (las de las zonas elevadas arriba)
+    const base = relief ? 0 : lift((ax + bx) / 2, (az + bz) / 2);
+    ao.translate((ax + bx) / 2, 0.006 + base, (az + bz) / 2);
     if (relief) {
       const p = ao.attributes.position;
       for (let k = 0; k < p.count; k++) p.setY(k, p.getY(k) + lift(p.getX(k), p.getZ(k)));
@@ -148,7 +164,10 @@ export function buildCourse(scene, course, theme) {
     for (const [g, all] of [[bodyGeo, false], [capGeo, true]]) {
       g.rotateY(rot);
       g.translate(cx, 0, cz);
-      if (!relief) continue;
+      if (!relief) {
+        if (base) g.translate(0, base, 0);
+        continue;
+      }
       const p = g.attributes.position;
       for (let k = 0; k < p.count; k++) {
         if (!all && p.getY(k) < 0.01) continue;
@@ -294,7 +313,7 @@ export function buildCourse(scene, course, theme) {
     ...(course.windmills ?? []).map((wm) => buildWindmill(scene, wm, style, lift(wm.x, wm.z))),
     ...(course.tunnels ?? []).map((tn, i) => buildTunnel(scene, tn, style, lift(tn.x, tn.z), i)),
   ];
-  const tubes = (course.portals ?? []).map((p, i) => (p.tube ? buildTube(scene, p, style, i, lift(...p.a)) : null));
+  const tubes = (course.portals ?? []).map((p, i) => (p.drop ? buildChute(scene, p, lift(...p.a)) : p.tube ? buildTube(scene, p, style, i, lift(...p.a)) : null));
 
   // portales: entrada morada y salida naranja, con remolino y columna de luz
   const portals = (course.portals ?? [])
@@ -411,6 +430,77 @@ function portalMesh(scene, [x, z], r, css, color, y = 0) {
   g.position.set(x, y, z);
   scene.add(g);
   return { disc, ring, beam };
+}
+
+/**
+ * Tubo de lava que cae: boca de cueva en la roca de la ladera y, dentro del
+ * volcán, un tobogán de basalto abierto por arriba por el que baja la bola
+ * (el tramo que cruza la roca queda tapado por la montaña).
+ */
+function buildChute(scene, portal, y) {
+  const [ax, az] = portal.a;
+  const pts = tubeTable(portal).pts.map((p) => new THREE.Vector3(p.x, p.y, p.z));
+  const curve = new THREE.CatmullRomCurve3(pts);
+  // media caña: semicírculo de radio R por debajo del recorrido de la bola
+  const N = 90, M = 10, R = 0.3;
+  const pos = [], idx = [];
+  const up = new THREE.Vector3(0, 1, 0), side = new THREE.Vector3(), down = new THREE.Vector3();
+  for (let i = 0; i <= N; i++) {
+    const u = i / N;
+    const c = curve.getPointAt(u), tan = curve.getTangentAt(u);
+    side.crossVectors(tan, up).normalize();
+    down.crossVectors(side, tan).normalize().negate();
+    for (let k = 0; k <= M; k++) {
+      const th = (k / M) * Math.PI;
+      // el centro de la caña queda un poco por debajo del centro de la bola
+      const p = c.clone().addScaledVector(side, Math.cos(th) * R).addScaledVector(down, Math.sin(th) * R + (R - BALL_R) * 0.6);
+      pos.push(p.x, p.y, p.z);
+    }
+  }
+  for (let i = 0; i < N; i++) for (let k = 0; k < M; k++) {
+    const a = i * (M + 1) + k, b = a + M + 1;
+    idx.push(a, b, a + 1, a + 1, b, b + 1);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  const chute = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0x3a2a26, roughness: 0.85, emissive: 0xff4a10, emissiveIntensity: 0.18, side: THREE.DoubleSide, flatShading: true }));
+  chute.castShadow = chute.receiveShadow = true;
+  // bordes de magma a lo largo del tobogán
+  const rimPts = (s) => pts.map((p, i) => {
+    const t = curve.getTangentAt(Math.min(1, i / (pts.length - 1)));
+    return p.clone().addScaledVector(side.crossVectors(t, up).normalize(), s * R).add(new THREE.Vector3(0, -0.02, 0));
+  });
+  const rimMat = new THREE.MeshStandardMaterial({ color: 0xff6a1a, emissive: 0xff5a14, emissiveIntensity: 1.4 });
+  const rims = [-1, 1].map((s) => new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(rimPts(s)), 90, 0.035, 6), rimMat));
+  // boca de la cueva: agujero negro, arco de roca y resplandor que sale de dentro
+  const g = new THREE.Group();
+  const hole = new THREE.Mesh(new THREE.CircleGeometry(portal.r, 32), new THREE.MeshBasicMaterial({ color: 0x050303 }));
+  hole.rotation.x = -Math.PI / 2;
+  hole.position.y = 0.005;
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(portal.r, 0.06, 10, 36), rimMat);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.03;
+  const archGeo = new THREE.TorusGeometry(1.05, 0.32, 8, 20, Math.PI);
+  const arch = new THREE.Mesh(archGeo, new THREE.MeshStandardMaterial({ color: 0x2a2022, roughness: 1, flatShading: true }));
+  arch.position.set(0, 0, -0.6);
+  arch.castShadow = true;
+  const glow = new THREE.PointLight(0xff6a1a, 3, 4, 1.5);
+  glow.position.set(0, 0.6, -0.8);
+  g.add(hole, ring, arch, glow);
+  // la cueva mira hacia donde llega la bola (de la boca hacia fuera del tubo)
+  const [dx, dz] = [portal.b[0] - ax, portal.b[1] - az];
+  g.rotation.y = Math.atan2(-dx, -dz);
+  g.position.set(ax, y, az);
+  scene.add(chute, ...rims, g);
+  return {
+    update(t) {
+      const k = 1 + Math.sin(t * 3.3) * 0.15;
+      glow.intensity = 3 * k;
+      ring.scale.setScalar(1 + Math.sin(t * 4) * 0.04);
+    },
+  };
 }
 
 /** Río o charco de lava en su canal, con una luz que parpadea. */

@@ -238,16 +238,16 @@ function rollFrom(c, x, z, v) {
 
 test('dentro del volcán: la lava devuelve la bola al sitio del golpe', () => {
   const c = COURSES.find((x) => x.name === 'Dentro del Volcán');
-  // de lado a la rampa, directo al primer río
-  const r = rollFrom(c, 2.6, 6.4, 6);
+  // entre la rampa y la lava del centro, directo al río del brazo izquierdo
+  const r = rollFrom(c, -2.1, 4.8, 6);
   assert.ok(r.lava, 'cae en la lava');
   assert.ok(inLava(c, ...r.lava));
-  assert.deepEqual([r.ball.x, r.ball.z, r.ball.vx, r.ball.vz], [2.6, 6.4, 0, 0]);
+  assert.deepEqual([r.ball.x, r.ball.z, r.ball.vx, r.ball.vz], [-2.1, 4.8, 0, 0]);
   assert.ok(!r.ball.from && !r.ball.air);
   // por el puente de roca se cruza sin quemarse
-  const bridge = rollFrom(c, -3.25, 6.4, 7);
+  const bridge = rollFrom(c, -5.7, 6.4, 7);
   assert.equal(bridge.lava, null);
-  assert.ok(bridge.ball.z < 2.4, 'cruza el puente');
+  assert.ok(bridge.ball.z < 1.8, 'cruza el puente');
 });
 
 test('dentro del volcán: la rampa hace saltar el río; flojo vuelve rodando', () => {
@@ -258,23 +258,69 @@ test('dentro del volcán: la rampa hace saltar el río; flojo vuelve rodando', (
   const weak = rollFrom(c, r1.x, foot, 2.5);
   assert.ok(!weak.launch && !weak.lava);
   assert.ok(!onRamp(c, weak.ball.x, weak.ball.z) && weak.ball.z > r1.z);
-  // con fuerza vuela por encima de la lava y cae al otro lado
+  // con fuerza vuela por encima de la lava y sigue brazo abajo
   const jump = rollFrom(c, r1.x, foot, 7.5);
   assert.ok(jump.launch, 'despega');
   assert.equal(jump.lava, null, 'no se quema');
-  assert.ok(jump.ball.z < 2.5 && jump.ball.z > -2.6, `cae entre los dos ríos (${jump.ball.z.toFixed(2)})`);
+  assert.ok(jump.ball.z < 1.9, `cae pasado el río (${jump.ball.z.toFixed(2)})`);
   assert.ok(jump.maxY > r1.h + 0.2, 'se ve volar');
   // a medio gas despega pero cae dentro del río
-  const short = rollFrom(c, r1.x, foot, 5.6);
+  const short = rollFrom(c, r1.x, foot, 4.6);
   assert.ok(short.launch && short.lava);
 });
 
-test('dentro del volcán: el servidor repite igual los saltos y la lava', () => {
+// golpe desde (x, z) con la física completa del hoyo (aspas incluidas)
+function shotFrom(c, x, z, yaw, power) {
+  const segs = segmentsOf(c);
+  const ball = { x, z, vx: 0, vz: 0 };
+  Object.assign(ball, shotVelocity(yaw, power));
+  const ev = { portal: -1, lava: null, launch: false, sunk: false };
+  let t = 0;
+  while (isMoving(ball) && t < 120 * 40) {
+    const r = step(c, segs, ball, ++t * DT, DT);
+    if (r.portal >= 0) ev.portal = r.portal;
+    ev.lava ??= r.lava ?? null;
+    ev.launch ||= !!r.launch;
+    ev.sunk ||= r.sunk;
+  }
+  return { ball, ...ev };
+}
+
+test('dentro del volcán: la cueva de fuera cae dentro, entre las dos rampas', () => {
+  const c = { ...COURSES.find((x) => x.name === 'Dentro del Volcán'), spinners: [] };
+  // la salida está en el sendero elevado, por encima de la cámara
+  assert.equal(groundHeight(c, ...c.tee), c.tiers[0].h);
+  assert.equal(groundHeight(c, ...c.cup), 0);
+  const ends = new Set();
+  for (const p of [0.6, 0.8, 1]) {
+    const r = shotFrom(c, ...c.tee, 0, p);
+    assert.equal(r.portal, 0, `p=${p}: entra en la cueva`);
+    ends.add(`${r.ball.x.toFixed(3)},${r.ball.z.toFixed(3)}`);
+  }
+  // el tobogán suelta la bola siempre igual: delante de la rampa y en la del atajo
+  assert.equal(ends.size, 1);
+  const [x, z] = [...ends][0].split(',').map(Number);
+  const [rampA, shortcut] = c.ramps;
+  assert.ok(Math.abs(x - rampA.x) < 0.3 && z > rampA.z + rampA.d / 2, 'delante de la rampa del río');
+  assert.ok(Math.abs(z - shortcut.z) < 0.3 && x < shortcut.x - shortcut.w / 2, 'en línea con la rampa del atajo');
+});
+
+test('dentro del volcán: el atajo cruza la U de un salto', () => {
+  const c = COURSES.find((x) => x.name === 'Dentro del Volcán');
+  const sideways = (p) => shotFrom(c, -3.4, 6.2, Math.PI / 2, p);
+  // flojo cae en la lava del centro; bien, aterriza en el brazo derecho
+  assert.ok(sideways(0.4).lava || !sideways(0.4).launch);
+  const ok = sideways(0.65);
+  assert.ok(ok.launch && !ok.lava, 'salta la lava del centro');
+  assert.ok(ok.ball.x > 1.5, `aterriza en el otro brazo (${ok.ball.x.toFixed(2)})`);
+});
+
+test('dentro del volcán: el servidor repite igual la cueva, los saltos y la lava', () => {
   const c = COURSES.find((x) => x.name === 'Dentro del Volcán');
   for (const p of [0.7, 0.8, 0.95]) {
-    const shots = [{ tick: 10, ...quantizeShot(0, p) }];
-    const a = replayHole(c, shots, { maxStrokes: 1 }), b = replayHole(c, structuredClone(shots), { maxStrokes: 1 });
-    assert.ok(a.ok, `p=${p}`);
+    const shots = [{ tick: 10, ...quantizeShot(0, p) }, { tick: 2400, ...quantizeShot(Math.PI / 2, 0.65) }];
+    const a = replayHole(c, shots, { maxStrokes: 2 }), b = replayHole(c, structuredClone(shots), { maxStrokes: 2 });
+    assert.ok(a.ok, `p=${p}: ${a.reason}`);
     assert.deepEqual(a, b);
   }
 });

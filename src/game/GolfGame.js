@@ -488,7 +488,7 @@ export class GolfGame {
     const b = this.bounds;
     const cam = new THREE.PerspectiveCamera(this.baseFov ?? 55, aspect, 0.1, 500);
     const corners = [];
-    for (const x of [b.minX - 0.4, b.maxX + 0.4]) for (const z of [b.minZ - 0.4, b.maxZ + 0.4]) for (const y of [0, 1.8]) corners.push(new THREE.Vector3(x, y, z));
+    for (const x of [b.minX - 0.4, b.maxX + 0.4]) for (const z of [b.minZ - 0.4, b.maxZ + 0.4]) for (const y of [0, 1.8 + (b.maxY ?? 0)]) corners.push(new THREE.Vector3(x, y, z));
     const fits = (d) => {
       cam.position.copy(look).addScaledVector(dir, d);
       cam.lookAt(look);

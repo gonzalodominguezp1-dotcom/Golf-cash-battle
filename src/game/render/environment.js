@@ -23,9 +23,28 @@ function noise(x, z) {
 }
 const fbm = (x, z) => noise(x, z) * 0.6 + noise(x * 2.1, z * 2.1) * 0.28 + noise(x * 4.3, z * 4.3) * 0.12;
 
+/** Rectángulo que ocupa el hoyo (con sus zonas elevadas; maxY es la más alta). */
 export function courseBounds(course) {
+  const pts = [course.outline, ...(course.tiers ?? []).map((t) => t.poly)].flat();
+  const xs = pts.map((p) => p[0]), zs = pts.map((p) => p[1]);
+  const maxY = Math.max(0, ...(course.tiers ?? []).map((t) => t.h));
+  return { minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs), maxY };
+}
+
+/**
+ * El volcán del hoyo de la caldera: elipse que rodea la cámara (el contorno)
+ * con margen. q(x, z) es 1 en la pared de dentro y crece hacia fuera.
+ */
+const RIM = 9; // altura del borde del cráter sobre el suelo de la cámara
+const FOOT = -7; // donde la ladera llega al suelo de fuera
+function volcanoShape(course) {
   const xs = course.outline.map((p) => p[0]), zs = course.outline.map((p) => p[1]);
-  return { minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs) };
+  const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cz = (Math.min(...zs) + Math.max(...zs)) / 2;
+  const rx = (Math.max(...xs) - Math.min(...xs)) / 2 + 3, rz = (Math.max(...zs) - Math.min(...zs)) / 2 + 3;
+  const q = (x, z) => Math.hypot((x - cx) / rx, (z - cz) / rz);
+  // ladera de fuera: del borde (q = 1.22, y = RIM) al pie (q = 2.8, y = FOOT)
+  const slope = (qq) => RIM - ((qq - 1.22) / (2.8 - 1.22)) * (RIM - FOOT);
+  return { cx, cz, rx, rz, q, slope };
 }
 
 function distToBounds(b, x, z) {
@@ -94,11 +113,15 @@ export function buildEnvironment(scene, course, theme, rng) {
   const geo = new THREE.PlaneGeometry(size, size, seg, seg);
   geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position;
-  const heightAt = (x, z) => {
-    const d = distToBounds(bounds, x, z);
-    const ramp = THREE.MathUtils.smoothstep(d, 2, 16);
-    return theme.terrainOffset * (1 - ramp * 0.3) - 0.55 + fbm(x * 0.06, z * 0.06) * 9 * ramp - 2.2 * ramp + ramp * ramp * 1.5;
-  };
+  const volcano = theme.caldera ? volcanoShape(course) : null;
+  // fuera del volcán: llanura de ceniza con lomas al pie de la montaña
+  const heightAt = volcano
+    ? (x, z) => FOOT - 0.4 + fbm(x * 0.05, z * 0.05) * 5 * THREE.MathUtils.smoothstep(volcano.q(x, z), 2.8, 4.5)
+    : (x, z) => {
+        const d = distToBounds(bounds, x, z);
+        const ramp = THREE.MathUtils.smoothstep(d, 2, 16);
+        return theme.terrainOffset * (1 - ramp * 0.3) - 0.55 + fbm(x * 0.06, z * 0.06) * 9 * ramp - 2.2 * ramp + ramp * ramp * 1.5;
+      };
   for (let i = 0; i < pos.count; i++) pos.setY(i, heightAt(pos.getX(i), pos.getZ(i)));
   const colors = new Float32Array(pos.count * 3);
   const low = new THREE.Color(theme.groundLow), mid = new THREE.Color(theme.groundMid), high = new THREE.Color(theme.groundHigh);
@@ -121,20 +144,29 @@ export function buildEnvironment(scene, course, theme, rng) {
   scene.add(terrain);
 
   // --- agua ---
-  // las olas se mueven en la tarjeta gráfica (antes se recalculaban en el procesador)
-  const waterGeo = new THREE.PlaneGeometry(size, size, 90, 90);
-  waterGeo.rotateX(-Math.PI / 2);
-  const waterMat = theme.lava
-    ? new THREE.MeshPhongMaterial({ color: theme.water, emissive: 0xff3a0a, emissiveIntensity: 0.9, shininess: 30, flatShading: true })
-    : new THREE.MeshPhongMaterial({ color: theme.water ?? 0x2bb3e6, shininess: 110, specular: 0xffffff, transparent: true, opacity: 0.86, flatShading: true });
-  waterShader(waterMat, theme);
-  // dentro del volcán el lago es lava de verdad: costra que se mueve y se rompe
-  const lake = theme.caldera ? lavaMaterial({ flow: [0.15, 0.1], scale: 0.35, heat: -0.08 }) : null;
-  const water = new THREE.Mesh(waterGeo, lake ?? waterMat);
-  water.position.y = theme.waterLevel;
-  scene.add(water);
-  if (lake) animated.push((t) => (lake.uniforms.uTime.value = t));
-  else if (theme.lava) animated.push((t) => (water.material.emissiveIntensity = 0.9 + Math.sin(t * 1.7) * 0.25));
+  if (volcano) {
+    // dentro del volcán hay un lago de lava de verdad (costra que se mueve y se
+    // rompe); fuera, nada de agua
+    const lake = lavaMaterial({ flow: [0.15, 0.1], scale: 0.35, heat: -0.08 });
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(1.12, 64), lake);
+    disc.rotation.x = -Math.PI / 2;
+    disc.scale.set(volcano.rx, volcano.rz, 1);
+    disc.position.set(volcano.cx, theme.waterLevel, volcano.cz);
+    scene.add(disc);
+    animated.push((t) => (lake.uniforms.uTime.value = t));
+  } else {
+    // las olas se mueven en la tarjeta gráfica (antes se recalculaban en el procesador)
+    const waterGeo = new THREE.PlaneGeometry(size, size, 90, 90);
+    waterGeo.rotateX(-Math.PI / 2);
+    const waterMat = theme.lava
+      ? new THREE.MeshPhongMaterial({ color: theme.water, emissive: 0xff3a0a, emissiveIntensity: 0.9, shininess: 30, flatShading: true })
+      : new THREE.MeshPhongMaterial({ color: theme.water ?? 0x2bb3e6, shininess: 110, specular: 0xffffff, transparent: true, opacity: 0.86, flatShading: true });
+    waterShader(waterMat, theme);
+    const water = new THREE.Mesh(waterGeo, waterMat);
+    water.position.y = theme.waterLevel;
+    scene.add(water);
+    if (theme.lava) animated.push((t) => (water.material.emissiveIntensity = 0.9 + Math.sin(t * 1.7) * 0.25));
+  }
 
   // --- decorado ---
   const place = (minD, maxD, tries, fn) => {
@@ -143,7 +175,9 @@ export function buildEnvironment(scene, course, theme, rng) {
       const z = (bounds.minZ + bounds.maxZ) / 2 + (rng() - 0.5) * 2 * (maxD + 12);
       const d = distToBounds(bounds, x, z);
       const y = heightAt(x, z);
-      if (d < minD || d > maxD || y < theme.waterLevel + 0.25) continue;
+      if (d < minD || d > maxD) continue;
+      // nada bajo el agua, ni dentro o encima del volcán
+      if (volcano ? volcano.q(x, z) < 2.9 : y < theme.waterLevel + 0.25) continue;
       fn(x, y, z, d);
     }
   };
@@ -176,7 +210,7 @@ export function buildEnvironment(scene, course, theme, rng) {
       }
     });
   }
-  if (theme.caldera) calderaWalls(scene, bounds, animated);
+  if (volcano) volcanoShell(scene, course, volcano, animated);
   else if (theme.lava) volcanoBackdrop(scene, course, bounds, heightAt, animated, rng);
 
   // --- nubes ---
@@ -615,59 +649,140 @@ function festoon(lamps) {
   return g;
 }
 
-// Dentro del volcán: pared de roca alrededor que se cierra hacia arriba hasta
-// la boca del cráter, con cascadas de lava que caen al lago
-function calderaWalls(scene, bounds, animated) {
-  const cx = (bounds.minX + bounds.maxX) / 2, cz = (bounds.minZ + bounds.maxZ) / 2;
-  const rx = (bounds.maxX - bounds.minX) / 2 + 12, rz = (bounds.maxZ - bounds.minZ) / 2 + 9;
-  const H = 34, bottom = -5;
-  const geo = new THREE.CylinderGeometry(0.42, 1, H, 120, 16, true).toNonIndexed();
-  const pos = geo.attributes.position;
-  // roca irregular: cada vértice sale o entra según el ruido (igual en los vértices repetidos)
+// El volcán del hoyo de la caldera: pared de dentro (que se ve desde la cámara
+// de magma) con cascadas de lava, borde del cráter y ladera de fuera, recortada
+// en terraza donde va el sendero (las zonas elevadas del hoyo).
+function volcanoShell(scene, course, v, animated) {
+  const { cx, cz, rx, rz } = v;
+  // ruido de la roca, igual en los vértices repetidos
+  const lumpy = (x, z, y, amp) => 1 + (noise(x * 2.2 + 5, z * 2.2 + y * 0.18) - 0.5) * amp + (noise(x * 7, z * 7 + y * 0.6) - 0.5) * amp * 0.3;
+  const emissive = (mat, k) => {
+    mat.onBeforeCompile = (sh) => {
+      sh.fragmentShader = sh.fragmentShader.replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>\n totalEmissiveRadiance += vColor * smoothstep(0.35, 0.6, vColor.r - vColor.b) * ${k.toFixed(2)};`,
+      );
+    };
+  };
+  const rock = new THREE.Color(0x241b1d), hot = new THREE.Color(0xff5a14), c = new THREE.Color();
+
+  // pared de dentro: de debajo del lago hasta el borde, abriéndose un poco
+  const bottom = -5, H = RIM - bottom;
+  const inner = new THREE.CylinderGeometry(1.08, 1, H, 120, 16, true).toNonIndexed();
+  let pos = inner.attributes.position;
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
-    const k = 1 + (noise(x * 2.2 + 5, z * 2.2 + y * 0.18) - 0.5) * 0.22 + (noise(x * 7, z * 7 + y * 0.6) - 0.5) * 0.06;
-    pos.setXYZ(i, x * rx * k, y + (noise(x * 3, z * 3) - 0.5) * 1.5, z * rz * k);
+    const k = y > H / 2 - 0.01 ? 1 : lumpy(x, z, y, 0.16);
+    pos.setXYZ(i, x * rx * k, y + (y > H / 2 - 0.01 ? 0 : (noise(x * 3, z * 3) - 0.5) * 1.2), z * rz * k);
   }
-  // cascadas de lava (franjas que bajan) y la base al rojo por el lago
+  // cascadas de lava: franjas que bajan; color por vértice para que sean suaves
   const falls = [0.35, 1.3, 2.15, 3.4, 4.2, 5.05, 5.8];
-  const colors = new Float32Array(pos.count * 3);
-  const rock = new THREE.Color(0x241b1d), hot = new THREE.Color(0xff5a14), c = new THREE.Color();
-  // color por vértice (igual en los vértices repetidos): las cascadas son
-  // franjas suaves, no dientes de sierra
+  let colors = new Float32Array(pos.count * 3);
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
     const a = Math.atan2(z / rz, x / rx) + Math.PI;
     const h = (y + H / 2) / H;
-    const fall = falls.some((f, j) => Math.abs(((a - f + Math.PI * 3) % (Math.PI * 2)) - Math.PI) < 0.03 && h < 0.5 + (j % 3) * 0.12);
+    const fall = falls.some((f, j) => Math.abs(((a - f + Math.PI * 3) % (Math.PI * 2)) - Math.PI) < 0.03 && h < 0.55 + (j % 3) * 0.13);
     c.copy(rock).offsetHSL(0, 0, (noise(x * 0.4, z * 0.4 + y * 0.3) - 0.5) * 0.06 + h * 0.03);
     if (fall) c.copy(hot).lerp(new THREE.Color(0xffc040), 0.2 + noise(y * 0.5, a * 3) * 0.3);
-    else if (h < 0.12) c.lerp(hot, (0.12 - h) * 4);
+    else if (h < 0.3) c.lerp(hot, (0.3 - h) * 1.6);
     c.toArray(colors, i * 3);
   }
-  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  geo.computeVertexNormals();
-  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95, side: THREE.BackSide });
-  mat.onBeforeCompile = (sh) => {
-    sh.fragmentShader = sh.fragmentShader.replace(
-      '#include <emissivemap_fragment>',
-      '#include <emissivemap_fragment>\n totalEmissiveRadiance += vColor * smoothstep(0.35, 0.6, vColor.r - vColor.b) * 1.4;',
-    );
-  };
-  const wall = new THREE.Mesh(geo, mat);
+  inner.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  inner.computeVertexNormals();
+  const innerMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95, side: THREE.BackSide });
+  emissive(innerMat, 1.4);
+  const wall = new THREE.Mesh(inner, innerMat);
   wall.position.set(cx, bottom + H / 2, cz);
-  scene.add(wall);
-  // la boca del cráter brilla arriba y el lago ilumina la cueva desde abajo
-  const glow = haloSprite(0xff7a2a, 26);
-  glow.position.set(cx, bottom + H + 2, cz);
-  glow.material.opacity = 0.35;
+
+  // ladera de fuera: anillo de rejilla del borde (q = 1.08·1.12) al pie
+  const NA = 160, NR = 34, Q0 = 1.08, Q1 = 1.22, Q2 = 3;
+  const opos = [], ocol = [], idx = [];
+  for (let j = 0; j <= NR; j++) {
+    for (let i = 0; i <= NA; i++) {
+      const a = (i / NA) * Math.PI * 2;
+      const qq = Q0 + (j / NR) * (Q2 - Q0);
+      // el labio del cráter es una cresta: sube desde la pared de dentro y luego baja la ladera
+      let y = qq < Q1 ? RIM + Math.sin(((qq - Q0) / (Q1 - Q0)) * Math.PI) * 0.6 : v.slope(qq);
+      const k = j === 0 ? 1 : lumpy(Math.cos(a) * 3, Math.sin(a) * 3, qq * 4, 0.1);
+      let x = cx + Math.cos(a) * rx * qq * k, z = cz + Math.sin(a) * rz * qq * k;
+      y += j === 0 ? 0 : (noise(x * 0.35, z * 0.35) - 0.5) * 1.6;
+      // terraza del sendero: la montaña se recorta por debajo de la zona elevada
+      for (const t of course.tiers ?? []) {
+        const near = t.poly.some(([px, pz]) => Math.hypot(px - x, pz - z) < 6) || pointInPoly(t.poly, x, z);
+        if (near && distPoly(t.poly, x, z) < 1.4 && y > t.h - 0.3) y = t.h - 0.3 - Math.max(0, distPoly(t.poly, x, z) - 1) * 2;
+      }
+      opos.push(x, y, z);
+      // vetas de lava que bajan por la ladera
+      const flow = [0.9, 2.6, 4.1, 5.4].some((f) => Math.abs(((a - f + Math.PI * 3) % (Math.PI * 2)) - Math.PI) < 0.02 + noise(qq * 3, f) * 0.03) && qq < 2.3;
+      c.copy(rock).offsetHSL(0, 0, (noise(x * 0.5, z * 0.5) - 0.5) * 0.08);
+      if (flow || qq < Q1 - 0.05) c.copy(hot).lerp(new THREE.Color(0xffb040), noise(x, z) * 0.4);
+      ocol.push(c.r, c.g, c.b);
+    }
+  }
+  for (let j = 0; j < NR; j++) for (let i = 0; i < NA; i++) {
+    const a = j * (NA + 1) + i, b = a + NA + 1;
+    idx.push(a, a + 1, b, a + 1, b + 1, b);
+  }
+  let outer = new THREE.BufferGeometry();
+  outer.setAttribute('position', new THREE.Float32BufferAttribute(opos, 3));
+  outer.setAttribute('color', new THREE.Float32BufferAttribute(ocol, 3));
+  outer.setIndex(idx);
+  outer = outer.toNonIndexed();
+  outer.computeVertexNormals();
+  const outerMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95, side: THREE.DoubleSide });
+  emissive(outerMat, 1.2);
+  const mountain = new THREE.Mesh(outer, outerMat);
+  mountain.receiveShadow = true;
+  scene.add(wall, mountain);
+
+  // el cráter brilla arriba y el lago ilumina la cámara desde abajo
+  const glow = haloSprite(0xff7a2a, 30);
+  glow.position.set(cx, RIM + 4, cz);
+  glow.material.opacity = 0.3;
   const under = new THREE.PointLight(0xff5a14, 8, 40, 1.4);
   under.position.set(cx, -0.2, cz);
-  scene.add(glow, under);
+  // humo que sale del cráter
+  const puffs = [];
+  const smokeMat = new THREE.MeshLambertMaterial({ color: 0x3a3036, transparent: true, opacity: 0.45, flatShading: true, depthWrite: false });
+  for (let i = 0; i < 10; i++) {
+    const m = new THREE.Mesh(new THREE.IcosahedronGeometry(2 + (i % 3) * 0.8, 0), smokeMat);
+    m.userData.t = i / 10;
+    puffs.push(m);
+  }
+  scene.add(glow, under, ...puffs);
   animated.push((t) => {
     under.intensity = 8 + Math.sin(t * 1.9) * 1.5 + Math.sin(t * 5.3) * 0.6;
-    glow.material.opacity = 0.3 + Math.sin(t * 0.8) * 0.06;
+    glow.material.opacity = 0.26 + Math.sin(t * 0.8) * 0.05;
+    for (const p of puffs) {
+      const k = (p.userData.t + t * 0.03) % 1;
+      const a = p.userData.t * 9;
+      p.position.set(cx + Math.cos(a) * rx * 0.7 + k * 8, RIM + 6 + k * 22, cz + Math.sin(a) * rz * 0.7);
+      p.scale.setScalar(0.6 + k * 2.6);
+    }
   });
+}
+
+function pointInPoly(poly, x, z) {
+  let ok = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, zi] = poly[i], [xj, zj] = poly[j];
+    if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) ok = !ok;
+  }
+  return ok;
+}
+
+// distancia de (x, z) al polígono (0 dentro)
+function distPoly(poly, x, z) {
+  if (pointInPoly(poly, x, z)) return 0;
+  let best = Infinity;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [ax, az] = poly[j], [bx, bz] = poly[i];
+    const vx = bx - ax, vz = bz - az;
+    const t = Math.max(0, Math.min(1, ((x - ax) * vx + (z - az) * vz) / (vx * vx + vz * vz)));
+    best = Math.min(best, Math.hypot(x - ax - vx * t, z - az - vz * t));
+  }
+  return best;
 }
 
 // Volcán de verdad detrás del hoyo: cono de roca, cráter de lava, coladas y humo

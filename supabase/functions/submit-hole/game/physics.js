@@ -56,8 +56,10 @@ export function shotVelocity(yaw, power) {
 
 export function segmentsOf(course) {
   const segs = [];
-  const o = course.outline;
-  for (let i = 0; i < o.length; i++) segs.push([o[i], o[(i + 1) % o.length]]);
+  // el contorno y las zonas elevadas aparte (tiers), cada una cerrada por paredes
+  for (const o of [course.outline, ...(course.tiers ?? []).map((t) => t.poly)]) {
+    for (let i = 0; i < o.length; i++) segs.push([o[i], o[(i + 1) % o.length]]);
+  }
   return segs.concat(course.walls);
 }
 
@@ -338,12 +340,21 @@ export function tubeTable(p) {
   const [ax, az] = p.a, [bx, bz] = p.b, [ox, oz] = p.out;
   const dx = bx - ax, dz = bz - az;
   const H = 1.2 + hyp(dx, dz) * 0.12;
-  const c = [
-    [ax, -0.35, az],
-    [ax, H * 1.4, az],
-    [bx - ox * 1.6, H * 1.4, bz - oz * 1.6],
-    [bx, BALL_R, bz],
-  ];
+  // los tubos de caída (drop: altura de la boca) cruzan la roca casi en llano y
+  // bajan por un tobogán hasta b
+  const c = p.drop
+    ? [
+        [ax, p.drop - 0.3, az],
+        [ax + dx * 0.55, p.drop + 0.1, az + dz * 0.55],
+        [bx - ox * 1.4, 0.15, bz - oz * 1.4],
+        [bx, BALL_R, bz],
+      ]
+    : [
+        [ax, -0.35, az],
+        [ax, H * 1.4, az],
+        [bx - ox * 1.6, H * 1.4, bz - oz * 1.6],
+        [bx, BALL_R, bz],
+      ];
   const pts = [];
   let s = 0;
   for (let k = 0; k <= TUBE_SAMPLES; k++) {
@@ -435,13 +446,21 @@ function trackStep(course, ball, dt) {
   if (tr.kind === 'tube') {
     const p = course.portals[tr.i];
     const table = tubeTable(p);
-    const s = tr.s + Math.max(tr.u, TUBE_MIN_SPEED) * dt;
+    let v = Math.max(tr.u, TUBE_MIN_SPEED);
+    if (p.drop) {
+      // al caer gana velocidad: v² = u² + 2·g·(lo que ha bajado desde la boca)
+      const fall = table.pts[0].y - sampleAt(table, tr.s).y;
+      if (fall > 0) v = Math.sqrt(v * v + 2 * GRAVITY * fall);
+    }
+    const s = tr.s + v * dt;
     if (s >= table.length) {
+      // el tobogán suelta la bola siempre igual (exit) para que se sepa dónde para
+      const out = p.exit ?? tr.u;
       ball.track = null;
       ball.x = p.b[0] + p.out[0] * 0.01;
       ball.z = p.b[1] + p.out[1] * 0.01;
-      ball.vx = p.out[0] * tr.u;
-      ball.vz = p.out[1] * tr.u;
+      ball.vx = p.out[0] * out;
+      ball.vz = p.out[1] * out;
       return 'exit';
     }
     ball.track = { ...tr, s };
