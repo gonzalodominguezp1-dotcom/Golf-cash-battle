@@ -108,6 +108,13 @@ const DEFS = {
     }),
   // entrada en arena
   sand: () => render(0.4, (d) => noise(d, { dur: 0.38, gain: 0.35, cutoff: 0.08, attack: 0.03, shape: 'sin' })),
+  // la bola cae en la lava: chisporroteo y un "fsss" que se apaga
+  lava: () =>
+    render(0.9, (d) => {
+      noise(d, { dur: 0.85, gain: 0.5, cutoff: 0.5, attack: 0.01 });
+      noise(d, { dur: 0.6, gain: 0.3, cutoff: 0.05, attack: 0.02, shape: 'sin' });
+      for (let i = 0; i < 14; i++) modal(d, [[1800 + Math.random() * 2400, 0.004, 0.12]], 1, Math.floor(Math.random() * 0.6 * SR));
+    }),
   // acelerador: barrido ascendente suave
   boost: () =>
     render(0.6, (d) => {
@@ -778,6 +785,7 @@ export const sfx = {
   cup: () => play('cup', { vol: 0.9 }),
   sand: () => play('sand', { vol: 0.8, rate: vary(0.1) }),
   boost: () => play('boost', { vol: 0.7 }),
+  lava: () => play('lava', { vol: 0.8, rate: vary(0.08) }),
   tick: () => play('tick', { vol: 0.5, rate: vary(0.1), wet: false }),
   portal: () => play('portal', { vol: 0.8 }),
   lip: () => play('lip', { vol: 0.8, rate: vary(0.08) }),

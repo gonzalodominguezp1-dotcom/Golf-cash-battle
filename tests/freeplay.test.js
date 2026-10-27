@@ -5,8 +5,8 @@ import { DT, segmentsOf, step, isMoving, quantizeShot, shotVelocity } from '../s
 import { Progress } from '../src/progress/Progress.js';
 import { LocalWallet } from '../src/wallet/LocalWallet.js';
 
-test('catálogo completo de 19 hoyos para selector de juego libre', () => {
-  assert.equal(COURSES.length, 19, 'debe haber exactamente 19 hoyos disponibles');
+test('catálogo completo de 20 hoyos para selector de juego libre', () => {
+  assert.equal(COURSES.length, 20, 'debe haber exactamente 20 hoyos disponibles');
   for (let i = 0; i < COURSES.length; i++) {
     const c = COURSES[i];
     assert.ok(c.name && typeof c.name === 'string', `hoyo ${i + 1} debe tener nombre`);

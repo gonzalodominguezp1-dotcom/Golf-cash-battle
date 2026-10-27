@@ -1,4 +1,4 @@
-import { BALL_R, GRAVITY, LOOP_RATIO, loopTable, sampleAt, tubeTable } from '../physics.js';
+import { BALL_R, GRAVITY, LOOP_RATIO, insidePoly, loopTable, rampHeight, sampleAt, tubeTable } from '../physics.js';
 
 // Relieve que se ve: la física es plana (x, z) y aquí se saca la altura del
 // césped a partir de las pendientes y montículos del hoyo, para levantar la
@@ -22,12 +22,34 @@ function easedRise(b, len) {
   return len - e - part((len - b) / e);
 }
 
+// distancia de (x, z) al borde del polígono
+function distToPoly(poly, x, z) {
+  let best = Infinity;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [ax, az] = poly[j], [bx, bz] = poly[i];
+    const vx = bx - ax, vz = bz - az;
+    const t = Math.max(0, Math.min(1, ((x - ax) * vx + (z - az) * vz) / (vx * vx + vz * vz)));
+    best = Math.min(best, Math.hypot(x - ax - vx * t, z - az - vz * t));
+  }
+  return best;
+}
+
+/**
+ * Altura de las zonas elevadas (tiers) en (x, z). Con margen cuenta también lo
+ * que está justo en el borde (las paredes y los postes de su contorno).
+ */
+export function tierHeight(course, x, z, margin = 0.05) {
+  let h = 0;
+  for (const t of course.tiers ?? []) if (t.h > h && (insidePoly(t.poly, x, z) || distToPoly(t.poly, x, z) < margin)) h = t.h;
+  return h;
+}
+
 /**
  * Altura del césped. Cada pendiente sube su lado de arriba (todo lo que queda
  * cuesta arriba dentro de su anchura) y los montículos son conos con la cima llana.
  */
 export function groundHeight(course, x, z) {
-  let h = 0;
+  let h = course.tiers ? tierHeight(course, x, z) : 0;
   for (const s of course.slopes ?? []) {
     const alongX = s.dir[0] !== 0;
     const len = alongX ? s.w : s.d;
@@ -132,6 +154,7 @@ export function ballPose(course, ball) {
     const q = sampleAt(tubeTable(course.portals[tr.i]), tr.s);
     return { x: q.x, y: q.y, z: q.z, ground: groundHeight(course, q.x, q.z), onTrack: true };
   }
-  const g = groundHeight(course, ball.x, ball.z);
-  return { x: ball.x, y: g + BALL_R, z: ball.z, ground: g, onTrack: false };
+  // las rampas son una cuña encima del césped; en el aire la bola va por encima
+  const g = groundHeight(course, ball.x, ball.z) + (course.ramps ? rampHeight(course, ball.x, ball.z) : 0);
+  return { x: ball.x, y: g + BALL_R + (ball.air?.y ?? 0), z: ball.z, ground: g, onTrack: false };
 }
