@@ -6,7 +6,7 @@ tags: [sdd, constitution]
 timestamp: 2026-10-27T12:00:00Z
 topic: sdd
 status: ratified
-version: 1.0.0
+version: 1.1.0
 ---
 
 # golfito — Constitution
@@ -42,6 +42,7 @@ Reglas numeradas y comprobables. Cada fase del flujo SDD (`specify`, `plan`, `ta
 - **K3.2** Cambios de base de datos solo como migración nueva en `supabase/migrations/`. Nunca se editan tablas a mano en el panel.
 - **K3.3** La interfaz de usuario está en español. Los identificadores de código pueden estar en inglés o en español, pero dentro de un mismo módulo se usa un solo idioma.
 - **K3.4** Un módulo nuevo entra en su carpeta de `src/` (`game/`, `wallet/`, `match/`, `account/`, `antibot/`, `ui/`, `progress/`, `admin/`). No se crean carpetas nuevas de nivel superior sin motivo.
+- **K3.5** Autoría: los commits del repositorio llevan como autor a **Chakets**, o a **La Yuinta** (dueño del repositorio). Ningún commit lleva trailers de IA (`Co-Authored-By` con un modelo, «Generated with…»). Rige desde la versión 1.1.0: los commits anteriores ya publicados no se reescriben.
 
 ## 4. Branching & shipping
 
@@ -87,6 +88,7 @@ Reglas numeradas y comprobables. Cada fase del flujo SDD (`specify`, `plan`, `ta
 - **D8.1** Las decisiones de producto y arquitectura se registran en `02-DOCS/wiki/` (carpeta `harness/` para el perfil y el plan de instalación).
 - **D8.2** Las excepciones a esta constitución se apuntan en la tabla de enmiendas con fecha, motivo y responsable.
 - **D8.3** Los documentos de diseño de skins viven en `docs/`. Mientras no se decida otra ubicación, esa es la oficial.
+- **D8.4** Excepción a S5.2, decidida por el equipo: CI y `verify.sh` auditan solo las dependencias de producción (`pnpm audit --prod`), con cualquier severidad. Las devDependencies quedan fuera. Hay dos CVE altas en `vite` 5.4.21 (GHSA-fx2h-pf6j-xcff y GHSA-587h-7wmj-h5pm) que afectan solo al servidor de desarrollo, y el script `dev` lo expone con `--host`. Se revisa cuando se suba `vite` a 6.4.4 o más.
 
 ## Definition of Done (el criterio que usa `verify`)
 
@@ -95,7 +97,7 @@ Un cambio está terminado cuando:
 1. `pnpm test` y `pnpm run build` pasan.
 2. Si cambia la base de datos, hay migración nueva y está en el PR.
 3. Si cambia la física, `replay.js` o `courses.js`, se ha ejecutado `pnpm run sync:functions` y `submit-hole` se vuelve a desplegar.
-4. `pnpm audit` no reporta CVE sin resolver de severidad alta o crítica.
+4. `pnpm audit --prod` no reporta ninguna CVE sin resolver en dependencias de producción (excepción de devDependencies en D8.4).
 5. No hay secretos en el diff, ni `service_role` en el cliente.
 6. Si toca interfaz, cumple la sección 6, y si toca render o carga, cumple la sección 7 con la medición anotada.
 7. Si toca entrada de usuario o acceso a datos, se ha revisado contra OWASP Top 10.
@@ -104,9 +106,12 @@ Un cambio está terminado cuando:
 
 Estas reglas son el objetivo. Hoy no todas se cumplen. Cada brecha tiene que cerrarse antes de la fase que la necesita:
 
-- **Auditoría de CVE:** `pnpm audit` no está en CI. Hay que añadirlo.
+- **Auditoría de CVE:** `pnpm audit --prod` está en CI y en `verify.sh`. Las devDependencies no se auditan: `vite` 5.4.21 tiene dos CVE altas (GHSA-fx2h-pf6j-xcff, GHSA-587h-7wmj-h5pm) que afectan al servidor de desarrollo. Pendiente: subir `vite` a >=6.4.4 (cambio mayor) o registrar una excepción documentada en S5.2.
 - **Funciones `SECURITY DEFINER`:** 7 migraciones las definen. Falta revisar que cada una cumpla S5.5.
 - **Rendimiento:** no hay medición de FPS ni de tiempos de carga en CI. Falta un procedimiento de medida.
+- **Auditoría de dependencias de Deno (S5.2):** ni CI ni `verify.sh` auditan las dependencias de las Edge Functions. Hay que añadir la herramienta equivalente.
+- **Sincronización de la física:** la DoD #3 exige `sync:functions`, pero no hay modo de comprobación que falle si la copia no está al día.
+- **Autoría (K3.5):** `verify.sh` la comprueba solo en los commits nuevos frente a `origin/main`, y no se ejecuta en CI. La regla no es retroactiva.
 - **Anticheat y antibots:** existen, pero no están revisados para producción (S5.10).
 - **Registro anónimo:** falta una protección contra abuso (S5.9) antes de cualquier salida pública.
 - **Dinero real:** pendiente. No se activa hasta S5.11.
@@ -117,3 +122,4 @@ Estas reglas son el objetivo. Hoy no todas se cumplen. Cada brecha tiene que cer
 |------|---------|--------|-----|
 | 2026-10-27 | draft | Borrador generado por `rsc onboard`. | La fase SDD necesita una constitución. |
 | 2026-10-27 | 1.0.0 | Constitución redactada y ratificada con las reglas de stack, calidad, seguridad (OWASP, CVE, RLS, claves), UX, rendimiento y definición de terminado. | Primera versión aprobada por el equipo. El uso de `VITE_BACKEND=local` no cambia y no se regula aquí. |
+| 2026-10-27 | 1.1.0 | Añadida K3.5: autoría de commits (Chakets o La Yuinta) y sin trailers de IA. | Resuelve el conflicto con la skill `ship`, que pedía otra autoría y prohibía los trailers de IA. Se actualiza la brecha de auditoría de CVE (ahora en CI, con las devDependencies pendientes). |
