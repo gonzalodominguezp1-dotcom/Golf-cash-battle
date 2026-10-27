@@ -20,6 +20,34 @@ export const THEMES = {
     flowers: true,
     clouds: 0x182c38,
   },
+  // pradera de día: cielo azul, sol cálido arriba a la izquierda, colinas en terrazas y
+  // montañas lejanas; las paredes brillan esmeralda (izquierda) y cian (derecha)
+  meadowDay: {
+    rim: [0x00f076, 0x38bdf8], // esmeralda y cian: el color de las paredes que brillan
+    sound: 'birds',
+    skyTop: 0x2f8fe3,
+    skyHorizon: 0xcdeedd,
+    sunColor: 0xfff0c2,
+    sunIntensity: 2.6,
+    sunDir: [-0.55, 0.8, -0.35],
+    ambient: 0.95,
+    groundLow: 0x3f8f3a,
+    groundMid: 0x5db04b,
+    groundHigh: 0x86c95a,
+    grass: ['#4fbe4a', '#35a041'],
+    terrainOffset: -0.4,
+    waterLevel: -1.6,
+    trees: ['round', 'pine', 'round'],
+    leaves: [0x7cc83f, 0x5db83e, 0x9ad24a, 0x3f9f45],
+    flowers: true,
+    clouds: 0xffffff,
+    lowClouds: true,
+    terraces: true,
+    mountains: 0x5b8f95,
+    glowWalls: true,
+    woodMill: true, // molino de madera en lugar de torre blanca con tejado rojo
+    teePad: { color: 0xff2bd6, w: 1.8, d: 2.2 },
+  },
   beach: {
     rim: [0xff007f, 0x00f5d4], // contraluces magenta y turquesa bioluminiscente
     sound: 'waves',

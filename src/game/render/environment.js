@@ -118,7 +118,7 @@ export function buildEnvironment(scene, course, theme, rng) {
   if (theme.rim) {
     const night = theme.sunIntensity < 2;
     theme.rim.forEach((color, i) => {
-      const rim = new THREE.DirectionalLight(color, night ? 1.4 : 0.8);
+      const rim = new THREE.DirectionalLight(color, night ? 1.4 : theme.glowWalls ? 0.35 : 0.8);
       rim.position.set(i ? 12 : -12, 6, i ? 8 : -10);
       scene.add(rim);
     });
@@ -151,7 +151,12 @@ export function buildEnvironment(scene, course, theme, rng) {
       // meseta plana junto a la pista (la rejilla es de 2 m: con margen para no
       // asomar entre las paredes) y luego lomas suaves hasta las mismas colinas de
       // fondo que el resto de hoyos, sin bajar hacia el agua
-      const far = theme.terrainOffset * 0.7 - 1.25 + fbm(x * 0.06, z * 0.06) * 9;
+      let far = theme.terrainOffset * 0.7 - 1.25 + fbm(x * 0.06, z * 0.06) * 9;
+      // colinas en terrazas: tramos llanos con escalones cortos entre ellos
+      if (theme.terraces) {
+        const step = 1.8, k = Math.floor(far / step);
+        far = (k + THREE.MathUtils.smoothstep(far / step - k, 0.72, 0.9)) * step;
+      }
       return GROUND_Y + (far - GROUND_Y) * THREE.MathUtils.smoothstep(d, 3.2, 26);
     }
     const ramp = THREE.MathUtils.smoothstep(d, 2, 16);
@@ -308,17 +313,20 @@ export function buildEnvironment(scene, course, theme, rng) {
   }
   if (volcano) volcanoShell(scene, course, volcano, animated);
   else if (theme.lava) volcanoBackdrop(scene, course, bounds, heightAt, animated, rng);
+  if (theme.mountains) distantMountains(scene, theme.mountains, rng);
 
   // --- nubes ---
   // nubes de algodón (solo para temas naturales, no en neón cyberpunk)
   if (theme.clouds && !isNeon) {
-    const cloudMat = new THREE.MeshLambertMaterial({ color: theme.clouds, emissive: theme.clouds, emissiveIntensity: 0.3 });
+    // de día (lowClouds): más bajas, más gordas y de un blanco que apenas se sombrea
+    const low = !!theme.lowClouds;
+    const cloudMat = new THREE.MeshLambertMaterial({ color: theme.clouds, emissive: theme.clouds, emissiveIntensity: low ? 0.45 : 0.3 });
     const clouds = [];
     for (let i = 0; i < 12; i++) {
       const n = 3 + Math.floor(rng() * 4);
       const parts = [];
       for (let k = 0; k < n; k++) {
-        const r = 1.5 + rng() * 2;
+        const r = (1.5 + rng() * 2) * (low ? 1.5 : 1);
         const geo = new THREE.IcosahedronGeometry(r, 2);
         geo.scale(1, 0.62, 1);
         // la parte central más alta: forma de cúmulo
@@ -326,8 +334,8 @@ export function buildEnvironment(scene, course, theme, rng) {
         parts.push(geo);
       }
       const g = new THREE.Mesh(mergeGeometries(parts), cloudMat);
-      const a = rng() * Math.PI * 2, r = 50 + rng() * 60;
-      g.position.set(Math.cos(a) * r, 18 + rng() * 22, Math.sin(a) * r);
+      const a = rng() * Math.PI * 2, r = low ? 45 + rng() * 55 : 50 + rng() * 60;
+      g.position.set(Math.cos(a) * r, low ? 11 + rng() * 14 : 18 + rng() * 22, Math.sin(a) * r);
       g.userData.speed = 0.4 + rng() * 0.6;
       clouds.push(g);
       scene.add(g);
@@ -747,6 +755,23 @@ function festoon(lamps) {
   for (let i = 0; i + 1 < wire.length; i++) if (wire[i].distanceTo(wire[i + 1]) < 1.2) segs.push(wire[i], wire[i + 1]);
   g.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(segs), new THREE.LineBasicMaterial({ color: 0x222222 })));
   return g;
+}
+
+// Montañas lejanas de un solo color (sin sombreado: así no parecen nevadas), difuminadas por la niebla: una sola malla
+function distantMountains(scene, color, rng) {
+  const parts = [];
+  const n = 16;
+  for (let i = 0; i < n; i++) {
+    const a = ((i + rng() * 0.6) / n) * Math.PI * 2, r = 88 + rng() * 22;
+    const h = 16 + rng() * 14, w = 16 + rng() * 14;
+    const cone = new THREE.ConeGeometry(w, h, 6, 1);
+    cone.rotateY(rng() * 3);
+    cone.scale(1 + rng() * 0.6, 1, 1);
+    cone.translate(Math.cos(a) * r, h / 2 - 3, Math.sin(a) * r);
+    parts.push(cone);
+  }
+  const mountains = new THREE.Mesh(mergeGeometries(parts), new THREE.MeshBasicMaterial({ color }));
+  scene.add(mountains);
 }
 
 // El volcán del hoyo de la caldera: pared de dentro (que se ve desde la cámara

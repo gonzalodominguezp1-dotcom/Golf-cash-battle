@@ -34,7 +34,7 @@ test('preloadCoursePreviews ejecuta sin errores en entornos seguros', () => {
   });
 });
 
-test('getCoursePreview devuelve rutas estáticas WebP para los 19 hoyos y el desempate (0 ms)', () => {
+test('getCoursePreview devuelve rutas estáticas WebP para todos los hoyos y el desempate (0 ms)', () => {
   for (let i = 0; i < COURSES.length; i++) {
     const preview = getCoursePreview(COURSES[i]);
     assert.equal(preview, `/courses/course-${i + 1}.webp`, `El hoyo ${i + 1} (${COURSES[i].name}) debe usar /courses/course-${i + 1}.webp`);

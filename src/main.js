@@ -7,7 +7,7 @@ import { createBackend } from './backend/index.js';
 import { COURSES, TIEBREAK_COURSE } from './game/courses.js';
 import { Bot } from './game/bots.js';
 import { segmentsOf } from './game/physics.js';
-import { isMuted, setMuted, sfx, unlockAudio } from './game/audio.js';
+import { enterFinale, isMuted, leaveFinale, setMuted, sfx, unlockAudio } from './game/audio.js';
 import { Progress } from './progress/Progress.js';
 import { CHALLENGES, TIERS as SKIN_TIERS, SKINS } from './progress/skins.js';
 import { ballPreview } from './game/render/ballPaint.js';
@@ -210,6 +210,7 @@ function bindHolo(root) {
 // ---------- lobby ----------
 
 async function showLobby() {
+  leaveFinale();
   screen = 'lobby';
   const balance = await wallet.getBalance();
   const skin = progress.skin;
@@ -852,6 +853,7 @@ async function showWallet() {
 // ---------- matchmaking ----------
 
 async function startMatch(tier, rematchOf = null) {
+  leaveFinale();
   // #hoyo3 en la URL: la práctica empieza por ese hoyo (útil para probar);
   // #hoyo3-empate además fuerza el desempate al final
   const forced = tier.entryFee === 0 && /^#hoyo(\d+)(-empate)?$/.exec(location.hash);
@@ -1498,6 +1500,7 @@ function showEndOverlay({ won, position, total, prize, ranking, legal, holes, ga
   });
   overlay.querySelector('.next').addEventListener('click', () => showLobby());
   app.append(overlay);
+  enterFinale();
   sfx.endJingle(won, position);
 }
 
@@ -1847,6 +1850,7 @@ function alertMsg(text) {
 
 const THEME_INFO = {
   meadow: { name: 'Pradera', icon: '', color: '#5cc24a' },
+  meadowDay: { name: 'Pradera de Día', icon: '', color: '#6fd24f' },
   beach: { name: 'Playa', icon: '', color: '#2fe0ff' },
   sunset: { name: 'Atardecer', icon: '', color: '#ff9a5c' },
   snow: { name: 'Nieve', icon: '', color: '#90d7ff' },

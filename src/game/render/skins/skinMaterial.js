@@ -4,6 +4,7 @@ import { getStudioEnv } from './envStudio.js';
 import { getPattern, PATTERN_IDS } from './patterns/index.js';
 import { getQuality } from '../quality.js';
 import { TIERS } from '../../../progress/skins.js';
+import { STILL_TIME, reducedMotion } from './fxRules.js';
 
 // Material premium de bola (docs/skins-premium-plan.md, b/d/f).
 //   createSkinMaterial(skin, { quality, instance, theme }, deps) -> { material, update, dispose, ... }
@@ -187,11 +188,17 @@ export function createSkinMaterial(skin, opts = {}, deps) {
     quality: level,
     update(t, dt, ctx) {
       if (disposed) return;
+      // E2: con «reducir movimiento» la bola queda como su miniatura (hora fija, impacto a la mitad)
+      const rm = reducedMotion();
+      if (rm) {
+        t = STILL_TIME;
+        dt = 0;
+      }
       if (U) {
         U.uTime.value = t;
         if (ctx) {
-          U.uSpeed.value = ctx.speed ?? 0;
-          U.uImpact.value = ctx.impact ?? 0;
+          U.uSpeed.value = rm ? 0 : ctx.speed ?? 0;
+          U.uImpact.value = (ctx.impact ?? 0) * (rm ? 0.5 : 1);
           U.uState.value = ctx.state ?? 0;
         }
         if (pattern) pattern.update?.(patU, t, dt, ctx ?? EMPTY_CTX);

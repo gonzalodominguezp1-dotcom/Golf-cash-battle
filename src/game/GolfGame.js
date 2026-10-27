@@ -32,6 +32,14 @@ const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const damp = (rate, dt) => 1 - Math.exp(-rate * dt);
 const forwardOf = (yaw) => new THREE.Vector3(Math.sin(yaw), 0, -Math.cos(yaw));
 const lerpAngle = (a, b, t) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * t;
+// una skin al azar por rival; no se repite hasta agotar el catálogo
+const pickRandomSkins = (n) => {
+  const pool = [];
+  return Array.from({ length: n }, () => {
+    if (!pool.length) pool.push(...SKINS);
+    return pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+  });
+};
 
 /**
  * Hoyo en 3D con cámara en tercera persona detrás de la bola.
@@ -459,15 +467,21 @@ export class GolfGame {
     this.ballGlow.rotation.x = -Math.PI / 2;
     scene.add(this.ballGlow);
 
-    // rivales: réplicas fantasma con la skin del jugador (los rivales no tienen skin propia) y su nombre encima.
-    // Solo el acabado: material 'low' compartido (mapa horneado, sin shader ni update) y sin SkinFX.
+    // rivales: réplicas fantasma con una skin al azar cada uno (sin repetir mientras haya skins) y su nombre encima.
+    // Solo el acabado: material 'low' por skin (mapa horneado, sin shader ni update) y sin SkinFX.
     this.ghostGeo = new THREE.SphereGeometry(BALL_R, 20, 14);
-    this.ghostHandle = createSkinMaterial(this.skin, { ...skinOpts, quality: 'low' });
-    this.ghostHandle.material.transparent = true;
-    this.ghostHandle.material.opacity = 0.75;
-    this.bots = this.botPlayers.map((p) => {
+    this.ghostHandles = new Map();
+    const botSkins = pickRandomSkins(this.botPlayers.length);
+    this.bots = this.botPlayers.map((p, i) => {
       const bot = new Bot(p, this.course, this.segs, Math.random);
-      const mesh = new THREE.Mesh(this.ghostGeo, this.ghostHandle.material);
+      const skin = botSkins[i];
+      if (!this.ghostHandles.has(skin.id)) {
+        const handle = createSkinMaterial(skin, { quality: 'low', instance: {}, theme: this.theme });
+        handle.material.transparent = true;
+        handle.material.opacity = 0.75;
+        this.ghostHandles.set(skin.id, handle);
+      }
+      const mesh = new THREE.Mesh(this.ghostGeo, this.ghostHandles.get(skin.id).material);
       const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTexture(p.name, p.color), transparent: true, depthWrite: false }));
       label.scale.set(0.9, 0.225, 1);
       label.renderOrder = 10;
@@ -511,8 +525,8 @@ export class GolfGame {
     this.skinFx = null;
     this.skinHandle?.dispose();
     this.skinHandle = null;
-    this.ghostHandle?.dispose();
-    this.ghostHandle = null;
+    for (const h of this.ghostHandles?.values() ?? []) h.dispose();
+    this.ghostHandles = null;
     this.ballMesh?.geometry.dispose();
     for (const m of [this.ballShadow, this.ballGlow]) {
       if (!m) continue;

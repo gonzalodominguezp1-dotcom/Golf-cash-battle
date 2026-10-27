@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { BALL_R } from '../../physics.js';
 import { AdditiveParticles, GroundDecals, RibbonTrail, Shockwaves, Trail } from '../effects.js';
 import { SKIN_SPRITES, releaseSkinSpriteAtlas, skinSpriteAtlas, softDotTexture } from '../textures.js';
+import { REDUCED_SPEED, STILL_TIME, calmList, continuousOpen, echoRing, hitList, particleLimit, reducedCount, reducedMotion, ribbonNoise, ribbonWave, sinkBurstAllowed, sinkDecalAllowed, trailRate } from './fxRules.js';
 
 // Runtime de efectos de skin (docs/skins-premium-plan.md, (d) y (f)).
 // Solo dibuja: nunca toca la física y usa su propio RNG de render.
@@ -87,7 +88,7 @@ const SIG = {
     wall: [P('soft', 5, 1.5, 0.8, 0.3, 0.4, 'accent', { dir: 'normal', drag: 2.5 })],
     trail: P('streak', 1, 0.9, 0.4, 0.2, 0.7, '#FFFFFF', { dir: 'in', att: 6 }),
     roll: P('spark', 1, 1.2, 1, 0.07, 0.5, '#FFB25C', { att: 8 }),
-    attractRoll: true, c2: '#FF4D8D', ring: 0x7a5cff,
+    attractRoll: true, attractSink: true, c2: '#FF4D8D', ring: 0x7a5cff,
     sinkDecal: { r: 0.5, col: '#000000', life: 2, add: false, op: 0.9 },
   },
   midas_touch: {
@@ -99,7 +100,85 @@ const SIG = {
     sinkFountain: P('coin', 30, 3, 0.3, 0.12, 1.1, '#FFCF4A', { dir: 'up', up: 4, grav: 8, spin: 8 }),
     c2: '#B8860B',
   },
+  // Skins de la colección nueva (docs: ideas_skins/_plan/spec-skins.md). Sprites del atlas actual (sin E4).
+  // Campos extra (solo estas skins): `rot` del sprite ('fan' estrella, 'rand', 'vert' rayo vertical),
+  // `flat` (ráfaga en el plano del suelo), `lift` (sube el punto de emisión), `flash` (se quita con la bandera), `drop` (altura de la
+  // estela, en radios bajo el centro), `wave` (onda lateral de la cinta), `hitEcho`/`sinkEcho`
+  // (segundo anillo retrasado) y `rmDropSink`. sinkFountain admite una lista de emisores.
+  antimatter_void: {
+    // implosión violeta con chispas cian que caen al centro (la «singularidad»)
+    hit: [P('soft', 6, 2.5, 0, 0.13, 0.45, 'accent', { dir: 'in' }), P('spark', 5, 3, 0, 0.08, 0.4, 'secondary', { dir: 'in', spin: 4 })],
+    wall: [P('shard', 5, 2.5, 0.5, 0.08, 0.4, 'accent', { dir: 'normal', grav: 4, rot: 'rand' }), P('spark', 3, 1.5, 0, 0.07, 0.35, 'secondary', { dir: 'in' })],
+    // «particle decay trail»: motas que se quedan atrás, atraídas hacia la bola, y se apagan despacio
+    trail: P('spark', 1, 0.6, 0.6, 0.09, 0.9, 'glow', { dir: 'in', att: 5 }),
+    sinkFountain: P('soft', 10, 2, 0, 0.1, 0.6, 'accent', { dir: 'in', att: 6 }),
+    sinkBurst: P('spark', 6, 2.5, 0.6, 0.08, 0.5, 'glow', { dir: 'up', up: 2, grav: 5 }),
+    sinkDecal: { r: 0.5, col: '#000000', life: 2, add: false, op: 0.9 },
+    wave: { amp: 0.09, freq: 1.5, speed: 0.8 }, // «lensing warp trail» trenzada
+    attractRoll: true, attractSink: true, c2: '#38BDF8',
+  },
+  tormenta_voltaica: {
+    // estrella blanca de rayos + chispas cian (golpe de la hoja)
+    hit: [P('streak', 4, 0, 0, 1, 0.18, 'secondary', { rot: 'fan', grow: 0.5, flash: true }), P('spark', 8, 5, 0.9, 0.09, 0.3, 'glow'), P('soft', 1, 0, 0, 0.9, 0.15, 'secondary')],
+    // arcos quebrados en el punto de choque
+    wall: [P('streak', 3, 0.6, 1, 0.75, 0.18, 'secondary', { dir: 'normal', rot: 'rand', drag: 4 }), P('spark', 6, 3.5, 0.6, 0.08, 0.3, 'secondary', { dir: 'normal', grav: 3 })],
+    trail: P('spark', 1, 1.4, 1, 0.07, 0.25, 'glow', { drag: 5 }), // chispas que «crepitan»
+    // rayo vertical: trazos verticales que suben rápido + chispas cian
+    sinkFountain: [P('streak', 5, 7, 0.03, 0.55, 0.35, 'secondary', { dir: 'up', rot: 'vert', drag: 0.5 }), P('spark', 6, 4, 0.12, 0.09, 0.5, 'glow', { dir: 'up', up: 3, grav: 3 })],
+    sinkEcho: { at: 0.22, size: 1.5, speed: 2 }, // segundo anillo cian
+    wallRing: { size: 0.6, speed: 3.5 },
+    wave: { amp: 0.1, freq: 4, speed: 2, zig: true }, // zigzag eléctrico (2 Hz de forma, sin parpadeo)
+    rmDropHit: ['soft'],
+    c2: '#38BDF8', ring: 0x38bdf8,
+  },
+  anima_errante: {
+    // anillo de niebla violeta a ras de suelo con alguna mota
+    hit: [P('soft', 5, 2.2, 1, 0.32, 0.7, 'accent', { flat: true, drag: 3.5, grow: 1.4, up: 0.15 }), P('spark', 2, 1.5, 1, 0.06, 0.6, 'glow', { flat: true, up: 0.5 })],
+    // estallido cian en estrella contra la pared
+    wall: [P('streak', 4, 0, 0, 0.8, 0.2, 'secondary', { rot: 'fan', grow: 0.4, flash: true }), P('spark', 6, 3.5, 0.6, 0.09, 0.35, 'secondary', { dir: 'normal' }), P('soft', 1, 0, 0, 0.6, 0.2, 'secondary')],
+    // «copias fantasma»: halos del tamaño de la bola que se quedan atrás y se apagan
+    trail: P('soft', 1, 0.05, 1, 0.34, 0.5, '#A99CFF', { drag: 4, grow: 0.25, drop: 0 }),
+    // almas que suben: 3 grandes cian pálido + 3 volutas lavanda
+    sinkFountain: [P('soft', 3, 1.1, 0.25, 0.45, 1.6, '#9FF3FF', { dir: 'up', up: 1.2, grav: -0.5, drag: 1, spin: 2 }), P('soft', 3, 0.9, 0.5, 0.18, 1.3, 'glow', { dir: 'up', up: 1.6, grav: -0.6, drag: 1 })],
+    sinkBurst: P('spark', 6, 2, 0.6, 0.07, 0.6, 'secondary', { dir: 'up', up: 2, grav: 2 }),
+    wave: { amp: 0.07, freq: 1, speed: 0.5 }, // voluta ondulante
+    rmNoSinkBurst: true,
+    c2: '#0DE0F8',
+  },
+  cronometro_laton: {
+    // esfera de reloj que crece y gira + engranajes + chispas crema
+    hit: [P('glyph', 1, 0, 0, 0.8, 0.4, 'glow', { grow: 0.5, spin: 3, lift: 0.3 }), P('coin', 6, 3.5, 0.7, 0.09, 0.7, 'base', { grav: 7, spin: 7 }), P('spark', 4, 3, 0.9, 0.08, 0.35, 'glow', { grav: 4 })],
+    // estallido dorado en estrella + chispas
+    wall: [P('streak', 3, 0, 0, 0.7, 0.18, 'base', { rot: 'fan', grow: 0.4, flash: true }), P('spark', 8, 4, 0.5, 0.09, 0.35, 'glow', { dir: 'normal', grav: 6 })],
+    trail: P('coin', 1, 0.7, 1, 0.08, 0.7, 'base', { grav: 3, spin: 6 }), // engranajes que saltan
+    // el reloj de bolsillo que sale del hoyo + engranajes + chispas
+    sinkFountain: [P('glyph', 1, 1.2, 0, 0.6, 1, 'glow', { dir: 'up', up: 1, grav: 1, spin: 2 }), P('coin', 9, 3.5, 0.4, 0.1, 0.9, 'base', { dir: 'up', up: 4, grav: 7, spin: 8 }), P('spark', 2, 3, 0.5, 0.07, 0.5, 'glow', { dir: 'up', up: 2, grav: 4 })],
+    sinkEcho: { at: 0.25, size: 1.4, speed: 2 },
+    wallRing: { size: 0.55, speed: 3.5 },
+    rmDropHit: ['glyph'],
+    rmDropSink: ['glyph'],
+    c2: '#C46A2B', ring: 0xd4af37,
+  },
+  abyssal_tide: {
+    hit: [P('soft', 6, 1.8, 0.9, 0.1, 0.8, 'glow', { up: 1.2, drag: 2, grav: -0.4 })],
+    hitEcho: { at: 0.15, size: 1, speed: 2.4 }, // ondas concéntricas
+    // salpicadura de gotas + estrella cian
+    wall: [P('ember', 7, 4, 0.7, 0.07, 0.45, 'accent', { dir: 'normal', grav: 7 }), P('streak', 3, 0, 0, 0.6, 0.16, 'glow', { rot: 'fan', grow: 0.4, flash: true })],
+    trail: P('soft', 1, 0.4, 1, 0.1, 0.9, 'glow', { grav: -0.7, drag: 2 }), // burbujas más grandes
+    // géiser: columna de agua + trazos verticales
+    sinkFountain: [P('soft', 8, 5, 0.12, 0.16, 0.9, 'accent', { dir: 'up', up: 4, grav: 6, grow: 0.5 }), P('streak', 4, 6, 0.04, 0.5, 0.4, 'glow', { dir: 'up', rot: 'vert', drag: 1 })],
+    sinkBurst: P('spark', 5, 2.5, 0.7, 0.07, 0.5, 'glow', { dir: 'up', up: 2, grav: 5 }),
+    sinkDecal: { r: 0.7, col: '#19E3D0', life: 1.6, add: true, op: 0.7 },
+    wallRing: { size: 0.7, speed: 3 },
+    rollRing: { every: 0.4, size: 0.5, speed: 2.5 },
+    wave: { amp: 0.06, freq: 1.2, speed: 0.5 },
+    rmNoSinkDecal: true,
+    c2: '#4B6BFF',
+  },
 };
+
+/** Solo lectura, para tests de presupuesto. */
+export const SKIN_SIG = SIG;
 
 // ---------------------------------------------------------------- clase
 export class SkinFX {
@@ -129,10 +208,13 @@ export class SkinFX {
     this.tmpC = new THREE.Color();
     this.cols = new Map();
     this.hexOf = new Map();
-    this.accTrail = this.accRoll = this.accDecal = 0;
+    this.accTrail = this.accRoll = this.accDecal = this.accRing = 0;
     this.sinkT = -1;
     this.sinkFlags = 0;
     this.sinkPos = new THREE.Vector3();
+    this.echoT = 0; // anillo de eco pendiente (hitEcho/sinkEcho)
+    this.echo = null;
+    this.echoX = this.echoZ = 0;
     this.lastPos = new THREE.Vector3();
 
     this.ribbon = null;
@@ -154,7 +236,9 @@ export class SkinFX {
     const pick = (table, kind) => (kind && table[kind] ? table[kind](c) : []);
     const sigOr = (key, kindSpecs) => sig[key] ?? kindSpecs;
     this.hitSpecs = sigOr('hit', pick(HIT, fx.hit === 'signature' ? 'burst' : fx.hit));
+    this.hitSpecsCalm = calmList(this.hitSpecs, sig.rmDropHit);
     this.wallSpecs = sigOr('wall', pick(WALL, fx.wall === 'signature' ? 'burst' : fx.wall));
+    this.wallSpecsCalm = calmList(this.wallSpecs, null);
     this.bumperSpecs = this.wallSpecs;
     this.lipSpecs = fx.lip ? [P('soft', 1, 0, 0, 0.8, 0.25, 'glow'), P('spark', 6, 2.5, 0.8, 0.09, 0.3, 'white', { grav: 3 })] : [];
     const style = fx.trail?.style ?? 'default';
@@ -164,12 +248,14 @@ export class SkinFX {
     else if (fx.roll === 'sparks' || fx.roll === 'signature') this.rollSpec = sig.roll ?? P(c, 1, 1.5, 0.9, 0.07, 0.35, 'accent', { up: 1.5, grav: 6 });
     this.rollRate = fx.roll === 'glints' ? 5 : 14;
     this.sinkKind = fx.sink ?? 'generic';
-    this.sinkFountain = this.sinkKind === 'generic' || this.sinkKind === 'tinted' ? null : (sig.sinkFountain ?? P(c, this.sinkKind === 'burst' ? 22 : 40, 3, 0.35, 0.1, 0.9, 'accent', { dir: 'up', up: 4, grav: 7 }));
+    const sf = this.sinkKind === 'generic' || this.sinkKind === 'tinted' ? null : (sig.sinkFountain ?? P(c, this.sinkKind === 'burst' ? 22 : 40, 3, 0.35, 0.1, 0.9, 'accent', { dir: 'up', up: 4, grav: 7 }));
+    this.sinkFountain = sf ? (Array.isArray(sf) ? sf : [sf]) : null;
+    this.sinkFountainCalm = sf ? calmList(this.sinkFountain, sig.rmDropSink) : null;
     this.flashSpec = P('soft', 1, 0, 0, 1.6, 0.35, 'white');
     this.flashBigSpec = P('soft', 1, 0, 0, 2.6, 0.3, 'white');
-    this.sinkBurst2 = P(c, 12, 3, 0.6, 0.1, 0.7, 'accent', { dir: 'up', up: 3, grav: 6 });
+    this.sinkBurst2 = sig.sinkBurst ?? P(c, 12, 3, 0.6, 0.1, 0.7, 'accent', { dir: 'up', up: 3, grav: 6 });
     // resolver colores de antemano: `update` no debe crear Color ni arrays
-    const all = [this.flashSpec, this.flashBigSpec, this.sinkBurst2, ...this.hitSpecs, ...this.wallSpecs, ...this.lipSpecs, this.trailSpec, this.rollSpec, this.sinkFountain];
+    const all = [this.flashSpec, this.flashBigSpec, this.sinkBurst2, ...this.hitSpecs, ...this.wallSpecs, ...this.lipSpecs, this.trailSpec, this.rollSpec, ...(this.sinkFountain ?? [])];
     for (const s of all) if (s) this.#color(s.col);
     for (const k of ['rollDecal', 'sinkDecal']) if (sig[k]) this.#color(sig[k].col);
     this.#color('accent');
@@ -195,7 +281,7 @@ export class SkinFX {
     if (lv === this.level) return;
     this.level = lv;
     const L = (this.L = LEVELS[lv]);
-    this.particles.setLimit(L.particles);
+    this.particles.setLimit(particleLimit(L.particles, L.name, this.fx.maxParticles));
     this.decals.setLimit(L.decals);
 
     // estela: puntos en Baja y para la estela por defecto; cinta en Media/Alta
@@ -210,9 +296,12 @@ export class SkinFX {
         color2: this.sig.c2 === 'rainbow' ? null : this.sig.c2 ?? null,
         width: tr.width ?? 0.7,
         taper: tr.taper ?? 0.5,
-        noise: style === 'shaped' ? 0.6 : style === 'ribbon_particles' ? 0.25 : 0,
+        noise: ribbonNoise(style, reducedMotion()),
+        wave: this.sig.wave ?? null,
       });
+      this.ribbon.waveAmp = ribbonWave(this.sig.wave, reducedMotion());
       this.ribbonSegments = L.segments;
+      this.ribbonStyle = style;
     } else if (!wantRibbon && this.ribbon) {
       this.ribbon.dispose();
       this.ribbon = null;
@@ -312,7 +401,10 @@ export class SkinFX {
   // ------------------------------------------------------------ emisión
   /** Emite un emisor declarativo en (x,y,z) con dirección unitaria (dx,dy,dz). */
   #emit(spec, x, y, z, dx, dy, dz, power = 1) {
-    const n = Math.max(1, Math.round(spec.n * (0.5 + 0.5 * power)));
+    const rm = reducedMotion();
+    let n = Math.max(1, Math.round(spec.n * (0.5 + 0.5 * power)));
+    if (rm) n = reducedCount(n);
+    const speedK = rm ? REDUCED_SPEED : 1;
     const rainbow = spec.col === 'rainbow';
     const col = rainbow ? null : this.#color(spec.col);
     const cell = SKIN_SPRITES[spec.cell] ?? 0;
@@ -321,10 +413,17 @@ export class SkinFX {
     const sy = dir === 'back' ? -dy : dir === 'up' ? 1 : dy;
     const sz = dir === 'back' ? -dz : dir === 'up' ? 0 : dz;
     const spread = spec.spread;
+    if (spec.lift) y += spec.lift; // sprites grandes: que no se corten con el suelo
+    const flatK = spec.flat ? 0.15 : 1; // ráfaga casi horizontal (anillo de niebla)
+    const rotMode = spec.rot;
     for (let i = 0; i < n; i++) {
       const u = this.#rnd() * 2 - 1, a = this.#rnd() * TAU, s = Math.sqrt(1 - u * u);
-      const rx = s * Math.cos(a), ry = u, rz = s * Math.sin(a);
-      const sp = spec.speed * (0.6 + 0.4 * this.#rnd());
+      const rx = s * Math.cos(a), ry = u * flatK, rz = s * Math.sin(a);
+      // giro inicial del sprite en pantalla: estrella repartida, al azar o vertical (rayo/chorro)
+      const rot0 = rotMode === 'fan' ? (i / n) * Math.PI + (this.#rnd() - 0.5) * 0.3
+        : rotMode === 'rand' ? this.#rnd() * TAU
+          : rotMode === 'vert' ? Math.PI / 2 + (this.#rnd() - 0.5) * 0.5 : 0;
+      const sp = spec.speed * speedK * (0.6 + 0.4 * this.#rnd());
       let r, g, b;
       if (rainbow) {
         this.tmpC.setHSL(i / n, 1, 0.6);
@@ -338,12 +437,12 @@ export class SkinFX {
       if (dir === 'in') {
         // nace en un anillo alrededor del punto y cae hacia él
         const rad = 0.5 + 0.5 * this.#rnd();
-        this.particles.emit(cell, x + rx * rad, y + ry * rad * 0.6, z + rz * rad, -rx * sp, -ry * sp * 0.6, -rz * sp, size, life, r, g, b, spec.grav, spec.drag, spec.grow, spin, spec.att);
+        this.particles.emit(cell, x + rx * rad, y + ry * rad * 0.6, z + rz * rad, -rx * sp, -ry * sp * 0.6, -rz * sp, size, life, r, g, b, spec.grav, spec.drag, spec.grow, spin, spec.att, rot0);
       } else {
         const vx = (sx * (1 - spread) + rx * spread) * sp;
         const vy = (sy * (1 - spread) + ry * spread) * sp + spec.up;
         const vz = (sz * (1 - spread) + rz * spread) * sp;
-        this.particles.emit(cell, x, y, z, vx, vy, vz, size, life, r, g, b, spec.grav, spec.drag, spec.grow, spin, spec.att);
+        this.particles.emit(cell, x, y, z, vx, vy, vz, size, life, r, g, b, spec.grav, spec.drag, spec.grow, spin, spec.att, rot0);
       }
     }
   }
@@ -356,6 +455,15 @@ export class SkinFX {
     this.shock.emit(x, z, this.ringHex, size, speed);
   }
 
+  /** Programa un segundo anillo (eco) `e.at` segundos después; sustituye al pendiente. */
+  #queueEcho(e, x, z) {
+    if (!e) return;
+    this.echo = e;
+    this.echoT = e.at;
+    this.echoX = x;
+    this.echoZ = z;
+  }
+
   #decal(x, y, z, d, scale = 1) {
     const c = this.#color(d.col);
     this.decals.emit(x, y, z, d.r * scale, c[0], c[1], c[2], d.life, d.add, d.op);
@@ -366,14 +474,19 @@ export class SkinFX {
   onHit(power, pos, dir) {
     this.impact = 1;
     const p = Math.max(0, Math.min(1, power));
+    const rm = reducedMotion();
     if (this.fx.hit && this.fx.hit !== 'generic') this.#ring(pos.x, pos.z, 0.5 + p * 0.8, 3);
-    this.#emitAll(this.hitSpecs, pos.x, pos.y, pos.z, dir.x, dir.y, dir.z, p);
+    this.#queueEcho(echoRing(this.sig.hitEcho, rm), pos.x, pos.z);
+    this.#emitAll(hitList(this.hitSpecs, this.hitSpecsCalm, rm), pos.x, pos.y, pos.z, dir.x, dir.y, dir.z, p);
   }
 
   /** `normal` unitaria de la pared contra la que choca. */
   onWall(strength, pos, normal) {
     this.impact = Math.max(this.impact, Math.min(1, strength));
-    this.#emitAll(this.wallSpecs, pos.x, pos.y, pos.z, normal.x, normal.y, normal.z, Math.min(1, strength));
+    const wr = this.sig.wallRing;
+    const rm = reducedMotion();
+    if (wr && strength > 0.3 && !rm) this.#ring(pos.x, pos.z, wr.size, wr.speed);
+    this.#emitAll(hitList(this.wallSpecs, this.wallSpecsCalm, rm), pos.x, pos.y, pos.z, normal.x, normal.y, normal.z, Math.min(1, strength));
   }
 
   onBumper(pos) {
@@ -396,17 +509,19 @@ export class SkinFX {
     this.sinkT = 0;
     this.sinkFlags = 0;
     if (k === 'generic') return;
+    const rm = reducedMotion();
     this.#ring(cup.x, cup.z, 1.1, 2);
-    if (this.sinkFountain) this.#emit(this.sinkFountain, cup.x, cup.y + 0.1, cup.z, 0, 1, 0, 1);
+    this.#queueEcho(echoRing(this.sig.sinkEcho, rm), cup.x, cup.z);
+    if (this.sinkFountain) this.#emitAll(hitList(this.sinkFountain, this.sinkFountainCalm, rm), cup.x, cup.y + 0.1, cup.z, 0, 1, 0, 1);
     if (k === 'cinematic' || k === 'transform') {
-      this.#emit(this.flashSpec, cup.x, cup.y + 0.3, cup.z, 0, 1, 0, 1);
-      if (this.sig.sinkDecal) this.#decal(cup.x, 0, cup.z, this.sig.sinkDecal);
+      if (!rm) this.#emit(this.flashSpec, cup.x, cup.y + 0.3, cup.z, 0, 1, 0, 1);
+      if (this.sig.sinkDecal && sinkDecalAllowed(this.sig, rm)) this.#decal(cup.x, 0, cup.z, this.sig.sinkDecal);
     }
-    if (this.skin.id === 'event_horizon') {
+    if (this.sig.attractSink && !rm) {
       this.particles.attract.copy(cup);
       this.particles.attractOn = true;
     }
-    if (this.light) {
+    if (this.light && !rm) {
       this.light.position.set(cup.x, cup.y + 0.6, cup.z);
     }
   }
@@ -419,16 +534,21 @@ export class SkinFX {
   /** `ctx` = { pos: Vector3, speed: number, moving: boolean, camera }; el llamador lo reutiliza. */
   update(t, dt, ctx) {
     const { pos, speed, moving, camera } = ctx;
+    const rm = reducedMotion();
     this.t = t;
     this.impact = Math.max(0, this.impact - dt / 0.3);
     const sN = (this.speedN = Math.min(1, speed / 12));
 
-    if (this.ribbon) this.ribbon.update(t, dt, pos, moving, camera.position);
+    if (this.ribbon) {
+      this.ribbon.mat.uniforms.uNoise.value = ribbonNoise(this.ribbonStyle, rm); // sigue la bandera si cambia en caliente
+      this.ribbon.waveAmp = ribbonWave(this.sig.wave, rm);
+      this.ribbon.update(t, dt, pos, moving, camera.position);
+    }
     if (this.pointTrail) this.pointTrail.update(pos, moving);
 
     // aura: escala con la velocidad; las míticas «laten»
     if (this.aura) {
-      const pulse = this.fx.aura === 'pulse' ? 0.15 * Math.sin(t * 3) : 0;
+      const pulse = this.fx.aura === 'pulse' && !rm ? 0.15 * Math.sin(t * 3) : 0;
       this.aura.position.copy(pos);
       this.aura.scale.setScalar(BALL_R * (4 + sN * 2 + pulse * 4));
       this.aura.material.opacity = 0.3 + sN * 0.25 + this.impact * 0.3 + pulse;
@@ -439,30 +559,41 @@ export class SkinFX {
     }
     if (this.disc) {
       this.disc.position.copy(pos);
-      this.disc.rotation.z += dt * 1.2;
-      this.disc.material.uniforms.uTime.value = t;
+      if (!rm) this.disc.rotation.z += dt * 1.2;
+      this.disc.material.uniforms.uTime.value = rm ? STILL_TIME : t;
       this.disc.material.uniforms.uGrow.value = Math.min(1, this.state / 5);
       this.disc.scale.setScalar(1 + this.state * 0.08);
     }
-    this.particles.attract.copy(this.sinkT >= 0 && this.sinkT < 0.8 && this.skin.id === 'event_horizon' ? this.sinkPos : pos);
-    this.particles.attractOn = this.sig.attractRoll === true || (this.sinkT >= 0 && this.sinkT < 0.8);
+    this.particles.attract.copy(this.sinkT >= 0 && this.sinkT < 0.8 && this.sig.attractSink ? this.sinkPos : pos);
+    this.particles.attractOn = !rm && (this.sig.attractRoll === true || (this.sinkT >= 0 && this.sinkT < 0.8));
 
     // emisores continuos
-    if (moving && speed > 0.5) {
-      if (this.trailSpec) {
-        this.accTrail += dt * (10 + speed * 2);
+    if (moving && speed > 0.5 && !rm) {
+      // E1: en skins con maxParticles, los continuos dejan libre la mitad del pool para los eventos
+      const open = continuousOpen(this.particles.n, this.particles.limit, this.fx.maxParticles);
+      if (this.trailSpec && open) {
+        this.accTrail += dt * trailRate(this.fx.trailRate, speed);
         while (this.accTrail >= 1) {
           this.accTrail -= 1;
-          this.#emit(this.trailSpec, pos.x, pos.y - BALL_R * 0.4, pos.z, 0, 0, 0, 0.6);
+          this.#emit(this.trailSpec, pos.x, pos.y - BALL_R * (this.trailSpec.drop ?? 0.4), pos.z, 0, 0, 0, 0.6);
         }
       }
-      if (this.rollSpec && speed > (this.fx.roll === 'glints' ? 1 : 3)) {
+      if (this.rollSpec && open && speed > (this.fx.roll === 'glints' ? 1 : 3)) {
         this.accRoll += dt * this.rollRate * (0.5 + sN);
         while (this.accRoll >= 1) {
           this.accRoll -= 1;
           const rx = (this.#rnd() - 0.5) * BALL_R, rz = (this.#rnd() - 0.5) * BALL_R;
           const up = this.fx.roll === 'glints';
           this.#emit(this.rollSpec, pos.x + rx, pos.y + (up ? BALL_R * 0.9 : -BALL_R * 0.8), pos.z + rz, 0, 1, 0, 1);
+        }
+      }
+      const rr = this.sig.rollRing;
+      if (rr && speed > 1.5) {
+        this.accRing += dt;
+        if (this.accRing >= rr.every) {
+          this.accRing = 0;
+          // E3: como mucho 2 anillos vivos (el pool de 4 es compartido con los eventos)
+          if (this.shock.activeCount() < 2) this.#ring(pos.x, pos.z, rr.size, rr.speed);
         }
       }
       const rd = this.sig.rollDecal;
@@ -475,20 +606,29 @@ export class SkinFX {
       }
     }
 
+    // anillo de eco pendiente (golpe/embocada); con la bandera nunca se programa
+    if (this.echo) {
+      this.echoT -= dt;
+      if (this.echoT <= 0) {
+        if (!rm) this.#ring(this.echoX, this.echoZ, this.echo.size, this.echo.speed);
+        this.echo = null;
+      }
+    }
+
     // secuencia de embocada
     if (this.sinkT >= 0) {
       this.sinkT += dt;
       const st = this.sinkT, k = this.sinkKind, sp = this.sinkPos;
       if ((k === 'cinematic' || k === 'transform') && !(this.sinkFlags & 1) && st > 0.35) {
         this.sinkFlags |= 1;
-        this.#ring(sp.x, sp.z, 1.6, 1.8);
-        this.#emit(this.sinkBurst2, sp.x, sp.y + 0.1, sp.z, 0, 1, 0, 1);
+        if (!rm) this.#ring(sp.x, sp.z, 1.6, 1.8);
+        if (sinkBurstAllowed(this.sig, rm)) this.#emit(this.sinkBurst2, sp.x, sp.y + 0.1, sp.z, 0, 1, 0, 1);
       }
       if (k === 'transform' && !(this.sinkFlags & 2) && st > 0.8) {
         this.sinkFlags |= 2;
-        this.#emit(this.flashBigSpec, sp.x, sp.y + 0.3, sp.z, 0, 1, 0, 1);
+        if (!rm) this.#emit(this.flashBigSpec, sp.x, sp.y + 0.3, sp.z, 0, 1, 0, 1);
       }
-      if (this.light) this.light.intensity = st < 0.4 ? 6 * (1 - st / 0.4) : 0;
+      if (this.light) this.light.intensity = !rm && st < 0.4 ? 6 * (1 - st / 0.4) : 0;
       if (st > 1.2) {
         this.sinkT = -1;
         if (this.light) this.light.intensity = 0;
@@ -519,6 +659,7 @@ export class SkinFX {
     this.decals.clear();
     this.ribbon?.clear();
     this.sinkT = -1;
+    this.echo = null;
     this.impact = 0;
     this.particles.attractOn = false;
     if (this.light) this.light.intensity = 0;
