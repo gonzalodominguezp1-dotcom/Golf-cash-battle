@@ -47,7 +47,7 @@
   "catalogVersion": "3.4.0",
   "tier": null,
   "optOuts": [
-    "trunk-open"
+    "trunk-guard"
   ],
   "gitPermissions": true,
   "onboarding": {
