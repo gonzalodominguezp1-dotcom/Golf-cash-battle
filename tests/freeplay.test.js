@@ -5,8 +5,8 @@ import { DT, segmentsOf, step, isMoving, quantizeShot, shotVelocity } from '../s
 import { Progress } from '../src/progress/Progress.js';
 import { LocalWallet } from '../src/wallet/LocalWallet.js';
 
-test('catálogo completo de 21 hoyos para selector de juego libre', () => {
-  assert.equal(COURSES.length, 21, 'debe haber exactamente 21 hoyos disponibles');
+test('catálogo completo de 14 hoyos para selector de juego libre', () => {
+  assert.equal(COURSES.length, 14, 'debe haber exactamente 14 hoyos disponibles');
   for (let i = 0; i < COURSES.length; i++) {
     const c = COURSES[i];
     assert.ok(c.name && typeof c.name === 'string', `hoyo ${i + 1} debe tener nombre`);
@@ -94,7 +94,7 @@ test('lógica de reinicio de hoyo (restart): devuelve la bola al tee y limpia go
 
 test('física en hoyos seleccionados en modo libre funciona determinísticamente', () => {
   // Probamos que varios hoyos clave se pueden jugar sin errores de física en solitario
-  const testIndices = [0, 4, 8, 10, 14, 17]; // La Recta, Bloques, El Volcán, Looping Neón, El Molino, Looping Nocturno
+  const testIndices = [0, 2, 6, 8, 12, 13]; // Zigzag, Bloques, Looping Neón, Tubos Neón, Dentro del Volcán, El Abismo
   for (const idx of testIndices) {
     const course = COURSES[idx];
     const segs = segmentsOf(course);

@@ -118,7 +118,7 @@ test('looping: flojo vuelve atrás, fuerte lo completa', () => {
 });
 
 test('molino: las aspas tapan la puerta según el momento del golpe', () => {
-  const c = COURSES.find((x) => x.name === 'Molino Neón');
+  const c = COURSES.find((x) => x.name === 'El Molino del Prado');
   const [wm] = c.windmills;
   let blocked = 0;
   const N = 2000;
@@ -208,16 +208,17 @@ test('looping: el mismo tiro da siempre el mismo resultado, bit a bit', () => {
   }
 });
 
-test('volcán: la ladera echa la bola hacia fuera y la cima es llana', () => {
-  const c = COURSES.find((x) => x.name === 'El Volcán');
+test('montículo: la ladera echa la bola hacia fuera y la cima es llana', () => {
+  const c = COURSES.find((x) => x.name === 'El Molino del Prado');
   const [m] = c.mounds;
+  const r = (m.top + m.base) / 2; // a mitad de la ladera
   assert.equal(onMound(c, m.x, m.z), null);
-  assert.ok(onMound(c, m.x + 2, m.z));
-  const ball = { x: m.x + 2, z: m.z, vx: 0, vz: 0 };
+  assert.ok(onMound(c, m.x + r, m.z));
+  const ball = { x: m.x + r, z: m.z, vx: 0, vz: 0 };
   step(c, segmentsOf(c), ball, DT, DT);
   assert.ok(ball.vx > 0 && ball.vz === 0);
   // el relieve que se dibuja: cima arriba, base abajo
-  assert.ok(groundHeight(c, ...c.cup) > 1);
+  assert.ok(groundHeight(c, m.x, m.z) > groundHeight(c, m.x + m.base * 2, m.z));
   assert.equal(groundHeight(c, ...c.tee), 0);
 });
 
