@@ -122,3 +122,18 @@ test('las míticas se desbloquean con wins50 y aces5', () => {
   assert.equal(p.equip('event_horizon'), true);
   assert.equal(p.equip('midas_touch'), true);
 });
+
+test('una skin guardada que ya no existe se sustituye por la de serie', () => {
+  const store = new Map([['gcb.progress.v1', JSON.stringify({ xp: 0, equipped: 'skin_que_no_existe' })]]);
+  const p = new Progress({ getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) });
+  assert.equal(p.skin.id, 'classic');
+  assert.equal(p.equip('skin_que_no_existe'), false);
+});
+
+test('las skins nuevas se desbloquean con su desafío o nivel y no antes', () => {
+  const p = new Progress(null);
+  for (const id of ['antimatter_void', 'tormenta_voltaica', 'anima_errante', 'cronometro_laton', 'abyssal_tide']) assert.equal(p.equip(id), false, id);
+  Object.assign(p.state, { bigWins: 5, matches: 150, birdies: 50, xp: 100000 });
+  for (const id of ['antimatter_void', 'tormenta_voltaica', 'anima_errante', 'cronometro_laton', 'abyssal_tide']) assert.equal(p.equip(id), true, id);
+  assert.equal(p.skin.id, 'abyssal_tide');
+});

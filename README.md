@@ -1,68 +1,133 @@
 # Golf Cash Battle
 
-Minigolf 3D para móvil (navegador) con partidas de 8 jugadores y entry fee: el que menos golpes hace se lleva el bote menos la comisión de la plataforma.
+Minigolf 3D para navegador y móvil. Partidas de hasta 8 jugadores con entrada: el que menos golpes hace se lleva el bote menos la comisión de la plataforma.
 
-## Qué hay en este prototipo
+> **Estado:** prototipo jugable con créditos demo. **No hay dinero real.** Antes de activarlo se cumplen los requisitos de la [constitución](02-DOCS/wiki/sdd/constitution.md) (sección 5, S5.10 y S5.11).
 
-- **Juego 3D** con Three.js y cámara en tercera persona detrás de la bola. En el móvil, deslizar en cualquier parte mueve la cámara (y hacia dónde apuntas); el tiro solo se carga arrastrando desde la bola hacia atrás. "Ver hoyo" muestra el recorrido entero.
-- **Contador de 20 s**: cuando el primero emboca, los demás tienen 20 s; quien no emboca queda descalificado en ese hoyo (máximo de golpes). En torneos cuenta desde el más rápido del hoyo y lo comprueba el servidor.
-- **10 hoyos** con su ambiente (pradera, playa, atardecer, nieve, cañón, otoño, noche y volcán): setas rebotadoras, arena, aspas giratorias, aceleradores, bloques móviles, pendientes, portales, loopings, molinos, tubos y, dentro del volcán, ríos de lava (la bola que cae vuelve al sitio del golpe) y rampas para saltarlos. En *El Abismo* hay agujeros de pared a pared (`pits`): funcionan como la lava y solo se cruzan saltando desde una rampa. Cada partida juega 3, los mismos para todos. Los hoyos nuevos se añaden siempre al final de `courses.js` (el servidor guarda el índice) y después se sube `course_count` en `app_config`.
-- **Sensación de golpe**: tono de carga, temblor de cámara y onda en el golpe, bola que se aplasta al chocar, aviso cuando la bola salta el hoyo y cámara lenta cuando un golpe largo va a entrar (solo visual: la física sigue a paso fijo).
-- **Rivales en el campo**: los otros 7 juegan el mismo hoyo a la vez, con la misma física, y su resultado es el que hacen ahí. Clasificación en vivo arriba. En producción serán jugadores reales.
-- **Sonidos** generados en el navegador (madera, hoyo, campanas, portal, ambiente), con botón para silenciar.
-- **Wallet** de créditos demo (100 de bienvenida, recargas demo, historial de movimientos). Sin dinero real.
-- **Partidas** Práctica (gratis), Bronce 1, Plata 5, Oro 10 y Diamante 25. Bote = entrada × 8; premio = bote − 10%. Empates reparten el premio.
+## Qué hay hoy
+
+- **Juego 3D** con Three.js y cámara en tercera persona detrás de la bola. En móvil, deslizar en cualquier parte mueve la cámara; el tiro se carga arrastrando desde la bola hacia atrás. "Ver hoyo" muestra el recorrido entero.
+- **Contador de 20 s:** cuando el primero emboca, los demás tienen 20 s. Quien no emboca queda descalificado en ese hoyo. En torneos cuenta desde el más rápido del hoyo y lo comprueba el servidor.
+- **21 hoyos** en distintos ambientes (pradera, playa, atardecer, nieve, cañón, otoño, noche y volcán). En *El Abismo* hay agujeros de pared a pared (`pits`) que solo se cruzan saltando desde una rampa. Cada partida juega 3, iguales para todos. Los hoyos nuevos se añaden al final de `src/game/courses.js` y después se sube `course_count` en `app_config`.
+- **Sensación de golpe:** tono de carga, temblor de cámara, onda en el impacto, bola que se aplasta al chocar y cámara lenta en golpes largos. Es solo visual: la física sigue a paso fijo.
+- **Rivales en el campo:** los otros 7 juegan el mismo hoyo a la vez, con la misma física. Clasificación en vivo.
+- **Skins**, con inventario y progreso.
+- **Sonidos** generados en el navegador, con botón para silenciar.
+- **Wallet demo:** 100 créditos de bienvenida, recargas demo e historial de movimientos.
+- **Niveles de mesa:** Práctica (gratis), Bronce (entrada 1), Plata (5), Oro (10), Diamante (25) y Esmeralda (50). Bote = entrada × 8. Premio = bote − 10 %. Los empates reparten el premio.
 
 Las reglas económicas están en `src/config.js`.
 
-## Empezar a colaborar
+## Empezar
 
-1. Clona el repo e instala: `git clone https://github.com/gonzalodominguezp1-dotcom/Golf-cash-battle.git && cd Golf-cash-battle && pnpm install` (Node 20 o superior).
-2. `pnpm dev` y abre la URL que muestra (o la "Network" desde el móvil en la misma wifi). Sin configurar nada usa el Supabase de producción (`oyawgvqbmvtmlnyqwgdf`); para jugar sin servidor: `VITE_BACKEND=local pnpm dev`.
-3. Trabaja en una rama y abre un PR contra `main`. Cada PR pasa las pruebas (`pnpm test`) en GitHub Actions; al fusionar en `main` Vercel publica la web sola (panel de admin en `/admin.html`) y cada PR tiene su propia vista previa.
-4. Cambios en la base de datos van como migración nueva en `supabase/migrations/`; las Edge Functions están en `supabase/functions/`. Desplegarlas en Supabase necesita acceso al proyecto (pídeselo a Gonzalo).
-
-## Desarrollo
+Requisitos: Node 22 (CI usa 22; `engines` pide 20 o superior) y pnpm 11.24.0.
 
 ```bash
+git clone https://github.com/gonzalodominguezp1-dotcom/Golf-cash-battle.git
+cd Golf-cash-battle
 pnpm install
-pnpm dev         # abre la URL "Network" desde el móvil en la misma wifi
-pnpm test        # reparto del bote y wallet
-pnpm build
+pnpm dev          # muestra una URL "Network" para abrir desde el móvil en la misma wifi
 ```
+
+- Sin configurar nada, `pnpm dev` usa el backend de Supabase de producción (`oyawgvqbmvtmlnyqwgdf`).
+- Para jugar sin servidor: `VITE_BACKEND=local pnpm dev`.
+
+## Scripts
+
+```bash
+pnpm dev                 # servidor de desarrollo
+pnpm test                # pruebas de juego, economía, progreso, antibots y skins
+pnpm run build           # build de producción
+pnpm run sync:functions  # copia física y réplica a las Edge Functions
+```
+
+## Flujo de trabajo
+
+- El equipo trabaja en una rama y abre un PR contra `main`.
+- GitHub Actions ejecuta `pnpm test` y `pnpm run build`, y `deno check` sobre las Edge Functions.
+- Al fusionar en `main`, Vercel publica la web. Cada PR tiene su vista previa.
+- El panel de administración está en `/admin.html`.
+- Los cambios de base de datos van como migración nueva en `supabase/migrations/`. Las Edge Functions están en `supabase/functions/`.
+- Antes de cambiar `src/game/physics.js`, `replay.js` o `courses.js`: ejecutar `pnpm run sync:functions` y volver a desplegar `submit-hole`.
+
+Las reglas completas están en la [constitución del proyecto](02-DOCS/wiki/sdd/constitution.md).
 
 ## Backend (Supabase)
 
 Proyecto `golf-cash-battle` (`oyawgvqbmvtmlnyqwgdf`). Cada jugador entra como invitado (cuenta anónima) y recibe 100 créditos demo.
 
-- Tablas: `wallets`, `transactions`, `matches`, `match_players`, `tiers`, `app_config`. RLS: cada usuario solo lee lo suyo y nadie escribe directamente.
-- El saldo solo cambia dentro de funciones del servidor: `join_match` (cobra la entrada y elige los hoyos), `submit_hole`, `finish_match` (reparte el bote y la comisión), `abandon_match` (devuelve la entrada si no se ha jugado), `demo_deposit`.
-- Requisito: en el panel de Supabase, Authentication → Sign In / Providers → activar *Allow anonymous sign-ins*.
-- `VITE_BACKEND=local` usa la demo en el navegador (la vista previa). Si Supabase no responde, la app pasa sola a modo local.
-- Depósitos cripto con NOWPayments (Edge Functions `crypto-deposit` y `nowpayments-ipn`, tabla `deposits`). El saldo solo sube cuando llega el aviso firmado con estado `finished`, una vez por depósito. Secrets: `NOWPAYMENTS_API_KEY`, `NOWPAYMENTS_IPN_SECRET` y `NOWPAYMENTS_SANDBOX` (por defecto pruebas). URL del IPN: `https://oyawgvqbmvtmlnyqwgdf.supabase.co/functions/v1/nowpayments-ipn`.
-- Torneos contra jugadores reales (mesas de pago): asíncronos, 8 plazas. Cada uno juega los mismos hoyos a su ritmo (20 min para terminar) y el bote se reparte cuando han terminado todos y la mesa está llena o se cierra la inscripción (15 min). Si al cerrar solo hay un jugador, se le devuelve la entrada. Tablas `tournaments`, `tournament_entries`, `tournament_holes`; funciones `join_tournament`, `start_round`, `leave_tournament`, `tournament_status`, `my_tournaments` (migración en `supabase/migrations/`).
-- Validación de golpes: el cliente no manda cuántos golpes hizo, solo cada tiro (`tick`, `yaw`, `power`). La Edge Function `submit-hole` repite el hoyo con la misma física (`src/game/replay.js`) y guarda los golpes que salen. La física solo usa operaciones exactas en IEEE 754, así que da el mismo resultado en cualquier navegador y en el servidor. Tras tocar `src/game/physics.js`, `replay.js` o `courses.js`: `pnpm run sync:functions` y volver a desplegar `submit-hole`.
-- Las puntuaciones de los rivales no se ven hasta que terminas tu ronda. Todos hacen al final un tiro de desempate, que solo cuenta si hay empate en cabeza.
-- La práctica se juega en el móvil contra rivales simulados. Las partidas contra bots del prototipo (`join_match`) ya no admiten entrada de pago.
-- Cuentas: se empieza como invitado (cuenta anónima). Al añadir el email (pestaña Cuenta) la misma cuenta pasa a permanente y conserva saldo, nivel y skins. Para entrar en otro móvil se pide un enlace o código por email. Perfil en `profiles` (nombre público, progreso); funciones `my_profile`, `set_username`, `save_progress`. Requisitos en el panel: Authentication → Sign In / Providers → *Allow manual linking* activado, y en URL Configuration la dirección de la web (Vercel) como Site URL y en Redirect URLs. Para que el email traiga código además de enlace, añadir `{{ .Token }}` a las plantillas *Change email address* y *Magic link*.
-- Mesas con entrada: solo con email confirmado, +18 e identidad verificada; una identidad = una cuenta (se guarda un hash del documento, no el número). Lo comprueba un trigger en `tournament_entries` (`_paid_block`), así que no se puede saltar desde el cliente.
-- Verificación de identidad: Edge Function `kyc` con proveedor intercambiable (`supabase/functions/kyc/providers.ts`). Con los secrets `DIDIT_API_KEY`, `DIDIT_WORKFLOW_ID` y `DIDIT_WEBHOOK_SECRET` usa Didit (documento + selfie) y su webhook va a `https://oyawgvqbmvtmlnyqwgdf.supabase.co/functions/v1/kyc/webhook`. Sin ellos funciona en modo pruebas: fecha de nacimiento y número de documento escritos a mano. Antes de dinero real hay que poner Didit.
-- Antibots: `submit-hole` guarda en `shot_signals` cuánto tarda cada tiro con la bola parada y el gesto del dedo que manda el móvil, y `src/antibot/risk.js` busca tiros instantáneos, tiempos robóticos, tiros sin gesto y precisión imposible frente a la media de todos en ese hoyo. Una cuenta marcada (`player_risk`) no entra en mesas de pago y sus premios van a `held_payouts`. Para revisarla, en el editor SQL: `select review_player('<id>', 'cleared')` (libera los premios) o `'blocked'`. Los umbrales se pueden cambiar en `app_config.antibot`.
-- Publicación: Vercel (`vercel.json`, instala con la misma versión de pnpm que `packageManager`), importando el repo en vercel.com. No necesita variables de entorno: la URL y la clave pública de Supabase van por defecto en `src/backend/supabase.js` (se pueden cambiar con `VITE_SUPABASE_URL` y `VITE_SUPABASE_KEY`).
+- **Tablas principales:** `wallets`, `transactions`, `matches`, `match_players`, `tiers`, `app_config`, `profiles`, `tournaments`, `tournament_entries`, `tournament_holes`, `shot_signals`, `player_risk`, `held_payouts`, `deposits`. RLS: cada usuario solo lee lo suyo y nadie escribe directamente.
+- **El saldo cambia solo dentro de funciones del servidor:** `join_match`, `submit_hole`, `finish_match`, `abandon_match`, `demo_deposit`, y para torneos `join_tournament`, `start_round`, `leave_tournament`, `tournament_status`, `my_tournaments`.
+- **Configuración en el panel de Supabase:**
+  - Authentication → Sign In / Providers: activar *Allow anonymous sign-ins* y *Allow manual linking*.
+  - URL Configuration: la dirección de la web (Vercel) como Site URL y en Redirect URLs.
+  - Para que el email traiga código además de enlace, añadir `{{ .Token }}` a las plantillas *Change email address* y *Magic link*.
+
+### Validación de golpes
+
+El cliente no manda cuántos golpes hizo, solo cada tiro (`tick`, `yaw`, `power`). La Edge Function `submit-hole` repite el hoyo con la misma física (`src/game/replay.js`). La física usa operaciones exactas en IEEE 754, así que da el mismo resultado en el navegador y en el servidor.
+
+Los rivales no ven las puntuaciones hasta terminar su ronda. Al final, todos hacen un tiro de desempate, que solo cuenta si hay empate en cabeza.
+
+### Cuentas
+
+- Se empieza como invitado. Al añadir un email (pestaña Cuenta), la misma cuenta pasa a permanente y conserva saldo, nivel y skins.
+- Para entrar desde otro móvil se pide un enlace o código por email.
+- Perfil en `profiles` (nombre público y progreso), con las funciones `my_profile`, `set_username` y `save_progress`.
+
+### Torneos
+
+- Torneos asíncronos de 8 plazas. Cada jugador juega los mismos hoyos a su ritmo (20 min para terminar).
+- El bote se reparte cuando han terminado todos y la mesa está llena, o cuando se cierra la inscripción (15 min).
+- Si al cerrar solo hay un jugador, se le devuelve la entrada.
+
+### Antibots
+
+- `submit-hole` guarda en `shot_signals` el tiempo de cada tiro con la bola parada y el gesto del dedo.
+- `src/antibot/risk.js` busca tiros instantáneos, tiempos robóticos, tiros sin gesto y precisión imposible, comparados con la media del hoyo.
+- Una cuenta marcada (`player_risk`) no entra en mesas de pago, y sus premios van a `held_payouts`.
+- Revisión manual en el editor SQL: `select review_player('<id>', 'cleared')` libera los premios; `'blocked'` los bloquea.
+- Los umbrales están en `app_config.antibot`.
+
+### Verificación de identidad
+
+- Edge Function `kyc`, con proveedor intercambiable (`supabase/functions/kyc/providers.ts`).
+- Con los secrets `DIDIT_API_KEY`, `DIDIT_WORKFLOW_ID` y `DIDIT_WEBHOOK_SECRET` usa Didit (documento y selfie). Su webhook va a `https://oyawgvqbmvtmlnyqwgdf.supabase.co/functions/v1/kyc/webhook`.
+- Sin esos secrets funciona en modo pruebas: fecha de nacimiento y número de documento escritos a mano. Este modo no es válido para dinero real.
+
+### Depósitos cripto (en pruebas)
+
+- Edge Functions `crypto-deposit` y `nowpayments-ipn`, tabla `deposits`.
+- El saldo solo sube cuando llega el aviso firmado con estado `finished`, una vez por depósito.
+- Secrets: `NOWPAYMENTS_API_KEY`, `NOWPAYMENTS_IPN_SECRET` y `NOWPAYMENTS_SANDBOX` (por defecto, pruebas).
+- URL del IPN: `https://oyawgvqbmvtmlnyqwgdf.supabase.co/functions/v1/nowpayments-ipn`.
+
+## Claves y seguridad
+
+- La clave pública de Supabase (`sb_publishable_…`) está en `src/backend/supabase.js`. Es pública por diseño: solo permite lo que RLS y las funciones dejan hacer. Se puede cambiar con `VITE_SUPABASE_URL` y `VITE_SUPABASE_KEY`.
+- La clave `service_role` nunca va al cliente ni al repositorio. Solo existe como secret de las Edge Functions.
+- Los secretos van en variables de entorno o en los secrets del proveedor. `.env` no se versiona.
+
+## Dinero real: pendiente
+
+Estos puntos deben cumplirse antes de activarlo (constitución S5.10 y S5.11):
+
+- Proveedor de identidad real (Didit o equivalente) en lugar del modo pruebas.
+- Antibots y anticheat implementados, revisados y ajustados con datos reales.
+- Revisión legal del modelo de habilidad por país.
+- Pasarela de pagos en producción.
+- Auditoría de RLS y de las funciones `SECURITY DEFINER`.
+- Protección contra abuso en el registro anónimo.
 
 ## Estructura
 
-- `src/game/` física (sin Three.js, reutilizable en servidor), hoyos, ambientaciones (`themes.js`), sonidos y render 3D (`render/`)
-- `src/wallet/` interfaz `WalletService`, `LocalWallet` (demo local) y `SupabaseWallet`
-- `src/backend/` elige backend y conecta con Supabase
-- `src/match/` matchmaking, puntuación y reparto del bote (`MatchService` local con bots, `TournamentService` para torneos reales)
-- `src/account/` cuenta, email y verificación de identidad
-- `src/antibot/` nota de riesgo a partir de las señales de cada hoyo
-- `supabase/functions/submit-hole/` repite los tiros en el servidor; `game/` y `antibot/` son copias de `src/` (`pnpm run sync:functions`)
-- `supabase/functions/kyc/` verificación de identidad y su webhook
-
-## Pendiente para dinero real
-
-- Poner las claves de Didit (o del proveedor elegido) en lugar del modo pruebas.
-- El antibots sube el coste de hacer trampas pero un bot cuidadoso puede imitar tiempos y gestos; lo que más frena es la precisión imposible, la retención de premios y que una identidad verificada solo tenga una cuenta. Hará falta revisar a mano las cuentas marcadas y ajustar los umbrales con datos reales.
-- Pasarela de pagos y revisión legal del modelo de habilidad por país.
+- `src/game/`: física (sin Three.js, reutilizable en el servidor), hoyos (`courses.js`), ambientaciones (`themes.js`), bots, sonidos y render 3D (`render/`).
+- `src/wallet/`: interfaz `WalletService`, `LocalWallet` (demo local) y `SupabaseWallet`.
+- `src/backend/`: elige el backend y conecta con Supabase.
+- `src/match/`: matchmaking, puntuación y reparto del bote (`MatchService` local, `SupabaseMatchService`, `TournamentService`).
+- `src/account/`: cuenta, email y verificación de identidad.
+- `src/antibot/`: nota de riesgo a partir de las señales de cada hoyo.
+- `src/progress/` y `src/ui/`: progreso, inventario, skins y componentes de interfaz.
+- `supabase/functions/`: `submit-hole`, `kyc`, `crypto-deposit`, `nowpayments-ipn`.
+- `supabase/migrations/`: cambios de base de datos, en orden.
+- `02-DOCS/`: wiki del proyecto. Empieza por [`02-DOCS/wiki/index.md`](02-DOCS/wiki/index.md).

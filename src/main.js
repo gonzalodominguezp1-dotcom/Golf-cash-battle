@@ -7,7 +7,7 @@ import { createBackend } from './backend/index.js';
 import { COURSES, TIEBREAK_COURSE } from './game/courses.js';
 import { Bot } from './game/bots.js';
 import { segmentsOf } from './game/physics.js';
-import { isMuted, setMuted, sfx, unlockAudio } from './game/audio.js';
+import { enterFinale, isMuted, leaveFinale, setMuted, sfx, unlockAudio } from './game/audio.js';
 import { Progress } from './progress/Progress.js';
 import { CHALLENGES, TIERS as SKIN_TIERS, SKINS } from './progress/skins.js';
 import { ballPreview } from './game/render/ballPaint.js';
@@ -29,6 +29,8 @@ const loadSkinInspector = () => import('./ui/skinInspector.js');
 
 // clave nueva: quien silenció sin querer cuando no se oía nada vuelve a tener sonido
 const MUTE_KEY = 'gcb.muted.v2';
+// "móvil" en pantallas táctiles, "equipo" en PC
+const DEVICE = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? 'móvil' : 'equipo';
 try {
   setMuted(localStorage.getItem(MUTE_KEY) === '1');
 } catch { }
@@ -210,6 +212,7 @@ function bindHolo(root) {
 // ---------- lobby ----------
 
 async function showLobby() {
+  leaveFinale();
   screen = 'lobby';
   const balance = await wallet.getBalance();
   const skin = progress.skin;
@@ -230,7 +233,7 @@ async function showLobby() {
           <button class="chip-btn" data-go="skins">Personalizar skin</button>
         </div>
       </section>
-      ${backend.mode === 'local' ? '<p class="offline">Modo sin conexión: el saldo se guarda solo en este móvil</p>' : ''}
+      ${backend.mode === 'local' ? `<p class="offline">Modo sin conexión: el saldo se guarda solo en este ${DEVICE}</p>` : ''}
       ${backend.account?.profile?.paid_block ? `<button class="notice account-hint" data-go="account">${{ account_required: 'Guarda tu cuenta con email para jugar mesas con entrada →', kyc_required: 'Verifica tu edad e identidad para jugar mesas con entrada →', account_review: 'Tu cuenta está en revisión: de momento solo Práctica', underage: 'Mesas con entrada solo para mayores de 18' }[backend.account.profile.paid_block]}</button>` : ''}
       <div class="my-tournaments"></div>
       <div class="section-head">
@@ -474,7 +477,7 @@ async function showSkins() {
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 const BLOCK_TEXT = {
-  account_required: 'Para jugar con créditos necesitas una cuenta con email. Así no pierdes tu saldo si cambias de móvil.',
+  account_required: 'Para jugar con créditos necesitas una cuenta con email. Así no pierdes tu saldo si cambias de dispositivo.',
   kyc_required: 'Antes de jugar con créditos tienes que verificar tu edad e identidad. Solo se hace una vez.',
   underage: 'Las mesas con entrada son solo para mayores de 18 años. Puedes seguir jugando en Práctica.',
   account_review: 'Tu cuenta está en revisión por el sistema antitrampas. Mientras tanto puedes jugar en Práctica.',
@@ -602,7 +605,7 @@ async function showAccount(note = '') {
       emailForm({
         intro: p.pending_email
           ? `Te enviamos un email a <b>${esc(p.pending_email)}</b>. Pulsa el enlace para confirmarlo, o escribe otro email.`
-          : 'Juegas como invitado. Añade tu email para guardar tu saldo, nivel y skins y poder entrar desde otro móvil.',
+          : 'Juegas como invitado. Añade tu email para guardar tu saldo, nivel y skins y poder entrar desde otro dispositivo.',
         button: 'Guardar mi cuenta',
         send: (email) => account.register(email),
         codeType: 'email_change',
@@ -612,7 +615,7 @@ async function showAccount(note = '') {
     other.addEventListener('click', () => {
       other.replaceWith(
         emailForm({
-          intro: 'Entra en tu cuenta. El saldo de este invitado se queda en este móvil.',
+          intro: `Entra en tu cuenta. El saldo de este invitado se queda en este ${DEVICE}.`,
           button: 'Enviarme el enlace',
           send: (email) => account.signIn(email),
           codeType: 'email',
@@ -692,7 +695,7 @@ function emailForm({ intro, button, send, codeType }) {
     }
     sentTo = email;
     box.innerHTML = `
-      <p class="sub">Te hemos enviado un email a <b>${esc(email)}</b>. Pulsa el enlace desde este móvil, o escribe aquí el código si viene uno.</p>
+      <p class="sub">Te hemos enviado un email a <b>${esc(email)}</b>. Pulsa el enlace desde este ${DEVICE}, o escribe aquí el código si viene uno.</p>
       <input name="code" required inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="Código">
       <button class="secondary">Confirmar código</button>`;
   });
@@ -852,6 +855,7 @@ async function showWallet() {
 // ---------- matchmaking ----------
 
 async function startMatch(tier, rematchOf = null) {
+  leaveFinale();
   // #hoyo3 en la URL: la práctica empieza por ese hoyo (útil para probar);
   // #hoyo3-empate además fuerza el desempate al final
   const forced = tier.entryFee === 0 && /^#hoyo(\d+)(-empate)?$/.exec(location.hash);
@@ -1499,6 +1503,7 @@ function showEndOverlay({ won, position, total, prize, ranking, legal, holes, ga
   });
   overlay.querySelector('.next').addEventListener('click', () => showLobby());
   app.append(overlay);
+  enterFinale();
   sfx.endJingle(won, position);
 }
 
@@ -1630,7 +1635,7 @@ async function submitOnline(match, hole, g, then) {
   } catch (e) {
     if (e.code === 'invalid_shots') return alertMsg('El servidor no ha podido validar los golpes de este hoyo.');
     if (['time_up', 'match_closed', 'wrong_hole'].includes(e.code)) return showOnlineResults(match);
-    retryMsg('Se ha perdido la conexión con el servidor. Tus golpes siguen guardados en el móvil.', () => submitOnline(match, hole, { shots, aim, endTick }, then));
+    retryMsg(`Se ha perdido la conexión con el servidor. Tus golpes siguen guardados en este ${DEVICE}.`, () => submitOnline(match, hole, { shots, aim, endTick }, then));
   }
 }
 
@@ -1848,6 +1853,7 @@ function alertMsg(text) {
 
 const THEME_INFO = {
   meadow: { name: 'Pradera', icon: '', color: '#5cc24a' },
+  meadowDay: { name: 'Pradera de Día', icon: '', color: '#6fd24f' },
   beach: { name: 'Playa', icon: '', color: '#2fe0ff' },
   sunset: { name: 'Atardecer', icon: '', color: '#ff9a5c' },
   snow: { name: 'Nieve', icon: '', color: '#90d7ff' },

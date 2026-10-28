@@ -112,7 +112,8 @@ export class Progress {
   }
 
   equip(id) {
-    if (!this.isUnlocked(skinById(id))) return false;
+    // un id desconocido no se guarda (skinById devolvería la de serie y parecería desbloqueada)
+    if (!SKINS.some((s) => s.id === id) || !this.isUnlocked(skinById(id))) return false;
     this.state.equipped = id;
     this.#save();
     return true;

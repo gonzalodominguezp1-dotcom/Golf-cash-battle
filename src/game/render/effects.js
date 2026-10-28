@@ -188,8 +188,14 @@ void main() {
  * por longitud. Todos los buffers se reservan una sola vez.
  */
 export class RibbonTrail {
-  constructor(scene, { segments = 32, color = '#ffffff', color2 = null, width = 0.7, taper = 0.5, noise = 0, lifetime = 0.8, step = 0.12 } = {}) {
+  constructor(scene, { segments = 32, color = '#ffffff', color2 = null, width = 0.7, taper = 0.5, noise = 0, lifetime = 0.8, step = 0.12, wave = null } = {}) {
     const n = (this.n = segments);
+    // Onda lateral opcional (espiral, zigzag eléctrico): desplaza el centro de la
+    // cinta hacia `side`. `waveAmp` lo fija quien llama cada frame (0 = recta).
+    this.waveAmp = wave?.amp ?? 0;
+    this.waveFreq = wave?.freq ?? 1; // ciclos a lo largo de la cinta
+    this.waveSpeed = wave?.speed ?? 0; // ciclos por segundo
+    this.waveZig = !!wave?.zig; // onda triangular en vez de seno
     this.rainbow = color === 'rainbow';
     this.c1 = new THREE.Color(this.rainbow ? '#ffffff' : color);
     this.c2 = new THREE.Color(color2 ?? (this.rainbow ? '#ffffff' : color));
@@ -238,11 +244,18 @@ export class RibbonTrail {
     for (let i = 0; i < this.count; i++) A[i] += dt;
     while (this.count > 0 && A[this.count - 1] > this.lifetime) this.count--;
     if (moving) {
-      const dx = pos.x - P[0], dy = pos.y - P[1], dz = pos.z - P[2];
-      if (this.count === 0 || dx * dx + dy * dy + dz * dz > this.step2) {
-        P.copyWithin(3, 0, (n - 1) * 3);
-        A.copyWithin(1, 0, n - 1);
-        this.count = Math.min(this.count + 1, n);
+      // P[0] es la cabeza (sigue a la bola cada frame); P[1] es el último punto fijado.
+      // Se fija uno nuevo cuando la cabeza se aleja `step` del último fijado (antes se
+      // medía contra la propia cabeza, así que solo crecía si la bola recorría > step
+      // en un único frame: a 60 fps, por encima de ~7 u/s; a 120 Hz, de ~14).
+      if (this.count === 0) this.count = 1;
+      else {
+        const dx = pos.x - P[3], dy = pos.y - P[4], dz = pos.z - P[5];
+        if (this.count === 1 || dx * dx + dy * dy + dz * dz > this.step2) {
+          P.copyWithin(3, 0, (n - 1) * 3);
+          A.copyWithin(1, 0, n - 1);
+          this.count = Math.min(this.count + 1, n);
+        }
       }
       P[0] = pos.x; P[1] = pos.y; P[2] = pos.z;
       A[0] = 0;
@@ -263,9 +276,17 @@ export class RibbonTrail {
       const w = this.width * (1 - this.taper * k);
       const col = this.rainbow ? this.tmp.setHSL((k * 0.8 + t * 0.15) % 1, 1, 0.6) : this.tmp.copy(this.c1).lerp(this.c2, k);
       const alpha = (1 - A[i] / this.lifetime) * (1 - k * 0.35) * 0.9;
+      // desplazamiento de la onda: nulo en la bola y pleno a partir de 1/3 de la cinta
+      let off = 0;
+      if (this.waveAmp > 0) {
+        const ph = k * this.waveFreq - t * this.waveSpeed;
+        const s = this.waveZig ? 4 * Math.abs(ph - Math.floor(ph + 0.5)) - 1 : Math.sin(ph * 6.283185307179586);
+        off = this.waveAmp * Math.min(1, k * 3) * s;
+      }
+      const cx = P[o] + this.side.x * off, cy = P[o + 1] + this.side.y * off, cz = P[o + 2] + this.side.z * off;
       const v = i * 6, c = i * 8;
-      vp[v] = P[o] + this.side.x * w; vp[v + 1] = P[o + 1] + this.side.y * w; vp[v + 2] = P[o + 2] + this.side.z * w;
-      vp[v + 3] = P[o] - this.side.x * w; vp[v + 4] = P[o + 1] - this.side.y * w; vp[v + 5] = P[o + 2] - this.side.z * w;
+      vp[v] = cx + this.side.x * w; vp[v + 1] = cy + this.side.y * w; vp[v + 2] = cz + this.side.z * w;
+      vp[v + 3] = cx - this.side.x * w; vp[v + 4] = cy - this.side.y * w; vp[v + 5] = cz - this.side.z * w;
       vc[c] = vc[c + 4] = col.r; vc[c + 1] = vc[c + 5] = col.g; vc[c + 2] = vc[c + 6] = col.b;
       vc[c + 3] = vc[c + 7] = alpha;
     }
@@ -360,14 +381,14 @@ export class AdditiveParticles {
   }
 
   /** Devuelve false si se alcanzó el límite de la calidad (la partícula se descarta). */
-  emit(cell, x, y, z, vx, vy, vz, size, lifeSec, r, g, b, grav = 0, drag = 1, grow = 0, spin = 0, attract = 0) {
+  emit(cell, x, y, z, vx, vy, vz, size, lifeSec, r, g, b, grav = 0, drag = 1, grow = 0, spin = 0, attract = 0, rot0 = 0) {
     if (this.n >= this.limit) return false;
     const i = this.n++, i3 = i * 3;
     this.px[i3] = x; this.px[i3 + 1] = y; this.px[i3 + 2] = z;
     this.vel[i3] = vx; this.vel[i3 + 1] = vy; this.vel[i3 + 2] = vz;
     this.life[i] = 1; this.decay[i] = 1 / Math.max(0.05, lifeSec);
     this.grav[i] = grav; this.drag[i] = drag; this.size[i] = size; this.grow[i] = grow;
-    this.rot[i] = 0; this.spin[i] = spin; this.cell[i] = cell; this.att[i] = attract;
+    this.rot[i] = rot0; this.spin[i] = spin; this.cell[i] = cell; this.att[i] = attract;
     this.rgb[i3] = r; this.rgb[i3 + 1] = g; this.rgb[i3 + 2] = b;
     return true;
   }
@@ -571,6 +592,13 @@ export class Shockwaves {
     it.m.material.color.set(color);
     it.m.position.set(x, 0.012, z);
     it.m.visible = true;
+  }
+
+  /** Anillos vivos ahora (sin asignar). */
+  activeCount() {
+    let c = 0;
+    for (const it of this.items) if (it.life > 0) c++;
+    return c;
   }
 
   update(dt) {

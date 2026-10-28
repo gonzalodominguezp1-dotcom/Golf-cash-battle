@@ -1,4 +1,4 @@
-// Patrón «Supernova Solar» (docs/skins-premium-plan.md, ficha 3 de (b)): plasma emisivo HDR con
+// Patrón «Supernova Solar»: plasma emisivo HDR con
 // granulación solar (voronoi 3D con celdas que derivan + dominio deformado por fbm), manchas solares
 // oscuras, protuberancias en el limbo y corona. Rough 0.6 efectivo, sin barniz: es una estrella.
 //   - low: sin shader (skinMaterial usa la textura horneada); variante definida por coherencia.

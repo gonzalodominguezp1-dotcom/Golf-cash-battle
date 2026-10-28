@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { loopTable, tubeTable } from '../physics.js';
-import { loopPoint } from './terrain.js';
+import { LOOP_FUNNEL, loopPoint } from './terrain.js';
 
 // Atracciones de minigolf: loopings, molinos, tubos y pasadizos. Cada una
 // tiene tres estilos: de día, de noche (con luces) y neón.
@@ -10,7 +10,7 @@ export function attractionStyle(theme) {
   if (theme.neon) return { kind: 'neon', colors: theme.neon };
   if (theme.caldera) return { kind: 'lava', colors: [0xff6a1a, 0xffa040, 0xff3d1a] };
   if (theme.lanterns || theme.stars) return { kind: 'night', colors: [0xffc46b, 0x6bd5ff, 0xff7ad9] };
-  return { kind: 'day', colors: [0xff5a4e, 0x3d8bff, 0xffc145] };
+  return { kind: 'day', colors: [0xff5a4e, 0x3d8bff, 0xffc145], wood: !!theme.woodMill };
 }
 
 // GLOW ajustado para que los brillos nunca excedan el 15% de bloom
@@ -88,11 +88,15 @@ function metalPlateTexture() {
   return tex;
 }
 
-/** Looping: carril realista con sección transversal sólida en U, estructura portante en celosía y arco de entrada. */
+/**
+ * Looping: carril en U con bordes de neón. Entra por delante a la derecha, da
+ * la vuelta al anillo y sale por detrás a la izquierda (ver loopLateral en terrain.js).
+ */
 export function buildLoop(scene, loop, style, i = 0) {
   const g = new THREE.Group();
   const N = 150;
-  const S = loopTable(loop).length;
+  // el carril empieza y acaba en el suelo un poco antes y después de la vuelta
+  const S = loopTable(loop).length, sA = loop.len / 2 - LOOP_FUNNEL, sB = S - sA;
   const color = style.colors[i % style.colors.length];
   const isNeon = style.kind === 'neon';
   const isNight = style.kind === 'night';
@@ -107,14 +111,14 @@ export function buildLoop(scene, loop, style, i = 0) {
   const railPtsL = [], railPtsR = [];
 
   for (let k = 0; k <= N; k++) {
-    const p = (k / N) * S;
-    const q = loopPoint(loop, p, 0);
+    const p = sA + (k / N) * (sB - sA);
+    const q = loopPoint(loop, p, 0, true);
     const cx = q.x, cy = q.y, cz = q.z;
     const nx = q.dx * q.nAlong, ny = q.nY, nz = q.dz * q.nAlong;
 
     // Tangente calculada numéricamente a lo largo de la trayectoria
-    const pNext = Math.min(S, p + 0.04), pPrev = Math.max(0, p - 0.04);
-    const qN = loopPoint(loop, pNext, 0), qP = loopPoint(loop, pPrev, 0);
+    const pNext = Math.min(sB, p + 0.04), pPrev = Math.max(sA, p - 0.04);
+    const qN = loopPoint(loop, pNext, 0, true), qP = loopPoint(loop, pPrev, 0, true);
     let tx = qN.x - qP.x, ty = qN.y - qP.y, tz = qN.z - qP.z;
     const tLen = Math.hypot(tx, ty, tz) || 1;
     tx /= tLen; ty /= tLen; tz /= tLen;
@@ -354,62 +358,6 @@ export function buildLoop(scene, loop, style, i = 0) {
     }
   }
 
-  // 3. Estructura portante realista en celosía y zapatas de apoyo
-  // Puntos clave de apoyo: hombro delantero (~32%) y hombro trasero (~68%)
-  const supportIndices = [Math.floor(N * 0.32), Math.floor(N * 0.68)];
-  for (const idx of supportIndices) {
-    const s = slices[idx];
-    const groundY = 0.01;
-
-    // Patas en "A" que bajan desde la quilla y los lados del casco hasta el suelo
-    for (const side of [-1, 1]) {
-      const anchorX = s.cx + s.lx * (side * (halfW + 0.08)) - s.nx * thk;
-      const anchorY = s.cy + s.ly * (side * (halfW + 0.08)) - s.ny * thk;
-      const anchorZ = s.cz + s.lz * (side * (halfW + 0.08)) - s.nz * thk;
-
-      const footX = s.cx + s.lx * (side * (halfW + 0.28));
-      const footZ = s.cz + s.lz * (side * (halfW + 0.28));
-
-      // Columna diagonal de soporte
-      const legVec = new THREE.Vector3(footX - anchorX, groundY - anchorY, footZ - anchorZ);
-      const legLen = legVec.length();
-      if (legLen > 0.05) {
-        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, legLen, 10), frameMat);
-        leg.position.set(anchorX + legVec.x * 0.5, anchorY + legVec.y * 0.5, anchorZ + legVec.z * 0.5);
-        leg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), legVec.clone().normalize());
-        leg.castShadow = true;
-        g.add(leg);
-
-        // Zapata / placa base empernada al suelo
-        const base = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.04, 12), frameMat);
-        base.position.set(footX, groundY + 0.02, footZ);
-        base.castShadow = true;
-        g.add(base);
-
-        // Anillos decorativos luminosos en las uniones de las patas (Neón)
-        if (isNeon) {
-          const ring = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.014, 8, 16), glowMat(color, 1.2));
-          ring.position.set(footX, groundY + 0.05, footZ);
-          ring.rotation.x = Math.PI / 2;
-          g.add(ring);
-        }
-      }
-    }
-
-    // Viga transversal de arriostramiento entre las dos patas
-    const crossBar = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, halfW * 2 + 0.36, 8), frameMat);
-    const midY = (s.cy + groundY) * 0.5;
-    crossBar.position.set(s.cx, midY, s.cz);
-    crossBar.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(s.lx, s.ly, s.lz));
-    g.add(crossBar);
-
-    // Costilla de refuerzo que abraza la parte exterior del carril
-    const rib = new THREE.Mesh(new THREE.BoxGeometry(halfW * 2 + curbW * 2 + 0.08, 0.06, 0.1), frameMat);
-    rib.position.set(s.cx - s.nx * (thk + 0.02), s.cy - s.ny * (thk + 0.02), s.cz - s.nz * (thk + 0.02));
-    rib.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), new THREE.Vector3(s.lx, s.ly, s.lz));
-    g.add(rib);
-  }
-
   // 4. Pórtico y Corona de la Cima (Apex Crown & Light)
   const topSlice = slices[Math.floor(N / 2)];
   const apexRib = new THREE.Mesh(new THREE.BoxGeometry(halfW * 2 + curbW * 2 + 0.12, 0.07, 0.12), frameMat);
@@ -471,7 +419,7 @@ export function buildLoop(scene, loop, style, i = 0) {
   const exitSlice = slices[slices.length - 1];
 
   for (const sl of [entrySlice, exitSlice]) {
-    const plateW = loop.w * 0.95, plateD = 0.55;
+    const plateW = (halfW + curbW) * 2 + 0.16, plateD = 0.55;
     const plate = new THREE.Mesh(new THREE.BoxGeometry(plateW, 0.016, plateD), plateMat);
     plate.position.set(sl.cx, 0.008, sl.cz);
     plate.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), new THREE.Vector3(sl.lx, 0, sl.lz).normalize());
@@ -484,43 +432,6 @@ export function buildLoop(scene, loop, style, i = 0) {
     lip.quaternion.copy(plate.quaternion);
     g.add(lip);
   }
-
-  // 6. Pórtico de Entrada con Arco Luminoso / Señalización
-  const gateH = 1.35;
-  const gateSpan = halfW * 2 + 0.28;
-  const gateMat = isNeon
-    ? new THREE.MeshStandardMaterial({ color: 0x14182e, metalness: 0.8, roughness: 0.3 })
-    : frameMat;
-
-  for (const s of [-1, 1]) {
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, gateH, 12), gateMat);
-    post.position.set(entrySlice.cx + entrySlice.lx * (s * gateSpan / 2), gateH / 2, entrySlice.cz + entrySlice.lz * (s * gateSpan / 2));
-    post.castShadow = true;
-    g.add(post);
-
-    if (isNeon) {
-      const postGlow = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.048, 0.08, 12), glowMat(color, 1.8));
-      postGlow.position.set(post.position.x, gateH * 0.7, post.position.z);
-      g.add(postGlow);
-    }
-  }
-
-  // Dintel superior del arco de entrada
-  const header = new THREE.Mesh(new THREE.BoxGeometry(gateSpan + 0.12, 0.09, 0.09), gateMat);
-  header.position.set(entrySlice.cx, gateH, entrySlice.cz);
-  header.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), new THREE.Vector3(entrySlice.lx, 0, entrySlice.lz).normalize());
-  g.add(header);
-
-  // Cartel luminoso / cheurón en el arco de entrada
-  const signMat = isNeon
-    ? glowMat(style.colors[1] || color, 1.8)
-    : isNight
-    ? new THREE.MeshStandardMaterial({ color: 0xffd066, emissive: 0xff9900, emissiveIntensity: 0.6 })
-    : new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xcccccc, emissiveIntensity: 0.3 });
-  const sign = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.14, 0.03), signMat);
-  sign.position.set(entrySlice.cx, gateH + 0.1, entrySlice.cz);
-  sign.quaternion.copy(header.quaternion);
-  g.add(sign);
 
   scene.add(g);
 
@@ -609,10 +520,10 @@ export function buildWindmill(scene, wm, style, lift = 0) {
   const color = style.colors[0];
   const bodyMat = neon
     ? new THREE.MeshStandardMaterial({ color: 0x14122a, roughness: 0.5, metalness: 0.3, transparent: true })
-    : new THREE.MeshStandardMaterial({ color: style.kind === 'night' ? 0xd9d2c5 : 0xf4efe6, roughness: 0.8, transparent: true });
+    : new THREE.MeshStandardMaterial({ color: style.wood ? 0xa8713f : style.kind === 'night' ? 0xd9d2c5 : 0xf4efe6, roughness: 0.8, transparent: true });
   const roofMat = neon
     ? new THREE.MeshStandardMaterial({ color: 0x1d0f33, emissive: style.colors[1], emissiveIntensity: 0.35, roughness: 0.4, transparent: true })
-    : new THREE.MeshStandardMaterial({ color: 0xd8433a, roughness: 0.7, transparent: true });
+    : new THREE.MeshStandardMaterial({ color: style.wood ? 0x8a5a30 : 0xd8433a, roughness: 0.7, transparent: true });
   const W = 1.9, H = 1.6, door = wm.w / 2 - 0.15;
   const depth = wm.depth + 0.1, cz = -wm.face * (wm.depth / 2);
   const box = (w, h, d, x, y, z, m) => {

@@ -1,0 +1,72 @@
+# Calibración del runtime SDD para golfito. La generó sdd-init; las fases la leen antes de elegir comandos.
+version: 1
+project:
+  root: .
+  stacks: [node, vite, three, supabase, deno-edge-functions]
+  package_managers: [pnpm]
+  monorepo: false
+  signals:
+    - package.json (pnpm@11.24.0, Vite 5, Three.js 0.169, @supabase/supabase-js)
+    - pnpm-lock.yaml
+    - .github/workflows/ci.yml (Node 22, pnpm test, pnpm run build, deno check)
+    - supabase/functions (Deno, deno.json)
+    - supabase/migrations (SQL)
+    - vercel.json
+sdd:
+  artifact_store: 02-DOCS/wiki/sdd
+  execution_mode: interactive
+  registry_path: .rsc/skill-registry.json
+  review_budget:
+    line_budget: 400
+    file_budget: 12
+  delivery_strategy:
+    default: ask-on-risk
+testing:
+  strict_tdd: true            # hay runner: node --test
+  runners: [node-test]
+  commands:
+    apply:
+      - pnpm install --frozen-lockfile
+      - pnpm test
+    verify:
+      - pnpm test
+      - pnpm run build
+      - deno check --node-modules-dir=none --no-lock supabase/functions/*/index.ts
+      - pnpm audit --prod
+  gaps:
+    - lint: no hay linter configurado. Pendiente decidir ESLint o Biome.
+    - cobertura: no se mide.
+phase_rules:
+  proposal: optional-on-ambiguity
+  specify: requires intent or proposal
+  plan: requires spec
+  tasks: requires plan and spec
+  analyze: requires spec plan tasks
+  implement: requires analyze pass, strict_tdd when testing.strict_tdd is true
+  verify: requires spec tasks evidence
+  archive: requires verify record and review/ship outcome
+commit_policy:
+  author: Chakets               # o La Yuinta (dueño del repositorio), ver constitución K3.5
+  trailers: none                # sin Co-Authored-By de IA
+models:
+  enabled: false              # opt-in; false = usar el modelo de la sesión, sin anunciar nada
+  provider: anthropic
+  tiers:
+    heavy: claude-opus-5-5
+    balanced: claude-sonnet-5-5
+    light: claude-haiku-5-5
+  phases:
+    constitution: heavy
+    specify: balanced
+    clarify: balanced
+    plan: heavy
+    tasks: balanced
+    analyze: heavy
+    implement: balanced
+    verify: balanced
+    review: heavy
+    ship: light
+    debug: heavy
+    worktrees: light
+    sdd-init: light
+  overrides: {}

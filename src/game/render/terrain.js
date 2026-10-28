@@ -1,4 +1,4 @@
-import { BALL_R, GRAVITY, LOOP_RATIO, insidePoly, loopTable, rampHeight, sampleAt, tubeTable } from '../physics.js';
+import { BALL_R, GRAVITY, insidePoly, loopTable, rampHeight, sampleAt, tubeTable } from '../physics.js';
 
 // Relieve que se ve: la física es plana (x, z) y aquí se saca la altura del
 // césped a partir de las pendientes y montículos del hoyo, para levantar la
@@ -68,42 +68,50 @@ export function groundHeight(course, x, z) {
 }
 
 const TWO_PI = Math.PI * 2;
-// Desplazamiento lateral helicoidal suave para que el carril no se cruce consigo mismo
-const LOOP_HELIX_OFFSET = 0.24;
+// El carril del looping va en espiral: entra por delante a la derecha y sale
+// por detrás a la izquierda, así las dos pasadas por abajo no se pisan.
+export const LOOP_HELIX_OFFSET = 0.36;
+// La física deja a la bola en su carril lateral (hasta ±w/2); al dibujarla se
+// acerca al centro del carril, que es más estrecho que la pista.
+const LOOP_LAT_SQUEEZE = 0.15;
+// metros de carril en el suelo antes y después de la vuelta (la bola se va hacia él)
+export const LOOP_FUNNEL = 0.9;
 
-/** Desplazamiento lateral suave en función del avance s a lo largo del looping. */
-export function loopLateralOffset(l, s, th) {
+const smooth = (t) => {
+  const x = Math.max(0, Math.min(1, t));
+  return x * x * (3 - 2 * x);
+};
+
+/**
+ * Desplazamiento lateral con que se dibuja la bola a s metros de la entrada:
+ * su carril (lat) estrechado dentro de la vuelta más la espiral. Con track,
+ * el del propio carril, que en el suelo va recto a su lado.
+ */
+export function loopLateral(l, s, th, lat, track = false) {
   const table = loopTable(l);
-  const R = l.radius, r = R / LOOP_RATIO;
-  const pad = (l.len - TWO_PI * r) / 2;
-  const sStart = pad;
-  const sEnd = Math.max(sStart, table.length - pad);
+  const pad = l.len / 2, ringEnd = table.length - pad;
   const D = LOOP_HELIX_OFFSET;
-
-  if (s < sStart) {
-    const t = sStart > 0 ? Math.max(0, Math.min(1, s / sStart)) : 1;
-    const ease = t * t * (3 - 2 * t);
-    return -D * ease;
+  if (s < pad) {
+    const t = track ? 1 : smooth(1 - (pad - s) / LOOP_FUNNEL);
+    return lat * (1 - (1 - LOOP_LAT_SQUEEZE) * t) + D * t;
   }
-  if (s > sEnd) {
-    const exitLen = table.length - sEnd;
-    const t = exitLen > 0 ? Math.max(0, Math.min(1, (s - sEnd) / exitLen)) : 1;
-    const ease = t * t * (3 - 2 * t);
-    return D * (1 - ease);
+  if (s > ringEnd) {
+    const t = track ? 1 : smooth(1 - (s - ringEnd) / LOOP_FUNNEL);
+    return lat * (1 - (1 - LOOP_LAT_SQUEEZE) * t) - D * t;
   }
-  return -D * Math.cos(th / 2);
+  return lat * LOOP_LAT_SQUEEZE + D * Math.cos(th / 2);
 }
 
 /**
  * Punto del carril del looping a s metros de la entrada (sin el radio de la
  * bola), con la normal hacia dentro de la vuelta.
  */
-export function loopPoint(l, s, lateral = 0) {
+export function loopPoint(l, s, lateral = 0, track = false) {
   const table = loopTable(l);
   const q = sampleAt(table, s);
   const a = table.pts[q.k], b = table.pts[q.k + 1];
   const ta = b.along - a.along, ty = b.y - a.y, tl = Math.hypot(ta, ty) || 1;
-  const side = lateral + loopLateralOffset(l, s, q.th);
+  const side = loopLateral(l, s, q.th, lateral, track);
   const [dx, dz] = l.dir, sx = -dz, sz = dx;
   const along = q.along - l.len / 2;
   return {
@@ -123,20 +131,19 @@ export function loopPoint(l, s, lateral = 0) {
 
 /**
  * Punto de la bola que cae dentro de la vuelta. El giro lateral y la normal se
- * toman del carril de la mitad por la que entró a esa misma altura, así al
+ * toman del anillo a esa misma altura en la mitad por la que entró, así al
  * despegarse y al volver a tocar el carril no hay saltos.
  */
 function loopFlightPoint(l, tr) {
   const { a, y } = tr.fly;
-  const R = l.radius, r = R / LOOP_RATIO;
+  const R = l.radius;
   const c = Math.min(1, Math.max(-1, 1 - y / R));
   const sn = Math.sqrt(1 - c * c) * (tr.from > 0 ? 1 : -1);
-  const da = r + R * c, dy = R * sn, v = Math.hypot(da, dy) || 1;
   const th = sn >= 0 ? Math.acos(c) : TWO_PI - Math.acos(c);
-  const side = tr.lat - LOOP_HELIX_OFFSET * Math.cos(th / 2);
+  const side = tr.lat * LOOP_LAT_SQUEEZE + LOOP_HELIX_OFFSET * Math.cos(th / 2);
   const [dx, dz] = l.dir, sx = -dz, sz = dx;
   const along = a - l.len / 2;
-  return { x: l.x + dx * along + sx * side, y, z: l.z + dz * along + sz * side, nAlong: -dy / v, nY: da / v, dx, dz };
+  return { x: l.x + dx * along + sx * side, y, z: l.z + dz * along + sz * side, nAlong: -sn, nY: c, dx, dz };
 }
 
 /** Dónde se dibuja el centro de la bola (también dentro de un looping o un tubo). */

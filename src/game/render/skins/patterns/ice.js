@@ -1,7 +1,7 @@
 // Criónova (skin `ice`, Épica) — hielo falso: sin transmission; base translúcida simulada con
 // fresnel + profundidad, grietas internas con parallax de 2 capas (vector de vista en espacio de
 // objeto) y escarcha que crece desde los polos con la bola parada y se derrite al rodar.
-// Ficha: docs/skins-premium-plan.md, (b) «5. Criónova». Baja (sin shader) usa el material estándar.
+// Criónova. Baja (sin shader) usa el material estándar.
 
 const glsl = /* glsl */ `
 // (uFrost lo declara skinMaterial a partir de los uniforms del patron)

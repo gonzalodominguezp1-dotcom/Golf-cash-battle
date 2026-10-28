@@ -28,6 +28,8 @@ jobs:
       # física determinista, réplica del servidor, antibots, economía y progreso
       - run: pnpm test
       - run: pnpm run build
+      # sin CVE conocidas en las dependencias de producción (constitución S5.2)
+      - run: pnpm audit --prod
 
   funciones:
     name: Funciones de Supabase
@@ -38,4 +40,4 @@ jobs:
         with:
           deno-version: v2.x
       # comprueba tipos e imports de las Edge Functions antes de desplegarlas
-      - run: deno check --node-modules-dir=none --no-lock supabase/functions/*/index.ts
+      - run: deno check --node-modules-dir=none --no-lock supabase/functions/*/*.ts
