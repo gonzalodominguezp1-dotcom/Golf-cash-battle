@@ -1,9 +1,15 @@
 # Golf Cash Battle
 
-## Rama de trabajo
+## Ramas de trabajo
 
-Todo el trabajo se hace en la rama `la-yuinta-mangante`.
+Cada persona trabaja en su propia rama y desde ahí se sube a `main`:
 
-- Antes de empezar: `git fetch origin la-yuinta-mangante && git checkout la-yuinta-mangante && git pull origin la-yuinta-mangante`.
-- Commits y pushes siempre a `la-yuinta-mangante` (`git push -u origin la-yuinta-mangante`).
-- No trabajar ni hacer push en `main` ni en otras ramas salvo que se pida expresamente.
+| Persona | Rama |
+|---|---|
+| Gonzalo (GitHub `gonzalodominguezp1-dotcom`) | `la-yuinta-mangante` |
+| Su compañero | `la-chaqueta-bionica` |
+
+- Al empezar, identifica quién te habla y trabaja solo en su rama. Si no está claro quién es, pregunta antes de tocar nada.
+- Antes de cambiar nada, ponte en esa rama y baja sus últimos cambios: `git fetch origin <rama> && git checkout <rama> && git pull origin <rama>`.
+- Haz los commits y pushes en esa rama (`git push -u origin <rama>`).
+- No hagas push a la rama del otro ni a `main` salvo que se pida expresamente.
