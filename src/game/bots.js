@@ -1,4 +1,4 @@
-import { BALL_R, MAX_SHOT_SPEED, WALL_HALF, insidePoly, isMoving, step } from './physics.js';
+import { BALL_R, LOOP_CAPTURE, LOOP_LANE, LOOP_PAD, MAX_SHOT_SPEED, WALL_HALF, insidePoly, isMoving, loopWalls, step } from './physics.js';
 import { MAX_STROKES_PER_HOLE } from '../config.js';
 
 // Rivales simulados que juegan el mismo hoyo con la misma física que tú.
@@ -18,11 +18,41 @@ function segBlocked(ax, az, bx, bz, segs, course) {
     const pad = 0.35 / Math.hypot(sx, sz);
     if (t > 0 && t < 1 && u > -pad && u < 1 + pad) return true;
   }
-  if (lavaBlocks(ax, az, bx, bz, course)) return true;
+  if (lavaBlocks(ax, az, bx, bz, course) || loopBlocks(ax, az, bx, bz, course)) return true;
   for (const b of course.bumpers) {
     const len2 = rx * rx + rz * rz;
     const t = Math.max(0, Math.min(1, ((b.x - ax) * rx + (b.z - az) * rz) / len2));
     if (Math.hypot(ax + rx * t - b.x, az + rz * t - b.z) < b.r + BALL_R + 0.1) return true;
+  }
+  return false;
+}
+
+/**
+ * ¿La línea de a a b atraviesa un looping sin entrar por su carril? Solo se
+ * puede cruzar entrando hacia delante por la boca, centrada en el carril de
+ * entrada (el carril obliga a salir en la dirección del looping).
+ */
+function loopBlocks(ax, az, bx, bz, course) {
+  for (const l of course.loops ?? []) {
+    const [dx, dz] = l.dir, sx = -dz, sz = dx;
+    const aA = (ax - l.x) * dx + (az - l.z) * dz, bA = (ax - l.x) * sx + (az - l.z) * sz;
+    const aB = (bx - l.x) * dx + (bz - l.z) * dz, bB = (bx - l.x) * sx + (bz - l.z) * sz;
+    // ¿toca la caja del looping (a lo largo ±LOOP_PAD, a lo ancho ±w/2)?
+    let t0 = 0, t1 = 1;
+    for (const [p, d, h] of [[aA, aB - aA, LOOP_PAD], [bA, bB - bA, l.w / 2]]) {
+      if (Math.abs(d) < 1e-9) {
+        if (Math.abs(p) > h) t0 = 2;
+        continue;
+      }
+      const u = (-h - p) / d, v = (h - p) / d;
+      t0 = Math.max(t0, Math.min(u, v));
+      t1 = Math.min(t1, Math.max(u, v));
+    }
+    if (t0 > t1) continue;
+    const da = aB - aA;
+    if (aA > -LOOP_PAD || da <= 0) return true;
+    const mouth = bA + ((bB - bA) * (-LOOP_PAD - aA)) / da;
+    if (Math.abs(mouth - LOOP_LANE) > LOOP_CAPTURE * 0.6) return true;
   }
   return false;
 }
@@ -70,15 +100,48 @@ function lavaBlocks(ax, az, bx, bz, course) {
 }
 const WALL_PAD = WALL_HALF + BALL_R;
 
-function chooseTarget(ball, course, segs) {
+// las paredes del looping no cuentan para ver el objetivo: loopBlocks ya decide
+const losCache = new WeakMap();
+function losSegs(course, segs) {
+  if (!course.loops) return segs;
+  let c = losCache.get(segs);
+  if (!c) {
+    const skip = new Set(course.loops.flatMap(loopWalls).map((w) => JSON.stringify(w)));
+    c = segs.filter((w) => !skip.has(JSON.stringify(w)));
+    losCache.set(segs, c);
+  }
+  return c;
+}
+
+/**
+ * El objetivo más lejano a la vista, sin volver a puntos de paso anteriores a
+ * from (el último al que ya apuntó).
+ */
+function chooseTarget(ball, course, allSegs, from = 0) {
+  const segs = losSegs(course, allSegs);
   const targets = [...(course.waypoints ?? []), course.cup];
-  for (let i = targets.length - 1; i >= 0; i--) {
+  for (let i = targets.length - 1; i >= from; i--) {
     const [x, z] = targets[i];
     if (i < targets.length - 1 && Math.hypot(x - ball.x, z - ball.z) < 0.8) continue;
-    if (!segBlocked(ball.x, ball.z, x, z, segs, course)) return { x, z, isCup: i === targets.length - 1 };
+    if (!segBlocked(ball.x, ball.z, x, z, segs, course)) return { x, z, isCup: i === targets.length - 1, index: i };
   }
-  const [x, z] = targets[0];
-  return { x, z, isCup: false };
+  // delante de un looping: por el centro de su boca, hasta pasada la salida
+  for (const l of course.loops ?? []) {
+    const [dx, dz] = l.dir, sx = -dz, sz = dx;
+    const a = (ball.x - l.x) * dx + (ball.z - l.z) * dz, b = (ball.x - l.x) * sx + (ball.z - l.z) * sz;
+    if (a > -LOOP_PAD - 0.05 || a < -LOOP_PAD - 4 || Math.abs(b) > l.w / 2 + 0.5) continue;
+    const k = (LOOP_PAD + 1 - a) / (-LOOP_PAD - a);
+    const ta = a + (-LOOP_PAD - a) * k, tb = b + (LOOP_LANE - b) * k;
+    const x = l.x + dx * ta + sx * tb, z = l.z + dz * ta + sz * tb;
+    if (!segBlocked(ball.x, ball.z, x, z, segs, course)) return { x, z, isCup: false };
+  }
+  // nada a la vista: al punto de paso pendiente más cercano que no sea el de al lado
+  let best = targets[Math.min(from, targets.length - 1)], bestD = Infinity;
+  for (const [x, z] of targets.slice(from, -1)) {
+    const d = Math.hypot(x - ball.x, z - ball.z);
+    if (d >= 0.8 && d < bestD) [best, bestD] = [[x, z], d];
+  }
+  return { x: best[0], z: best[1], isCup: false };
 }
 
 /** Distancia recorrida por un tiro (sin aspas, bloques ni molinos, para que sea estable). */
@@ -157,6 +220,7 @@ export class Bot {
     Object.assign(this, { player, course, segs, rng });
     this.ball = { x: course.tee[0], z: course.tee[1], vx: 0, vz: 0 };
     this.strokes = 0;
+    this.progress = 0;
     this.done = false;
     this.wait = 0.8 + rng() * 2.2;
   }
@@ -164,7 +228,8 @@ export class Bot {
   /** Decide el siguiente tiro: hacia dónde y, si hace falta, empieza a buscar la potencia. */
   plan() {
     const { ball, course, segs, rng } = this;
-    const target = chooseTarget(ball, course, segs);
+    const target = chooseTarget(ball, course, segs, this.progress);
+    if (target.index !== undefined) this.progress = target.index;
     const dx = target.x - ball.x, dz = target.z - ball.z;
     const dist = Math.hypot(dx, dz);
     const miss = 1 - this.player.skill;

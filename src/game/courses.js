@@ -49,7 +49,8 @@ const band = (z0, z1) => ({ poly: [[-3, z0], [3, z0], [3, z1], [-3, z1]] });
 
 const LOOP_A = { x: 0, z: 1, dir: [0, -1], len: 4.4, w: 1.6, radius: 0.8 };
 const LOOP_B1 = { x: -3.6, z: 3, dir: [0, -1], len: 4.4, w: 1.6, radius: 0.8 };
-const LOOP_B2 = { x: -0.2, z: -7.8, dir: [1, 0], len: 4.4, w: 1.6, radius: 0.8 };
+// el carril de entrada (a la derecha según dir) queda en línea con el acelerador (z = -7.8)
+const LOOP_B2 = { x: -0.2, z: -8.16, dir: [1, 0], len: 4.4, w: 2, radius: 0.8 };
 const MILL_N1 = windmill({ x: -1.2, z: 2.6, w: 1, left: -2.6, right: 2.6, speed: 1.2, blades: 3 });
 const MILL_N2 = windmill({ x: 1.2, z: -4, w: 1, left: -2.6, right: 2.6, speed: -1.3, blades: 3, phase: 0.7 });
 const MILL_PRADO = windmill({ x: 0, z: 0.8, w: 1.1, depth: 1.6, left: -1.6, right: 1.6, speed: 1.2 });
@@ -185,23 +186,23 @@ export const COURSES = [
     sand: [{ x: -1.1, z: -8.7, w: 1.6, d: 1.4 }],
     spinners: [],
     loops: [LOOP_A],
-    waypoints: [[0, -2.8]],
+    waypoints: [[0.36, 3.6], [0.36, -2.8]],
   },
   {
     name: 'Doble Looping',
     tip: 'Pasa el primer looping: el acelerador te lanza al segundo',
     par: 3,
     theme: 'neonPink',
-    tee: [-3.6, 8.6],
+    tee: [-3.24, 8.6],
     cup: [4.6, -6],
-    outline: [[-4.4, 10], [-2.8, 10], [-2.8, -7], [2.4, -7], [2.4, -4.6], [5.8, -4.6], [5.8, -10.6], [2.4, -10.6], [2.4, -8.6], [-4.4, -8.6]],
+    outline: [[-4.4, 10], [-2.8, 10], [-2.8, -7], [2.4, -7], [2.4, -4.6], [5.8, -4.6], [5.8, -10.6], [2.4, -10.6], [2.4, -9], [-4.4, -9]],
     walls: [],
     bumpers: [{ x: 4.2, z: -7.8, r: 0.35 }, { x: 5, z: -9.6, r: 0.3 }],
     sand: [{ x: 3.4, z: -9.9, w: 1.6, d: 1.2 }],
     spinners: [],
     boosts: [{ x: -3.6, z: -7.8, w: 1.4, d: 1.4, dir: [1, 0], speed: 9 }],
     loops: [LOOP_B1, LOOP_B2],
-    waypoints: [[-3.6, -7.8], [3.4, -7.8]],
+    waypoints: [[-3.24, 5], [-3.6, -7.8], [-2, -7.8], [3.4, -7.8], [3.2, -6.2]],
   },
   {
     name: 'Tubos Neón',

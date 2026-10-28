@@ -1946,8 +1946,10 @@ body.sk-noscroll { overflow: hidden; }
     margin-right: 5px;
     box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
   }
+  /* con ratón ya está la barra de controles: no se repiten las instrucciones */
   .hint-touch { display: none !important; }
-  .hint-mouse { display: inline-block !important; }
+  .hint-mouse { display: none !important; }
+  .desktop-controls-bar span { white-space: nowrap; }
 }
 
 @media (max-width: 899px), (pointer: coarse) {

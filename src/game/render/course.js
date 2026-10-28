@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BALL_R, CUP_R, WALL_HALF, moverPos, segmentsOf, tubeTable } from '../physics.js';
+import { BALL_R, CUP_R, WALL_HALF, moverPos, tubeTable, wallSegmentsOf } from '../physics.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { abyssTexture, chevronTexture, crateTexture, dirtMaps, grassMaps, rockFloorMaps, roughTone, sandMaps, slopeShadeTexture, softDotTexture, stripeTexture, woodMaps } from './textures.js';
@@ -141,7 +141,7 @@ export function buildCourse(scene, course, theme) {
   const aoStrips = [];
   // a ras de suelo, normal hacia fuera de cada lado del contorno (para la sombra exterior)
   const outward = grounded ? outwardNormals(course.outline) : [];
-  segmentsOf(course).forEach(([[ax, az], [bx, bz]], i) => {
+  wallSegmentsOf(course).forEach(([[ax, az], [bx, bz]], i) => {
     // materiales propios para poder transparentar la pared que tapa la bola
     // glowWalls (pradera de día): cuerpo verde y remate que brilla esmeralda a la
     // izquierda y cian a la derecha, con los colores de theme.rim
@@ -222,7 +222,7 @@ export function buildCourse(scene, course, theme) {
   // postes en las esquinas
   const corners = new Set();
   const posts = [];
-  for (const seg of segmentsOf(course)) for (const p of seg) corners.add(p.join(','));
+  for (const seg of wallSegmentsOf(course)) for (const p of seg) corners.add(p.join(','));
   let corner = 0;
   for (const k of corners) {
     const [x, z] = k.split(',').map(Number);
