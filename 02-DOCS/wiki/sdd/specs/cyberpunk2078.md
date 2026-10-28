@@ -16,6 +16,10 @@ Referencia visual: `02-DOCS/raw/cyberpunk2078-referencia.jpg`. Es referencia de 
 
 El spec original pedía un carril más ancho. Ensanchar `LOOP_LANE` rompe los hoyos existentes con loop (Looping Neón y Doble Looping), porque sus pasillos de 1,6 m no caben. Se decidió (opción B) **no tocar `LOOP_LANE` ni `LOOP_LANE_HALF`**. El looping del hoyo 15 es grande por su radio (1,2 m), no por su carril. Un carril más ancho queda para un spec aparte que rediseñe esos hoyos.
 
+## Enmienda 2: boost más fuerte
+
+Con el boost a `speed: 9` y radio 1,2 m, la bola entra al looping a unos 8,56 m/s y no lo completa: hace falta unos 8,90 m/s en la boca, y el rozamiento se come unos 0,4 m/s entre el final del boost y la boca (simulación del agente). Se decidió (opción b, boost más fuerte) **subir la velocidad del boost** y mantener el radio de 1,2 m. El valor exacto (provisionalmente 11 m/s) se fija en la simulación de la tarea 2 del plan.
+
 ## Decisiones
 
 1. **Chevrons = boost.** La rampa solo sube `h` a lo largo de un eje y no da velocidad hacia el looping. El boost (`speed: 9`, primitiva existente) sí la da, y esa velocidad es lo que permite entrar en R 1,2 m. Los chevrons son solo visuales: `loopChevronTexture` es decorativo y la física no lo lee.
@@ -29,7 +33,7 @@ Coordenadas en metros (x, z). `-z` es hacia delante.
 
 - **Contorno:** rectángulo `[[-4,10],[4,10],[4,-10],[-4,-10]]`.
 - **Tee:** `[-2.4, 8.4]`. **Cup:** `[2.4, -8.4]`.
-- **Boost de entrada:** `{x: -1.0, z: 5.0, w: 1.6, d: 2.2, dir: [0,-1], speed: 9}`.
+- **Boost de entrada:** `{x: -1.0, z: 5.0, w: 1.6, d: 2.2, dir: [0,-1], speed: 11}` (provisional; ver enmienda 2). La posición exacta también se fija en la simulación.
 - **Looping grande:** `{x: -1.36, z: 2.2, dir: [0,-1], len: 4.4, w: 2.6, radius: 1.2}`. El carril de entrada está en `x = loop.x + LOOP_LANE = -1.0`, en línea con el boost. Tramo en el suelo: z 1,3 a 3,1; altura del anillo: 2,4 m. Las posiciones finales se fijan en la simulación.
 - **Muro divisor:** `[[-4,-0.4],[1.2,-0.4]]`. Hueco a la derecha, x de 1,2 a 4.
 - **Portal (atajo sobre el muro):** entrada `a: [-2.8, 0.8]`, salida `b: [-2.8, -2.2]`, `r: 0.42`. Sin tubo.
