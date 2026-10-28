@@ -49,8 +49,10 @@ const band = (z0, z1) => ({ poly: [[-3, z0], [3, z0], [3, z1], [-3, z1]] });
 
 const LOOP_A = { x: 0, z: 1, dir: [0, -1], len: 4.4, w: 1.6, radius: 0.8 };
 const LOOP_B1 = { x: -3.6, z: 3, dir: [0, -1], len: 4.4, w: 1.6, radius: 0.8 };
-const LOOP_B2 = { x: -0.2, z: -7.8, dir: [1, 0], len: 4.4, w: 1.6, radius: 0.8 };
-const LOOP_N = { x: 0, z: 1.8, dir: [0, -1], len: 4.4, w: 1.6, radius: 0.8 };
+// el carril de entrada (a la derecha según dir) queda en línea con el acelerador (z = -7.8)
+const LOOP_B2 = { x: -0.2, z: -8.16, dir: [1, 0], len: 4.4, w: 2, radius: 0.8 };
+// el carril de salida (a la izquierda) queda en línea con el pasadizo (x = 0)
+const LOOP_N = { x: 0.36, z: 1.8, dir: [0, -1], len: 4.4, w: 2, radius: 0.8 };
 const MILL_NEON = windmill({ x: 0, z: 0, depth: 1.4, left: -2, right: 2, speed: 1.6 });
 const MILL_DAY = windmill({ x: 0, z: -1.5, depth: 1.6, left: -2.6, right: 2.6, speed: 1.3 });
 const MILL_N1 = windmill({ x: -1.2, z: 2.6, w: 1, left: -2.6, right: 2.6, speed: 1.2, blades: 3 });
@@ -250,7 +252,7 @@ export const COURSES = [
     sand: [{ x: -1.1, z: -8.7, w: 1.6, d: 1.4 }],
     spinners: [],
     loops: [LOOP_A],
-    waypoints: [[0, -2.8]],
+    waypoints: [[0.36, 3.6], [0.36, -2.8]],
   },
   {
     name: 'Doble Looping',
@@ -259,14 +261,14 @@ export const COURSES = [
     theme: 'neonPink',
     tee: [-3.6, 8.6],
     cup: [4.6, -6],
-    outline: [[-4.4, 10], [-2.8, 10], [-2.8, -7], [2.4, -7], [2.4, -4.6], [5.8, -4.6], [5.8, -10.6], [2.4, -10.6], [2.4, -8.6], [-4.4, -8.6]],
+    outline: [[-4.4, 10], [-2.8, 10], [-2.8, -7], [2.4, -7], [2.4, -4.6], [5.8, -4.6], [5.8, -10.6], [2.4, -10.6], [2.4, -9], [-4.4, -9]],
     walls: [],
     bumpers: [{ x: 4.2, z: -7.8, r: 0.35 }, { x: 5, z: -9.6, r: 0.3 }],
     sand: [{ x: 3.4, z: -9.9, w: 1.6, d: 1.2 }],
     spinners: [],
     boosts: [{ x: -3.6, z: -7.8, w: 1.4, d: 1.4, dir: [1, 0], speed: 9 }],
     loops: [LOOP_B1, LOOP_B2],
-    waypoints: [[-3.6, -7.8], [3.4, -7.8]],
+    waypoints: [[-3.24, 5], [-3.6, -7.8], [-2, -7.8], [3.4, -7.8]],
   },
   {
     name: 'Molino Neón',
@@ -354,14 +356,14 @@ export const COURSES = [
     theme: 'night',
     tee: [0, 8.4],
     cup: [1.6, -8],
-    outline: [[-1.8, 10], [1.8, 10], [1.8, 5], [0.8, 4.4], [0.8, -0.8], [2.8, -1.6], [2.8, -10], [-2.8, -10], [-2.8, -1.6], [-0.8, -0.8], [-0.8, 4.4], [-1.8, 5]],
+    outline: [[-1.8, 10], [1.8, 10], [1.8, 5], [1.2, 4.4], [1.2, -0.8], [2.8, -1.6], [2.8, -10], [-2.8, -10], [-2.8, -1.6], [-0.8, -0.8], [-0.8, 4.4], [-1.8, 5]],
     walls: [[[-2.8, -5], [-0.45, -5]], [[0.45, -5], [2.8, -5]], [[-0.45, -4.2], [-0.45, -5.8]], [[0.45, -4.2], [0.45, -5.8]]],
     bumpers: [{ x: -1.2, z: -2.8, r: 0.3 }, { x: 1.2, z: -2.8, r: 0.3 }, { x: 0, z: -7.4, r: 0.35 }],
     sand: [{ x: -1.8, z: -8.8, w: 1.6, d: 1.6 }],
     spinners: [],
     loops: [LOOP_N],
     tunnels: [{ x: 0, z: -5, w: 0.9, d: 1.6 }],
-    waypoints: [[0, -6.4]],
+    waypoints: [[0.72, 4], [0, -3.4], [0, -6.4]],
   },
   {
     name: 'Dentro del Volcán',

@@ -54,13 +54,19 @@ export function shotVelocity(yaw, power) {
   return { vx: dsin(yaw) * speed, vz: -dcos(yaw) * speed };
 }
 
-export function segmentsOf(course) {
+/** Paredes que se dibujan: el contorno, las zonas elevadas y las paredes del hoyo. */
+export function wallSegmentsOf(course) {
   const segs = [];
   // el contorno y las zonas elevadas aparte (tiers), cada una cerrada por paredes
   for (const o of [course.outline, ...(course.tiers ?? []).map((t) => t.poly)]) {
     for (let i = 0; i < o.length; i++) segs.push([o[i], o[(i + 1) % o.length]]);
   }
   return segs.concat(course.walls);
+}
+
+/** Todo contra lo que choca la bola: las paredes y la estructura de los loopings (que ya dibuja su carril). */
+export function segmentsOf(course) {
+  return wallSegmentsOf(course).concat((course.loops ?? []).flatMap(loopWalls));
 }
 
 export function spinnerSegment(sp, t) {
@@ -291,7 +297,7 @@ const LOOP_SAMPLES = 160;
 const PAD_SAMPLES = 8;
 const TUBE_SAMPLES = 64;
 const TUBE_MIN_SPEED = 4;
-const TRACK_DRAG = 0.2; // el carril es liso: frena menos que el césped
+const TRACK_DRAG = 0.3; // el carril es liso: frena menos que el césped
 // al caerse dentro de la vuelta: velocidad que conserva al tocar el carril,
 // rozamiento hasta la boca y velocidad mínima para que siempre salga
 const FELL_KEEP = 0.3;
@@ -302,19 +308,29 @@ const TRACK_MIN_SPEED = 0.4;
 const FLY_KEEP_ALONG = 0.35;
 const HALF_TURN = 3.141592653589793;
 const tables = new WeakMap();
+// El carril del looping va en espiral: entra por delante a la derecha (lado
+// +LOOP_LANE del eje lateral), da la vuelta y sale por detrás a la izquierda.
+// Solo entra la bola que llega centrada en el carril de entrada; el resto
+// choca con los bordillos o con la parte baja del carril de salida.
+export const LOOP_LANE = 0.36; // del eje del looping al centro de cada carril
+export const LOOP_LANE_HALF = 0.33; // media anchura del carril con sus bordillos
+export const LOOP_PAD = 0.9; // tramo recto en el suelo antes y después de la vuelta
+export const LOOP_CAPTURE = LOOP_LANE_HALF - BALL_R; // la bola cabe entre los bordillos
+const LOOP_GUARD = 0.3; // dónde choca, delante y detrás del centro, la bola que va por fuera
 
 /**
- * Perfil del looping: un tramo recto, un anillo vertical de radio radius que
- * apoya en el suelo en el centro del looping (la bola entra por abajo, da la
- * vuelta por dentro y sale por el mismo punto hacia delante) y otro tramo
- * recto, en total len por el suelo. Muestras { s, along, y, th, kap, ny }:
+ * Perfil del looping: un tramo recto de LOOP_PAD, un anillo vertical de radio
+ * radius que apoya en el suelo en el centro del looping (la bola entra por
+ * abajo, da la vuelta por dentro y sale por el mismo punto hacia delante) y
+ * otro tramo recto de LOOP_PAD. along se mide desde la boca de entrada.
+ * Muestras { s, along, y, th, kap, ny }:
  * s = longitud de carril, kap la curvatura y ny la componente vertical de la
  * normal hacia dentro de la vuelta.
  */
 export function loopTable(loop) {
   let t = tables.get(loop);
   if (t) return t;
-  const R = loop.radius, pad = loop.len / 2;
+  const R = loop.radius, pad = LOOP_PAD;
   const pts = [];
   let s = 0;
   const push = (along, y, th, kap, ny) => {
@@ -396,37 +412,64 @@ export function sampleAt(table, s) {
 
 // eje lateral del looping: dir girado 90°
 const loopSide = (l) => [-l.dir[1], l.dir[0]];
-/** Punto de entrada del looping (al principio, en el suelo). */
-const loopEntry = (l) => [l.x - (l.dir[0] * l.len) / 2, l.z - (l.dir[1] * l.len) / 2];
+/** Boca de entrada del looping (donde empieza el carril, en el suelo). */
+const loopEntry = (l) => [l.x - l.dir[0] * LOOP_PAD, l.z - l.dir[1] * LOOP_PAD];
 
-/** ¿Ha cruzado la bola (de p a ball) la boca de un looping? Devuelve el carril nuevo o null. */
+/**
+ * Paredes de la estructura del looping, para la bola que no va por el carril:
+ * los bordillos de los dos tramos rectos y, junto al centro, la parte baja del
+ * carril de salida (por delante) y la del de entrada (por detrás).
+ */
+export function loopWalls(l) {
+  const [sx, sz] = loopSide(l), [dx, dz] = l.dir;
+  const p = (a, b) => [l.x + dx * a + sx * b, l.z + dz * a + sz * b];
+  // las paredes tienen grosor (WALL_HALF): su eje queda por fuera del bordillo
+  const inner = LOOP_LANE - LOOP_LANE_HALF - WALL_HALF, outer = LOOP_LANE + LOOP_LANE_HALF + WALL_HALF, side = l.w / 2;
+  return [
+    [p(-LOOP_PAD, inner), p(-LOOP_GUARD, inner)],
+    [p(-LOOP_PAD, outer), p(-LOOP_GUARD, outer)],
+    [p(-LOOP_GUARD, -side), p(-LOOP_GUARD, inner)],
+    [p(LOOP_GUARD, -inner), p(LOOP_PAD, -inner)],
+    [p(LOOP_GUARD, -outer), p(LOOP_PAD, -outer)],
+    [p(LOOP_GUARD, -inner), p(LOOP_GUARD, side)],
+  ];
+}
+
+/**
+ * ¿Ha cruzado la bola (de p a ball) la boca de un looping centrada en su
+ * carril? Devuelve el carril nuevo (lat: desvío respecto al centro del carril) o null.
+ */
 function enterLoop(course, ball, px, pz) {
   const loops = course.loops ?? [];
   for (let i = 0; i < loops.length; i++) {
     const l = loops[i];
     const [ex, ez] = loopEntry(l), [sx, sz] = loopSide(l);
-    const lat = (ball.x - ex) * sx + (ball.z - ez) * sz;
-    if (Math.abs(lat) > l.w / 2) continue;
+    const off = (ball.x - ex) * sx + (ball.z - ez) * sz;
     const before = (px - ex) * l.dir[0] + (pz - ez) * l.dir[1];
     const after = (ball.x - ex) * l.dir[0] + (ball.z - ez) * l.dir[1];
     const u = ball.vx * l.dir[0] + ball.vz * l.dir[1];
-    const len = loopTable(l).length;
-    // por la entrada hacia delante o por la salida marcha atrás
-    if (before < 0 && after >= 0 && u > 0) return { kind: 'loop', i, s: after, u, lat, from: 1 };
-    if (before > l.len && after <= l.len && u < 0) return { kind: 'loop', i, s: len - (l.len - after), u, lat, from: -1 };
+    const len = loopTable(l).length, end = 2 * LOOP_PAD;
+    // por la entrada (a la derecha) hacia delante o por la salida (a la izquierda) marcha atrás
+    const inLat = off - LOOP_LANE, outLat = off + LOOP_LANE;
+    if (before < 0 && after >= 0 && u > 0 && Math.abs(inLat) <= LOOP_CAPTURE) return { kind: 'loop', i, s: after, u, lat: inLat, from: 1 };
+    if (before > end && after <= end && u < 0 && Math.abs(outLat) <= LOOP_CAPTURE) return { kind: 'loop', i, s: len - (end - after), u, lat: outLat, from: -1 };
   }
   return null;
 }
+
+/** Desvío lateral del carril respecto al eje del looping: +LOOP_LANE al entrar, −LOOP_LANE al salir. */
+const loopLaneOffset = (th) => LOOP_LANE * dcos(th / 2);
 
 /** Coloca ball.x/z/vx/vz según el carril (proyección en el suelo). */
 function placeOnTrack(course, ball, loop) {
   const tr = ball.track;
   if (tr.kind === 'loop') {
     const l = loop ?? course.loops[tr.i];
-    const along = tr.fly ? tr.fly.a : sampleAt(loopTable(l), tr.s).along;
+    const q = tr.fly ? null : sampleAt(loopTable(l), tr.s);
+    const along = q ? q.along : tr.fly.a, lat = tr.lat + (q ? loopLaneOffset(q.th) : 0);
     const [ex, ez] = loopEntry(l), [sx, sz] = loopSide(l);
-    ball.x = ex + l.dir[0] * along + sx * tr.lat;
-    ball.z = ez + l.dir[1] * along + sz * tr.lat;
+    ball.x = ex + l.dir[0] * along + sx * lat;
+    ball.z = ez + l.dir[1] * along + sz * lat;
     const u = tr.fly ? tr.fly.va : tr.u;
     ball.vx = l.dir[0] * u;
     ball.vz = l.dir[1] * u;
@@ -503,10 +546,11 @@ function trackStep(course, ball, dt) {
 /** Sale del looping al suelo por la salida (forward) o por la entrada. */
 function leaveLoop(l, ball, forward, lat, u) {
   const [ex, ez] = loopEntry(l), [sx, sz] = loopSide(l);
-  const along = forward ? l.len + 0.001 : -0.001;
+  const along = forward ? 2 * LOOP_PAD + 0.001 : -0.001;
+  const side = lat + (forward ? -LOOP_LANE : LOOP_LANE);
   ball.track = null;
-  ball.x = ex + l.dir[0] * along + sx * lat;
-  ball.z = ez + l.dir[1] * along + sz * lat;
+  ball.x = ex + l.dir[0] * along + sx * side;
+  ball.z = ez + l.dir[1] * along + sz * side;
   ball.vx = l.dir[0] * u;
   ball.vz = l.dir[1] * u;
   return 'exit';

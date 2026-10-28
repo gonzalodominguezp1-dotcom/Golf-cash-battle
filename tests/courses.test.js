@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DT, MIN_SLOPE_ACCEL, inLava, inPit, inSand, isMoving, onMound, onRamp, portalAt, quantizeShot, rampAccel, segmentsOf, shotVelocity, step, windmillBlocks } from '../src/game/physics.js';
+import { DT, LOOP_LANE, LOOP_PAD, MIN_SLOPE_ACCEL, inLava, inPit, inSand, isMoving, onMound, onRamp, portalAt, quantizeShot, rampAccel, segmentsOf, shotVelocity, step, windmillBlocks } from '../src/game/physics.js';
 import { ballPose } from '../src/game/render/terrain.js';
 import { groundHeight, hasRelief } from '../src/game/render/terrain.js';
 import { replayHole } from '../src/game/replay.js';
@@ -105,16 +105,44 @@ function straightShot(c, power, tick0 = 0) {
   return { ...ball, crossed };
 }
 
-test('looping: flojo vuelve atrás, fuerte lo completa', () => {
+// tira la bola desde (x, z) hacia -z a velocidad v y la sigue hasta que se para o emboca
+function loopRoll(c, x, z, v) {
+  const segs = segmentsOf(c);
+  const ball = { x, z, vx: 0, vz: -v };
+  let entered = false;
+  for (let t = 1; isMoving(ball) && t < 120 * 30; t++) {
+    const r = step(c, segs, ball, t * DT, DT);
+    if (ball.track) entered = true;
+    if (r.sunk) return { sunk: true, entered };
+  }
+  return { ...ball, entered };
+}
+
+test('looping: flojo vuelve atrás, fuerte lo completa (por el carril de entrada)', () => {
   const c = COURSES.find((x) => x.name === 'Looping Neón');
   const [l] = c.loops;
-  const entry = l.z + l.len / 2, exit = l.z - l.len / 2;
-  assert.ok(straightShot(c, 0.4).z > entry, 'un tiro flojo vuelve antes del looping');
-  const strong = straightShot(c, 0.9);
-  assert.ok(strong === null || strong.z < exit, 'un tiro fuerte pasa al otro lado');
+  const laneX = l.x + LOOP_LANE; // dir (0, -1): la derecha es +x
+  const entry = l.z + LOOP_PAD, exit = l.z - LOOP_PAD;
+  const weak = loopRoll(c, laneX, l.z + 3, 6);
+  assert.ok(weak.entered && weak.z > entry, 'un tiro flojo sube, vuelve y sale por la entrada');
+  const strong = loopRoll(c, laneX, l.z + 3, 11);
+  assert.ok(strong.sunk || strong.z < exit, 'un tiro fuerte pasa al otro lado');
   // el looping no levanta el césped
   assert.ok(!hasRelief(c));
   assert.equal(groundHeight(c, l.x, l.z), 0);
+});
+
+test('looping: fuera del carril de entrada la bola choca con la estructura y no entra', () => {
+  const c = COURSES.find((x) => x.name === 'Looping Neón');
+  const [l] = c.loops;
+  // por la izquierda (bajo el carril de salida), por el centro y rozando el bordillo
+  for (const dx of [-0.5, -0.2, 0, 0.65]) {
+    const r = loopRoll(c, l.x + dx, l.z + 3, 11);
+    assert.ok(!r.sunk && !r.entered, `dx=${dx}: no entra en el looping`);
+    assert.ok(r.z > l.z, `dx=${dx}: rebota hacia atrás`);
+  }
+  // centrada en el carril (aunque algo desviada) sí entra
+  for (const dx of [0.2, 0.36, 0.5]) assert.ok(loopRoll(c, l.x + dx, l.z + 3, 11).entered, `dx=${dx}: entra`);
 });
 
 test('molino: las aspas tapan la puerta según el momento del golpe', () => {
@@ -154,7 +182,7 @@ test('tubos: la bola viaja por dentro y sale en la dirección del tubo', () => {
 // tira la bola recta al looping a velocidad v y la sigue hasta que sale del carril
 function throughLoop(c, l, v) {
   const segs = segmentsOf(c);
-  const ball = { x: l.x, z: l.z + l.len / 2 + 0.05, vx: 0, vz: -v };
+  const ball = { x: l.x + LOOP_LANE, z: l.z + LOOP_PAD + 0.05, vx: 0, vz: -v };
   let t = 0, flew = false, r;
   do {
     r = step(c, segs, ball, ++t * DT, DT);
@@ -175,9 +203,13 @@ test('looping: un solo umbral; si no llega se cae y vuelve despacio por la entra
       threshold ??= v;
       assert.ok(r.out > 0.74 * v && r.out < 0.86 * v, `v=${v.toFixed(1)}: pasa perdiendo un 15–25 % (sale a ${r.out.toFixed(2)})`);
       assert.ok(!r.flew, `v=${v.toFixed(1)}: si pasa no se despega`);
+      // sale por el carril de salida, a la izquierda
+      assert.ok(r.ball.x < l.x, `v=${v.toFixed(1)}: sale por la izquierda`);
     } else {
       assert.equal(threshold, null, `v=${v.toFixed(1)}: por encima del umbral siempre pasa`);
-      if (r.flew) assert.ok(r.out <= 0.35 * v, `v=${v.toFixed(1)}: tras caerse sale despacio (${r.out.toFixed(2)})`);
+      if (r.flew) assert.ok(r.out <= 0.4 * v, `v=${v.toFixed(1)}: tras caerse sale despacio (${r.out.toFixed(2)})`);
+      // vuelve por el carril de entrada, a la derecha
+      assert.ok(r.ball.x > l.x, `v=${v.toFixed(1)}: vuelve por la entrada`);
       assert.ok(r.time < 5, `v=${v.toFixed(1)}: no se queda dentro`);
     }
   }
@@ -192,7 +224,7 @@ test('looping: si la bola se cae arriba vuelve por la entrada y nunca se queda e
   const [l] = c.loops;
   const segs = segmentsOf(c);
   for (const v of [2, 4, 5.5, 6.5, 7, 8, 11]) {
-    const ball = { x: l.x, z: l.z + l.len / 2 + 0.3, vx: 0, vz: -v };
+    const ball = { x: l.x + LOOP_LANE, z: l.z + LOOP_PAD + 0.3, vx: 0, vz: -v };
     let t = 0;
     while (isMoving(ball) && t < 120 * 30) step(c, segs, ball, ++t * DT, DT);
     assert.ok(!ball.track && !isMoving(ball), `v=${v}: la bola se para fuera del carril`);
