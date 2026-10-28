@@ -5,7 +5,7 @@ import { TIERS } from '../progress/skins.js';
 import { rarePatternOf } from '../progress/inventory.js';
 import { upgradeImg } from './skinThumbs.js';
 
-// Animación de reveal/desbloqueo de skins (docs/skins-premium-plan.md, (d) y P10).
+// Animación de reveal/desbloqueo de skins (P10).
 //   await showSkinReveal(skins, { progress })
 // Una secuencia por skin, de menor a mayor tier (la mejor al final). Un toque (o Esc) salta al final
 // de la skin actual; después, «Siguiente»/«Continuar» avanza. La promesa se resuelve al cerrar la cola.

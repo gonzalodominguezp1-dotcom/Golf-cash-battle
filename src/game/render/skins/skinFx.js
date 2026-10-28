@@ -4,7 +4,7 @@ import { AdditiveParticles, GroundDecals, RibbonTrail, Shockwaves, Trail } from 
 import { SKIN_SPRITES, releaseSkinSpriteAtlas, skinSpriteAtlas, softDotTexture } from '../textures.js';
 import { REDUCED_SPEED, STILL_TIME, calmList, continuousOpen, echoRing, hitList, particleLimit, reducedCount, reducedMotion, ribbonNoise, ribbonWave, sinkBurstAllowed, sinkDecalAllowed, trailRate } from './fxRules.js';
 
-// Runtime de efectos de skin (docs/skins-premium-plan.md, (d) y (f)).
+// Runtime de efectos de skin.
 // Solo dibuja: nunca toca la física y usa su propio RNG de render.
 // `update` no asigna: todo son typed arrays y objetos reutilizados.
 

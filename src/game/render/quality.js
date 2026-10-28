@@ -6,7 +6,7 @@ const KEY = 'gcb.quality';
 export const QUALITY_LEVELS = ['low', 'medium', 'high'];
 export const QUALITY_NAMES = { low: 'Bajo', medium: 'Medio', high: 'Alto' };
 
-// Presupuesto de render por calidad (docs/skins-premium-plan.md, (f)).
+// Presupuesto de render por calidad.
 // - skinFx: nivel máximo de los FX de skin ('low'|'medium'|'high'); el gobernador
 //   (perfGovernor.js) puede bajarlo en caliente, nunca subirlo por encima de aquí.
 // - ballSegments: segmentos {w, h} de la esfera de la bola.

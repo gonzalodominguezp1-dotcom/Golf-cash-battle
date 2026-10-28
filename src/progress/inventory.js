@@ -1,6 +1,6 @@
 // Inventario de skins: cada skin desbloqueada tiene una instancia con patrón
 // (seed) y contadores. El seed sale de un hash de (dueño, skin): recargar no
-// permite re-tirar. Ver docs/skins-premium-plan.md (c). (El desgaste/float se
+// permite re-tirar. (El desgaste/float se
 // quitó: las claves `float` de guardados antiguos se ignoran al leer.)
 
 export const MAX_INVENTORY = 64;

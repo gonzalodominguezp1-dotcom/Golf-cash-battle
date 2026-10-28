@@ -1,4 +1,4 @@
-// Prisma Holo (docs/skins-premium-plan.md, ficha 7; contrato en ./index.js).
+// Prisma Holo (contrato en ./index.js).
 // Cromo base + lámina thin-film que cambia con dot(N,V) + purpurina que solo se enciende
 // con cierto ángulo vista/luz. Todo en espacio de objeto: el espectro gira con la bola, no con el tiempo.
 //

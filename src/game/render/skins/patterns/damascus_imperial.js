@@ -1,4 +1,4 @@
-// Damasco Imperial (P3b, docs/skins-premium-plan.md (b) #2): acero de capas forjadas. Bandas onduladas
+// Damasco Imperial (P3b): acero de capas forjadas. Bandas onduladas
 // (fbm con dominio deformado) alternan capa clara pulida (#9FB3B8) y acero oscuro (#1C2326); en cada
 // frontera corre un filo verde (#10B981) y un grabado dorado (#C9A44C) sigue curvas de nivel de otro fbm.
 // El patrón se lee por reflejo: metalness 1 en todo el objeto, rough 0.18 en capas claras y 0.34 en oscuras.

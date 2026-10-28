@@ -1,4 +1,4 @@
-// Patrón «Toque de Midas» (docs/skins-premium-plan.md, b #8; P3h).
+// Patrón «Toque de Midas» (P3h).
 // Oro 24K pulido con filigrana grabada (red curva de una superficie tipo Schwarz-P cortada con la
 // esfera), pátina de bronce que se pierde al crecer el estado, AO de cavidad en los hoyuelos
 // (voronoi, una capa) y chispas HDR en estados altos.

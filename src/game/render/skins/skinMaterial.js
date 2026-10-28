@@ -6,7 +6,7 @@ import { getQuality } from '../quality.js';
 import { TIERS } from '../../../progress/skins.js';
 import { STILL_TIME, reducedMotion } from './fxRules.js';
 
-// Material premium de bola (docs/skins-premium-plan.md, b/d/f).
+// Material premium de bola.
 //   createSkinMaterial(skin, { quality, instance, theme }, deps) -> { material, update, dispose, ... }
 // `deps` lo aporta ballSkins.js ({ canvas(skin, dimples), legacy(material, skin, map, disposables) })
 // para no tener un import circular; ballSkins.js exporta la versión ya enlazada.

@@ -7,7 +7,7 @@ import { QUALITY_LEVELS, QUALITY_NAMES, getQuality } from '../game/render/qualit
 import { SKINS, TIERS } from '../progress/skins.js';
 import { rarePatternOf } from '../progress/inventory.js';
 
-// Inspector 360° de skins v2 (docs/skins-premium-plan.md, (c), (e) y P8).
+// Inspector 360° de skins v2 (P8).
 //   createSkinInspector(container, { skin, instance, mode: 'panel'|'fullscreen', quality? })
 //     -> { setSkin(skin, instance?, { quality }?), playFx(on?), destroy(), ... }
 // Un único WebGLRenderer por inspector. Render bajo demanda: solo hay bucle mientras hay interacción o

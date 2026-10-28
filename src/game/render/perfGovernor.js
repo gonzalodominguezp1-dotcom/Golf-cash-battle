@@ -1,4 +1,4 @@
-// Gobernador de rendimiento de los FX de skin (docs/skins-premium-plan.md, (f) y P11).
+// Gobernador de rendimiento de los FX de skin .
 //
 // Mide el tiempo de frame con una media móvil exponencial (~0,5 s) y ajusta el
 // nivel de FX de skin del jugador en escalones, con histéresis:
