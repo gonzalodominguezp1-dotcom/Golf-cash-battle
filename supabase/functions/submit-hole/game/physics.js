@@ -281,11 +281,9 @@ function airStep(course, segs, ball, dt) {
 export const GRAVITY = 9.8;
 const LOOP_SAMPLES = 160;
 const PAD_SAMPLES = 8;
-// radio de la vuelta / avance: con 3 la vuelta es redonda y el cruce queda abajo
-export const LOOP_RATIO = 3;
 const TUBE_SAMPLES = 64;
 const TUBE_MIN_SPEED = 4;
-const TRACK_DRAG = 0.25; // el carril es liso: frena menos que el césped
+const TRACK_DRAG = 0.2; // el carril es liso: frena menos que el césped
 // al caerse dentro de la vuelta: velocidad que conserva al tocar el carril,
 // rozamiento hasta la boca y velocidad mínima para que siempre salga
 const FELL_KEEP = 0.3;
@@ -298,16 +296,17 @@ const HALF_TURN = 3.141592653589793;
 const tables = new WeakMap();
 
 /**
- * Perfil del looping: un tramo recto, una trocoide que da una vuelta de radio
- * radius (redonda, con el cruce abajo) y otro tramo recto, en total len por el
- * suelo. Muestras { s, along, y, th, kap, ny }: s = longitud de carril, kap la
- * curvatura y ny la componente vertical de la normal hacia dentro de la vuelta.
+ * Perfil del looping: un tramo recto, un anillo vertical de radio radius que
+ * apoya en el suelo en el centro del looping (la bola entra por abajo, da la
+ * vuelta por dentro y sale por el mismo punto hacia delante) y otro tramo
+ * recto, en total len por el suelo. Muestras { s, along, y, th, kap, ny }:
+ * s = longitud de carril, kap la curvatura y ny la componente vertical de la
+ * normal hacia dentro de la vuelta.
  */
 export function loopTable(loop) {
   let t = tables.get(loop);
   if (t) return t;
-  const R = loop.radius, r = R / LOOP_RATIO;
-  const pad = (loop.len - TWO_PI * r) / 2;
+  const R = loop.radius, pad = loop.len / 2;
   const pts = [];
   let s = 0;
   const push = (along, y, th, kap, ny) => {
@@ -318,13 +317,10 @@ export function loopTable(loop) {
   for (let j = 0; j < PAD_SAMPLES; j++) push((pad * j) / PAD_SAMPLES, 0, 0, 0, 1);
   for (let j = 0; j <= LOOP_SAMPLES; j++) {
     const th = (TWO_PI * j) / LOOP_SAMPLES;
-    const c = dcos(th), sn = dsin(th);
-    // derivadas de (along, y) respecto a th
-    const da = r + R * c, dy = R * sn;
-    const v = hyp(da, dy);
-    push(pad + r * th + R * sn, R * (1 - c), th, (r * R * c + R * R) / (v * v * v), da / v);
+    const c = dcos(th);
+    push(pad + R * dsin(th), R * (1 - c), th, 1 / R, c);
   }
-  for (let j = 1; j <= PAD_SAMPLES; j++) push(loop.len - pad + (pad * j) / PAD_SAMPLES, 0, TWO_PI, 0, 1);
+  for (let j = 1; j <= PAD_SAMPLES; j++) push(pad + (pad * j) / PAD_SAMPLES, 0, TWO_PI, 0, 1);
   t = { pts, length: s };
   tables.set(loop, t);
   return t;
