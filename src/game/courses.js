@@ -49,10 +49,8 @@ const band = (z0, z1) => ({ poly: [[-3, z0], [3, z0], [3, z1], [-3, z1]] });
 
 const LOOP_A = { x: 0, z: 1, dir: [0, -1], len: 4.4, w: 1.6, radius: 0.8 };
 const LOOP_B1 = { x: -3.6, z: 3, dir: [0, -1], len: 4.4, w: 1.6, radius: 0.8 };
-const LOOP_B2 = { x: -0.2, z: -7.8, dir: [1, 0], len: 4.4, w: 1.6, radius: 0.8 };
-const LOOP_N = { x: 0, z: 1.8, dir: [0, -1], len: 4.4, w: 1.6, radius: 0.8 };
-const MILL_NEON = windmill({ x: 0, z: 0, depth: 1.4, left: -2, right: 2, speed: 1.6 });
-const MILL_DAY = windmill({ x: 0, z: -1.5, depth: 1.6, left: -2.6, right: 2.6, speed: 1.3 });
+// el carril de entrada (a la derecha según dir) queda en línea con el acelerador (z = -7.8)
+const LOOP_B2 = { x: -0.2, z: -8.16, dir: [1, 0], len: 4.4, w: 2, radius: 0.8 };
 const MILL_N1 = windmill({ x: -1.2, z: 2.6, w: 1, left: -2.6, right: 2.6, speed: 1.2, blades: 3 });
 const MILL_N2 = windmill({ x: 1.2, z: -4, w: 1, left: -2.6, right: 2.6, speed: -1.3, blades: 3, phase: 0.7 });
 const MILL_PRADO = windmill({ x: 0, z: 0.8, w: 1.1, depth: 1.6, left: -1.6, right: 1.6, speed: 1.2 });
@@ -67,34 +65,6 @@ const LOOP_PRADO = { x: 2.4, z: -6.6, dir: [0, -1], len: 4.4, w: 1.6, radius: 0.
 
 
 export const COURSES = [
-  {
-    name: 'La Recta',
-    par: 2,
-    theme: 'meadow',
-    tee: [0, 11.5],
-    cup: [0, -11],
-    outline: [[-3.2, 13], [3.2, 13], [3.2, -13], [-3.2, -13]],
-    grounded: true, // la pista va a ras del terreno, sin plataforma de tierra
-    walls: [],
-    bumpers: [{ x: 0, z: 0, r: 0.6 }, { x: -1.7, z: -6.5, r: 0.4 }, { x: 1.7, z: -6.5, r: 0.4 }],
-    sand: [{ x: -1.9, z: 5.4, w: 1.8, d: 2.2 }, { x: 1.2, z: -9.2, w: 2.2, d: 1.4 }],
-    spinners: [],
-    waypoints: [[-1.9, 0], [1.9, 0]], // alternativas para esquivar la seta central
-  },
-  {
-    name: 'El Codo',
-    par: 3,
-    theme: 'beach',
-    aimYaw: 0,
-    tee: [-1.5, 8],
-    cup: [2.6, -7.2],
-    outline: [[-3, 9.5], [0, 9.5], [0, -3], [4, -3], [4, -9.5], [-3, -9.5]],
-    walls: [],
-    bumpers: [{ x: 1.8, z: -5.2, r: 0.4 }],
-    sand: [{ x: -1.4, z: -6.6, w: 2.6, d: 2.4 }, { x: 3.3, z: -4.3, w: 1.2, d: 1.4 }],
-    spinners: [],
-    waypoints: [[-1.5, -4.5], [0.5, -6.5]],
-  },
   {
     name: 'Zigzag',
     par: 4,
@@ -155,22 +125,6 @@ export const COURSES = [
     waypoints: [[0, -4]],
   },
   {
-    name: 'La Colina',
-    tip: 'Cuesta arriba: si te quedas corto, la bola vuelve',
-    par: 3,
-    theme: 'autumn',
-    tee: [0, 8.5],
-    cup: [0, -7.6],
-    outline: [[-2.4, 10], [2.4, 10], [2.4, -10], [-2.4, -10]],
-    walls: [],
-    bumpers: [{ x: -1.1, z: -5.6, r: 0.35 }, { x: 1.1, z: -5.6, r: 0.35 }],
-    sand: [{ x: 1.2, z: 5.6, w: 1.8, d: 1.6 }, { x: 0, z: -9.3, w: 2.4, d: 1 }],
-    spinners: [],
-    // cuesta arriba: sin fuerza la bola vuelve rodando
-    slopes: [{ x: 0, z: 0, w: 4.8, d: 5.6, dir: [0, 1], accel: 3.2 }],
-    waypoints: [],
-  },
-  {
     name: 'El Portal',
     tip: 'Entra en el portal morado para salir al otro lado',
     par: 3,
@@ -203,24 +157,6 @@ export const COURSES = [
     waypoints: [],
   },
   {
-    name: 'El Volcán',
-    tip: 'El hoyo está en la cima: ni flojo ni fuerte',
-    par: 2,
-    theme: 'volcano',
-    tee: [0, 9],
-    cup: [0, -2],
-    // pasillo de entrada y octógono alrededor del cono
-    outline: [[-1.2, 10.4], [1.2, 10.4], [1.2, 2], [1.66, 2], [4, -0.34], [4, -3.66], [1.66, -6], [-1.66, -6], [-4, -3.66], [-4, -0.34], [-1.66, 2], [-1.2, 2]],
-    walls: [],
-    bumpers: [],
-    sand: [{ x: -0.6, z: 6.2, w: 1, d: 1.6 }],
-    spinners: [],
-    // cono con la cima llana y el hoyo en el cráter: las laderas echan la bola
-    // hacia fuera, así que demasiado flojo vuelve y demasiado fuerte se pasa
-    mounds: [{ x: 0, z: -2, top: 0.9, base: 3.4, accel: 5.5, tint: 0x5a3a30 }],
-    waypoints: [],
-  },
-  {
     name: 'La Herradura',
     tip: 'Usa el acelerador y sube la cuesta del final',
     par: 4,
@@ -250,38 +186,23 @@ export const COURSES = [
     sand: [{ x: -1.1, z: -8.7, w: 1.6, d: 1.4 }],
     spinners: [],
     loops: [LOOP_A],
-    waypoints: [[0, -2.8]],
+    waypoints: [[0.36, 3.6], [0.36, -2.8]],
   },
   {
     name: 'Doble Looping',
     tip: 'Pasa el primer looping: el acelerador te lanza al segundo',
     par: 3,
     theme: 'neonPink',
-    tee: [-3.6, 8.6],
+    tee: [-3.24, 8.6],
     cup: [4.6, -6],
-    outline: [[-4.4, 10], [-2.8, 10], [-2.8, -7], [2.4, -7], [2.4, -4.6], [5.8, -4.6], [5.8, -10.6], [2.4, -10.6], [2.4, -8.6], [-4.4, -8.6]],
+    outline: [[-4.4, 10], [-2.8, 10], [-2.8, -7], [2.4, -7], [2.4, -4.6], [5.8, -4.6], [5.8, -10.6], [2.4, -10.6], [2.4, -9], [-4.4, -9]],
     walls: [],
     bumpers: [{ x: 4.2, z: -7.8, r: 0.35 }, { x: 5, z: -9.6, r: 0.3 }],
     sand: [{ x: 3.4, z: -9.9, w: 1.6, d: 1.2 }],
     spinners: [],
     boosts: [{ x: -3.6, z: -7.8, w: 1.4, d: 1.4, dir: [1, 0], speed: 9 }],
     loops: [LOOP_B1, LOOP_B2],
-    waypoints: [[-3.6, -7.8], [3.4, -7.8]],
-  },
-  {
-    name: 'Molino Neón',
-    tip: 'Cruza la puerta cuando no pase un aspa',
-    par: 2,
-    theme: 'neon',
-    tee: [0, 8.5],
-    cup: [0.8, -6.8],
-    outline: [[-2, 10], [2, 10], [2, -10], [-2, -10]],
-    walls: MILL_NEON.walls,
-    bumpers: [{ x: -1.1, z: 4.2, r: 0.35 }, { x: 1.1, z: 3.2, r: 0.35 }, { x: -0.4, z: -4.6, r: 0.3 }],
-    sand: [{ x: -1.2, z: -8.2, w: 1.4, d: 1.6 }],
-    spinners: [],
-    windmills: [MILL_NEON.windmill],
-    waypoints: [[0, -2.2]],
+    waypoints: [[-3.24, 5], [-3.6, -7.8], [-2, -7.8], [3.4, -7.8], [3.2, -6.2]],
   },
   {
     name: 'Tubos Neón',
@@ -300,21 +221,6 @@ export const COURSES = [
       { a: [1.8, 2.6], b: [-1.8, -1.8], r: 0.42, out: [0, -1], tube: true },
     ],
     waypoints: [[-1.8, 2.6], [0.4, -4.6]],
-  },
-  {
-    name: 'El Molino',
-    tip: 'El clásico: pasa por la puerta del molino',
-    par: 3,
-    theme: 'meadow',
-    tee: [0, 9],
-    cup: [-1.2, -8],
-    outline: [[-1.8, 10.4], [1.8, 10.4], [1.8, 3], [2.6, 2.2], [2.6, -10.4], [-2.6, -10.4], [-2.6, 2.2], [-1.8, 3]],
-    walls: MILL_DAY.walls,
-    bumpers: [{ x: -0.9, z: 5.4, r: 0.4 }, { x: 1, z: 4.2, r: 0.3 }, { x: 0.9, z: -6, r: 0.35 }],
-    sand: [{ x: 1.4, z: -8.7, w: 1.8, d: 1.6 }],
-    spinners: [],
-    windmills: [MILL_DAY.windmill],
-    waypoints: [[0, -4]],
   },
   {
     name: 'Molinos de Noche',
@@ -346,22 +252,6 @@ export const COURSES = [
     portals: [{ a: [1.8, 2.4], b: [2.2, -2.4], r: 0.42, out: [-1, 0], tube: true }],
     tunnels: [{ x: -2.55, z: 0, w: 0.9, d: 2.4 }],
     waypoints: [[-2.55, 2.2], [-2.55, -2.2]],
-  },
-  {
-    name: 'Looping Nocturno',
-    tip: 'Looping y pasadizo: entra recto',
-    par: 3,
-    theme: 'night',
-    tee: [0, 8.4],
-    cup: [1.6, -8],
-    outline: [[-1.8, 10], [1.8, 10], [1.8, 5], [0.8, 4.4], [0.8, -0.8], [2.8, -1.6], [2.8, -10], [-2.8, -10], [-2.8, -1.6], [-0.8, -0.8], [-0.8, 4.4], [-1.8, 5]],
-    walls: [[[-2.8, -5], [-0.45, -5]], [[0.45, -5], [2.8, -5]], [[-0.45, -4.2], [-0.45, -5.8]], [[0.45, -4.2], [0.45, -5.8]]],
-    bumpers: [{ x: -1.2, z: -2.8, r: 0.3 }, { x: 1.2, z: -2.8, r: 0.3 }, { x: 0, z: -7.4, r: 0.35 }],
-    sand: [{ x: -1.8, z: -8.8, w: 1.6, d: 1.6 }],
-    spinners: [],
-    loops: [LOOP_N],
-    tunnels: [{ x: 0, z: -5, w: 0.9, d: 1.6 }],
-    waypoints: [[0, -6.4]],
   },
   {
     name: 'Dentro del Volcán',

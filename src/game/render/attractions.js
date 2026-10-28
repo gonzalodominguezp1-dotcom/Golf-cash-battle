@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { loopTable, tubeTable } from '../physics.js';
-import { LOOP_FUNNEL, loopPoint } from './terrain.js';
+import { LOOP_LANE_HALF, loopTable, tubeTable } from '../physics.js';
+import { loopPoint } from './terrain.js';
 
 // Atracciones de minigolf: loopings, molinos, tubos y pasadizos. Cada una
 // tiene tres estilos: de día, de noche (con luces) y neón.
@@ -95,14 +95,13 @@ function metalPlateTexture() {
 export function buildLoop(scene, loop, style, i = 0) {
   const g = new THREE.Group();
   const N = 150;
-  // el carril empieza y acaba en el suelo un poco antes y después de la vuelta
-  const S = loopTable(loop).length, sA = loop.len / 2 - LOOP_FUNNEL, sB = S - sA;
+  const S = loopTable(loop).length, sA = 0, sB = S;
   const color = style.colors[i % style.colors.length];
   const isNeon = style.kind === 'neon';
   const isNight = style.kind === 'night';
 
-  const halfW = 0.28;  // Semianchura de la pista interior
   const curbW = 0.045; // Anchura del bordillo
+  const halfW = LOOP_LANE_HALF - curbW; // Semianchura de la pista interior (la misma que en la física)
   const curbH = 0.075; // Altura del bordillo de seguridad
   const thk = 0.055;   // Grosor del casco inferior
 
@@ -112,13 +111,13 @@ export function buildLoop(scene, loop, style, i = 0) {
 
   for (let k = 0; k <= N; k++) {
     const p = sA + (k / N) * (sB - sA);
-    const q = loopPoint(loop, p, 0, true);
+    const q = loopPoint(loop, p, 0);
     const cx = q.x, cy = q.y, cz = q.z;
     const nx = q.dx * q.nAlong, ny = q.nY, nz = q.dz * q.nAlong;
 
     // Tangente calculada numéricamente a lo largo de la trayectoria
     const pNext = Math.min(sB, p + 0.04), pPrev = Math.max(sA, p - 0.04);
-    const qN = loopPoint(loop, pNext, 0, true), qP = loopPoint(loop, pPrev, 0, true);
+    const qN = loopPoint(loop, pNext, 0), qP = loopPoint(loop, pPrev, 0);
     let tx = qN.x - qP.x, ty = qN.y - qP.y, tz = qN.z - qP.z;
     const tLen = Math.hypot(tx, ty, tz) || 1;
     tx /= tLen; ty /= tLen; tz /= tLen;
@@ -194,16 +193,16 @@ export function buildLoop(scene, loop, style, i = 0) {
   // 2. Materiales temáticos de alta fidelidad
   const trackBedMat = isNeon
     ? new THREE.MeshStandardMaterial({
-        color: 0x090c18,
-        roughness: 0.35,
-        metalness: 0.65,
+        color: 0x1e2850,
+        roughness: 0.4,
+        metalness: 0.45,
         emissive: color,
-        emissiveIntensity: 0.08,
+        emissiveIntensity: 0.1,
       })
     : isNight
     ? new THREE.MeshStandardMaterial({
-        color: 0x162438,
-        roughness: 0.65,
+        color: 0x2f4a70,
+        roughness: 0.6,
         metalness: 0.2,
       })
     : new THREE.MeshStandardMaterial({
@@ -214,16 +213,16 @@ export function buildLoop(scene, loop, style, i = 0) {
 
   const curbMat = isNeon
     ? new THREE.MeshStandardMaterial({
-        color: 0x161a2e,
-        roughness: 0.25,
-        metalness: 0.75,
+        color: 0x2c3460,
+        roughness: 0.3,
+        metalness: 0.55,
         emissive: color,
-        emissiveIntensity: 0.15,
+        emissiveIntensity: 0.18,
       })
     : isNight
     ? new THREE.MeshStandardMaterial({
-        color: 0x3d271d,
-        roughness: 0.6,
+        color: 0x7a5236,
+        roughness: 0.55,
         metalness: 0.25,
       })
     : new THREE.MeshStandardMaterial({
@@ -234,14 +233,14 @@ export function buildLoop(scene, loop, style, i = 0) {
 
   const hullMat = isNeon
     ? new THREE.MeshStandardMaterial({
-        color: 0x0f1220,
-        roughness: 0.3,
-        metalness: 0.8,
+        color: 0x283058,
+        roughness: 0.35,
+        metalness: 0.55,
       })
     : isNight
     ? new THREE.MeshStandardMaterial({
-        color: 0x2b1c14,
-        roughness: 0.7,
+        color: 0x5e3e29,
+        roughness: 0.65,
         metalness: 0.15,
       })
     : new THREE.MeshStandardMaterial({
@@ -268,14 +267,14 @@ export function buildLoop(scene, loop, style, i = 0) {
 
   const frameMat = isNeon
     ? new THREE.MeshStandardMaterial({
-        color: 0x121528,
-        metalness: 0.85,
-        roughness: 0.3,
+        color: 0x2a3158,
+        metalness: 0.6,
+        roughness: 0.35,
       })
     : isNight
     ? new THREE.MeshStandardMaterial({
-        color: 0x242426,
-        metalness: 0.6,
+        color: 0x55555c,
+        metalness: 0.5,
         roughness: 0.45,
       })
     : new THREE.MeshStandardMaterial({
@@ -435,78 +434,13 @@ export function buildLoop(scene, loop, style, i = 0) {
 
   scene.add(g);
 
-  // 7. Gestión unificada de transparencia ante obstrucción de cámara
-  const fadeMats = [];
-  g.traverse((o) => {
-    if (o.isMesh && o.material) {
-      const mats = Array.isArray(o.material) ? o.material : [o.material];
-      for (const m of mats) {
-        if (m && !fadeMats.some((e) => e.mat === m)) {
-          m.transparent = true;
-          fadeMats.push({
-            mat: m,
-            baseOpacity: m.opacity != null ? m.opacity : 1.0,
-            baseEmissive: m.emissiveIntensity != null ? m.emissiveIntensity : 0,
-          });
-        }
-      }
-    }
-  });
-
-  let currentOpacity = 1.0;
+  // 7. El carril es macizo: se ve por las dos caras y nunca se transparenta
+  for (const m of [trackBedMat, curbMat, hullMat]) m.side = THREE.DoubleSide;
 
   return {
-    update(t, ball, cameraPos) {
+    update(t) {
       // Animación continua de los cheurones de avance a lo largo del carril
       chevronTex.offset.y = -t * 1.6;
-
-      // Detección de obstrucción entre la cámara y la bola
-      let blocksBall = false;
-      const midPoint = topSlice;
-      const reachR = loop.radius + 0.45;
-
-      if (ball && cameraPos) {
-        // Verificar si la bola está en el interior del volumen del looping
-        const dCenter = Math.hypot(ball.x - midPoint.cx, ball.z - midPoint.cz);
-        const inside = dCenter < reachR && ball.y < topSlice.cy + 0.2;
-
-        if (inside) {
-          blocksBall = true;
-        } else {
-          // Raycast analítico cámara -> bola respecto al cilindro aproximado del looping
-          const dx = ball.x - cameraPos.x, dz = ball.z - cameraPos.z;
-          const lenSq = dx * dx + dz * dz;
-          if (lenSq > 1e-4) {
-            const tRay = ((midPoint.cx - cameraPos.x) * dx + (midPoint.cz - cameraPos.z) * dz) / lenSq;
-            if (tRay > 0.03 && tRay < 0.97) {
-              const rx = cameraPos.x + tRay * dx, rz = cameraPos.z + tRay * dz;
-              if (Math.hypot(midPoint.cx - rx, midPoint.cz - rz) < reachR) {
-                const ballY = ball.y != null ? ball.y : 0.05;
-                const rayY = cameraPos.y + tRay * (ballY - cameraPos.y);
-                if (rayY >= -0.1 && rayY <= topSlice.cy + 0.3) {
-                  blocksBall = true;
-                }
-              }
-            }
-          }
-        }
-      }
-
-      // Suavizado elegante de opacidad (90% invisible = 0.1 de opacidad)
-      const targetOpacity = blocksBall ? 0.1 : 1.0;
-      currentOpacity += (targetOpacity - currentOpacity) * 0.2;
-
-      for (const entry of fadeMats) {
-        entry.mat.opacity = currentOpacity * entry.baseOpacity;
-        entry.mat.depthWrite = currentOpacity > 0.95;
-        if (entry.baseEmissive > 0) {
-          entry.mat.emissiveIntensity = entry.baseEmissive * (0.15 + 0.85 * (currentOpacity - 0.1) / 0.9);
-        }
-      }
-
-      if (loopLight) {
-        loopLight.intensity = baseLightIntensity * (0.15 + 0.85 * (currentOpacity - 0.1) / 0.9);
-      }
     },
   };
 }
