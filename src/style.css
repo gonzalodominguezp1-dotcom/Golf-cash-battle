@@ -1563,17 +1563,6 @@ body.sk-noscroll { overflow: hidden; }
   background: linear-gradient(0deg, #10b981, #ffd23f 60%, #f97316);
   box-shadow: 0 0 12px rgba(255, 215, 0, 0.7);
 }
-.power span {
-  position: absolute;
-  top: -26px;
-  left: 50%;
-  transform: translateX(-50%);
-  color: #fff;
-  font-family: var(--display);
-  font-weight: 800;
-  font-size: 14px;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
-}
 
 .map-btn {
   position: absolute;
@@ -2111,9 +2100,6 @@ body.sk-noscroll { overflow: hidden; }
     right: 32px;
     width: 24px;
     height: min(45vh, 320px);
-  }
-  .power span {
-    font-size: 15px;
   }
   .map-btn {
     left: 24px;
