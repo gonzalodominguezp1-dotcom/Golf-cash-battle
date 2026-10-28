@@ -130,5 +130,4 @@ Estos puntos deben cumplirse antes de activarlo (constitución S5.10 y S5.11):
 - `src/progress/` y `src/ui/`: progreso, inventario, skins y componentes de interfaz.
 - `supabase/functions/`: `submit-hole`, `kyc`, `crypto-deposit`, `nowpayments-ipn`.
 - `supabase/migrations/`: cambios de base de datos, en orden.
-- `docs/`: planes y revisiones de skins premium.
-- `02-DOCS/`: wiki del proyecto (decisiones y constitución).
+- `02-DOCS/`: wiki del proyecto. Empieza por [`02-DOCS/wiki/index.md`](02-DOCS/wiki/index.md).

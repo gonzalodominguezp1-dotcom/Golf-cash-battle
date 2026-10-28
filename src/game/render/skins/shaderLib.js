@@ -1,4 +1,4 @@
-// Biblioteca GLSL compartida por los materiales de skin premium (docs/skins-premium-plan.md, d).
+// Biblioteca GLSL compartida por los materiales de skin premium.
 // Todo trabaja en espacio de objeto sobre la esfera unitaria (`vObjPos`): sin costuras ni polos.
 
 /** Uniforms comunes (valores por defecto; skinMaterial los clona por material). */

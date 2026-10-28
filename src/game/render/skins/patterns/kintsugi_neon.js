@@ -1,4 +1,4 @@
-// Kintsugi Neón (P3a, docs/skins-premium-plan.md (b) #1): fibra de carbono tejida con grietas de oro
+// Kintsugi Neón (P3a): fibra de carbono tejida con grietas de oro
 // pulido y núcleo magenta emisivo. Las vetas son aristas de un Voronoi 3D (distancia d2 - d1) con el
 // dominio deformado; un pulso viaja a lo largo de ellas (fase = ruido espacial - tiempo) y hay un
 // «latido» idle cada 2.5 s. uImpact = destello blanco + micro-grietas extra que se «reparan».

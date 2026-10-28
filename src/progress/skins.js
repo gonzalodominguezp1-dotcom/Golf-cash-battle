@@ -1,7 +1,7 @@
 // Skins de bola: solo cambian la apariencia, nunca la física ni el resultado.
 // unlock: { level } por nivel, { wins } por victorias o { challenge } por desafío.
 
-// Tiers de rareza (docs/skins-premium-plan.md, sección b). `color` es el marco del tier.
+// Tiers de rareza. `color` es el marco del tier.
 export const TIERS = {
   common: { name: 'Común', order: 0, color: '#9AA4B2', icon: '●' },
   uncommon: { name: 'Poco común', order: 1, color: '#4ADE80', icon: '◆' },

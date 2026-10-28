@@ -1,4 +1,4 @@
-// P3d — Dragón Carmesí (docs/skins-premium-plan.md, b.4): escamas voronoi abombadas con normal,
+// P3d — Dragón Carmesí: escamas voronoi abombadas con normal,
 // brillo de brasa en las juntas que late (respiración de 4 s), escamas que se erizan al acelerar y
 // un «ojo» con pupila rasgada que se abre cuando la bola lleva > 3 s parada.
 // Calidad: baja (sin shader, no se usa), media (escamas + normal + ojo), alta (más densidad + micrograno).
