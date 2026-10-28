@@ -8,7 +8,7 @@ Minigolf 3D para navegador y móvil. Partidas de hasta 8 jugadores con entrada: 
 
 - **Juego 3D** con Three.js y cámara en tercera persona detrás de la bola. En móvil, deslizar en cualquier parte mueve la cámara; el tiro se carga arrastrando desde la bola hacia atrás. "Ver hoyo" muestra el recorrido entero.
 - **Contador de 20 s:** cuando el primero emboca, los demás tienen 20 s. Quien no emboca queda descalificado en ese hoyo. En torneos cuenta desde el más rápido del hoyo y lo comprueba el servidor.
-- **20 hoyos** en distintos ambientes (pradera, playa, atardecer, nieve, cañón, otoño, noche y volcán). Cada partida juega 3, iguales para todos. Los hoyos nuevos se añaden al final de `src/game/courses.js` y después se sube `course_count` en `app_config`.
+- **21 hoyos** en distintos ambientes (pradera, playa, atardecer, nieve, cañón, otoño, noche y volcán). En *El Abismo* hay agujeros de pared a pared (`pits`) que solo se cruzan saltando desde una rampa. Cada partida juega 3, iguales para todos. Los hoyos nuevos se añaden al final de `src/game/courses.js` y después se sube `course_count` en `app_config`.
 - **Sensación de golpe:** tono de carga, temblor de cámara, onda en el impacto, bola que se aplasta al chocar y cámara lenta en golpes largos. Es solo visual: la física sigue a paso fijo.
 - **Rivales en el campo:** los otros 7 juegan el mismo hoyo a la vez, con la misma física. Clasificación en vivo.
 - **Skins**, con inventario y progreso.

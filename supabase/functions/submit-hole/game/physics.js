@@ -202,6 +202,12 @@ export function insidePoly(poly, x, z) {
 
 /** La lava en la que está el centro de la bola (o undefined). */
 export const inLava = (course, x, z) => (course.lava ?? []).find((l) => insidePoly(l.poly, x, z));
+/**
+ * Agujeros (pits): polígonos sin suelo. Para la física son como la lava (la
+ * bola que cae vuelve parada al sitio del golpe); solo se dibujan distinto.
+ */
+export const inPit = (course, x, z) => (course.pits ?? []).find((p) => insidePoly(p.poly, x, z));
+const hasHazards = (course) => !!(course.lava || course.pits);
 
 export const onRamp = (course, x, z) => (course.ramps ?? []).find((r) => inRect(r, x, z));
 const rampLen = (r) => (r.dir[0] !== 0 ? r.w : r.d);
@@ -260,7 +266,9 @@ function airStep(course, segs, ball, dt) {
   // toca el suelo: si cae en lava se quema; si no, bota o se queda rodando
   out.landed = true;
   out.impact = -vy;
-  if (inLava(course, ball.x, ball.z)) {
+  const pit = inPit(course, ball.x, ball.z);
+  if (pit || inLava(course, ball.x, ball.z)) {
+    out.pit = !!pit;
     out.lava = burn(course, ball);
     return out;
   }
@@ -575,7 +583,7 @@ export function step(course, segs, ball, t, dt) {
   let bumper = -1;
   let portal = -1;
   // de dónde sale el golpe: allí vuelve la bola si cae en la lava
-  if (!ball.from && course.lava && (ball.vx !== 0 || ball.vz !== 0)) ball.from = [ball.x, ball.z];
+  if (!ball.from && hasHazards(course) && (ball.vx !== 0 || ball.vz !== 0)) ball.from = [ball.x, ball.z];
   if (ball.air) return airStep(course, segs, ball, dt);
   if (ball.track) {
     const ev = trackStep(course, ball, dt);
@@ -679,6 +687,7 @@ export function step(course, segs, ball, t, dt) {
   }
 
   if (course.lava && inLava(course, ball.x, ball.z)) return { sunk: false, hit, bumper, portal, lava: burn(course, ball) };
+  if (course.pits && inPit(course, ball.x, ball.z)) return { sunk: false, hit, bumper, portal, pit: true, lava: burn(course, ball) };
 
   const [hx, hz] = course.cup;
   const toCup = hyp(ball.x - hx, ball.z - hz);

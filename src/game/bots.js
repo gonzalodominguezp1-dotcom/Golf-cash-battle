@@ -31,11 +31,11 @@ function segBlocked(ax, az, bx, bz, segs, course) {
 const JUMP_REACH = 3.2;
 
 /**
- * ¿La línea de a a b pasa por lava? No cuenta la que cruza justo después de
+ * ¿La línea de a a b pasa por lava o por un agujero? No cuenta la que cruza justo después de
  * subir por una rampa (la salta), ni la de la lava en la que ya está a.
  */
 function lavaBlocks(ax, az, bx, bz, course) {
-  if (!course.lava) return false;
+  if (!course.lava && !course.pits) return false;
   const rx = bx - ax, rz = bz - az, len = Math.hypot(rx, rz);
   if (len < 1e-6) return false;
   // dónde pasa la línea por el labio de cada rampa (en metros desde a)
@@ -51,7 +51,8 @@ function lavaBlocks(ax, az, bx, bz, course) {
     if (Math.abs(lat) < across) lips.push(s);
   }
   const cross = (ux, uz, vx, vz) => ux * vz - uz * vx;
-  for (const { poly } of course.lava) {
+  // los agujeros cortan el paso igual que la lava
+  for (const { poly } of [...(course.lava ?? []), ...(course.pits ?? [])]) {
     for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
       const [cx, cz] = poly[j], [dx, dz] = poly[i];
       const sx = dx - cx, sz = dz - cz;
@@ -169,7 +170,7 @@ export class Bot {
     const miss = 1 - this.player.skill;
     const ang = Math.atan2(dx, -dz) + gauss(rng) * (0.015 + miss * 0.09);
     const dirX = Math.sin(ang), dirZ = -Math.cos(ang);
-    if (course.slopes || course.mounds || course.loops || course.portals || course.lava || course.ramps) return { dirX, dirZ, search: new PowerSearch(course, segs, ball, dirX, dirZ, target) };
+    if (course.slopes || course.mounds || course.loops || course.portals || course.lava || course.pits || course.ramps) return { dirX, dirZ, search: new PowerSearch(course, segs, ball, dirX, dirZ, target) };
     const firm = target.isCup && !course.noCup;
     let power = powerFor(course, segs, ball, dirX, dirZ, firm ? dist + 0.4 : dist);
     // al hoyo se le pega con firmeza: la búsqueda da justo el mínimo para llegar
