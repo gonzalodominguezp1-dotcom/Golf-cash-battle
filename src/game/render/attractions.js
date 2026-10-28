@@ -434,72 +434,13 @@ export function buildLoop(scene, loop, style, i = 0) {
 
   scene.add(g);
 
-  // 7. Gestión unificada de transparencia ante obstrucción de cámara
-  const fadeMats = [];
-  g.traverse((o) => {
-    if (o.isMesh && o.material) {
-      const mats = Array.isArray(o.material) ? o.material : [o.material];
-      for (const m of mats) {
-        if (m && !fadeMats.some((e) => e.mat === m)) {
-          m.transparent = true;
-          fadeMats.push({
-            mat: m,
-            baseOpacity: m.opacity != null ? m.opacity : 1.0,
-            baseEmissive: m.emissiveIntensity != null ? m.emissiveIntensity : 0,
-          });
-        }
-      }
-    }
-  });
-
-  let currentOpacity = 1.0;
+  // 7. El carril es macizo: se ve por las dos caras y nunca se transparenta
+  for (const m of [trackBedMat, curbMat, hullMat]) m.side = THREE.DoubleSide;
 
   return {
-    update(t, ball, cameraPos) {
+    update(t) {
       // Animación continua de los cheurones de avance a lo largo del carril
       chevronTex.offset.y = -t * 1.6;
-
-      // Detección de obstrucción entre la cámara y la bola
-      let blocksBall = false;
-      const midPoint = topSlice;
-      const reachR = loop.radius + 0.45;
-
-      if (ball && cameraPos) {
-        {
-          // Raycast analítico cámara -> bola respecto al cilindro aproximado del looping
-          const dx = ball.x - cameraPos.x, dz = ball.z - cameraPos.z;
-          const lenSq = dx * dx + dz * dz;
-          if (lenSq > 1e-4) {
-            const tRay = ((midPoint.cx - cameraPos.x) * dx + (midPoint.cz - cameraPos.z) * dz) / lenSq;
-            if (tRay > 0.03 && tRay < 0.97) {
-              const rx = cameraPos.x + tRay * dx, rz = cameraPos.z + tRay * dz;
-              if (Math.hypot(midPoint.cx - rx, midPoint.cz - rz) < reachR) {
-                const ballY = ball.y != null ? ball.y : 0.05;
-                const rayY = cameraPos.y + tRay * (ballY - cameraPos.y);
-                if (rayY >= -0.1 && rayY <= topSlice.cy + 0.3) {
-                  blocksBall = true;
-                }
-              }
-            }
-          }
-        }
-      }
-
-      // si tapa la bola se aclara a la mitad, pero el looping se sigue viendo entero
-      const targetOpacity = blocksBall ? 0.5 : 1.0;
-      currentOpacity += (targetOpacity - currentOpacity) * 0.2;
-
-      for (const entry of fadeMats) {
-        entry.mat.opacity = currentOpacity * entry.baseOpacity;
-        entry.mat.depthWrite = currentOpacity > 0.95;
-        if (entry.baseEmissive > 0) {
-          entry.mat.emissiveIntensity = entry.baseEmissive * (0.15 + 0.85 * (currentOpacity - 0.1) / 0.9);
-        }
-      }
-
-      if (loopLight) {
-        loopLight.intensity = baseLightIntensity * (0.15 + 0.85 * (currentOpacity - 0.1) / 0.9);
-      }
     },
   };
 }
