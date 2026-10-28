@@ -956,7 +956,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         <span><kbd>Esc</kbd> Ajustes</span>
         ${freePlay ? '<span><kbd>R</kbd> Reiniciar hoyo</span>' : ''}
       </div>
-      <div class="power"><div class="fill"></div><span>0%</span></div>
+      <div class="power"><div class="fill"></div></div>
       <button class="map-btn" aria-label="Ver el hoyo completo">Ver mapa <kbd class="kbd-hint">Espacio</kbd></button>
     </main>`);
   const gameClass = loadGolfGame();
@@ -1164,7 +1164,6 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       },
       onAim: (p) => {
         power.querySelector('.fill').style.height = `${p * 100}%`;
-        power.querySelector('span').textContent = `${Math.round(p * 100)}%`;
         power.classList.toggle('active', p > 0);
         power.classList.toggle('full', p >= 1);
       },
