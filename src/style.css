@@ -3040,3 +3040,59 @@ body.sk-noscroll { overflow: hidden; }
 .reward-note { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 12px 0 0; padding: 8px 12px; border-radius: 12px; font-weight: 800; font-size: 14px; color: var(--yellow); background: rgba(255, 210, 63, 0.12); box-shadow: 0 0 0 1px rgba(255, 210, 63, 0.3) inset; }
 .reward-note i { width: 8px; height: 8px; border-radius: 50%; background: var(--yellow); box-shadow: 0 0 8px var(--yellow); animation: pulse-dot 1.4s ease-in-out infinite; }
 @keyframes pulse-dot { 50% { opacity: 0.35; } }
+
+/* indicador del hoyo (GolfGame#updateCupMarker) */
+.cup-marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 4;
+  pointer-events: none;
+  will-change: transform;
+}
+.cup-marker[hidden] { display: none; }
+.cup-marker svg {
+  position: absolute;
+  left: -15px;
+  top: -15px;
+  width: 30px;
+  height: 30px;
+  padding: 6px;
+  box-sizing: border-box;
+  color: #fff;
+  border-radius: 50%;
+  background: rgba(18, 25, 36, 0.82);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45), 0 0 0 1.5px rgba(255, 255, 255, 0.85) inset;
+}
+.cup-arrow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  margin: -6px 0 0 -4px;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+  border-left: 9px solid #fff;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
+  transform-origin: 4px 6px;
+  transform: rotate(var(--a, 90deg)) translateX(19px);
+}
+.cup-marker.off svg { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45), 0 0 0 1.5px #ffe066 inset; }
+.cup-marker.off .cup-arrow { border-left-color: #ffe066; }
+
+/* móvil estrecho: sonido y pantalla completa ya están en Ajustes; Ajustes queda como icono */
+@media (max-width: 520px) {
+  .hud .pill.mute, .hud .pill.fullscreen { display: none !important; }
+  .hud .pill.settings-btn-hud {
+    font-size: 0 !important;
+    width: 34px;
+    padding: 0 !important;
+  }
+  .hud .pill.settings-btn-hud::before { content: '\2699\FE0E'; font-size: 18px; line-height: 1; }
+  .hud .pill { padding: 6px 9px; }
+  /* juego libre: sin "Modo Libre" ni el nombre del hoyo (sale en la intro); Reiniciar queda como icono */
+  .is-freeplay .hud .pill.freeplay-pill, .is-freeplay .hud .pill.freeplay-pill + .pill { display: none; }
+  .hud .pill.restart-btn { font-size: 0 !important; width: 34px; padding: 0 !important; }
+  .hud .pill.restart-btn::before { content: '\21BB'; font-size: 18px; line-height: 1; }
+}

@@ -479,9 +479,10 @@ export function buildCourse(scene, course, theme) {
       pole.position.y += (hc + 0.85 + targetY - pole.position.y) * 0.1;
       cloth.position.y = pole.position.y + 0.83;
 
-      // un poste se vuelve 90% invisible (10% opacidad) ÚNICA Y EXCLUSIVAMENTE si tapa la pelota
+      // un poste se vuelve 90% invisible (10% opacidad) si tapa la pelota o si está pegado a la cámara
       for (const p of posts) {
-        const blocks = ball ? postBlocksBall(cam, ball, p) : false;
+        // o si está pegado a la cámara: de cerca su bola roja tapaba media pantalla en el móvil
+        const blocks = ball ? postBlocksBall(cam, ball, p) || Math.hypot(p.x - cam.x, p.z - cam.z) < 1.4 : false;
         p.opacity += ((blocks ? 0.1 : 1) - p.opacity) * 0.2;
         p.meshes.forEach((m) => (m.visible = true));
         for (const m of p.mats) {
