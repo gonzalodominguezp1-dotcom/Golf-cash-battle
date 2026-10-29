@@ -130,6 +130,40 @@ Bots de la disposición con bolsa cerrada (modelo `bots.js`, 12 partidas de `cou
 
 Alternativas para decidir (no aplicadas): (a) aceptar entradas por la salida con un coste medido y un criterio distinto; (b) cambiar la orientación del looping para que la salida dé a una zona sin campo; (c) permitir la salida solo tras el portal de salida, con un segundo portal en la boca de salida (requiere decisión sobre física de portales).
 
+## Registro de la orientación (2026-10-29, tarea 1 detenida, criterio no alcanzado)
+
+Sonda con el mismo barrido de la sección anterior (tee + 93 puntos libres, yaw y potencia cuantizados, 71.911 golpes), con los muros de bolsa. Giro del looping alrededor de la boca de entrada fija (dir = [sen θ, −cos θ]). Cifras: entradas por la salida desde el campo / entradas por la boca con portal / entradas por la boca sin portal.
+
+| θ (grados) | Salida | Con portal | Sin portal |
+|---|---|---|---|
+| 0 (base) | 765 | 1.894 | 51 |
+| -10 | 659 | 793 | 2 |
+| 10 | 756 | 1.830 | 30 |
+| 15 | 548 | 1.822 | 5 |
+| 20 | 633 | 1.766 | 0 |
+| 25 | 634 | 1.657 | 0 |
+| 30 | 655 | 1.587 | 0 |
+| 40 | 666 | 1.294 | 5 |
+| 50 | 594 | 826 | 3 |
+| 60 | 593 | 393 | 1 |
+| 75 | 484 | 116 | 0 |
+| 90 | 316 | 97 | 11 |
+| -20 | 676 | 136 | 0 |
+| -30 | 671 | 4 | 0 |
+| -40 | 675 | 0 | 0 |
+| -50 | 636 | 0 | 0 |
+| -60 | 736 | 0 | 0 |
+| -75 | 95 | 0 | 1 |
+| -90 | 46 | 0 | 21 |
+
+Lectura: con θ ≤ 0 casi no entra la bola por el portal, y con θ ≥ 75° el looping pierde el acceso; las salidas que quedan en 0 por el portal no cuentan. El mejor giro que mantiene el acceso es θ = 15° (548 salidas, 1.822 entradas por portal, 5 directas), pero no llega a 0. Sin cambiar el criterio, ninguna orientación cumple 0.
+
+Prueba de muro largo (no es orientación, solo referencia): alargar los bordillos de salida (`tubeL`) baja las salidas a 176 con L = 5 m y a 0 con L = 9 m. Con L = 9 m el tubo sale del contorno (z ≈ −10,2) y la muestra baja de 93 a 81 puntos (los de dentro del tubo dejan de ser libres). No es válido: ni cumple el tamaño de muestra ni deja una salida jugable.
+
+Causa: la salida y la aproximación desde el campo comparten la misma ventana de captura (±0,2 m) y el mismo sentido de paso, así que un muro o un giro del looping no separa las dos. Los puntos del campo con línea de tiro directa a la ventana (en el eje de la salida o detrás de su boca) siguen contando.
+
+Decisión pendiente (la persona): (a) aceptar un número distinto de entradas por la salida con una cifra medida y un criterio nuevo; (b) cambiar física de salida (no permitido por la restricción actual); (c) segundo portal en la boca de salida (requiere física de portales).
+
 ## Decisiones que la persona debe aprobar
 
 1. El concepto de dos rutas y la disposición como principio; coordenadas definitivas tras la tarea 1.
