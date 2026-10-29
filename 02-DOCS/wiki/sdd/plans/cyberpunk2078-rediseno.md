@@ -164,6 +164,51 @@ Causa: la salida y la aproximación desde el campo comparten la misma ventana de
 
 Decisión pendiente (la persona): (a) aceptar un número distinto de entradas por la salida con una cifra medida y un criterio nuevo; (b) cambiar física de salida (no permitido por la restricción actual); (c) segundo portal en la boca de salida (requiere física de portales).
 
+## Sonda definitiva (2026-10-29, θ = 0, bolsa cerrada)
+
+Criterio de portal (enmienda del spec, 2026-10-29): entradas sin portal, por la boca más por la salida, ≤ 2 % del barrido.
+
+Coordenadas finales (sustituyen a la sección A; θ = 0, `dir = [0,-1]`):
+
+| Elemento | Valor |
+|---|---|
+| Tee | (-1,0; 8,6) |
+| Portal de acceso a / destino b | (-1,0; 5,6) / (-1,0; 3,0), r 0,42 |
+| Muro W1 | (-4; 4,2) → (0,4; 4,2) |
+| Muro W2 | (0,4; 4,2) → (0,4; 0,6) |
+| Muros de la bolsa | (-4; 0,6) → (-1,48; 0,6); (-0,52; 0,6) → (0,4; 0,6); (-1,48; 0,3) → (-0,52; 0,3) |
+| Acelerador | `{x:-1.0, z:1.5, w:0.8, d:1.4, dir:[0,-1], speed:11}` (z 0,8…2,2) |
+| Looping | `{x:-1.36, z:-0.3, dir:[0,-1], len:4.4, w:2.6, radius:1.2}`, boca z 0,6 |
+| Bloque móvil | `{x:2.2, z:1.2, w:1.2, d:0.6, axis:'x', range:1.0, speed:1.2}` |
+| Molino | `windmill({x:2.2, z:-5.0, w:1.0, depth:1.4, left:0.4, right:4.0, speed:1.2, blades:3})` |
+| Bumpers | (3,2; 2,6) r 0,4; (2,6; -3,2) r 0,4 |
+| Arena | (2,4; -7,6), w 1,4, d 1,2 |
+| Cup | (2,4; -8,4) |
+| Waypoints (bots) | `[[-1,5.6],[2.4,3.2],[2.2,0.2],[1.0,-3.6],[2.2,-4.0]]` |
+| Contorno | `[[-4,10],[4,10],[4,-10],[-4,-10]]` |
+
+Medición del criterio (barrido de 93 puntos libres y el tee, yaw y potencia cuantizados, 71.911 golpes; `probe3.mjs` con `closeBag` y `theta 0`):
+
+- Entradas por la boca sin portal: 51 (0,07 %).
+- Entradas por la salida sin portal: 765 (1,06 %).
+- Total sin portal: 816 (1,13 %). Cumple ≤ 2 % (límite 1.438).
+- Entradas por portal: 1.894 (2,63 %).
+
+Ruta A (tiro del tee, yaw ±6°, potencia 0,5–1,0; 2.193 golpes, todos cruzan el portal):
+
+- Completan el looping: 2.095 de 2.193 = 95,53 % (criterio ≥ 95 %). Margen fino.
+- Completan el 100 % con |yaw| ≤ 4,5°. Los 98 fallos están solo con |yaw| ≥ 4,9°: entran por el carril con 6,8–8,8 m/s, bajo el umbral.
+- Velocidad en la boca: mediana 10,90 m/s, mínimo 6,79 m/s (fallos de borde). Umbral 8,9 m/s.
+- Parada: mediana z = -8,27.
+
+Bots (modelo `bots.js`, skill 0,85, semilla 4242 y 4343, N = 200):
+
+- Ruta A: mediana 2 golpes, media 2,08; 200/200 embocan.
+- Ruta B: mediana 5 golpes, media 5,75; 147/200 embocan. 146 llegan a la cup sin portal ni looping: **la ruta B existe**.
+- 12 bots de courses.test.js: 9 con menos de 8 golpes, media 5,67 (semilla propia; se verifica con el test real).
+
+Observado y no es criterio: en el barrido desde el campo, 564 golpes embocan sin pasar por el looping.
+
 ## Decisiones que la persona debe aprobar
 
 1. El concepto de dos rutas y la disposición como principio; coordenadas definitivas tras la tarea 1.

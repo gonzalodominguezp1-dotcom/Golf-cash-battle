@@ -83,6 +83,10 @@ No se añade ninguna primitiva nueva de física.
 
 **2026-10-29 (decisión de la persona, D-A).** Se elimina el criterio «Coste parecido» entre la ruta A y la ruta B. La ruta A es la espectacular y más barata; la ruta B es la alternativa segura y más lenta. No se exige que ambas rutas cuesten lo mismo, y ninguna medición del coste A/B forma parte de la aceptación.
 
+**2026-10-29 (decisión de la persona, criterio de portal).** La entrada por delante solo es válida por el portal de acceso. Se acepta una fracción medida de entradas sin portal desde el campo, como mecánica de looping ya existente, con el límite de **≤ 2 % de los golpes del barrido**. Ese límite cuenta las entradas sin portal por la boca más las entradas por la salida. No se exige 0 entradas por la salida ni 0 entradas directas. No se añade segundo portal ni se cambia la física. El test de portal obligatorio mide con este límite.
+
+Medición (71.911 golpes, bolsa cerrada, θ = 0): 51 directas por la boca y 765 por la salida, 816 en total (1,13 %).
+
 ## Preguntas abiertas
 
 - ¿Apruebas el concepto de dos rutas (A espectacular, B segura) con portal obligatorio?
