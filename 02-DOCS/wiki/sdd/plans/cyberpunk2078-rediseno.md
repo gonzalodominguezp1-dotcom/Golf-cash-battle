@@ -48,8 +48,7 @@ Cifras medidas en la disposición de prueba (sin bloque ni molino):
 Todo determinista: `step()` de physics.js con `DT = 1/120`, desde el tee, con `quantizeShot` y `shotVelocity`.
 
 1. **Sonda de la disposición (tarea 1, script temporal en el scratchpad).** Mide: golpes directos a la boca (debe ser 0); golpes por portal que entran y los que completan; golpes que embocan en un tiro (debe ser 0 en la ruta A); parada de la ruta A (mediana y dispersión).
-2. **Coste de cada ruta.** Modelo de error de `bots.js` (skill 0,85: σ yaw ≈ 0,0285 rad, σ potencia ≈ 5,8 %), semilla fija, N = 200 por ruta. Criterio: |mediana_A − mediana_B| ≤ 1.
-3. **Bots de todo el hoyo.** Las 12 partidas de courses.test.js:57-71: al menos 9 con menos de 8 golpes; media ≤ 6,5.
+2. **Bots de todo el hoyo.** Las 12 partidas de courses.test.js:57-71: al menos 9 con menos de 8 golpes; media ≤ 6,5.
 
 Medición previa (en memoria): 0 de 2499 golpes directos a la boca; 2473 de 2499 entran por portal; 0 embocan en un tiro; parada mediana de la ruta A en z = -8,27.
 
@@ -80,9 +79,9 @@ Verificación de que no tocan la simulación: grep de imports desde `src/game/*.
 
 ## D. Tareas (orden de dependencia)
 
-1. **Sonda de la disposición.** Ejecutar la sonda con la disposición de A; fijar coordenadas finales. Done: 0 golpes directos a la boca; proporción de entrada por portal; medianas de A y B; coordenadas escritas en este plan.
+1. **Sonda de la disposición.** Ejecutar la sonda con la disposición de A; fijar coordenadas finales. Done: 0 golpes directos a la boca; proporción de entrada por portal; 0 entradas por la salida; coordenadas escritas en este plan.
 2. **Hoyo.** Reemplazar el objeto `Cyberpunk2078` (352-369) y `LOOP_CYBER` (58-59) con `theme: 'cyber2078'`; añadir el tema en themes.js. Done: `COURSES.length === 15`, último = 'Cyberpunk2078', `loops[0].radius === 1.2`, `loops[0].x === -1.36`.
-3. **Tests (reescribir v1 y añadir nuevos).** Los 3 tests v1 dependen de la geometría anterior, así que se reescriben: portal obligatorio (barrido de yaw ±45° y potencia 0,3–1,0; ningún golpe entra al looping sin pasar por el portal); looping (barrido yaw ±6°, potencia 0,5–1,0; ≥ 95 % entran y completan; velocidad ≥ umbral + 1); ruta B (existe un golpe sin portal ni looping que llega a la cup, ver decisión 2); coste parecido (|mediana A − mediana B| ≤ 1 con N = 200). Done: los 4 tests nuevos fallan con la v1 y pasan con la nueva disposición.
+3. **Tests (reescribir v1 y añadir nuevos).** Los 3 tests v1 dependen de la geometría anterior, así que se reescriben: portal obligatorio (barrido de yaw ±45° y potencia 0,3–1,0; ningún golpe entra al looping sin pasar por el portal); looping (barrido yaw ±6°, potencia 0,5–1,0; ≥ 95 % entran y completan; velocidad ≥ umbral + 1); ruta B (existe un golpe sin portal ni looping que llega a la cup, ver decisión 2); entrada por la salida (0 entradas desde el campo). Done: los 4 tests nuevos fallan con la v1 y pasan con la nueva disposición.
 4. **Freeplay.** `tests/freeplay.test.js:8-9` ya está en 15. Done: sigue en 15.
 5. **Sincronía.** `pnpm sync:functions` tras la tarea 2. Done: diff sin salida para courses.js y physics.js.
 6. **Entorno.** environment.js, cyberpunkEnvironment.js y themes.js, gateados por tema. Done: `pnpm test` verde; test de que en calidad `low` se añade menos de N mallas; otros hoyos neón sin cambios.
@@ -102,6 +101,34 @@ Orden: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11.
 - **Rendimiento y legibilidad:** solo se comprueban en navegador.
 - **Webp:** el generador necesita Chrome con WebGL; sin verificar.
 - **Cifras de la sección A:** son de la disposición de prueba y hay que repetirlas con la final.
+
+## Enmienda
+
+**2026-10-29 (decisión de la persona, D-A).** Se elimina el criterio de coste parecido entre la ruta A y la ruta B (spec, sección Enmienda). Quedan sin efecto: la sección B, punto 2 (coste de cada ruta, N = 200), la cifra de «Coste parecido» de la tarea 3 y las alternativas de coste de la sección B. No se mide ni se exige coste A/B.
+
+## Registro de la sonda (2026-10-29, tarea 1 detenida)
+
+Disposición de la sección A con los muros de bolsa (`[-4,0.6]-[-1.48,0.6]`, `[-0.52,0.6]-[0.4,0.6]`, `[-1.48,0.3]-[-0.52,0.3]`), sin cerrar la salida. Barrido de 93 puntos libres y el tee, con yaw y potencia cuantizados (71.911 golpes).
+
+- Entradas por la boca sin portal: 459 sin bolsa cerrada; 51 con la bolsa cerrada.
+- Entradas por la boca con portal: 1.699 sin cerrar; 1.894 con la bolsa cerrada.
+- **Entradas por la salida desde el campo: 765** (sin cerrar la salida).
+
+Pruebas de cierre de la salida (todas con la bolsa cerrada), sin conseguir 0:
+
+| Variante | Entradas por la salida |
+|---|---|
+| Sin cambios | 765 |
+| Muro diagonal que desvía la salida | 1.012 |
+| Muro horizontal con hueco en el carril de salida | 1.139 |
+| Arena pequeña sobre la salida (`x -1,72, z -2,2, w 1,0, d 1,6`) | 473 |
+| Arena grande sobre la salida (`x -1,72, z -2,6, w 1,6, d 2,4`) | 337 |
+
+Motivo: la captura de la salida (`enterLoop`, física) se comprueba antes que las colisiones y es simétrica. Un muro que impide entrar por la salida también impide salir. Sin cambiar física ni LOOP_LANE no hay disposición con 0 entradas por la salida que mantenga la ruta A.
+
+Bots de la disposición con bolsa cerrada (modelo `bots.js`, 12 partidas de `courses.test.js`): 9 de 12 con menos de 8 golpes; media 5,67. Cumple el criterio.
+
+Alternativas para decidir (no aplicadas): (a) aceptar entradas por la salida con un coste medido y un criterio distinto; (b) cambiar la orientación del looping para que la salida dé a una zona sin campo; (c) permitir la salida solo tras el portal de salida, con un segundo portal en la boca de salida (requiere decisión sobre física de portales).
 
 ## Decisiones que la persona debe aprobar
 

@@ -29,7 +29,7 @@ Par 4 sin cambio. La complejidad está en las rutas, no en los golpes.
 
 - **Ruta A (espectacular):** del tee, la bola entra en el portal de acceso. El portal la deposita en la zona de lanzamiento del looping. Con el boost previo, el looping se completa y la bola sale hacia la cup.
 - **Ruta B (segura):** rodeo por el lado opuesto. Pasa entre un bloque móvil y un molino, rebota en dos bumpers y llega a la cup por el carril lateral.
-- Ambas rutas deben tener un coste de golpes esperado parecido (ver criterios). La ruta A exige más precisión; la B exige más tiempo y timing.
+- La ruta A es la espectacular y la más barata; la B es la alternativa segura y más lenta (ver Enmienda). La ruta A exige más precisión; la B exige más tiempo y timing.
 
 La disposición exacta (coordenadas de muros, portal, boost, looping, bloque móvil, molino y bumpers) se fija en el plan con simulación y vista cenital, como en la versión anterior.
 
@@ -66,7 +66,6 @@ No se añade ninguna primitiva nueva de física.
 - **Portal obligatorio:** ningún golpe directo a la boca del looping entra. Solo entra la bola que pasa por el portal de acceso (test nuevo).
 - **Looping:** con el boost, la bola de la ruta A completa el looping con margen medido.
 - **Ruta B:** existe al menos un golpe que llega a la cup sin tocar el portal ni el looping.
-- **Coste parecido:** la mediana de golpes de la ruta A y de la B difiere como máximo en 1 golpe.
 - **Bots:** al menos 9 de 12 terminan con menos de 8 golpes; media ≤ 6,5 (`courses.test.js:57-71`).
 - **Sin cambios fuera del hoyo:** `LOOP_LANE`, `LOOP_LANE_HALF` y los hoyos existentes no cambian.
 - **Determinismo:** los efectos visuales no modifican el estado de la simulación. `pnpm test` verde (123 + tests nuevos).
@@ -79,6 +78,10 @@ No se añade ninguna primitiva nueva de física.
 - **Portal obligatorio + bots:** los bots pueden no encontrar la ruta A. Hay que medir antes de fijar la disposición.
 - **Rendimiento:** la ciudad y los efectos suman draw calls. Se usan los niveles de calidad existentes (`quality()`), y el hoyo debe funcionar en el nivel bajo.
 - **Legibilidad:** demasiados neones pueden tapar la bola. Hay que probar contraste en la vista cenital y en partida.
+
+## Enmienda
+
+**2026-10-29 (decisión de la persona, D-A).** Se elimina el criterio «Coste parecido» entre la ruta A y la ruta B. La ruta A es la espectacular y más barata; la ruta B es la alternativa segura y más lenta. No se exige que ambas rutas cuesten lo mismo, y ninguna medición del coste A/B forma parte de la aceptación.
 
 ## Preguntas abiertas
 
