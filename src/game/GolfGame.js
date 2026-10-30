@@ -4,6 +4,7 @@ import { Bot } from './bots.js';
 import { THEMES } from './themes.js';
 import { buildEnvironment, courseBounds } from './render/environment.js';
 import { buildCourse } from './render/course.js';
+import { createCyberFx } from './render/cyberpunkFx.js';
 import { ballPose, groundHeight } from './render/terrain.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
@@ -426,6 +427,8 @@ export class GolfGame {
     const rng = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
     this.env = buildEnvironment(scene, this.course, this.theme, rng);
     this.courseView = buildCourse(scene, this.course, this.theme);
+    // efectos del hoyo 15 (solo visuales: leen la bola y los eventos, no escriben la simulación)
+    this.cyberFx = this.theme.cyberCity ? createCyberFx(scene, this.course) : null;
     const q = quality();
     // reflejos suaves de un estudio: los plásticos y metales dejan de verse apagados
     // (de noche y en neón no: los metales oscuros reflejarían un estudio blanco y brillarían de más)
@@ -1247,6 +1250,7 @@ export class GolfGame {
       const r = step(this.course, this.segs, this.ball, this.t, DT);
       const pose = ballPose(this.course, this.ball);
       const pos = this.#pos.set(pose.x, pose.y, pose.z);
+      if (r.portal >= 0) this.cyberFx?.onPortal(r.portal);
       if (r.portal >= 0 && this.course.portals[r.portal].tube) {
         // entra en un tubo: la bola viaja por dentro y la cámara la sigue
         sfx.portal();
@@ -1301,6 +1305,7 @@ export class GolfGame {
       }
       if (r.bumper >= 0) {
         this.courseView.bumpers[r.bumper].userData.squash = 0.18;
+        this.cyberFx?.onBumper(r.bumper);
         sfx.bumper();
         this.skinFx.onBumper(pos);
         if (this.genericFx.wall) {
@@ -1461,6 +1466,7 @@ export class GolfGame {
     this.env.update(this.t, dt);
     this.#placeCamera(realDt);
     this.courseView.update(this.t, this.camera.position, this.ball, this.camLook, this.overview);
+    this.cyberFx?.update(this.t, this.ball);
     this.fxCtx.speed = speed;
     this.fxCtx.moving = speed > 0.5;
     this.skinFx.update(this.t, dt, this.fxCtx);

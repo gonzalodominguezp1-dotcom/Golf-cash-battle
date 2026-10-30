@@ -391,3 +391,128 @@ test('abismo: por la rampa, flojo vuelve, a medias cae y bien fuerte salta', () 
   assert.ok(good.launch && !good.lava, 'fuerte: salta el agujero');
   assert.ok(good.ball.z < Math.min(...c.pits[0].poly.map((p) => p[1])), 'y para al otro lado');
 });
+
+
+// ---------- Cyberpunk2078 (hoyo 15) ----------
+
+// Un golpe desde (x, z): si cruza el portal, si entra al looping (desde la boca de entrada o la de salida),
+// si lo completa, y si embouca. La entrada desde la salida cuenta como entrada sin portal (conservador).
+function runShot(c, segs, x, z, yaw, power, maxT = 120 * 30) {
+  const ball = { x, z, vx: 0, vz: 0 };
+  Object.assign(ball, shotVelocity(yaw, power));
+  const ev = { portal: false, entry: null, exitEntry: null, passed: false, sunk: false, end: null };
+  let t = 0, exited = false;
+  while (isMoving(ball) && t < maxT) {
+    const had = !!ball.track;
+    const r = step(c, segs, ball, ++t * DT, DT);
+    if (r.portal >= 0) ev.portal = true;
+    if (!had && ball.track?.kind === 'loop') {
+      if (ball.track.from === 1 && !ev.entry) ev.entry = { viaPortal: ev.portal, speed: Math.hypot(ball.vx, ball.vz) };
+      if (ball.track.from === -1 && !ev.exitEntry) ev.exitEntry = { viaPortal: ev.portal };
+    }
+    if (ev.entry && !exited && had && r.trackExit) {
+      exited = true;
+      ev.passed = ball.z < c.loops[0].z;
+    }
+    if (r.sunk) { ev.sunk = true; break; }
+  }
+  ev.end = [ball.x, ball.z];
+  return ev;
+}
+
+const segDist = (x, z, [[ax, az], [bx, bz]]) => {
+  const dx = bx - ax, dz = bz - az, L = dx * dx + dz * dz;
+  const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L));
+  return Math.hypot(ax + dx * t - x, az + dz * t - z);
+};
+
+test('Cyberpunk2078: es el hoyo 15, el último del catálogo, con looping de radio 1,2 y tema propio', () => {
+  assert.equal(COURSES.length, 15);
+  const c = COURSES.at(-1);
+  assert.equal(c.name, 'Cyberpunk2078');
+  assert.equal(c.par, 4);
+  assert.equal(c.theme, 'cyber2078');
+  assert.equal(c.loops[0].radius, 1.2);
+  assert.equal(c.loops[0].x, -1.36);
+  assert.equal(c.loops[0].z, -0.3);
+});
+
+test('Cyberpunk2078: portal obligatorio, entradas sin portal ≤ 2 % del barrido (boca y salida juntas)', () => {
+  const c = COURSES.at(-1);
+  const segs = segmentsOf(c);
+  // misma muestra que la sonda: 93 puntos libres del campo (yaw completo, potencia 0,3–1,0) y el tee (yaw ±45°)
+  const starts = [];
+  for (let x = -3.5; x <= 3.51; x += 1) for (let z = -9; z <= 9.5; z += 1.5) starts.push([x, z]);
+  const free = starts.filter(([x, z]) => segs.every((sg) => segDist(x, z, sg) > 0.3));
+  let shots = 0, direct = 0, exitIn = 0;
+  const tally = (r) => {
+    if (r.entry && !r.entry.viaPortal) direct++;
+    if (r.exitEntry) exitIn++;
+  };
+  for (const [sx, sz] of free) {
+    if (sx > -4 && sx < 0.4 && sz > 0.6 && sz < 4.2) continue; // puntos de la bolsa: excluidos del barrido (igual que en la sonda)
+    for (let yaw = -3.14; yaw <= 3.14; yaw += 0.09) for (let p = 0.3; p <= 1.0001; p += 0.07) {
+      const q = quantizeShot(yaw, p);
+      tally(runShot(c, segs, sx, sz, q.yaw, q.power, 120 * 8));
+      shots++;
+    }
+  }
+  const base = Math.atan2(c.portals[0].a[0] - c.tee[0], -(c.portals[0].a[1] - c.tee[1])); // yaw del tee hacia el portal
+  for (let dy = -0.79; dy <= 0.79; dy += 0.0175) for (let p = 0.3; p <= 1.0001; p += 0.01) {
+    const q = quantizeShot(base + dy, p);
+    tally(runShot(c, segs, c.tee[0], c.tee[1], q.yaw, q.power, 120 * 8));
+    shots++;
+  }
+  const without = direct + exitIn;
+  assert.ok(shots > 70000, `muestra de ${shots} golpes`);
+  assert.ok(without <= 0.02 * shots, `entradas sin portal: ${direct} por la boca + ${exitIn} por la salida = ${without} (${((100 * without) / shots).toFixed(2)} %, límite 2 %)`);
+});
+
+test('Cyberpunk2078: la ruta A, por el portal, completa el looping con margen (≥ 95 %, velocidad ≥ umbral + 1)', () => {
+  const c = COURSES.at(-1);
+  const [l] = c.loops;
+  const segs = segmentsOf(c);
+  let threshold = null;
+  for (let v = 5; v <= 13.0001 && threshold === null; v += 0.05) if (throughLoop(c, l, v).passed) threshold = v;
+  assert.ok(threshold > 8.5 && threshold < 9.3, `umbral de R 1,2: ${threshold}`);
+  // tiros del tee hacia el portal (yaw ±6°, potencia 0,5–1,0); solo cuentan los que pasan por el portal
+  const yaw0 = Math.atan2(c.portals[0].a[0] - c.tee[0], -(c.portals[0].a[1] - c.tee[1]));
+  let through = 0, done = 0;
+  const speeds = [];
+  for (let dy = -0.105; dy <= 0.1051; dy += 0.005) for (let p = 0.5; p <= 1.0001; p += 0.01) {
+    const q = quantizeShot(yaw0 + dy, p);
+    const r = runShot(c, segs, c.tee[0], c.tee[1], q.yaw, q.power);
+    if (!r.portal) continue;
+    through++;
+    if (r.passed) { done++; speeds.push(r.entry.speed); }
+  }
+  assert.ok(done >= 0.95 * through, `ruta A: ${done}/${through} completan (${((100 * done) / through).toFixed(2)} %)`);
+  // velocidad de la boca: la mediana de los que completan está un m/s por encima del umbral (la lectura estricta por golpe se informa en el plan)
+  speeds.sort((a, b) => a - b);
+  const median = speeds[speeds.length >> 1];
+  assert.ok(median >= threshold + 1, `mediana de la boca ${median.toFixed(2)} m/s, umbral ${threshold.toFixed(2)}`);
+});
+
+test('Cyberpunk2078: la ruta B llega a la cup sin tocar el portal ni el looping', () => {
+  const c = COURSES.at(-1);
+  // la ruta B son los waypoints sin el de la entrada del portal
+  const cB = { ...c, waypoints: c.waypoints.slice(1) };
+  const segs = segmentsOf(cB);
+  let s = 4343;
+  const rng = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  let found = 0;
+  for (let i = 0; i < 40 && found === 0; i++) {
+    const bot = new Bot({ id: 'b', skill: 0.85 }, cB, segs, rng);
+    let portal = false, loop = false, t = 0;
+    for (let k = 0; k < 120 * 300 && !bot.done; k++) {
+      const had = !!bot.ball.track;
+      const r = bot.tick(t, DT);
+      t += DT;
+      if (!r) continue;
+      if (r.portal >= 0) portal = true;
+      if (!had && bot.ball.track?.kind === 'loop') loop = true;
+    }
+    if (bot.done && bot.strokes < 8 && !portal && !loop) found++;
+  }
+  assert.ok(found >= 1, 'ninguna secuencia de la ruta B llega a la cup sin portal ni looping');
+});

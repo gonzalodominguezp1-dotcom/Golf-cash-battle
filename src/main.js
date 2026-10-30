@@ -281,6 +281,8 @@ async function showLobby() {
 
 // ---------- skins ----------
 
+const LOCK_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10.5" rx="2.5" fill="currentColor"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
+
 const tierOrder = (s) => SKIN_TIERS[s.tier]?.order ?? 0;
 const FILTER_TIERS = Object.keys(SKIN_TIERS).reverse();
 
@@ -348,13 +350,13 @@ async function showSkins() {
           <span class="sk-ico" title="${tier.name}">${tier.icon}</span>
           <span class="sk-eq">Equipada</span>
           <img class="sk-thumb" src="${(open && thumbCached(skin, inst)) || ballPreview(skin, 152)}" width="76" height="76" alt="" draggable="false">
+          ${open ? '' : `<span class="sk-lock">${LOCK_SVG}</span>`}
           ${open && inst?.counter?.enabled ? '<span class="sk-chip">Marcador</span>' : ''}
           ${rare ? '<span class="sk-chip sk-chip-rare">✦ Patrón raro</span>' : ''}
         </div>
         <div class="sk-strip">
           <b>${skin.name}</b>
           <small>${tier.name}</small>
-          ${open ? '' : `<small class="req">${req.text}</small><span class="bar"><i style="width:${req.ratio * 100}%"></i></span>`}
         </div>
       </button>`);
     const img = card.querySelector('.sk-thumb');
@@ -417,24 +419,30 @@ async function showSkins() {
           <button type="button" class="sk-view-back" aria-label="Cerrar inspección">‹ Skins</button>
           <span class="sk-view-title">${tier.icon} ${skin.name}</span>
         </div>
-        <div class="sk-view-stage"><img class="sk-view-poster" src="${thumbCached(skin, progress.instance(skin.id)) ?? ballPreview(skin, 288)}" alt="" draggable="false"></div>
+        <div class="sk-view-stage">
+          <div class="sk-view-canvas"><img class="sk-view-poster" src="${thumbCached(skin, progress.instance(skin.id)) ?? ballPreview(skin, 288)}" alt="" draggable="false"></div>
+          <div class="sk-view-lock" hidden>
+            <span class="sk-lock sk-lock-big">${LOCK_SVG}</span>
+            <div class="sk-view-req"><small></small><span class="bar"><i></i></span></div>
+          </div>
+        </div>
         <div class="sk-view-actions">
-          <div class="sk-view-req"></div>
           <button type="button" class="primary sk-equip"></button>
         </div>
       </div>`);
     document.body.append(overlay);
     document.body.classList.add('sk-noscroll');
     const equipBtn = overlay.querySelector('.sk-equip');
-    const reqBox = overlay.querySelector('.sk-view-req');
+    const lockBox = overlay.querySelector('.sk-view-lock');
     const syncAction = () => {
       const req = progress.requirement(skin);
       const open = req.ratio >= 1;
       const isEq = progress.skin.id === skin.id;
       equipBtn.disabled = isEq || !open;
       equipBtn.textContent = isEq ? '✓ Equipada' : open ? 'Equipar' : 'Bloqueada';
-      reqBox.hidden = open;
-      reqBox.innerHTML = open ? '' : `<small>${req.text}</small><span class="bar"><i style="width:${req.ratio * 100}%"></i></span>`;
+      lockBox.hidden = open;
+      lockBox.querySelector('small').textContent = req.text;
+      lockBox.querySelector('.bar i').style.width = `${req.ratio * 100}%`;
     };
     syncAction();
     equipBtn.addEventListener('click', () => {
@@ -456,7 +464,9 @@ async function showSkins() {
     // el visor 3D (three.js + materiales) se descarga y crea solo ahora, al abrir
     loadSkinInspector().then(({ createSkinInspector }) => {
       if (view3d !== mine) return; // cerrado mientras cargaba
-      mine.inspector = createSkinInspector(overlay.querySelector('.sk-view-stage'), { skin, instance: progress.instance(skin.id) ?? undefined, mode: 'fullscreen' });
+      mine.inspector = createSkinInspector(overlay.querySelector('.sk-view-canvas'), { skin, instance: progress.instance(skin.id) ?? undefined, mode: 'fullscreen' });
+      // el candado va sobre el visor 3D, centrado en la bola (el visor vacía el contenedor al crearse)
+      overlay.querySelector('.sk-stage')?.append(lockBox);
     }).catch((err) => console.warn('inspector no disponible', err));
   }
 

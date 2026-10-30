@@ -11,21 +11,28 @@ export const QUALITY_NAMES = { low: 'Bajo', medium: 'Medio', high: 'Alto' };
 //   (perfGovernor.js) puede bajarlo en caliente, nunca subirlo por encima de aquí.
 // - ballSegments: segmentos {w, h} de la esfera de la bola.
 // - dimpleRes: resolución {w, h} del mapa normal de hoyuelos.
+// - rain: gotas de la lluvia del hoyo 15 (cyber2078); 0 = sin lluvia (una sola malla).
+// - puddles: charcos estáticos sobre el suelo del campo del hoyo 15 (0 = ninguno; una sola malla).
 // Ni la física ni `quality()` cambian la simulación.
 const PRESETS = {
   low: {
     pixelRatio: 1, shadows: false, shadowRes: 1024, bloom: false, decor: 0.45, texScale: 0.5, maxLights: 0, env: false,
-    skinFx: 'low', ballSegments: { w: 24, h: 16 }, dimpleRes: { w: 512, h: 256 },
+    skinFx: 'low', ballSegments: { w: 24, h: 16 }, dimpleRes: { w: 512, h: 256 }, rain: 0, puddles: 0,
   },
   medium: {
     pixelRatio: 1.5, shadows: true, shadowRes: 2048, bloom: true, decor: 0.75, texScale: 1, maxLights: 4, env: true,
-    skinFx: 'medium', ballSegments: { w: 48, h: 32 }, dimpleRes: { w: 1024, h: 512 },
+    skinFx: 'medium', ballSegments: { w: 48, h: 32 }, dimpleRes: { w: 1024, h: 512 }, rain: 900, puddles: 4,
   },
   high: {
     pixelRatio: 2, shadows: true, shadowRes: 4096, bloom: true, decor: 1, texScale: 2, maxLights: 8, env: true,
-    skinFx: 'high', ballSegments: { w: 64, h: 48 }, dimpleRes: { w: 1024, h: 512 },
+    skinFx: 'high', ballSegments: { w: 64, h: 48 }, dimpleRes: { w: 1024, h: 512 }, rain: 2200, puddles: 9,
   },
 };
+
+/** Ajustes de un nivel concreto (sin mirar lo guardado). */
+export function qualityPreset(level) {
+  return PRESETS[QUALITY_LEVELS.includes(level) ? level : 'medium'];
+}
 
 function isDesktop() {
   if (typeof window === 'undefined') return false;

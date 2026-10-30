@@ -55,6 +55,9 @@ const MILL_N1 = windmill({ x: -1.2, z: 2.6, w: 1, left: -2.6, right: 2.6, speed:
 const MILL_N2 = windmill({ x: 1.2, z: -4, w: 1, left: -2.6, right: 2.6, speed: -1.3, blades: 3, phase: 0.7 });
 const MILL_PRADO = windmill({ x: 0, z: 0.8, w: 1.1, depth: 1.6, left: -1.6, right: 1.6, speed: 1.2 });
 const LOOP_PRADO = { x: 2.4, z: -6.6, dir: [0, -1], len: 4.4, w: 1.6, radius: 0.8 };
+// Cyberpunk2078: looping grande (radio 1,2) con la boca de entrada en z 0,6. El carril de entrada (x + LOOP_LANE = -1) queda en línea con el acelerador.
+const LOOP_CYBER = { x: -1.36, z: -0.3, dir: [0, -1], len: 4.4, w: 2.6, radius: 1.2 };
+const MILL_CYBER = windmill({ x: 2.2, z: -5.0, w: 1.0, depth: 1.4, left: 0.4, right: 4.0, speed: 1.2, blades: 3 });
 
 
 
@@ -346,6 +349,31 @@ export const COURSES = [
     // de pared a pared: sin rampa no se puede pasar
     pits: [band(6.4, 3.8), band(-6.2, -9)],
     waypoints: [[-1.3, 9.6], [-1.3, 0.6], [0, -2.6], [0.8, -11.4]],
+  },
+  {
+    name: 'Cyberpunk2078',
+    tip: 'Ruta A: el portal te deja en el acelerador y el looping te lanza a la cup. Ruta B: rodea por la derecha entre el bloque y el molino',
+    par: 4,
+    theme: 'cyber2078',
+    tee: [-1.0, 8.6],
+    cup: [2.4, -8.4],
+    outline: [[-4, 10], [4, 10], [4, -10], [-4, -10]],
+    walls: [
+      // W1 y W2 (en L) separan la bolsa del looping del tee. Los muros de la bolsa se quitaron por orden de la persona (spec, enmienda 2026-10-30)
+      [[-4, 4.2], [0.4, 4.2]],
+      [[0.4, 4.2], [0.4, 0.6]],
+      ...MILL_CYBER.walls,
+    ],
+    bumpers: [{ x: 3.2, z: 2.6, r: 0.4 }, { x: 1.2, z: -0.8, r: 0.4 }],
+    sand: [{ x: -0.6, z: -8.1, w: 1.8, d: 3.0 }],
+    spinners: [],
+    movers: [{ x: 2.2, z: 1.2, w: 1.2, d: 0.6, axis: 'x', range: 1.0, speed: 1.2 }],
+    windmills: [MILL_CYBER.windmill],
+    boosts: [{ x: -1.0, z: 1.5, w: 0.6, d: 1.4, dir: [0, -1], speed: 11 }],
+    loops: [LOOP_CYBER],
+    // el único acceso al looping: la entrada por la boca sin portal es rara (ver test)
+    portals: [{ a: [-1.0, 5.6], b: [-1.0, 3.0], r: 0.42 }],
+    waypoints: [[-1.0, 5.6], [2.4, 3.2], [2.2, 0.2], [1.0, -3.6], [2.2, -4.0]],
   },
 ];
 

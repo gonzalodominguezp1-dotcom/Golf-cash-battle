@@ -91,8 +91,10 @@ function metalPlateTexture() {
 /**
  * Looping: carril en U con bordes de neón. Entra por delante a la derecha, da
  * la vuelta al anillo y sale por detrás a la izquierda (ver loopLateral en terrain.js).
+ * opts.blocks(cam, ball) dice si el anillo tapa la bola; si se pasa, todas sus mallas
+ * se transparentan al 10% con transición suave (como el molino). Sin opts, no cambia.
  */
-export function buildLoop(scene, loop, style, i = 0) {
+export function buildLoop(scene, loop, style, i = 0, opts = {}) {
   const g = new THREE.Group();
   const N = 150;
   const S = loopTable(loop).length, sA = 0, sB = S;
@@ -317,6 +319,9 @@ export function buildLoop(scene, loop, style, i = 0) {
 
   // D) Cheurones de avance animados en el centro de la pista
   const chevronTex = loopChevronTexture(color, style.kind);
+  // hoyo 15 (opts.plainPlate): los cheurones iban 3 mm sobre la pista y se mezclaban con ella (z-fighting).
+  // Se separan 8 mm y ganan por polygonOffset; el resto de loopings no cambia.
+  const chevronSep = opts.plainPlate ? 0.008 : 0.003;
   const chevronMat = new THREE.MeshStandardMaterial({
     map: chevronTex,
     transparent: true,
@@ -325,11 +330,12 @@ export function buildLoop(scene, loop, style, i = 0) {
     emissiveIntensity: isNeon ? 0.45 : (isNight ? 0.3 : 0.2),
     roughness: 0.3,
     depthWrite: false,
+    ...(opts.plainPlate ? { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 } : {}),
   });
   const chevronW = 0.12;
   const chevronGeo = buildStrip((k) => {
     const s = slices[k];
-    const offY = 0.003;
+    const offY = chevronSep;
     const p1 = [s.cx - s.lx * chevronW + s.nx * offY, s.cy - s.ly * chevronW + s.ny * offY, s.cz - s.lz * chevronW + s.nz * offY];
     const p2 = [s.cx + s.lx * chevronW + s.nx * offY, s.cy + s.ly * chevronW + s.ny * offY, s.cz + s.lz * chevronW + s.nz * offY];
     return [p1, p2];
@@ -408,19 +414,36 @@ export function buildLoop(scene, loop, style, i = 0) {
 
   // 5. Placas metálicas de transición y embudos en Entrada y Salida
   const plateTex = metalPlateTexture();
-  const plateMat = new THREE.MeshStandardMaterial({
-    map: plateTex,
-    roughness: 0.45,
-    metalness: 0.65,
-  });
+  // opts.plainPlate (hoyo 15): placa lisa y oscura, sin rejilla, y desplazada por polygonOffset para no
+  // solapar la superficie del césped (la rejilla se veía como una pieza aparte junto a la base)
+  const plateMat = opts.plainPlate
+    ? new THREE.MeshStandardMaterial({
+        color: 0x161a2e,
+        roughness: 0.35,
+        metalness: 0.6,
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+        polygonOffsetUnits: -4,
+      })
+    : new THREE.MeshStandardMaterial({
+        map: plateTex,
+        roughness: 0.45,
+        metalness: 0.65,
+      });
 
   const entrySlice = slices[0];
   const exitSlice = slices[slices.length - 1];
 
   for (const sl of [entrySlice, exitSlice]) {
-    const plateW = (halfW + curbW) * 2 + 0.16, plateD = 0.55;
+    const plateW = (halfW + curbW) * 2 + 0.16;
+    // opts.outReach: cuánto sale la placa de entrada por su lado exterior (la boca de fuera);
+    // el hoyo 15 la corta en la cara de la pared para no pisar la baldosa del acelerador
+    const sideOut = sl === entrySlice && opts.outReach !== undefined ? opts.outReach : null;
+    const plateD = sideOut === null ? 0.55 : 0.275 + sideOut;
     const plate = new THREE.Mesh(new THREE.BoxGeometry(plateW, 0.016, plateD), plateMat);
-    plate.position.set(sl.cx, 0.008, sl.cz);
+    // el lado exterior queda en -dirección de la entrada: se desplaza el centro para acortarla hacia fuera
+    const shift = sideOut === null ? 0 : (sideOut - 0.275) / 2;
+    plate.position.set(sl.cx - loop.dir[0] * shift, 0.008, sl.cz - loop.dir[1] * shift);
     plate.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), new THREE.Vector3(sl.lx, 0, sl.lz).normalize());
     plate.receiveShadow = true;
     g.add(plate);
@@ -437,10 +460,39 @@ export function buildLoop(scene, loop, style, i = 0) {
   // 7. El carril es macizo: se ve por las dos caras y nunca se transparenta
   for (const m of [trackBedMat, curbMat, hullMat]) m.side = THREE.DoubleSide;
 
+  // 8. Transparencia cuando el anillo tapa la bola: recorre todas sus mallas, como el molino
+  const fadeEntries = [];
+  if (opts.blocks) {
+    g.traverse((o) => {
+      if (!o.material) return;
+      for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+        if (fadeEntries.some((e) => e.mat === m)) continue;
+        fadeEntries.push({
+          mat: m,
+          baseOpacity: m.opacity,
+          baseDepthWrite: m.depthWrite,
+          baseEmissive: m.emissiveIntensity ?? 0,
+        });
+        m.transparent = true;
+      }
+    });
+  }
+  let fade = 1;
+
   return {
-    update(t) {
+    update(t, ball, cam) {
       // Animación continua de los cheurones de avance a lo largo del carril
       chevronTex.offset.y = -t * 1.6;
+      if (!opts.blocks) return;
+
+      const blocks = !!ball && !!cam && opts.blocks(cam, ball);
+      fade += ((blocks ? 0.1 : 1) - fade) * 0.2;
+      for (const e of fadeEntries) {
+        e.mat.opacity = e.baseOpacity * fade;
+        e.mat.depthWrite = fade > 0.95 ? e.baseDepthWrite : false;
+        if (e.baseEmissive > 0) e.mat.emissiveIntensity = e.baseEmissive * (0.15 + 0.85 * (fade - 0.1) / 0.9);
+      }
+      if (loopLight) loopLight.intensity = baseLightIntensity * (0.1 + 0.9 * (fade - 0.1) / 0.9);
     },
   };
 }

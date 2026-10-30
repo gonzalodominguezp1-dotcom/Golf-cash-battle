@@ -318,3 +318,6 @@ export const THEMES = {
     floaters: { color: 0x7affea, count: 50, size: 0.07, speed: 0.04, glow: true },
   },
 };
+
+// Cyberpunk2078 (hoyo 15): clon de neon con clave propia, para que el entorno de ciudad no toque «Looping Neón»
+THEMES.cyber2078 = { ...THEMES.neon, cyberCity: true, cyberFog: 0x6a1758 };
