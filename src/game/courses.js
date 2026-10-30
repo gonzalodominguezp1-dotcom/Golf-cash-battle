@@ -22,7 +22,7 @@ function windmill({ x, z, w = 0.9, depth = 1.4, face = 1, left, right, speed, bl
 // Una rampa de salto: sube h a lo largo de dir (solo ejes) y lleva paredes a
 // los lados, así solo se entra por el pie. Al pasar por el labio la bola vuela
 // con salida lift (tangente del ángulo: el labio es un trampolín).
-function ramp({ x, z, w = 1.7, d = 1.6, dir = [0, -1], h = 0.32, lift = 0.42 }) {
+function ramp({ x, z, w = 1.7, d = 1.6, dir = [0, -1], h = 0.32, lift = 0.42, maxV }) {
   const along = dir[0] !== 0;
   const hw = along ? d / 2 : w / 2, hl = along ? w / 2 : d / 2;
   // lados: paralelos a dir, a hw del centro
@@ -31,7 +31,7 @@ function ramp({ x, z, w = 1.7, d = 1.6, dir = [0, -1], h = 0.32, lift = 0.42 }) 
     [[x - sx - lx, z - sz - lz], [x - sx + lx, z - sz + lz]],
     [[x + sx - lx, z + sz - lz], [x + sx + lx, z + sz + lz]],
   ];
-  return { ramp: { x, z, w, d, dir, h, lift }, walls };
+  return { ramp: { x, z, w, d, dir, h, lift, ...(maxV ? { maxV } : {}) }, walls };
 }
 
 // Dentro del Volcán: se sale en un sendero de la ladera, la cueva lleva por un
@@ -59,18 +59,22 @@ const LOOP_PRADO = { x: 2.4, z: -6.6, dir: [0, -1], len: 4.4, w: 1.6, radius: 0.
 const LOOP_CYBER = { x: -1.36, z: -0.3, dir: [0, -1], len: 4.4, w: 2.6, radius: 1.2 };
 const MILL_CYBER = windmill({ x: 2.2, z: -5.0, w: 1.0, depth: 1.4, left: 0.4, right: 4.0, speed: 1.2, blades: 3 });
 
-// El Templo de la Selva: una U alrededor de la laguna de la selva. Ruta
-// principal: subir por la calzada de la izquierda, cruzar el templo de arriba
-// y bajar por la derecha hasta el hoyo. Atajos: el sendero del centro (por el
-// paso de la izquierda y el puente), los dos saltos de agua y dos rampas que
-// saltan los muros de las escuadras. water: es como la lava (vuelves al
-// sitio del golpe), pero se ve agua. Nada toca el contorno: el agua se recorta
-// en el césped y el recorte tiene que quedar dentro.
-const JUNGLE_JUMP_W1 = ramp({ x: -10.4, z: 3.55, w: 1.6, d: 1.5 });
+// El Templo de la Selva: una U alrededor de la laguna de la selva. Tres
+// maneras de llegar, parecidas en golpes pero con riesgos distintos:
+// - la U entera (subir, cruzar el templo y bajar): larga pero segura;
+// - el sendero del centro (por el paso de arriba de la calzada, bajando y
+//   cruzando el puente): más corto, con aspa, charca y bloques en el puente;
+// - saltar la escuadra de la calzada con la rampa: cae junto a la charca del
+//   sendero, solo bien medido se libra del agua. La rampa frena (maxV): ni a
+//   tope pasa del puente, así que no ahorra más de un golpe.
+// Jugando perfecto: 6 golpes por la U, 5 por el sendero y 5 saltando
+// (scripts/route-planner.mjs).
+// Al final, el rincón del hoyo se entra por un hueco de abajo.
+// water: es como la lava (vuelves al sitio del golpe), pero se ve agua. Nada
+// toca el contorno: el agua se recorta en el césped y tiene que quedar dentro.
+const JUNGLE_JUMP_W1 = ramp({ x: -10.4, z: 7.95, w: 1.6, d: 1.5 });
 const JUNGLE_JUMP_W2 = ramp({ x: 10.4, z: -2.95, w: 1.6, d: 1.5, dir: [0, 1] });
-// saltan el muro de la escuadra: de la calzada al sendero y de la bajada al hoyo
-const JUNGLE_CORNER_L = ramp({ x: -9.6, z: 8.1, w: 1.5, d: 1.5, dir: [1, 0] });
-const JUNGLE_CORNER_R = ramp({ x: 10.3, z: 9.2, w: 1.5, d: 1.5, dir: [-1, 0] });
+const JUNGLE_CORNER_L = ramp({ x: -9.6, z: 0.6, w: 1.5, d: 1.5, dir: [1, 0], maxV: 7.5 });
 const waterBox = (x0, x1, z0, z1, flow) => ({ poly: [[x0, z0], [x1, z0], [x1, z1], [x0, z1]], flow, water: true });
 
 // El Glaciar: tres pistas en zigzag casi todas de hielo, donde la bola apenas
@@ -389,69 +393,78 @@ export const COURSES = [
   },
   {
     name: 'El Templo de la Selva',
-    tip: 'Sube, cruza el templo y baja al hoyo. Atajos: el sendero del puente, los saltos de agua y las rampas que saltan las escuadras. Llega suave: si vas fuerte la bola rebota en el borde del hoyo',
-    par: 10,
-    maxStrokes: 18,
+    tip: 'Tres caminos: la U entera, el sendero del puente o saltar la escuadra de la calzada. Llega suave: si vas fuerte la bola rebota en el borde del hoyo',
+    par: 12,
+    maxStrokes: 20,
     theme: 'jungle',
     // hoyo con borde: la bola cae en la boca y, si va fuerte, choca con el canto y se sale
     realCup: true,
     tee: [-10, 12.6],
-    cup: [4.6, 10.6],
-    // la U: calzada izquierda (x -12..-8), templo arriba (z -14..-10), bajada
-    // derecha (x 8..12) y la explanada del hoyo; el sendero y el puente quedan
-    // dentro, junto a la laguna (encerrada por muros)
-    outline: [[-12, 14], [-12, -14], [12, -14], [12, 14], [2, 14], [2, 9], [-8, 9], [-8, 14]],
+    cup: [10.9, 12.3],
+    // la U: calzada izquierda (x -12..-8), templo arriba (z -14..-10) y bajada
+    // derecha (x 8..12) hasta el rincón del hoyo; el sendero (x -8..-4.6) y el
+    // puente (z 2..4.5) rodean la laguna, encerrada por muros
+    outline: [[-12, 14], [-12, -14], [12, -14], [12, 14], [8, 14], [8, 4.5], [-8, 4.5], [-8, 14]],
     walls: [
       // la laguna del centro
-      [[-8, -4], [-8, -10]], [[-8, -10], [8, -10]], [[8, -10], [8, 7]], [[8, 7], [2, 7]],
-      [[2, 7], [2, 6.5]], [[2, 6.5], [-4.6, 6.5]], [[-4.6, 6.5], [-4.6, -4]], [[-4.6, -4], [-8, -4]],
+      [[-8, -4], [-8, -10]], [[-8, -10], [8, -10]], [[8, -10], [8, 2]], [[8, 2], [-4.6, 2]],
+      [[-4.6, 2], [-4.6, -4]], [[-4.6, -4], [-8, -4]],
       // entre la calzada y el sendero (el paso queda arriba, de z -4 a -1.5)
-      [[-8, -1.5], [-8, 9]],
-      // la escuadra de abajo a la derecha: hay que rodear este muro para llegar al hoyo
-      [[8, 7], [8, 11.2]],
+      [[-8, -1.5], [-8, 4.5]],
+      // las dos puertas del puente: solo se pasan pegado a la laguna (saltando la
+      // primera, la segunda frena la bola)
+      [[-4.6, 4.5], [-4.6, 3.1]],
+      [[-1.6, 4.5], [-1.6, 3.1]],
+      // el rincón del hoyo: se entra por abajo, por el hueco junto al muro de fuera
+      [[9.6, 11.2], [12, 11.2]],
+      [[9.6, 11.2], [9.6, 12.6]],
       // el templo de arriba: una isla parte la galería en dos caminos
       [[-4.5, -12], [4.5, -12]],
       // escuadras en diagonal en las esquinas de arriba
       [[-12, -12.4], [-10.4, -14]], [[10.4, -14], [12, -12.4]],
+      // recodos de piedra que cortan los tiros largos
+      [[-8, 10.6], [-10.2, 10.6]],
+      [[-12, -0.5], [-9.6, -0.5]],
+      [[-8, -6.5], [-10.4, -6.5]],
+      [[0, -14], [0, -12.9]],
+      [[8, -6], [9.6, -6]],
+      [[8, 6.6], [10, 6.6]],
       ...JUNGLE_JUMP_W1.walls,
       ...JUNGLE_JUMP_W2.walls,
       ...JUNGLE_CORNER_L.walls,
-      ...JUNGLE_CORNER_R.walls,
     ],
     bumpers: [
-      { x: -10.9, z: -5.6, r: 0.38 },
-      { x: -6.3, z: 3.6, r: 0.36 },
+      { x: -5.5, z: -0.2, r: 0.34 },
       { x: -2, z: -10.5, r: 0.34 },
       { x: 2.4, z: -10.5, r: 0.34 },
-      { x: 9.4, z: -6.4, r: 0.38 },
-      { x: 6.4, z: 12.8, r: 0.34 },
+      { x: 9, z: -8, r: 0.38 },
     ],
     sand: [
-      { x: -6.3, z: -2.8, w: 2.4, d: 1.4 },
-      { x: 0.2, z: -11, w: 1.6, d: 1.2 },
-      { x: 3.2, z: 12.6, w: 1.6, d: 1.4 },
+      { x: -6.3, z: -2.9, w: 2.4, d: 1.4 },
+      { x: -0.8, z: -11, w: 1.4, d: 1.2 },
+      { x: 8.8, z: 9.6, w: 1.2, d: 1.2 },
     ],
-    spinners: [{ x: -6.3, z: 0.8, len: 2.4, speed: 1.3 }],
+    spinners: [{ x: -6.3, z: 0.9, len: 2.4, speed: 1.3 }],
     movers: [
-      { x: -1.5, z: -13, w: 0.6, d: 0.6, axis: 'x', range: 2.2, speed: 1.1 },
-      { x: 2.5, z: -13, w: 0.6, d: 0.6, axis: 'x', range: 1.4, speed: -1.5 },
-      { x: -1.2, z: 7.75, w: 0.6, d: 0.6, axis: 'z', range: 0.7, speed: 1.4 },
+      { x: -2.5, z: -13, w: 0.6, d: 0.6, axis: 'x', range: 1.5, speed: 1.1 },
+      { x: 2.6, z: -13, w: 0.6, d: 0.6, axis: 'x', range: 1.4, speed: -1.5 },
+      { x: 1, z: 3.25, w: 0.6, d: 0.6, axis: 'z', range: 0.7, speed: 1.4 },
+      { x: 4.2, z: 3.25, w: 0.6, d: 0.6, axis: 'z', range: 0.7, speed: -1.2, phase: 1 },
     ],
-    boosts: [{ x: 9.2, z: 3.6, w: 1.2, d: 1.6, dir: [0, 1], speed: 7 }],
-    ramps: [JUNGLE_JUMP_W1.ramp, JUNGLE_JUMP_W2.ramp, JUNGLE_CORNER_L.ramp, JUNGLE_CORNER_R.ramp],
+    ramps: [JUNGLE_JUMP_W1.ramp, JUNGLE_JUMP_W2.ramp, JUNGLE_CORNER_L.ramp],
     lava: [
       // los dos saltos de agua; junto al muro de dentro queda un paso estrecho
-      waterBox(-11.95, -8.9, 1.6, 2.8, [-1, 0]),
+      waterBox(-11.95, -8.9, 6, 7.2, [-1, 0]),
       waterBox(8.9, 11.95, -2.2, -1, [1, 0]),
+      // la charca del sendero, donde cae el salto de la escuadra si no va bien medido
+      waterBox(-7.8, -6.1, 2.2, 4.3, [0, 1]),
       // la laguna (si saltas mal por encima de un muro, acabas aquí)
-      {
-        poly: [[-7.8, -9.8], [7.8, -9.8], [7.8, 6.8], [2.2, 6.8], [2.2, 6.3], [-4.4, 6.3], [-4.4, -4.2], [-7.8, -4.2]],
-        flow: [0, 1],
-        water: true,
-      },
+      { poly: [[-7.8, -9.8], [7.8, -9.8], [7.8, 1.8], [-4.4, 1.8], [-4.4, -4.2], [-7.8, -4.2]], flow: [0, 1], water: true },
     ],
     waypoints: [
-      [-11.3, 6.6], [-10.4, 5.2], [-10.4, 0.6], [-10, -11.3], [10, -11.3], [10.4, -4.4], [10.4, 0.4], [8.8, 6], [8.8, 12.6], [7, 12.4],
+      [-11, 10], [-10.4, 9.6], [-10.4, 5.2], [-8.45, 2.6], [-8.45, -1.6], [-11.3, -6],
+      [-11.2, -7.8], [-10, -11.5], [-5, -11.5], [5, -11.5], [10, -11.5], [11, -9], [10.4, -6.6], [10.4, 0.4],
+      [11, 5.5], [11, 8], [8.8, 10.4], [8.9, 13.5],
     ],
   },
   {

@@ -409,7 +409,8 @@ function rollAtCup(c, x, z, v) {
 }
 
 test('hoyo con borde: despacio entra, fuerte rebota en el canto y se sale', () => {
-  const c = COURSES.find((x) => x.realCup);
+  // sin muros: solo cuenta el hoyo
+  const c = { ...COURSES.find((x) => x.realCup), walls: [] };
   const [hx, hz] = c.cup;
   for (const v of [1, 2, 3]) assert.ok(rollAtCup(c, hx, hz + 0.3, v).sunk, `v=${v}: entra por el centro`);
   for (const v of [5, 6]) {
@@ -431,10 +432,11 @@ function viaRamp(c, r, v) {
   const len = r.dir[0] ? r.w : r.d;
   const segs = segmentsOf(c);
   const ball = { x: r.x - r.dir[0] * (len / 2 + 0.5), z: r.z - r.dir[1] * (len / 2 + 0.5), vx: r.dir[0] * v, vz: r.dir[1] * v };
-  const ev = { launch: false, lava: null, outside: false, start: [ball.x, ball.z] };
+  const ev = { launch: false, lava: null, outside: false, start: [ball.x, ball.z], maxAirX: -Infinity };
   let t = 0;
   while (isMoving(ball) && t < 120 * 30) {
     const s = step(c, segs, ball, ++t * DT, DT);
+    if (ball.air) ev.maxAirX = Math.max(ev.maxAirX, ball.x);
     ev.launch ||= !!s.launch;
     ev.lava ??= s.lava ?? null;
     ev.outside ||= !!s.outside;
@@ -456,21 +458,28 @@ test('el templo: los saltos de agua; floja no despega, a medias cae y bien salta
   assert.ok(c.par >= 8 && c.maxStrokes > c.par + 4);
 });
 
-test('el templo: las rampas de las escuadras saltan el muro por encima (sin muros invisibles)', () => {
+test('el templo: la rampa de la escuadra salta el muro por encima (sin muros invisibles)', () => {
   const c = COURSES.find((x) => x.name === 'El Templo de la Selva');
-  const [toPath, toCup] = c.ramps.filter((q) => q.dir[0] !== 0);
+  const [toPath] = c.ramps.filter((q) => q.dir[0] !== 0);
   // de la calzada (x < -8) al sendero del centro, por encima del muro x = -8
   const a = viaRamp(c, toPath, 7);
-  assert.ok(a.launch && !a.lava && a.ball.x > -7.8 && a.ball.z > 6.5 && a.ball.z < 9, `cae en el sendero, junto al puente (${a.ball.x.toFixed(2)})`);
-  // de la bajada (x > 8) a la explanada del hoyo, por encima del muro x = 8
-  const b = viaRamp(c, toCup, 8);
-  assert.ok(b.launch && !b.lava && b.ball.x < 7.8, `cae junto al hoyo (${b.ball.x.toFixed(2)})`);
+  assert.ok(a.launch && !a.lava && a.ball.x > -7.8 && a.ball.z > -1.5 && a.ball.z < 4.5, `cae en el sendero (${a.ball.x.toFixed(2)}, ${a.ball.z.toFixed(2)})`);
   // flojo no llega a la altura del muro y rebota en él
   const low = viaRamp(c, toPath, 5);
   assert.ok(low.launch && low.ball.x < -8);
-  // demasiado fuerte: vuela por encima del muro de fuera y vuelve al sitio del golpe
-  const far = viaRamp(c, toCup, 12);
-  assert.ok(far.outside && far.lava);
+  // la rampa frena (maxV): ni a tope el salto pasa del puente; o cae antes o en la laguna
+  for (const v of [9, 12, 20]) {
+    const r = viaRamp(c, toPath, v);
+    assert.ok(r.lava || r.maxAirX < -4.6, `v=${v}: no vuela hasta el puente`);
+  }
+});
+
+test('fuera del campo: si un salto cae fuera, vuelve al sitio del golpe', () => {
+  const r = { x: 0, z: 2, w: 1.6, d: 1.5, dir: [0, -1], h: 0.32, lift: 0.42 };
+  const c = { tee: [0, 3.25], cup: [0, -20], outline: [[-2, 5], [2, 5], [2, -3], [-2, -3]], walls: [], bumpers: [], sand: [], spinners: [], ramps: [r] };
+  // viaRamp sale de 0,5 m antes del pie: 3,25, donde está el tee
+  const far = viaRamp(c, r, 10);
+  assert.ok(far.launch && far.outside && far.lava);
   assert.deepEqual([far.ball.x, far.ball.z], far.start);
 });
 

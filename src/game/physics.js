@@ -239,7 +239,9 @@ export const rampAccel = (r) => (GRAVITY * r.h) / rampLen(r);
 
 /** ¿Ha pasado la bola (de p a ball) por el labio de una rampa hacia delante? */
 function rampLaunch(course, ball, px, pz) {
-  for (const r of course.ramps ?? []) {
+  const ramps = course.ramps ?? [];
+  for (let i = 0; i < ramps.length; i++) {
+    const r = ramps[i];
     const len = rampLen(r);
     const lat = (px - r.x) * r.dir[1] - (pz - r.z) * r.dir[0];
     const across = r.dir[0] !== 0 ? r.d : r.w;
@@ -249,9 +251,12 @@ function rampLaunch(course, ball, px, pz) {
       // el labio levanta la bola con la pendiente lift (tangente del ángulo de salida)
       const lift = r.lift ?? r.h / len;
       const k = 1 / Math.sqrt(1 + lift * lift);
-      ball.vx *= k;
-      ball.vz *= k;
-      return { y: r.h, vy: u * lift * k };
+      // maxV: rampa que frena (barro, tablas); el salto no pasa de cierto largo
+      const v = Math.sqrt(ball.vx * ball.vx + ball.vz * ball.vz) * k;
+      const cap = r.maxV && v > r.maxV ? r.maxV / v : 1;
+      ball.vx *= k * cap;
+      ball.vz *= k * cap;
+      return { y: r.h, vy: u * lift * k * cap, ramp: i };
     }
   }
   return null;
@@ -700,8 +705,8 @@ export function step(course, segs, ball, t, dt) {
 
   const air = ramp ? rampLaunch(course, ball, px, pz) : null;
   if (air) {
-    ball.air = air;
-    return { sunk: false, hit, bumper, portal, launch: true };
+    ball.air = { y: air.y, vy: air.vy };
+    return { sunk: false, hit, bumper, portal, launch: true, ramp: air.ramp };
   }
 
   const loop = course.loops ? enterLoop(course, ball, px, pz) : null;
