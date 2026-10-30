@@ -65,7 +65,10 @@ const MILL_CYBER = windmill({ x: 2.2, z: -5.0, w: 1.0, depth: 1.4, left: 0.4, ri
 // - el sendero del centro (por el paso de arriba de la calzada, bajando y
 //   cruzando el puente): más corto, con aspa, charca y bloques en el puente;
 // - saltar la escuadra de la calzada con la rampa: cae junto a la charca del
-//   sendero, solo bien medido se libra del agua.
+//   sendero, solo bien medido se libra del agua. La rampa frena (maxV): ni a
+//   tope pasa del puente, así que no ahorra más de un golpe.
+// Jugando perfecto: 6 golpes por la U, 5 por el sendero y 5 saltando
+// (scripts/route-planner.mjs).
 // Al final, el rincón del hoyo se entra por un hueco de abajo.
 // water: es como la lava (vuelves al sitio del golpe), pero se ve agua. Nada
 // toca el contorno: el agua se recorta en el césped y tiene que quedar dentro.
