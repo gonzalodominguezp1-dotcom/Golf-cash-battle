@@ -87,6 +87,19 @@ No se añade ninguna primitiva nueva de física.
 
 Medición (71.911 golpes, bolsa cerrada, θ = 0): 51 directas por la boca y 765 por la salida, 816 en total (1,13 %).
 
+**2026-10-30 (decisión de la persona, quitar los muros de la bolsa).** La persona ordena quitar los tres muros de la bolsa del looping (`[-4,0.6]-[-1.48,0.6]`, `[-0.52,0.6]-[0.4,0.6]`, `[-1.48,0.3]-[-0.52,0.3]`) y dejar solo la L: W1 `[(-4,4.2)→(0.4,4.2)]` y W2 `[(0.4,4.2)→(0.4,0.6)]`. Los postes de esquina de esos muros salen con ellos. Esto sustituye la medición de «bolsa cerrada» de la enmienda anterior como disposición real. El criterio de portal (≤ 2 %) se mide ahora con la L, y el número que sale se registra aquí tal cual.
+
+Medición con la L (71.911 golpes, θ = 0, `probe3.mjs`; misma muestra que el test):
+
+- Entradas sin portal por la boca: 459 (0,64 %).
+- Entradas sin portal por la salida: 765 (1,06 %).
+- Total sin portal: 1.224 (**1,70 %**). Cumple ≤ 2 % (límite 1.438).
+- Entradas por portal: 1.699 por la boca.
+- Ruta A (2.193 golpes por el portal, yaw ±6°, potencia 0,5–1,0): completan 2.095 = **95,53 %**, margen fino sobre el 95 %. Velocidad en la boca: mediana **10,90 m/s**, mínimo 8,94 m/s, umbral 8,90 m/s.
+- Bots (modelo `bots.js`, N = 200): ruta A mediana **2** golpes, 200/200 embocan; ruta B 139 de 200 llegan sin portal ni looping. Los 12 bots de `courses.test.js:57-71`: **9 con menos de 8 golpes**, media **5,67**.
+
+Los tres muros de la bolsa no se cuentan ya en `courses.js`; la cifra de 816 (1,13 %) queda como referencia de la disposición anterior.
+
 ## Preguntas abiertas
 
 - ¿Apruebas el concepto de dos rutas (A espectacular, B segura) con portal obligatorio?
