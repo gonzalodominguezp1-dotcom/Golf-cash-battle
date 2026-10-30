@@ -55,21 +55,23 @@ const MILL_N1 = windmill({ x: -1.2, z: 2.6, w: 1, left: -2.6, right: 2.6, speed:
 const MILL_N2 = windmill({ x: 1.2, z: -4, w: 1, left: -2.6, right: 2.6, speed: -1.3, blades: 3, phase: 0.7 });
 const MILL_PRADO = windmill({ x: 0, z: 0.8, w: 1.1, depth: 1.6, left: -1.6, right: 1.6, speed: 1.2 });
 const LOOP_PRADO = { x: 2.4, z: -6.6, dir: [0, -1], len: 4.4, w: 1.6, radius: 0.8 };
+// Cyberpunk2078: looping grande (radio 1,2) con la boca de entrada en z 0,6. El carril de entrada (x + LOOP_LANE = -1) queda en línea con el acelerador.
+const LOOP_CYBER = { x: -1.36, z: -0.3, dir: [0, -1], len: 4.4, w: 2.6, radius: 1.2 };
+const MILL_CYBER = windmill({ x: 2.2, z: -5.0, w: 1.0, depth: 1.4, left: 0.4, right: 4.0, speed: 1.2, blades: 3 });
 
-// El Templo de la Selva: siete calles en zigzag, separadas por muros de piedra
-// o por ríos. Cada río se salta con su rampa (atajo a la calle siguiente) y
-// la de la segunda calle corta la escuadra de la curva. Nunca hay río justo
-// delante de la salida de una curva. water: es como la lava (vuelves al sitio
-// del golpe), pero se ve agua.
-const TEMPLE_RAMP_A = ramp({ x: 0, z: 12.15, w: 1.6, d: 1.5 });
-const TEMPLE_CORNER = ramp({ x: -3.8, z: 7.75, w: 1.5, d: 1.5 });
-const TEMPLE_RAMP_B = ramp({ x: 2.4, z: 3.35, w: 1.6, d: 1.5 });
-const TEMPLE_RAMP_C = ramp({ x: 0.4, z: -5.45, w: 1.6, d: 1.5 });
-// (los ríos no tocan el contorno: se recortan en el césped y el recorte tiene que quedar dentro)
-const river = (x0, x1, z) => {
-  const a = Math.max(x0, -7.95), b = Math.min(x1, 7.95);
-  return { poly: [[a, z - 0.4], [b, z - 0.4], [b, z + 0.4], [a, z + 0.4]], flow: [x0 < -7 ? -1 : 1, 0], water: true };
-};
+// El Templo de la Selva: una U alrededor de la laguna de la selva. Ruta
+// principal: subir por la calzada de la izquierda, cruzar el templo de arriba
+// y bajar por la derecha hasta el hoyo. Atajos: el sendero del centro (por el
+// paso de la izquierda y el puente), los dos saltos de agua y dos rampas que
+// saltan los muros de las escuadras. water: es como la lava (vuelves al
+// sitio del golpe), pero se ve agua. Nada toca el contorno: el agua se recorta
+// en el césped y el recorte tiene que quedar dentro.
+const JUNGLE_JUMP_W1 = ramp({ x: -10.4, z: 3.55, w: 1.6, d: 1.5 });
+const JUNGLE_JUMP_W2 = ramp({ x: 10.4, z: -2.95, w: 1.6, d: 1.5, dir: [0, 1] });
+// saltan el muro de la escuadra: de la calzada al sendero y de la bajada al hoyo
+const JUNGLE_CORNER_L = ramp({ x: -9.6, z: 8.1, w: 1.5, d: 1.5, dir: [1, 0] });
+const JUNGLE_CORNER_R = ramp({ x: 10.3, z: 9.2, w: 1.5, d: 1.5, dir: [-1, 0] });
+const waterBox = (x0, x1, z0, z1, flow) => ({ poly: [[x0, z0], [x1, z0], [x1, z1], [x0, z1]], flow, water: true });
 
 export const COURSES = [
   {
@@ -355,72 +357,97 @@ export const COURSES = [
     waypoints: [[-1.3, 9.6], [-1.3, 0.6], [0, -2.6], [0.8, -11.4]],
   },
   {
+    name: 'Cyberpunk2078',
+    tip: 'Ruta A: el portal te deja en el acelerador y el looping te lanza a la cup. Ruta B: rodea por la derecha entre el bloque y el molino',
+    par: 4,
+    theme: 'cyber2078',
+    tee: [-1.0, 8.6],
+    cup: [2.4, -8.4],
+    outline: [[-4, 10], [4, 10], [4, -10], [-4, -10]],
+    walls: [
+      // W1 y W2 (en L) separan la bolsa del looping del tee. Los muros de la bolsa se quitaron por orden de la persona (spec, enmienda 2026-10-30)
+      [[-4, 4.2], [0.4, 4.2]],
+      [[0.4, 4.2], [0.4, 0.6]],
+      ...MILL_CYBER.walls,
+    ],
+    bumpers: [{ x: 3.2, z: 2.6, r: 0.4 }, { x: 1.2, z: -0.8, r: 0.4 }],
+    sand: [{ x: -0.6, z: -8.1, w: 1.8, d: 3.0 }],
+    spinners: [],
+    movers: [{ x: 2.2, z: 1.2, w: 1.2, d: 0.6, axis: 'x', range: 1.0, speed: 1.2 }],
+    windmills: [MILL_CYBER.windmill],
+    boosts: [{ x: -1.0, z: 1.5, w: 0.6, d: 1.4, dir: [0, -1], speed: 11 }],
+    loops: [LOOP_CYBER],
+    // el único acceso al looping: la entrada por la boca sin portal es rara (ver test)
+    portals: [{ a: [-1.0, 5.6], b: [-1.0, 3.0], r: 0.42 }],
+    waypoints: [[-1.0, 5.6], [2.4, 3.2], [2.2, 0.2], [1.0, -3.6], [2.2, -4.0]],
+  },
+  {
     name: 'El Templo de la Selva',
-    tip: 'Hoyo largo: sigue el zigzag, rebota en las escuadras o salta los ríos con las rampas. Llega al hoyo suave: si vas fuerte, la bola rebota en el borde',
-    par: 14,
-    maxStrokes: 20,
+    tip: 'Sube, cruza el templo y baja al hoyo. Atajos: el sendero del puente, los saltos de agua y las rampas que saltan las escuadras. Llega suave: si vas fuerte la bola rebota en el borde del hoyo',
+    par: 10,
+    maxStrokes: 18,
     theme: 'jungle',
-    aimYaw: 1.5708,
     // hoyo con borde: la bola cae en la boca y, si va fuerte, choca con el canto y se sale
     realCup: true,
-    tee: [-6.6, 13.7],
-    cup: [6.6, -13.2],
-    outline: [[-8, 15], [8, 15], [8, -15], [-8, -15]],
+    tee: [-10, 12.6],
+    cup: [4.6, 10.6],
+    // la U: calzada izquierda (x -12..-8), templo arriba (z -14..-10), bajada
+    // derecha (x 8..12) y la explanada del hoyo; el sendero y el puente quedan
+    // dentro, junto a la laguna (encerrada por muros)
+    outline: [[-12, 14], [-12, -14], [12, -14], [12, 14], [2, 14], [2, 9], [-8, 9], [-8, 14]],
     walls: [
-      // muros entre calles (el hueco de cada curva queda en un extremo)
-      [[1, 11], [5.2, 11]],
-      [[-1, 6.6], [8, 6.6]],
-      [[-8, 2.2], [0, 2.2]],
-      [[-5.2, -2.2], [8, -2.2]],
-      [[-8, -6.6], [-2, -6.6]],
-      [[-5.2, -11], [8, -11]],
-      // las escuadras: muros en diagonal en las esquinas de cada curva; un tiro
-      // bien medido rebota en las dos y da la curva entera
-      [[6.4, 15], [8, 13.4]], [[8, 8.6], [6.4, 7]],
-      [[-6.4, 10.6], [-8, 9]], [[-8, 4.2], [-6.4, 2.6]],
-      [[6.4, 6.2], [8, 4.6]], [[8, -0.2], [6.4, -1.8]],
-      [[-6.4, 1.8], [-8, 0.2]], [[-8, -4.6], [-6.4, -6.2]],
-      [[6.4, -2.6], [8, -4.2]], [[8, -9], [6.4, -10.6]],
-      [[-6.4, -7], [-8, -8.6]], [[-8, -13.4], [-6.4, -15]],
-      // la isla que parte la calle del centro en dos caminos
-      [[-3.6, 0], [1.2, 0]],
-      // la puerta del templo, delante del hoyo
-      [[4.2, -11], [4.2, -12.5]],
-      [[4.2, -13.9], [4.2, -15]],
-      ...TEMPLE_RAMP_A.walls,
-      ...TEMPLE_CORNER.walls,
-      ...TEMPLE_RAMP_B.walls,
-      ...TEMPLE_RAMP_C.walls,
+      // la laguna del centro
+      [[-8, -4], [-8, -10]], [[-8, -10], [8, -10]], [[8, -10], [8, 7]], [[8, 7], [2, 7]],
+      [[2, 7], [2, 6.5]], [[2, 6.5], [-4.6, 6.5]], [[-4.6, 6.5], [-4.6, -4]], [[-4.6, -4], [-8, -4]],
+      // entre la calzada y el sendero (el paso queda arriba, de z -4 a -1.5)
+      [[-8, -1.5], [-8, 9]],
+      // la escuadra de abajo a la derecha: hay que rodear este muro para llegar al hoyo
+      [[8, 7], [8, 11.2]],
+      // el templo de arriba: una isla parte la galería en dos caminos
+      [[-4.5, -12], [4.5, -12]],
+      // escuadras en diagonal en las esquinas de arriba
+      [[-12, -12.4], [-10.4, -14]], [[10.4, -14], [12, -12.4]],
+      ...JUNGLE_JUMP_W1.walls,
+      ...JUNGLE_JUMP_W2.walls,
+      ...JUNGLE_CORNER_L.walls,
+      ...JUNGLE_CORNER_R.walls,
     ],
     bumpers: [
-      { x: 2.2, z: 12.3, r: 0.38 },
-      { x: 4.4, z: 14.5, r: 0.34 },
-      { x: 2.6, z: 8.1, r: 0.36 },
-      { x: -4.8, z: 1.55, r: 0.3 },
-      { x: -2.8, z: 3.4, r: 0.4 },
-      { x: 6.8, z: -12.1, r: 0.3 },
-      { x: 1.6, z: -9.9, r: 0.38 },
-      { x: -2.6, z: -7.8, r: 0.38 },
+      { x: -10.9, z: -5.6, r: 0.38 },
+      { x: -6.3, z: 3.6, r: 0.36 },
+      { x: -2, z: -10.5, r: 0.34 },
+      { x: 2.4, z: -10.5, r: 0.34 },
+      { x: 9.4, z: -6.4, r: 0.38 },
+      { x: 6.4, z: 12.8, r: 0.34 },
     ],
     sand: [
-      { x: -2.4, z: 10, w: 1.6, d: 1 },
-      { x: -1.4, z: -0.95, w: 2.6, d: 1.1 },
-      { x: 1.6, z: -14, w: 1.8, d: 1.2 },
+      { x: -6.3, z: -2.8, w: 2.4, d: 1.4 },
+      { x: 0.2, z: -11, w: 1.6, d: 1.2 },
+      { x: 3.2, z: 12.6, w: 1.6, d: 1.4 },
     ],
-    spinners: [
-    ],
-    boosts: [{ x: 3.4, z: 0.9, w: 1.4, d: 1.2, dir: [-1, 0], speed: 8 }],
+    spinners: [{ x: -6.3, z: 0.8, len: 2.4, speed: 1.3 }],
     movers: [
-      { x: 5, z: 4.4, w: 0.6, d: 0.6, axis: 'z', range: 1.1, speed: -1.4 },
-      { x: -3.4, z: -4.4, w: 0.6, d: 0.6, axis: 'z', range: 1.1, speed: 1.5 },
+      { x: -1.5, z: -13, w: 0.6, d: 0.6, axis: 'x', range: 2.2, speed: 1.1 },
+      { x: 2.5, z: -13, w: 0.6, d: 0.6, axis: 'x', range: 1.4, speed: -1.5 },
+      { x: -1.2, z: 7.75, w: 0.6, d: 0.6, axis: 'z', range: 0.7, speed: 1.4 },
     ],
-    ramps: [TEMPLE_RAMP_A.ramp, TEMPLE_CORNER.ramp, TEMPLE_RAMP_B.ramp, TEMPLE_RAMP_C.ramp],
-    // los ríos entre calles, donde se pueden saltar (el resto es muro)
-    lava: [river(-8, 1, 11), river(-5.2, -1, 6.6), river(0, 5.2, 2.2), river(-2, 5.2, -6.6)],
+    boosts: [{ x: 9.2, z: 3.6, w: 1.2, d: 1.6, dir: [0, 1], speed: 7 }],
+    ramps: [JUNGLE_JUMP_W1.ramp, JUNGLE_JUMP_W2.ramp, JUNGLE_CORNER_L.ramp, JUNGLE_CORNER_R.ramp],
+    lava: [
+      // los dos saltos de agua; junto al muro de dentro queda un paso estrecho
+      waterBox(-11.95, -8.9, 1.6, 2.8, [-1, 0]),
+      waterBox(8.9, 11.95, -2.2, -1, [1, 0]),
+      // la laguna (si saltas mal por encima de un muro, acabas aquí)
+      {
+        poly: [[-7.8, -9.8], [7.8, -9.8], [7.8, 6.8], [2.2, 6.8], [2.2, 6.3], [-4.4, 6.3], [-4.4, -4.2], [-7.8, -4.2]],
+        flow: [0, 1],
+        water: true,
+      },
+    ],
     waypoints: [
-      [6.6, 13.7], [6.6, 9.4], [1.2, 9.7], [-6.6, 9.4], [-6.6, 4.9], [-1.5, 5.2], [6.6, 4.9], [6.6, 0.9], [3, 0.9],
-      [-6.4, 0.9], [-6.6, -3.9], [-0.5, -3.6], [6.6, -3.9], [6.6, -8.8], [-6.6, -8.8], [-6.6, -13.2], [3.2, -13.2],
-    ],  },
+      [-11.3, 6.6], [-10.4, 5.2], [-10.4, 0.6], [-10, -11.3], [10, -11.3], [10.4, -4.4], [10.4, 0.4], [8.8, 6], [8.8, 12.6], [7, 12.4],
+    ],
+  },
 ];
 
 // Desempate: sin agujero. Un tiro cada uno y gana quien pare más cerca de la diana.

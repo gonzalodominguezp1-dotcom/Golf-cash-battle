@@ -192,6 +192,8 @@ export const WINDMILL_GATE_HALF = 0.08;
 // ball.air = { y, vy } mientras está en el aire, sin rozamiento y por encima
 // de la lava, las setas y las aspas. Al caer bota una vez y sigue rodando.
 
+// altura (de la parte de abajo de la bola) a la que pasa por encima de una pared
+export const WALL_TOP = 0.36;
 const LAND_KEEP = 0.8; // velocidad que conserva al tocar el suelo tras un salto
 const HOP_KEEP = 0.3; // el bote: parte de la velocidad vertical que devuelve el suelo
 const HOP_MIN = 1.6; // por debajo de esta velocidad de caída ya no bota
@@ -255,7 +257,11 @@ function burn(course, ball) {
   return at;
 }
 
-/** Un paso en el aire: vuelo parabólico; las paredes siguen parando la bola. */
+/**
+ * Un paso en el aire: vuelo parabólico. Las paredes solo paran la bola si va
+ * más baja que su remate (WALL_TOP); por encima las salta, y si cae fuera
+ * del campo vuelve al sitio del golpe, como en el agua.
+ */
 function airStep(course, segs, ball, dt) {
   const a = ball.air;
   const vy = a.vy - GRAVITY * dt;
@@ -263,7 +269,7 @@ function airStep(course, segs, ball, dt) {
   ball.x += ball.vx * dt;
   ball.z += ball.vz * dt;
   let hit = 0;
-  for (const seg of segs) hit = Math.max(hit, collideSegment(ball, seg, 0, 0));
+  if (y < WALL_TOP) for (const seg of segs) hit = Math.max(hit, collideSegment(ball, seg, 0, 0));
   const out = { sunk: false, hit, bumper: -1, portal: -1, air: true, landed: false };
   if (y > 0) {
     ball.air = { y, vy };
@@ -272,6 +278,11 @@ function airStep(course, segs, ball, dt) {
   // toca el suelo: si cae en lava se quema; si no, bota o se queda rodando
   out.landed = true;
   out.impact = -vy;
+  if (!insidePoly(course.outline, ball.x, ball.z)) {
+    out.outside = true;
+    out.lava = burn(course, ball);
+    return out;
+  }
   const pit = inPit(course, ball.x, ball.z);
   const lava = pit ? null : inLava(course, ball.x, ball.z);
   if (pit || lava) {

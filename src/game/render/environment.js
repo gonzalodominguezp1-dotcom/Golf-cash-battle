@@ -10,6 +10,7 @@ import {
   makeHoloCrystal,
   makeCyberPylon,
   setupCyberpunkEnvironment,
+  buildCyberCity,
 } from './cyberpunkEnvironment.js';
 
 // tiempo compartido por los sombreadores animados (viento, agua)
@@ -97,7 +98,8 @@ export function buildEnvironment(scene, course, theme, rng) {
     }),
   );
   scene.add(sky);
-  scene.fog = new THREE.Fog(theme.skyHorizon, 40, 120);
+  // hoyo 15: niebla magenta a media distancia (theme.cyberFog); el resto de temas, sin cambios
+  scene.fog = new THREE.Fog(theme.cyberFog ?? theme.skyHorizon, 40, 120);
 
   // --- luces ---
   scene.add(new THREE.HemisphereLight(theme.skyHorizon, theme.groundMid, theme.ambient));
@@ -276,6 +278,8 @@ export function buildEnvironment(scene, course, theme, rng) {
 
     // Megaciudad de rascacielos lejanos, searchlights y tráfico aéreo limpio
     setupCyberpunkEnvironment(scene, decor, bounds, theme, rng, animated, q);
+    // ciudad propia del hoyo 15 (cables y letreros); los demás neón no la reciben
+    if (theme.cyberCity) buildCyberCity(scene, decor, bounds, theme, rng, animated, q);
   } else {
     const leaves = theme.leaves?.map((color) => addWind(new THREE.MeshLambertMaterial({ color, flatShading: true }), windUniforms, WIND));
     // a ras de suelo nada pisa el antegreen, y detrás del tee queda un claro para la cámara

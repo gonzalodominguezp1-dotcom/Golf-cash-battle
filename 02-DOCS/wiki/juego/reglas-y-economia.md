@@ -15,7 +15,7 @@ Estado actual: prototipo jugable con créditos demo. No hay dinero real (ver [pe
 
 ## Hoyos
 
-- 14 hoyos en `src/game/courses.js`, en ambientes distintos: pradera, playa, atardecer, nieve, cañón, otoño, noche y volcán. Ambientaciones en `src/game/themes.js`.
+- 15 hoyos en `src/game/courses.js`, en ambientes distintos: pradera, playa, atardecer, nieve, cañón, otoño, noche, volcán y la ciudad neón cyberpunk (Cyberpunk2078: rascacielos, cables y letreros, tema `cyber2078`). Ambientaciones en `src/game/themes.js`.
 - Para añadir hoyos: añadirlos al final de `courses.js` y subir `course_count` en `app_config` (migración nueva en `supabase/migrations/`).
 
 ## Niveles de mesa

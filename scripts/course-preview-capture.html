@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Captura de vista previa de hoyo</title>
+</head>
+<body style="margin:0;background:#000">
+  <!-- Página de captura: la usa scripts/capture-course-previews.mjs con Chrome en modo headless.
+       Renderiza un hoyo con el mismo renderer que la app y deja el WebP en el DOM. -->
+  <pre id="out" data-status="pending"></pre>
+  <script type="module">
+    import { COURSES, TIEBREAK_COURSE } from '/src/game/courses.js';
+    import { getCoursePreview } from '/src/game/render/coursePreview.js';
+
+    const out = document.getElementById('out');
+    const name = new URLSearchParams(location.search).get('course');
+    const course = name === TIEBREAK_COURSE.name ? TIEBREAK_COURSE : COURSES.find((c) => c.name === name);
+
+    try {
+      if (!course) throw new Error(`hoyo desconocido: ${name}`);
+      // forceDynamic: renderiza de verdad, sin usar la imagen estática que ya existe.
+      const dataUrl = getCoursePreview(course, { forceDynamic: true });
+      if (!dataUrl.startsWith('data:image/webp;base64,')) throw new Error('el renderer no devolvió WebP');
+      out.dataset.status = 'ok';
+      out.textContent = dataUrl;
+    } catch (err) {
+      out.dataset.status = 'error';
+      out.textContent = String(err && err.message ? err.message : err);
+    }
+  </script>
+</body>
+</html>
