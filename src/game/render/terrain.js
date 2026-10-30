@@ -138,5 +138,6 @@ export function ballPose(course, ball) {
   }
   // las rampas son una cuña encima del césped; en el aire la bola va por encima
   const g = groundHeight(course, ball.x, ball.z) + (course.ramps ? rampHeight(course, ball.x, ball.z) : 0);
-  return { x: ball.x, y: g + BALL_R + (ball.air?.y ?? 0), z: ball.z, ground: g, onTrack: false };
+  // en un hoyo con borde la bola baja dentro de la boca (cup.y < 0) o bota sobre ella
+  return { x: ball.x, y: g + BALL_R + (ball.air?.y ?? 0) + (ball.cup?.y ?? 0), z: ball.z, ground: g, onTrack: false };
 }

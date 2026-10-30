@@ -1,5 +1,5 @@
 import { BALL_R, LOOP_CAPTURE, LOOP_LANE, LOOP_PAD, MAX_SHOT_SPEED, WALL_HALF, insidePoly, isMoving, loopWalls, step } from './physics.js';
-import { MAX_STROKES_PER_HOLE } from '../config.js';
+import { maxStrokesOf } from '../config.js';
 
 // Rivales simulados que juegan el mismo hoyo con la misma física que tú.
 // Solo para la demo: en producción cada bola será un jugador real.
@@ -135,6 +135,12 @@ function chooseTarget(ball, course, allSegs, from = 0) {
     const x = l.x + dx * ta + sx * tb, z = l.z + dz * ta + sz * tb;
     if (!segBlocked(ball.x, ball.z, x, z, segs, course)) return { x, z, isCup: false };
   }
+  // nada pendiente a la vista: vuelve al último punto de paso que se vea, aunque ya lo
+  // hubiera pasado (p. ej. tras rebotar contra un muro en un hoyo largo en zigzag)
+  for (let i = Math.min(from, targets.length - 2); i >= 0; i--) {
+    const [x, z] = targets[i];
+    if (Math.hypot(x - ball.x, z - ball.z) >= 0.8 && !segBlocked(ball.x, ball.z, x, z, segs, course)) return { x, z, isCup: false };
+  }
   // nada a la vista: al punto de paso pendiente más cercano que no sea el de al lado
   let best = targets[Math.min(from, targets.length - 1)], bestD = Infinity;
   for (const [x, z] of targets.slice(from, -1)) {
@@ -176,6 +182,8 @@ function landing(course, segs, from, dirX, dirZ, power, portal = -1) {
   for (let i = 0; i < 3600 && isMoving(sim); i++) {
     const r = step(c, segs, sim, 0, DT);
     if (r.sunk || (portal >= 0 && r.portal === portal)) return null;
+    // al agua o a la lava: vuelve al sitio, es el peor tiro posible
+    if (r.lava) return { ...sim, lost: true };
   }
   return sim;
 }
@@ -201,7 +209,7 @@ class PowerSearch {
   advance() {
     const p = SEARCH_POWERS[this.i++];
     const end = landing(this.course, this.segs, this.from, this.dirX, this.dirZ, p, this.portal);
-    this.scored.push({ p, d: end ? Math.hypot(end.x - this.target.x, end.z - this.target.z) : 0 });
+    this.scored.push({ p, d: !end ? 0 : end.lost ? 1e3 : Math.hypot(end.x - this.target.x, end.z - this.target.z) });
   }
 
   best() {
@@ -264,7 +272,7 @@ export class Bot {
     if (this.done) return null;
     if (!isMoving(this.ball)) {
       // desempate: un tiro y donde pare
-      if (this.strokes >= (this.course.noCup ? 1 : MAX_STROKES_PER_HOLE)) {
+      if (this.strokes >= (this.course.noCup ? 1 : maxStrokesOf(this.course))) {
         this.done = true;
         return { finished: true };
       }
@@ -293,7 +301,7 @@ export class Bot {
       t += DT;
     }
     if (!this.done) {
-      this.strokes = MAX_STROKES_PER_HOLE;
+      this.strokes = maxStrokesOf(this.course);
       this.done = true;
     }
     return this.strokes;

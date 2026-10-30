@@ -5,7 +5,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { abyssTexture, chevronTexture, crateTexture, dirtMaps, grassMaps, rockFloorMaps, roughTone, sandMaps, slopeShadeTexture, softDotTexture, stripeTexture, woodMaps } from './textures.js';
 import { buildPortal } from './portal.js';
 import { groundHeight, hasRelief, tierHeight } from './terrain.js';
-import { lavaMaterial } from './lava.js';
+import { lavaMaterial, waterMaterial } from './lava.js';
 import { attractionStyle, buildLoop, buildTube, buildTunnel, buildWindmill, neonGridTexture } from './attractions.js';
 
 const WALL_H = 0.32;
@@ -152,12 +152,16 @@ export function buildCourse(scene, course, theme) {
       ? new THREE.MeshStandardMaterial({ normalMap: wood.normalMap, color: 0x23724f, roughness: 0.6, transparent: true })
       : theme.rockFloor
         ? new THREE.MeshStandardMaterial({ ...rockWall, color: 0x8a7470, roughness: 0.95, transparent: true })
-        : new THREE.MeshStandardMaterial({ ...wood, roughness: 0.75, transparent: true });
+        : theme.stoneWalls
+          ? new THREE.MeshStandardMaterial({ normalMap: wood.normalMap, color: 0xd99a4e, roughness: 0.9, transparent: true })
+          : new THREE.MeshStandardMaterial({ ...wood, roughness: 0.75, transparent: true });
     const capMat = neon
       ? new THREE.MeshStandardMaterial({ color: neonColor(i), emissive: neonColor(i), emissiveIntensity: 0.35, roughness: 0.3, transparent: true })
       : glowColor !== null
       ? new THREE.MeshStandardMaterial({ color: new THREE.Color(glowColor).multiplyScalar(0.12), emissive: glowColor, emissiveIntensity: 0.85, roughness: 0.3, transparent: true })
-      : new THREE.MeshStandardMaterial({ color: 0xeeeeea, roughness: 0.75, envMapIntensity: 0.4, transparent: true });
+      : theme.stoneWalls
+        ? new THREE.MeshStandardMaterial({ color: 0xf0bb6e, roughness: 0.85, transparent: true })
+        : new THREE.MeshStandardMaterial({ color: 0xeeeeea, roughness: 0.75, envMapIntensity: 0.4, transparent: true });
     // de noche el remate de las paredes es una tira de luz del color del contraluz
     const baseEmissive = capMat.emissiveIntensity || 0;
     walls.push({ a: [ax, az], b: [bx, bz], mats: [wallMat, capMat], opacity: 1, baseEmissive });
@@ -229,10 +233,14 @@ export function buildCourse(scene, course, theme) {
     const h = lift(x, z);
     const postMat = neon
       ? new THREE.MeshStandardMaterial({ color: 0x1a1830, roughness: 0.3, metalness: 0.6, transparent: true })
-      : new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.4, transparent: true });
+      : theme.stoneWalls
+        ? new THREE.MeshStandardMaterial({ color: 0xc88a48, roughness: 0.9, transparent: true })
+        : new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.4, transparent: true });
     const ballMat = neon
       ? new THREE.MeshStandardMaterial({ color: neonColor(corner++), emissive: neonColor(corner - 1), emissiveIntensity: 0.35, transparent: true })
-      : new THREE.MeshStandardMaterial({ color: 0xff5a4e, emissive: 0xff3a2e, emissiveIntensity: night ? 0.35 : 0.15, transparent: true });
+      : theme.stoneWalls
+        ? new THREE.MeshStandardMaterial({ color: 0xe6b46a, roughness: 0.85, transparent: true })
+        : new THREE.MeshStandardMaterial({ color: 0xff5a4e, emissive: 0xff3a2e, emissiveIntensity: night ? 0.35 : 0.15, transparent: true });
     const baseEmissive = ballMat.emissiveIntensity || 0;
 
     // con relieve el poste baja hasta el suelo de la maqueta; en una zona elevada empieza en ella
@@ -664,11 +672,18 @@ function buildPits(scene, course, rects) {
   }
 }
 
-/** Río o charco de lava en su canal, con una luz que parpadea. */
+/** Río o charco de lava en su canal, con una luz que parpadea (o un río de agua, sin luz). */
 function buildLava(scene, l) {
   const shape = new THREE.Shape(l.poly.map(([x, z]) => new THREE.Vector2(x, -z)));
   const geo = new THREE.ShapeGeometry(shape);
   geo.rotateX(-Math.PI / 2);
+  if (l.water) {
+    const water = waterMaterial({ flow: l.flow });
+    const mesh = new THREE.Mesh(geo, water);
+    mesh.position.y = -0.12;
+    scene.add(mesh);
+    return { update: (t) => (water.uniforms.uTime.value = t) };
+  }
   const mat = lavaMaterial({ flow: l.flow, heat: 0.06 });
   const lava = new THREE.Mesh(geo, mat);
   lava.position.y = -0.09;

@@ -273,8 +273,10 @@ function airStep(course, segs, ball, dt) {
   out.landed = true;
   out.impact = -vy;
   const pit = inPit(course, ball.x, ball.z);
-  if (pit || inLava(course, ball.x, ball.z)) {
+  const lava = pit ? null : inLava(course, ball.x, ball.z);
+  if (pit || lava) {
     out.pit = !!pit;
+    out.water = !!lava?.water;
     out.lava = burn(course, ball);
     return out;
   }
@@ -730,13 +732,18 @@ export function step(course, segs, ball, t, dt) {
     ball.z = p.b[1];
   }
 
-  if (course.lava && inLava(course, ball.x, ball.z)) return { sunk: false, hit, bumper, portal, lava: burn(course, ball) };
+  const lava = course.lava ? inLava(course, ball.x, ball.z) : null;
+  if (lava) return { sunk: false, hit, bumper, portal, lava: burn(course, ball), water: !!lava.water };
   if (course.pits && inPit(course, ball.x, ball.z)) return { sunk: false, hit, bumper, portal, pit: true, lava: burn(course, ball) };
 
+  if (course.realCup && !course.noCup) {
+    const cup = cupStep(course, ball, dt);
+    if (cup) return { sunk: cup.sunk, hit, bumper, portal, lip: cup.lip };
+  }
   const [hx, hz] = course.cup;
   const toCup = hyp(ball.x - hx, ball.z - hz);
   const v = hyp(ball.vx, ball.vz);
-  if (!course.noCup && toCup < CUP_R && v < CUP_CAPTURE_SPEED) {
+  if (!course.noCup && !course.realCup && toCup < CUP_R && v < CUP_CAPTURE_SPEED) {
     ball.x = hx;
     ball.z = hz;
     ball.vx = ball.vz = 0;
@@ -749,5 +756,84 @@ export function step(course, segs, ball, t, dt) {
 }
 
 export function isMoving(ball) {
-  return ball.vx !== 0 || ball.vz !== 0 || !!ball.track || !!ball.air;
+  return ball.vx !== 0 || ball.vz !== 0 || !!ball.track || !!ball.air || !!ball.cup;
+}
+
+// ---------- hoyo con borde (realCup) ----------
+//
+// En los hoyos con realCup la bola no entra solo por ir despacio: cuando su
+// centro pasa por encima de la boca pierde el suelo y empieza a caer
+// (ball.cup = { y, vy }, y es cuánto ha bajado respecto a rodar por el césped).
+// Si baja hasta tener el centro a la altura del borde (CUP_DEPTH) ya no sale.
+// Si antes toca el canto de la boca, choca con él como con una esquina: la
+// normal va del canto al centro de la bola, en el plano (radial, altura). Una
+// bola lenta ha caído mucho y choca de frente: rebota hacia dentro y entra.
+// Una rápida apenas ha caído y choca por debajo: el canto la levanta, sale
+// botando, frenada y torcida si no iba por el centro (se sale "de labio").
+// Como el resto de la física, solo usa + - * / y Math.sqrt.
+
+const CUP_DEPTH = BALL_R;
+const RIM_RESTITUTION = 0.3;
+const RIM_HOP_MAX = 1.3; // el bote al salir del hoyo, como mucho (m/s hacia arriba)
+const RIM_KEEP = 0.85; // velocidad que conserva al salir botando del borde
+
+/** Un paso de la bola sobre la boca del hoyo; null si no está en ella. */
+function cupStep(course, ball, dt) {
+  const [hx, hz] = course.cup;
+  const dx = ball.x - hx, dz = ball.z - hz;
+  const d = hyp(dx, dz);
+  const c = ball.cup;
+  if (!c && d >= CUP_R) return null;
+  let y = c ? c.y : 0, vy = c ? c.vy : 0;
+  // sobre la boca no hay suelo: cae
+  if (d < CUP_R) {
+    vy -= GRAVITY * dt;
+    y += vy * dt;
+  }
+  if (y <= -CUP_DEPTH) {
+    Object.assign(ball, { x: hx, z: hz, vx: 0, vz: 0, cup: null });
+    return { sunk: true, lip: false };
+  }
+  let lip = false;
+  if (d > 1e-6) {
+    const rx = dx / d, rz = dz / d;
+    // del canto (a CUP_R del centro, a ras de suelo) al centro de la bola
+    const ex = d - CUP_R, ey = BALL_R + y;
+    const el = hyp(ex, ey);
+    if (el < BALL_R && el > 1e-9) {
+      const nh = ex / el, ny = ey / el;
+      const push = BALL_R - el;
+      ball.x += rx * nh * push;
+      ball.z += rz * nh * push;
+      y += ny * push;
+      const vr = ball.vx * rx + ball.vz * rz;
+      const vn = vr * nh + vy * ny;
+      if (vn < 0) {
+        const j = -(1 + RIM_RESTITUTION) * vn;
+        ball.vx += rx * nh * j;
+        ball.vz += rz * nh * j;
+        vy += ny * j;
+        if (vy > RIM_HOP_MAX) vy = RIM_HOP_MAX;
+        // un golpe de verdad contra el canto (no rodar por encima al entrar)
+        lip = j > 0.6;
+      }
+    }
+  }
+  const dOut = hyp(ball.x - hx, ball.z - hz) - CUP_R;
+  const out = dOut >= 0;
+  // ya pasado el canto (sin tocarlo) vuelve a tener césped debajo
+  if (out && y < 0 && dOut * dOut + (BALL_R + y) * (BALL_R + y) >= BALL_R * BALL_R) y = 0;
+  if (out && y >= 0) {
+    // fuera de la boca otra vez: rueda o sale botando
+    ball.cup = null;
+    if (vy > 0) {
+      ball.vx *= RIM_KEEP;
+      ball.vz *= RIM_KEEP;
+      ball.air = { y, vy };
+    }
+    return { sunk: false, lip };
+  }
+  // sobre la boca, o tocando el canto por debajo del césped
+  ball.cup = { y, vy };
+  return { sunk: false, lip };
 }

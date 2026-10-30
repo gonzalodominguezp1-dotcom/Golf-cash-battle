@@ -56,13 +56,20 @@ const MILL_N2 = windmill({ x: 1.2, z: -4, w: 1, left: -2.6, right: 2.6, speed: -
 const MILL_PRADO = windmill({ x: 0, z: 0.8, w: 1.1, depth: 1.6, left: -1.6, right: 1.6, speed: 1.2 });
 const LOOP_PRADO = { x: 2.4, z: -6.6, dir: [0, -1], len: 4.4, w: 1.6, radius: 0.8 };
 
-
-
-
-
-
-
-
+// El Templo de la Selva: siete calles en zigzag, separadas por muros de piedra
+// o por ríos. Cada río se salta con su rampa (atajo a la calle siguiente) y
+// la de la segunda calle corta la escuadra de la curva. Nunca hay río justo
+// delante de la salida de una curva. water: es como la lava (vuelves al sitio
+// del golpe), pero se ve agua.
+const TEMPLE_RAMP_A = ramp({ x: 0, z: 12.15, w: 1.6, d: 1.5 });
+const TEMPLE_CORNER = ramp({ x: -3.8, z: 7.75, w: 1.5, d: 1.5 });
+const TEMPLE_RAMP_B = ramp({ x: 2.4, z: 3.35, w: 1.6, d: 1.5 });
+const TEMPLE_RAMP_C = ramp({ x: 0.4, z: -5.45, w: 1.6, d: 1.5 });
+// (los ríos no tocan el contorno: se recortan en el césped y el recorte tiene que quedar dentro)
+const river = (x0, x1, z) => {
+  const a = Math.max(x0, -7.95), b = Math.min(x1, 7.95);
+  return { poly: [[a, z - 0.4], [b, z - 0.4], [b, z + 0.4], [a, z + 0.4]], flow: [x0 < -7 ? -1 : 1, 0], water: true };
+};
 
 export const COURSES = [
   {
@@ -347,6 +354,73 @@ export const COURSES = [
     pits: [band(6.4, 3.8), band(-6.2, -9)],
     waypoints: [[-1.3, 9.6], [-1.3, 0.6], [0, -2.6], [0.8, -11.4]],
   },
+  {
+    name: 'El Templo de la Selva',
+    tip: 'Hoyo largo: sigue el zigzag, rebota en las escuadras o salta los ríos con las rampas. Llega al hoyo suave: si vas fuerte, la bola rebota en el borde',
+    par: 14,
+    maxStrokes: 20,
+    theme: 'jungle',
+    aimYaw: 1.5708,
+    // hoyo con borde: la bola cae en la boca y, si va fuerte, choca con el canto y se sale
+    realCup: true,
+    tee: [-6.6, 13.7],
+    cup: [6.6, -13.2],
+    outline: [[-8, 15], [8, 15], [8, -15], [-8, -15]],
+    walls: [
+      // muros entre calles (el hueco de cada curva queda en un extremo)
+      [[1, 11], [5.2, 11]],
+      [[-1, 6.6], [8, 6.6]],
+      [[-8, 2.2], [0, 2.2]],
+      [[-5.2, -2.2], [8, -2.2]],
+      [[-8, -6.6], [-2, -6.6]],
+      [[-5.2, -11], [8, -11]],
+      // las escuadras: muros en diagonal en las esquinas de cada curva; un tiro
+      // bien medido rebota en las dos y da la curva entera
+      [[6.4, 15], [8, 13.4]], [[8, 8.6], [6.4, 7]],
+      [[-6.4, 10.6], [-8, 9]], [[-8, 4.2], [-6.4, 2.6]],
+      [[6.4, 6.2], [8, 4.6]], [[8, -0.2], [6.4, -1.8]],
+      [[-6.4, 1.8], [-8, 0.2]], [[-8, -4.6], [-6.4, -6.2]],
+      [[6.4, -2.6], [8, -4.2]], [[8, -9], [6.4, -10.6]],
+      [[-6.4, -7], [-8, -8.6]], [[-8, -13.4], [-6.4, -15]],
+      // la isla que parte la calle del centro en dos caminos
+      [[-3.6, 0], [1.2, 0]],
+      // la puerta del templo, delante del hoyo
+      [[4.2, -11], [4.2, -12.5]],
+      [[4.2, -13.9], [4.2, -15]],
+      ...TEMPLE_RAMP_A.walls,
+      ...TEMPLE_CORNER.walls,
+      ...TEMPLE_RAMP_B.walls,
+      ...TEMPLE_RAMP_C.walls,
+    ],
+    bumpers: [
+      { x: 2.2, z: 12.3, r: 0.38 },
+      { x: 4.4, z: 14.5, r: 0.34 },
+      { x: 2.6, z: 8.1, r: 0.36 },
+      { x: -4.8, z: 1.55, r: 0.3 },
+      { x: -2.8, z: 3.4, r: 0.4 },
+      { x: 6.8, z: -12.1, r: 0.3 },
+      { x: 1.6, z: -9.9, r: 0.38 },
+      { x: -2.6, z: -7.8, r: 0.38 },
+    ],
+    sand: [
+      { x: -2.4, z: 10, w: 1.6, d: 1 },
+      { x: -1.4, z: -0.95, w: 2.6, d: 1.1 },
+      { x: 1.6, z: -14, w: 1.8, d: 1.2 },
+    ],
+    spinners: [
+    ],
+    boosts: [{ x: 3.4, z: 0.9, w: 1.4, d: 1.2, dir: [-1, 0], speed: 8 }],
+    movers: [
+      { x: 5, z: 4.4, w: 0.6, d: 0.6, axis: 'z', range: 1.1, speed: -1.4 },
+      { x: -3.4, z: -4.4, w: 0.6, d: 0.6, axis: 'z', range: 1.1, speed: 1.5 },
+    ],
+    ramps: [TEMPLE_RAMP_A.ramp, TEMPLE_CORNER.ramp, TEMPLE_RAMP_B.ramp, TEMPLE_RAMP_C.ramp],
+    // los ríos entre calles, donde se pueden saltar (el resto es muro)
+    lava: [river(-8, 1, 11), river(-5.2, -1, 6.6), river(0, 5.2, 2.2), river(-2, 5.2, -6.6)],
+    waypoints: [
+      [6.6, 13.7], [6.6, 9.4], [1.2, 9.7], [-6.6, 9.4], [-6.6, 4.9], [-1.5, 5.2], [6.6, 4.9], [6.6, 0.9], [3, 0.9],
+      [-6.4, 0.9], [-6.6, -3.9], [-0.5, -3.6], [6.6, -3.9], [6.6, -8.8], [-6.6, -8.8], [-6.6, -13.2], [3.2, -13.2],
+    ],  },
 ];
 
 // Desempate: sin agujero. Un tiro cada uno y gana quien pare más cerca de la diana.

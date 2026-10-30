@@ -48,6 +48,30 @@ export const THEMES = {
     woodMill: true, // molino de madera en lugar de torre blanca con tejado rojo
     teePad: { color: 0xff2bd6, w: 1.8, d: 2.2 },
   },
+  // selva: cielo verdoso de mediodía, césped a cuadros y muros de piedra arenisca
+  jungle: {
+    sound: 'birds',
+    skyTop: 0x37b5c2,
+    skyHorizon: 0xbfe6cf,
+    sunColor: 0xfff1cc,
+    sunIntensity: 2.5,
+    sunDir: [-0.45, 0.85, 0.3],
+    ambient: 0.95,
+    groundLow: 0x2f6a2a,
+    groundMid: 0x3f7f2f,
+    groundHigh: 0x5c9a3a,
+    grass: ['#5f9a2c', '#4d8524'],
+    terrainOffset: -0.4,
+    waterLevel: -1.6,
+    water: 0x2aa6b8,
+    trees: ['round', 'round', 'pine'],
+    leaves: [0x2f7d32, 0x3e8e2f, 0x1f6b3a, 0x5a9e2f],
+    flowers: true,
+    clouds: 0xeefaf2,
+    lowClouds: true,
+    mountains: 0x4f8a72,
+    stoneWalls: true, // muros de piedra arenisca, como un templo
+  },
   beach: {
     rim: [0xff007f, 0x00f5d4], // contraluces magenta y turquesa bioluminiscente
     sound: 'waves',

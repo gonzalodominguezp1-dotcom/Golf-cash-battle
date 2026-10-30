@@ -19,7 +19,9 @@ const SETTLE_TICKS = 120 * 30; // tras el último golpe se espera a que pare la 
  * endTick: el cliente se quedó sin tiempo en ese paso. Lo que no entre hasta
  * entonces queda descalificado (timedOut) y cuenta como maxStrokes.
  */
-export function replayHole(course, shots, { maxStrokes = 8, endTick = null } = {}) {
+export function replayHole(course, shots, { maxStrokes: base = 8, endTick = null } = {}) {
+  // los hoyos largos llevan su propio máximo de golpes
+  const maxStrokes = course.maxStrokes ?? base;
   const fail = (reason) => ({ ok: false, reason, strokes: 0, sunk: false, sunkTick: null, timedOut: false, distance: null, waits: [] });
   const timed = endTick !== null && endTick !== undefined;
   if (timed && (course.noCup || !Number.isInteger(endTick) || endTick < 1 || endTick > MAX_HOLE_TICKS)) return fail('bad_end');

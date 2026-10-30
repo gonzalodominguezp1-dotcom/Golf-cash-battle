@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DT, LOOP_LANE, LOOP_PAD, MIN_SLOPE_ACCEL, inLava, inPit, inSand, isMoving, onMound, onRamp, portalAt, quantizeShot, rampAccel, segmentsOf, shotVelocity, step, windmillBlocks } from '../src/game/physics.js';
+import { BALL_R, DT, LOOP_LANE, LOOP_PAD, MIN_SLOPE_ACCEL, inLava, inPit, inSand, isMoving, onMound, onRamp, portalAt, quantizeShot, rampAccel, segmentsOf, shotVelocity, step, windmillBlocks } from '../src/game/physics.js';
 import { ballPose } from '../src/game/render/terrain.js';
 import { groundHeight, hasRelief } from '../src/game/render/terrain.js';
 import { replayHole } from '../src/game/replay.js';
@@ -63,7 +63,7 @@ test('los rivales pueden terminar cada hoyo nuevo', () => {
     for (let i = 0; i < 12; i++) {
       const bot = new Bot({ id: 'b', skill: 0.85 }, c, segs, rng);
       total += bot.finishInstantly(0);
-      if (bot.strokes < 8) sunk++;
+      if (bot.strokes < (c.maxStrokes ?? 8)) sunk++;
     }
     assert.ok(total / 12 <= c.par + 2.5, `${c.name}: media ${(total / 12).toFixed(1)} golpes`);
     assert.ok(sunk >= 9, `${c.name}: solo ${sunk}/12 terminan`);
@@ -390,4 +390,61 @@ test('abismo: por la rampa, flojo vuelve, a medias cae y bien fuerte salta', () 
   const good = rollFrom(c, x, z, 0.78 * 13);
   assert.ok(good.launch && !good.lava, 'fuerte: salta el agujero');
   assert.ok(good.ball.z < Math.min(...c.pits[0].poly.map((p) => p[1])), 'y para al otro lado');
+});
+
+// tira la bola hacia -z desde (x, z) con velocidad v y cuenta lo que pasa en el hoyo
+function rollAtCup(c, x, z, v) {
+  const segs = segmentsOf(c);
+  const ball = { x, z, vx: 0, vz: -v };
+  const ev = { sunk: false, lip: false, hop: false, minY: Infinity };
+  let t = 0;
+  while (isMoving(ball) && t < 120 * 20) {
+    const r = step(c, segs, ball, ++t * DT, DT);
+    ev.sunk ||= r.sunk;
+    ev.lip ||= !!r.lip;
+    ev.hop ||= !!ball.air;
+    ev.minY = Math.min(ev.minY, ballPose(c, ball).y);
+  }
+  return { ball, ...ev };
+}
+
+test('hoyo con borde: despacio entra, fuerte rebota en el canto y se sale', () => {
+  const c = COURSES.find((x) => x.realCup);
+  const [hx, hz] = c.cup;
+  for (const v of [1, 2, 3]) assert.ok(rollAtCup(c, hx, hz + 0.3, v).sunk, `v=${v}: entra por el centro`);
+  for (const v of [5, 6]) {
+    const r = rollAtCup(c, hx, hz + 0.3, v);
+    assert.ok(!r.sunk && r.lip && r.hop, `v=${v}: choca con el borde, bota y no entra`);
+    assert.ok(r.ball.z < hz - 0.4, `v=${v}: sigue de largo`);
+  }
+  // rozando el borde solo entra muy despacio: si no, la bola gira y se sale
+  assert.ok(!rollAtCup(c, hx + 0.2, hz + 0.3, 2.5).sunk);
+  // se ve caer dentro de la boca
+  assert.ok(rollAtCup(c, hx, hz + 0.3, 2).minY < BALL_R - 0.05);
+  // el mismo tiro da siempre lo mismo
+  const a = rollAtCup(c, hx + 0.1, hz + 0.3, 4.2).ball, b = rollAtCup(c, hx + 0.1, hz + 0.3, 4.2).ball;
+  assert.deepEqual([a.x, a.z, a.vx, a.vz], [b.x, b.z, b.vx, b.vz]);
+});
+
+test('el templo: cada rampa salta su río; floja vuelve y a medias cae al agua', () => {
+  const c = COURSES.find((x) => x.name === 'El Templo de la Selva');
+  for (const r of c.ramps) {
+    const foot = r.z + r.d / 2 + 0.5;
+    const weak = rollFrom(c, r.x, foot, 3);
+    assert.ok(!weak.launch && !weak.lava, `rampa ${r.x}: floja no despega`);
+    const short = rollFrom(c, r.x, foot, 4);
+    assert.ok(short.launch && short.lava, `rampa ${r.x}: a medias cae al río`);
+    const ok = rollFrom(c, r.x, foot, 6);
+    assert.ok(ok.launch && !ok.lava && ok.ball.z < r.z - r.d / 2 - 0.8, `rampa ${r.x}: salta a la calle de arriba`);
+  }
+  // el agua devuelve la bola al sitio del golpe y avisa de que es agua
+  const segs = segmentsOf(c);
+  const ball = { x: -4, z: 12, vx: 0, vz: -6 };
+  let r, t = 0;
+  do r = step(c, segs, ball, ++t * DT, DT);
+  while (!r.lava && t < 600);
+  assert.ok(r.water && r.lava);
+  assert.deepEqual([ball.x, ball.z], [-4, 12]);
+  // es un hoyo largo: más golpes permitidos que en el resto
+  assert.ok(c.par >= 10 && c.par <= 15 && c.maxStrokes > c.par + 4);
 });

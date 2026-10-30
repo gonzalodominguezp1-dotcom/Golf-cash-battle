@@ -17,7 +17,7 @@ import { labelTexture, softDotTexture } from './render/textures.js';
 import { createSkinMaterial } from './render/ballSkins.js';
 import { SkinFX } from './render/skins/skinFx.js';
 import { SKINS } from '../progress/skins.js';
-import { HOLE_TIME_LIMIT, MAX_STROKES_PER_HOLE } from '../config.js';
+import { HOLE_TIME_LIMIT, maxStrokesOf } from '../config.js';
 import { setAmbient, setCharge, setRolling, sfx, stopAmbient, stopRolling, unlockAudio } from './audio.js';
 
 const INTRO_SECONDS = 2.2;
@@ -73,7 +73,7 @@ export class GolfGame {
   #aimColor = new THREE.Color();
   #cupV = new THREE.Vector3();
 
-  constructor(container, { onStroke, onSunk, onAim, onRest, onCup, onRival, onLip, onLava, onFall, onOpenSettings, onOverviewChange, onTimer, onTimeUp } = {}) {
+  constructor(container, { onStroke, onSunk, onAim, onRest, onCup, onRival, onLip, onLava, onWater, onFall, onOpenSettings, onOverviewChange, onTimer, onTimeUp } = {}) {
     this.onLava = onLava;
     this.onFall = onFall;
     this.container = container;
@@ -86,6 +86,7 @@ export class GolfGame {
     this.onCup = onCup;
     this.onRival = onRival;
     this.onLip = onLip;
+    this.onWater = onWater;
     this.onOpenSettings = onOpenSettings;
     this.onOverviewChange = onOverviewChange;
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -295,6 +296,7 @@ export class GolfGame {
     this.ball = { x: this.course.tee[0], z: this.course.tee[1], vx: 0, vz: 0 };
     this.strokes = 0;
     this.sunk = false;
+    this.lipped = false;
     this.timedOut = false;
     this.locked = false;
     this.endTick = null;
@@ -374,7 +376,7 @@ export class GolfGame {
     }
     const out = {};
     for (const b of this.bots ?? []) {
-      if (!b.done) Object.assign(b, { done: true, strokes: MAX_STROKES_PER_HOLE });
+      if (!b.done) Object.assign(b, { done: true, strokes: maxStrokesOf(this.course) });
       out[b.player.id] = b.strokes;
     }
     return out;
@@ -386,7 +388,7 @@ export class GolfGame {
     if (dl == null || this.course.noCup || tick <= dl) return false;
     for (const b of this.bots ?? []) {
       if (b.done) continue;
-      Object.assign(b, { done: true, dq: true, strokes: MAX_STROKES_PER_HOLE });
+      Object.assign(b, { done: true, dq: true, strokes: maxStrokesOf(this.course) });
       this.onRival?.(b.player, { strokes: b.strokes, sunk: false, done: true, dq: true });
     }
     return true;
@@ -1239,7 +1241,7 @@ export class GolfGame {
         if (this.genericFx.hit) this.particles.puff(new THREE.Vector3(b.ball.x, 0.05, b.ball.z), 0x9be37f, 8 + Math.round(r.shot * 10), 1 + r.shot, 0.18);
       }
       if (r.portal >= 0) this.particles.puff(new THREE.Vector3(b.ball.x, 0.1, b.ball.z), 0xffb020, 8, 1.2, 0.16);
-      if (r.lava) this.particles.puff(new THREE.Vector3(r.lava[0], 0, r.lava[1]), r.pit ? 0x2a2420 : 0xffa030, 10, 1.6, 0.12);
+      if (r.lava) this.particles.puff(new THREE.Vector3(r.lava[0], 0, r.lava[1]), r.pit ? 0x2a2420 : r.water ? 0x9fe8ff : 0xffa030, 10, 1.6, 0.12);
       if (r.bumper < 0 && r.hit > 2 && !r.shot) {
         if (this.genericFx.wall) this.particles.puff(new THREE.Vector3(b.ball.x, b.mesh.position.y, b.ball.z), 0xf3e3c3, 5, 0.8, 0.14);
       }
@@ -1327,6 +1329,15 @@ export class GolfGame {
         this.#addShake(0.25);
         navigator.vibrate?.([20, 30, 20]);
         this.onFall?.();
+      } else if (r.water) {
+        // cae al río: salpica y vuelve a su sitio
+        const [lx, lz] = r.lava;
+        sfx.fall();
+        this.particles.puff(new THREE.Vector3(lx, 0, lz), 0x9fe8ff, 18, 2, 0.16);
+        this.waves.emit(lx, lz, 0x7fdcff, 1.2, 2.2);
+        this.#addShake(0.25);
+        navigator.vibrate?.([20, 30, 20]);
+        this.onWater?.();
       } else if (r.lava) {
         // se quema en la lava: chispas y humo donde ha caído y vuelve a su sitio
         const [lx, lz] = r.lava;
@@ -1364,7 +1375,21 @@ export class GolfGame {
       }
       // pasa por encima del hoyo demasiado rápido: "¡uy!"
       const toCup = Math.hypot(this.ball.x - this.course.cup[0], this.ball.z - this.course.cup[1]);
-      if (!this.course.noCup && !r.sunk && toCup < CUP_R && Math.hypot(this.ball.vx, this.ball.vz) >= CUP_CAPTURE) {
+      if (this.course.realCup) {
+        // hoyo con borde: suena el golpe contra el canto y, si al final se sale, "¡uy!"
+        if (r.lip) {
+          sfx.lip();
+          this.particles.puff(pos, 0xffffff, 4, 0.8, 0.1);
+          this.#addShake(0.1);
+          this.lipped = true;
+        }
+        if (this.lipped && !r.sunk && !this.ball.cup && toCup > CUP_R + 0.1) {
+          this.lipped = false;
+          this.skinFx.onLip(pos);
+          if (this.genericFx.lip) this.particles.puff(pos, 0xffffff, 6, 1, 0.12);
+          this.onLip?.();
+        }
+      } else if (!this.course.noCup && !r.sunk && toCup < CUP_R && Math.hypot(this.ball.vx, this.ball.vz) >= CUP_CAPTURE) {
         if (!this.overCup) {
           this.overCup = true;
           sfx.lip();

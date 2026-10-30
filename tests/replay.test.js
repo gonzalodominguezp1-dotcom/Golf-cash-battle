@@ -43,7 +43,7 @@ test('el servidor obtiene los mismos golpes que el cliente en todos los hoyos', 
   let checked = 0;
   for (const course of [...COURSES, TIEBREAK_COURSE]) {
     for (let seed = 1; seed <= 40; seed++) {
-      const { shots, result } = playLikeClient(course, seed * 7919);
+      const { shots, result } = playLikeClient(course, seed * 7919, course.maxStrokes ?? 8);
       if (!result) continue;
       const r = replayHole(course, shots);
       assert.equal(r.ok, true, `${course.name} ${seed}: ${r.reason}`);

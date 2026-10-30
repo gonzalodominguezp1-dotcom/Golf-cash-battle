@@ -5,12 +5,12 @@ import { DT, segmentsOf, step, isMoving, quantizeShot, shotVelocity } from '../s
 import { Progress } from '../src/progress/Progress.js';
 import { LocalWallet } from '../src/wallet/LocalWallet.js';
 
-test('catálogo completo de 14 hoyos para selector de juego libre', () => {
-  assert.equal(COURSES.length, 14, 'debe haber exactamente 14 hoyos disponibles');
+test('catálogo completo de 15 hoyos para selector de juego libre', () => {
+  assert.equal(COURSES.length, 15, 'debe haber exactamente 15 hoyos disponibles');
   for (let i = 0; i < COURSES.length; i++) {
     const c = COURSES[i];
     assert.ok(c.name && typeof c.name === 'string', `hoyo ${i + 1} debe tener nombre`);
-    assert.ok(typeof c.par === 'number' && c.par >= 2 && c.par <= 5, `hoyo ${i + 1} debe tener par válido`);
+    assert.ok(typeof c.par === 'number' && c.par >= 2 && c.par <= (c.maxStrokes ? c.maxStrokes - 1 : 5), `hoyo ${i + 1} debe tener par válido`);
     assert.ok(Array.isArray(c.tee) && c.tee.length === 2, `hoyo ${i + 1} debe tener tee`);
     assert.ok(Array.isArray(c.cup) && c.cup.length === 2, `hoyo ${i + 1} debe tener cup`);
     assert.ok(c.theme && typeof c.theme === 'string', `hoyo ${i + 1} debe tener tema`);

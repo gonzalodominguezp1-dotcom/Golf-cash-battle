@@ -1,5 +1,5 @@
 import './style.css';
-import { HOLES_PER_MATCH, HOLE_TIME_LIMIT, MAX_STROKES_PER_HOLE, PLATFORM_COMMISSION, PLAYERS_PER_MATCH, TIERS, potFor, prizeFor } from './config.js';
+import { HOLES_PER_MATCH, HOLE_TIME_LIMIT, PLATFORM_COMMISSION, PLAYERS_PER_MATCH, TIERS, maxStrokesOf, potFor, prizeFor } from './config.js';
 import { LocalWallet } from './wallet/LocalWallet.js';
 import { InsufficientFundsError } from './wallet/WalletService.js';
 import { MatchService, leaders } from './match/MatchService.js';
@@ -1207,17 +1207,18 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         setChip('me', 'DQ', true);
         banner('¡Tiempo! Descalificado');
         cupBanner.classList.add('dq');
-        setTimeout(() => finish(MAX_STROKES_PER_HOLE), 1600);
+        setTimeout(() => finish(maxStrokesOf(course)), 1600);
       },
       onLip: () => toast('¡Uy! Demasiado fuerte para entrar', '#ffffff'),
       onLava: () => toast('🔥 ¡A la lava! Vuelves al sitio del golpe', '#ff8a3a'),
+      onWater: () => toast('💦 ¡Al agua! Vuelves al sitio del golpe', '#7fdcff'),
       onFall: () => toast('🕳️ ¡Al agujero! Vuelves al sitio del golpe', '#ffc400'),
       onRest: (n) => {
         showDistance();
         if (tiebreak) {
           setChip('me', `${game.distanceToCup().toFixed(2)}m`, true);
           setTimeout(() => finish(n), 900);
-        } else if (!freePlay && n >= MAX_STROKES_PER_HOLE) finish(n);
+        } else if (!freePlay && n >= maxStrokesOf(course)) finish(n);
       },
     });
     game.load(course, { bots: freePlay ? [] : players.filter((p) => p.isBot), skin: progress.skin, instance: progress.instance(progress.skin.id), firstSunkTick, timeLimit: freePlay ? null : timeLimit });
@@ -1312,7 +1313,7 @@ function playHole(match, index) {
       const dq = g.timedOut;
       match.myHoles[index] = { strokes, par: course.par };
       Promise.resolve()
-        .then(() => match.service.recordHole(match, index, course.par, strokes, bots))
+        .then(() => match.service.recordHole(match, index, course.par, strokes, bots, maxStrokesOf(course)))
         .then((standings) => showHoleResult(match, index, course, strokes, standings, dq))
         .catch(() => alertMsg('Se ha perdido la conexión con el servidor. Tu partida sigue guardada.'));
     },
