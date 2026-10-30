@@ -11,6 +11,8 @@ export const MAX_SHOT_SPEED = 13;
 const ROLL_DRAG = 0.42; // proporcional a la velocidad
 const ROLL_DECEL = 1.1; // constante
 const SAND_FACTOR = 6.5;
+// en el hielo la bola apenas frena: resbala y llega mucho más lejos
+const ICE_FACTOR = 0.3;
 const RESTITUTION = 0.72;
 const CUP_CAPTURE_SPEED = 3.5;
 const STOP_SPEED = 0.06;
@@ -131,6 +133,12 @@ export const onBoost = (course, x, z) => (course.boosts ?? []).find((b) => inRec
 export function inSand(course, x, z) {
   return course.sand.some((s) => inRect(s, x, z));
 }
+
+/** Placas de hielo: rectángulos como la arena, pero casi sin rozamiento. */
+export const onIce = (course, x, z) => (course.ice ?? []).some((r) => inRect(r, x, z));
+
+// cuánto frena el suelo: la arena mucho, el hielo casi nada
+const grip = (course, x, z) => (inSand(course, x, z) ? SAND_FACTOR : course.ice && onIce(course, x, z) ? ICE_FACTOR : 1);
 
 /** Pendientes: rectángulos que empujan la bola cuesta abajo (dir) con aceleración accel. */
 export const onSlope = (course, x, z) => (course.slopes ?? []).find((s) => inRect(s, x, z));
@@ -648,8 +656,8 @@ export function step(course, segs, ball, t, dt) {
   }
   const speed = hyp(ball.vx, ball.vz);
   if (speed > 0) {
-    const sand = inSand(course, ball.x, ball.z) ? SAND_FACTOR : 1;
-    const newSpeed = Math.max(0, speed - (ROLL_DECEL * sand + ROLL_DRAG * sand * speed) * dt);
+    const g = grip(course, ball.x, ball.z);
+    const newSpeed = Math.max(0, speed - (ROLL_DECEL * g + ROLL_DRAG * g * speed) * dt);
     const k = newSpeed / speed;
     ball.vx *= k;
     ball.vz *= k;
@@ -760,7 +768,7 @@ export function step(course, segs, ball, t, dt) {
     ball.vx = ball.vz = 0;
     return { sunk: true, hit, bumper, portal };
   }
-  const rolls = incline > ROLL_DECEL * (inSand(course, ball.x, ball.z) ? SAND_FACTOR : 1);
+  const rolls = incline > ROLL_DECEL * grip(course, ball.x, ball.z);
   if (v < STOP_SPEED && !rolls) ball.vx = ball.vz = 0;
   if (ball.from && ball.vx === 0 && ball.vz === 0) ball.from = null;
   return { sunk: false, hit, bumper, portal };

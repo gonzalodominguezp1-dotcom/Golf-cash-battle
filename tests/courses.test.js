@@ -596,3 +596,24 @@ test('Cyberpunk2078: la ruta B llega a la cup sin tocar el portal ni el looping'
   }
   assert.ok(found >= 1, 'ninguna secuencia de la ruta B llega a la cup sin portal ni looping');
 });
+
+test('en el hielo la bola resbala mucho más lejos que en la nieve', () => {
+  const field = { outline: [[-4, 40], [4, 40], [4, -40], [-4, -40]], walls: [], bumpers: [], sand: [], spinners: [], tee: [0, 35], cup: [0, -39], noCup: true };
+  const roll = (c) => {
+    const segs = segmentsOf(c);
+    const ball = { x: 0, z: 35, vx: 0, vz: 0, ...shotVelocity(0, 0.2) };
+    for (let t = 1; isMoving(ball) && t < 120 * 30; t++) step(c, segs, ball, t * DT, DT);
+    return 35 - ball.z;
+  };
+  const snow = roll(field), ice = roll({ ...field, ice: [{ x: 0, z: 0, w: 8, d: 80 }] });
+  assert.ok(ice > snow * 2.5, `hielo ${ice.toFixed(2)} m, nieve ${snow.toFixed(2)} m`);
+});
+
+test('el hielo no se mezcla con la arena, la salida ni el hoyo', () => {
+  for (const c of COURSES) {
+    for (const r of c.ice ?? []) {
+      for (const sand of c.sand) assert.ok(!overlaps(r, sand), `${c.name}: hielo sobre arena`);
+      for (const [x, z] of [c.tee, c.cup]) assert.ok(Math.abs(x - r.x) >= r.w / 2 || Math.abs(z - r.z) >= r.d / 2, `${c.name}: salida u hoyo en el hielo`);
+    }
+  }
+});

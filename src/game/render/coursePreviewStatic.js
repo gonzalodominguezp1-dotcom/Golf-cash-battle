@@ -22,6 +22,7 @@ export const STATIC_COURSE_PREVIEWS = {
   'El Abismo': '/courses/course-14.webp',
   'Cyberpunk2078': '/courses/course-15.webp',
   'El Templo de la Selva': '/courses/course-16.webp',
+  'El Glaciar': '/courses/course-17.webp',
   'Desempate': '/courses/tiebreak.webp',
 };
 

@@ -88,6 +88,14 @@ function generate2DFallback(course, width = 480, height = 270) {
     ctx.stroke();
   }
 
+  // Placas de hielo (debajo de la arena y las setas)
+  if (course.ice) {
+    ctx.fillStyle = '#9fd6ee';
+    for (const s of course.ice) {
+      ctx.fillRect(toX(s.x - s.w / 2), toY(s.z - s.d / 2), s.w * scale, s.d * scale);
+    }
+  }
+
   // Obstáculos de arena
   if (course.sand) {
     ctx.fillStyle = '#c9a861';
