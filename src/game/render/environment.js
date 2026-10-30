@@ -12,6 +12,7 @@ import {
   setupCyberpunkEnvironment,
   buildCyberCity,
 } from './cyberpunkEnvironment.js';
+import { lushMountains, makeGrassClump, makeLushCloud, makeLushBush, makeLushRock, makeLushTree, meadowGroundTexture } from './lushEnvironment.js';
 
 // tiempo compartido por los sombreadores animados (viento, agua)
 const windUniforms = { uTime: { value: 0 } };
@@ -71,6 +72,8 @@ export function buildEnvironment(scene, course, theme, rng) {
   const isNeon = !!theme.neon;
   // pista a ras de suelo: el terreno llega plano hasta las paredes (ver course.grounded)
   const grounded = !!course.grounded && !isNeon;
+  // decorado suave (sin facetas): ver lushEnvironment.js
+  const lush = !!theme.lushEnv && !isNeon;
 
   // --- cielo con degradado y sol ---
   const sunDir = new THREE.Vector3(...theme.sunDir).normalize();
@@ -127,7 +130,7 @@ export function buildEnvironment(scene, course, theme, rng) {
   }
 
   // --- terreno: colinas suaves con color por altura ---
-  const size = 220, seg = 110;
+  const size = 220, seg = lush ? 180 : 110;
   const geo = new THREE.PlaneGeometry(size, size, seg, seg);
   geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position;
@@ -155,7 +158,7 @@ export function buildEnvironment(scene, course, theme, rng) {
       // fondo que el resto de hoyos, sin bajar hacia el agua
       let far = theme.terrainOffset * 0.7 - 1.25 + fbm(x * 0.06, z * 0.06) * 9;
       // colinas en terrazas: tramos llanos con escalones cortos entre ellos
-      if (theme.terraces) {
+      if (theme.terraces && !lush) {
         const step = 1.8, k = Math.floor(far / step);
         far = (k + THREE.MathUtils.smoothstep(far / step - k, 0.72, 0.9)) * step;
       }
@@ -210,6 +213,8 @@ export function buildEnvironment(scene, course, theme, rng) {
         flatShading: true,
         vertexColors: true,
       })
+    : lush
+    ? new THREE.MeshStandardMaterial({ vertexColors: true, map: meadowGroundTexture(), roughness: 0.95 })
     : new THREE.MeshLambertMaterial({ vertexColors: true });
   const terrain = new THREE.Mesh(geo, terrainMat);
   terrain.receiveShadow = true;
@@ -280,6 +285,22 @@ export function buildEnvironment(scene, course, theme, rng) {
     setupCyberpunkEnvironment(scene, decor, bounds, theme, rng, animated, q);
     // ciudad propia del hoyo 15 (cables y letreros); los demás neón no la reciben
     if (theme.cyberCity) buildCyberCity(scene, decor, bounds, theme, rng, animated, q);
+  } else if (lush) {
+    // copas y rocas lisas, arbustos y matas de hierba curvas
+    const leaves = (theme.leaves ?? [0x3bb54a]).map((color) => addWind(new THREE.MeshStandardMaterial({ color, vertexColors: true, roughness: 0.8 }), windUniforms, WIND));
+    const grass = addWind(new THREE.MeshStandardMaterial({ color: new THREE.Color(theme.groundHigh).multiplyScalar(0.9), vertexColors: true, roughness: 0.9, side: THREE.DoubleSide }), windUniforms, WIND * 3);
+    const [tx, tz] = course.tee;
+    const clear = (x, z) => !grounded || Math.hypot(x - tx, z - tz) > 9;
+    place(grounded ? 4.5 : 2.2, 40, 140, (x, y, z) => {
+      if (!clear(x, z)) return;
+      const tree = makeLushTree(theme.trees[Math.floor(rng() * theme.trees.length)], rng, x, y, z, leaves);
+      tree.userData.swayRoot = true;
+      decor.add(tree);
+    });
+    place(grounded ? 3.2 : 2, 22, 60, (x, y, z) => clear(x, z) && decor.add(makeLushBush(rng, x, y, z, leaves)));
+    place(grounded ? 2.8 : 1.8, 30, 34, (x, y, z) => clear(x, z) && decor.add(makeLushRock(rng, x, y, z, theme.groundLow)));
+    if (theme.flowers) place(grounded ? 1.6 : 1.2, 12, 140, (x, y, z) => decor.add(makeFlower(rng, x, y, z)));
+    place(grounded ? 1.6 : 1, 16, 220, (x, y, z) => decor.add(makeGrassClump(rng, x, y, z, grass)));
   } else {
     const leaves = theme.leaves?.map((color) => addWind(new THREE.MeshLambertMaterial({ color, flatShading: true }), windUniforms, WIND));
     // a ras de suelo nada pisa el antegreen, y detrás del tee queda un claro para la cámara
@@ -317,7 +338,7 @@ export function buildEnvironment(scene, course, theme, rng) {
   }
   if (volcano) volcanoShell(scene, course, volcano, animated);
   else if (theme.lava) volcanoBackdrop(scene, course, bounds, heightAt, animated, rng);
-  if (theme.mountains) distantMountains(scene, theme.mountains, rng);
+  if (theme.mountains) lush ? lushMountains(scene, theme.mountains, theme.skyHorizon, rng) : distantMountains(scene, theme.mountains, rng);
 
   // --- nubes ---
   // nubes de algodón (solo para temas naturales, no en neón cyberpunk)
@@ -326,7 +347,17 @@ export function buildEnvironment(scene, course, theme, rng) {
     const low = !!theme.lowClouds;
     const cloudMat = new THREE.MeshLambertMaterial({ color: theme.clouds, emissive: theme.clouds, emissiveIntensity: low ? 0.45 : 0.3 });
     const clouds = [];
-    for (let i = 0; i < 12; i++) {
+    // decorado suave: nubes lisas y altas, que no se apoyan en el horizonte
+    const lushCloudMat = lush ? new THREE.MeshLambertMaterial({ color: theme.clouds, emissive: theme.clouds, emissiveIntensity: 0.55, vertexColors: true }) : null;
+    for (let i = 0; i < 12 && lush; i++) {
+      const g = makeLushCloud(rng, lushCloudMat);
+      const a = rng() * Math.PI * 2, r = 55 + rng() * 55;
+      g.position.set(Math.cos(a) * r, 24 + rng() * 16, Math.sin(a) * r);
+      g.userData.speed = 0.4 + rng() * 0.6;
+      clouds.push(g);
+      scene.add(g);
+    }
+    for (let i = 0; i < 12 && !lush; i++) {
       const n = 3 + Math.floor(rng() * 4);
       const parts = [];
       for (let k = 0; k < n; k++) {

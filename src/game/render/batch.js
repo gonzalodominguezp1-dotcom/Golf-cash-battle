@@ -16,7 +16,8 @@ export function bakeStatic(root, parent) {
     if (Array.isArray(mat)) return;
     let g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
     // todas las piezas deben tener los mismos atributos para poder juntarlas
-    for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'normal') g.deleteAttribute(name);
+    // (el color por vértice se queda si el material lo usa: todas las piezas del mismo material lo llevan)
+    for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'normal' && !(name === 'color' && mat.vertexColors)) g.deleteAttribute(name);
     if (!g.attributes.normal) g.computeVertexNormals();
     // cuánto se mece cada vértice con el viento: su altura sobre la base del árbol
     const sway = new Float32Array(g.attributes.position.count);

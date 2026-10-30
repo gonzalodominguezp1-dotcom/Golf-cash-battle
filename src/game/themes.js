@@ -47,6 +47,7 @@ export const THEMES = {
     glowWalls: true,
     woodMill: true, // molino de madera en lugar de torre blanca con tejado rojo
     teePad: { color: 0xff2bd6, w: 1.8, d: 2.2 },
+    lushEnv: true, // árboles, rocas y montañas lisos (ver lushEnvironment.js)
   },
   // selva: cielo verdoso de mediodía, césped a cuadros y muros de piedra arenisca
   jungle: {
