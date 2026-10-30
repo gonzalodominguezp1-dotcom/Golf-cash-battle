@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { BALL_R, CUP_R, LOOP_LANE, LOOP_LANE_HALF, WALL_HALF, moverPos, tubeTable, wallSegmentsOf } from '../physics.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { abyssTexture, chevronTexture, crateTexture, dirtMaps, grassMaps, rockFloorMaps, roughTone, sandMaps, slopeShadeTexture, softDotTexture, stripeTexture, woodMaps } from './textures.js';
+import { abyssTexture, chevronTexture, crateTexture, dirtMaps, grassMaps, iceTexture, rockFloorMaps, roughTone, sandMaps, slopeShadeTexture, softDotTexture, stripeTexture, woodMaps } from './textures.js';
 import { buildPortal } from './portal.js';
 import { groundHeight, hasRelief, tierHeight } from './terrain.js';
 import { lavaMaterial, waterMaterial } from './lava.js';
@@ -138,12 +138,12 @@ export function buildCourse(scene, course, theme) {
 
   // ríos y charcos de lava que corren por los canales
   const lavaMats = (course.lava ?? []).map((l) => buildLava(scene, l));
-  if (pitRects.length) buildPits(scene, course, pitRects);
+  if (pitRects.length) buildPits(scene, course, pitRects, theme);
 
   // arena: un montoncito con volumen que se deshace en granos sobre el césped,
   // sin borde dibujado. La zona de juego (física) es el rectángulo; el fundido
   // queda repartido a ambos lados de su borde
-  const sandM = course.sand.length ? sandMaps() : null;
+  const sandM = course.sand.length ? sandMaps(!!theme.snowSand) : null;
   if (sandM) sandM.map.repeat.set(0.5, 0.5);
   course.sand.forEach((s, i) => {
     const m = new THREE.Mesh(bunkerGeometry(s.w, s.d), bunkerMaterial(sandM, s.w, s.d, i, theme));
@@ -154,6 +154,31 @@ export function buildCourse(scene, course, theme) {
     m.renderOrder = 1;
     scene.add(m);
   });
+
+  // hielo: placas azules lisas que brillan con el sol; el agua que cae dentro
+  // queda recortada para que se vea debajo
+  if (course.ice?.length) {
+    const iceMap = iceTexture();
+    iceMap.repeat.set(0.35, 0.35);
+    const iceMat = new THREE.MeshStandardMaterial({ map: iceMap, roughness: 0.08, metalness: 0.1, envMapIntensity: 1.4, transparent: true, opacity: 0.94 });
+    for (const r of course.ice) {
+      const x0 = r.x - r.w / 2, x1 = r.x + r.w / 2, z0 = r.z - r.d / 2, z1 = r.z + r.d / 2;
+      const plate = new THREE.Shape([[x0, z0], [x1, z0], [x1, z1], [x0, z1]].map(([x, z]) => new THREE.Vector2(x, -z)));
+      for (const l of course.lava ?? []) {
+        if (l.poly.every(([x, z]) => x > x0 && x < x1 && z > z0 && z < z1)) plate.holes.push(new THREE.Path(l.poly.map(([x, z]) => new THREE.Vector2(x, -z))));
+      }
+      const geo = new THREE.ShapeGeometry(plate, 16);
+      // UV en metros, como el césped
+      const pos = geo.attributes.position, uv = geo.attributes.uv;
+      for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i), pos.getY(i));
+      geo.rotateX(-Math.PI / 2);
+      const m = new THREE.Mesh(geo, iceMat);
+      m.position.y = lift(r.x, r.z) + 0.003;
+      m.receiveShadow = true;
+      m.renderOrder = 1;
+      scene.add(m);
+    }
+  }
 
   // paredes de madera (en neón: oscuras con una línea de luz arriba)
   const night = !!theme.rim && theme.sunIntensity < 2;
@@ -173,6 +198,8 @@ export function buildCourse(scene, course, theme) {
       ? new THREE.MeshStandardMaterial({ color: 0x0d0c1c, roughness: 0.4, metalness: 0.5, transparent: true })
       : glowColor !== null
       ? new THREE.MeshStandardMaterial({ normalMap: wood.normalMap, color: 0x23724f, roughness: 0.6, transparent: true })
+      : theme.iceWalls
+      ? new THREE.MeshStandardMaterial({ normalMap: wood.normalMap, color: 0x8fcbe8, roughness: 0.15, metalness: 0.1, transparent: true })
       : theme.rockFloor
         ? new THREE.MeshStandardMaterial({ ...rockWall, color: 0x8a7470, roughness: 0.95, transparent: true })
         : theme.stoneWalls
@@ -184,7 +211,9 @@ export function buildCourse(scene, course, theme) {
       ? new THREE.MeshStandardMaterial({ color: new THREE.Color(glowColor).multiplyScalar(0.12), emissive: glowColor, emissiveIntensity: 0.85, roughness: 0.3, transparent: true })
       : theme.stoneWalls
         ? new THREE.MeshStandardMaterial({ color: 0xf0bb6e, roughness: 0.85, transparent: true })
-        : new THREE.MeshStandardMaterial({ color: 0xeeeeea, roughness: 0.75, envMapIntensity: 0.4, transparent: true });
+        : theme.iceWalls
+          ? new THREE.MeshStandardMaterial({ color: 0xfafdff, roughness: 0.9, transparent: true }) // remate de nieve
+          : new THREE.MeshStandardMaterial({ color: 0xeeeeea, roughness: 0.75, envMapIntensity: 0.4, transparent: true });
     // de noche el remate de las paredes es una tira de luz del color del contraluz
     const baseEmissive = capMat.emissiveIntensity || 0;
     walls.push({ a: [ax, az], b: [bx, bz], mats: [wallMat, capMat], opacity: 1, baseEmissive });
@@ -261,12 +290,16 @@ export function buildCourse(scene, course, theme) {
       ? new THREE.MeshStandardMaterial({ color: 0x1a1830, roughness: 0.3, metalness: 0.6, transparent: true })
       : theme.stoneWalls
         ? new THREE.MeshStandardMaterial({ color: 0xc88a48, roughness: 0.9, transparent: true })
-        : new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.4, transparent: true });
+        : theme.iceWalls
+          ? new THREE.MeshStandardMaterial({ color: 0xb4dcf0, roughness: 0.15, metalness: 0.1, transparent: true })
+          : new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.4, transparent: true });
     const ballMat = neon
       ? new THREE.MeshStandardMaterial({ color: neonColor(corner++), emissive: neonColor(corner - 1), emissiveIntensity: 0.35, transparent: true })
       : theme.stoneWalls
         ? new THREE.MeshStandardMaterial({ color: 0xe6b46a, roughness: 0.85, transparent: true })
-        : new THREE.MeshStandardMaterial({ color: 0xff5a4e, emissive: 0xff3a2e, emissiveIntensity: night ? 0.35 : 0.15, transparent: true });
+        : theme.iceWalls
+          ? new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, transparent: true }) // bola de nieve
+          : new THREE.MeshStandardMaterial({ color: 0xff5a4e, emissive: 0xff3a2e, emissiveIntensity: night ? 0.35 : 0.15, transparent: true });
     const baseEmissive = ballMat.emissiveIntensity || 0;
 
     // con relieve el poste baja hasta el suelo de la maqueta; en una zona elevada empieza en ella
@@ -688,11 +721,12 @@ function pitRect(course, p) {
 }
 
 /** Agujeros: oscuridad que se traga la bola y borde de aviso amarillo y negro. */
-function buildPits(scene, course, rects) {
+function buildPits(scene, course, rects, theme) {
   const xs = course.outline.map((q) => q[0]), zs = course.outline.map((q) => q[1]);
   const dark = new THREE.MeshBasicMaterial({ map: abyssTexture(), transparent: true, side: THREE.BackSide, depthWrite: false });
   const hidden = new THREE.MeshBasicMaterial({ visible: false });
-  const hazard = stripeTexture('#ffc400', '#1a1a1a');
+  // en el glaciar es una grieta: el borde avisa en azul hielo y blanco
+  const hazard = theme.iceWalls ? stripeTexture('#e8f6ff', '#2f7fb3') : stripeTexture('#ffc400', '#1a1a1a');
   const depth = PLATFORM_DEPTH - 0.2;
   for (const r of rects) {
     const w = r.x1 - r.x0, d = r.z1 - r.z0, cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2;

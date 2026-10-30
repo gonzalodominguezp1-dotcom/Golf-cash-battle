@@ -73,6 +73,12 @@ const JUNGLE_CORNER_L = ramp({ x: -9.6, z: 8.1, w: 1.5, d: 1.5, dir: [1, 0] });
 const JUNGLE_CORNER_R = ramp({ x: 10.3, z: 9.2, w: 1.5, d: 1.5, dir: [-1, 0] });
 const waterBox = (x0, x1, z0, z1, flow) => ({ poly: [[x0, z0], [x1, z0], [x1, z1], [x0, z1]], flow, water: true });
 
+// El Glaciar: tres pistas en zigzag casi todas de hielo, donde la bola apenas
+// frena (ice). Abajo, un lago helado con un agujero de agua en medio; al final,
+// una grieta de pared a pared que se salta con la rampa o se cruza por el
+// puente de hielo estrecho de la derecha.
+const GLACIER_RAMP = ramp({ x: -3, z: -5.1, w: 1.6, d: 1.6 });
+
 export const COURSES = [
   {
     name: 'Zigzag',
@@ -447,6 +453,51 @@ export const COURSES = [
     waypoints: [
       [-11.3, 6.6], [-10.4, 5.2], [-10.4, 0.6], [-10, -11.3], [10, -11.3], [10.4, -4.4], [10.4, 0.4], [8.8, 6], [8.8, 12.6], [7, 12.4],
     ],
+  },
+  {
+    name: 'El Glaciar',
+    tip: 'El hielo resbala: la bola apenas frena. Salta la grieta con la rampa o arriésgate por el puente de hielo',
+    par: 6,
+    maxStrokes: 12,
+    theme: 'glacier',
+    tee: [-2.6, 13],
+    cup: [1.2, -12.6],
+    outline: [[-4, 15], [4, 15], [4, -15], [-4, -15]],
+    walls: [
+      // primera pista: se sale por la derecha; segunda: por la izquierda
+      [[-4, 5], [2, 5]],
+      [[-2, -3.6], [4, -3.6]],
+      ...GLACIER_RAMP.walls,
+    ],
+    bumpers: [
+      { x: -0.8, z: 9.8, r: 0.38 },
+      { x: 2, z: 8.2, r: 0.38 },
+      { x: -2.2, z: -11.4, r: 0.34 },
+      { x: 2.8, z: -13.6, r: 0.34 },
+    ],
+    // nieve polvo: frena como la arena (detrás del hoyo, para el que llega pasado)
+    sand: [{ x: 1.2, z: -14.3, w: 2.6, d: 1 }],
+    // aspa en la salida de abajo del lago
+    spinners: [{ x: 1.6, z: -2.2, len: 2.2, speed: 1.4 }],
+    // bloque de hielo que cruza el paso de arriba del lago
+    movers: [{ x: -0.6, z: 3.6, w: 0.7, d: 0.6, axis: 'x', range: 1.6, speed: 1.1 }],
+    ice: [
+      { x: 0, z: 9.6, w: 8, d: 4.6 },
+      { x: 0, z: 0.7, w: 8, d: 6.4 },
+      // franja antes de la grieta y el puente de hielo
+      { x: 1, z: -4.75, w: 6, d: 2.3 },
+      { x: 3.3, z: -7.05, w: 1.4, d: 2.3 },
+      // placa delante del hoyo: hay que llegar suave
+      { x: 0.2, z: -10.4, w: 5.4, d: 1.8 },
+    ],
+    ramps: [GLACIER_RAMP.ramp],
+    // la grieta: de la pared izquierda al puente de la derecha
+    pits: [{ poly: [[-4, -5.9], [2.6, -5.9], [2.6, -8.2], [-4, -8.2]] }],
+    lava: [
+      // el agujero del lago helado: agua (vuelves al sitio del golpe)
+      { poly: [[-0.6, 2.4], [0.8, 2.6], [1.8, 1.6], [1.6, -0.6], [0.4, -1.3], [-0.9, -0.8], [-1.4, 0.8]], flow: [1, 0], water: true },
+    ],
+    waypoints: [[3, 6.4], [3, 3.6], [-2.8, 2.4], [-3, -2.6], [-3, -9.6]],
   },
 ];
 

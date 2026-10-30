@@ -133,6 +133,32 @@ export const THEMES = {
     clouds: 0x112338,
     snowfall: true,
   },
+  // glaciar: mañana fría de cielo azul pálido, pista nevada, placas de hielo
+  // azul, muros de hielo con remate de nieve, pinos nevados y montañas blancas
+  glacier: {
+    sound: 'wind',
+    skyTop: 0x5d9fd6,
+    skyHorizon: 0xe4f1fa,
+    sunColor: 0xfff6ea,
+    sunIntensity: 2.3,
+    sunDir: [0.45, 0.75, 0.4],
+    ambient: 1,
+    groundLow: 0xb7cad8,
+    groundMid: 0xd5e3ee,
+    groundHigh: 0xf1f6fa,
+    grass: ['#e3edf4', '#d3e1ec'], // nieve pisada, un poco azulada para que se vea la bola
+    terrainOffset: -0.6,
+    waterLevel: -1.5,
+    water: 0x3f9fc9,
+    trees: ['snowpine', 'snowpine', 'pine'],
+    flowers: false,
+    clouds: 0xffffff,
+    lowClouds: true,
+    mountains: 0xc9dceb,
+    snowfall: true,
+    iceWalls: true, // muros de hielo azul con remate de nieve
+    snowSand: true, // la "arena" es nieve polvo
+  },
   canyon: {
     rim: [0xff2a6d, 0xffa000], // contraluces carmesí y ámbar cósmico
     sound: 'wind',

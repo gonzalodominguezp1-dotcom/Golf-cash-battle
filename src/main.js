@@ -1868,6 +1868,7 @@ const THEME_INFO = {
   beach: { name: 'Playa', icon: '', color: '#2fe0ff' },
   sunset: { name: 'Atardecer', icon: '', color: '#ff9a5c' },
   snow: { name: 'Nieve', icon: '', color: '#90d7ff' },
+  glacier: { name: 'Glaciar', icon: '', color: '#9fd6ee' },
   canyon: { name: 'Cañón', icon: '', color: '#e58f4a' },
   autumn: { name: 'Otoño', icon: '', color: '#e06b3a' },
   night: { name: 'Noche', icon: '', color: '#7a8bff' },
@@ -1893,6 +1894,7 @@ function getCourseFeatures(c) {
   if (c.movers?.length) feats.push('Bloques');
   if (c.spinners?.length) feats.push('Aspas');
   if (c.bumpers?.length) feats.push('Setas');
+  if (c.ice?.length) feats.push('Hielo');
   if (c.sand?.length) feats.push('Arena');
   return feats;
 }
