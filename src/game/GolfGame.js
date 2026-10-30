@@ -72,6 +72,7 @@ export class GolfGame {
   #axis = new THREE.Vector3();
   #pos = new THREE.Vector3();
   #aimColor = new THREE.Color();
+  #cupV = new THREE.Vector3();
 
   constructor(container, { onStroke, onSunk, onAim, onRest, onCup, onRival, onLip, onLava, onFall, onOpenSettings, onOverviewChange, onTimer, onTimeUp } = {}) {
     this.onLava = onLava;
@@ -96,6 +97,12 @@ export class GolfGame {
     this.renderer.toneMappingExposure = 1.05;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(this.renderer.domElement);
+    // indicador del hoyo: se ve a través de las paredes y, si queda fuera de pantalla, apunta hacia él
+    this.cupMarker = document.createElement('div');
+    this.cupMarker.className = 'cup-marker';
+    this.cupMarker.hidden = true;
+    this.cupMarker.innerHTML = '<i class="cup-arrow"></i><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 1v14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4.9 1.6 13 4.6 4.9 7.6z" fill="#ff4d4d"/></svg>';
+    container.appendChild(this.cupMarker);
     this.camera = new THREE.PerspectiveCamera(55, 1, 0.05, 400);
     // resplandor (bloom): limitado estrictamente a un máximo del 15% (0.15)
     this.composer = new EffectComposer(this.renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 }));
@@ -413,6 +420,7 @@ export class GolfGame {
     this.composer.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
+    this.cupMarker?.remove();
   }
 
   // ---------- escena ----------
@@ -744,6 +752,38 @@ export class GolfGame {
       b.labelFade = THREE.MathUtils.lerp(b.labelFade ?? 1, hidden ? 0 : 1, 0.2);
       b.label.material.opacity *= b.labelFade;
     }
+  }
+
+  /** Marca del hoyo sobre la bandera; fuera de pantalla se pega al borde con una flecha hacia él. */
+  #updateCupMarker() {
+    const el = this.cupMarker;
+    if (!el) return;
+    const c = this.course;
+    const show = !c.noCup && !this.sunk && !this.timedOut && !this.paused && this.intro >= 1 && !this.overview
+      && !isMoving(this.ball) && this.distanceToCup() > 2.5;
+    if (!show) {
+      if (!el.hidden) el.hidden = true;
+      return;
+    }
+    const w = this.container.clientWidth || 1, h = this.container.clientHeight || 1;
+    this.camera.updateMatrixWorld();
+    const v = this.#cupV.set(c.cup[0], this.courseView.flag.pole.position.y + 1.1, c.cup[1]).project(this.camera);
+    // detrás de la cámara la proyección sale invertida
+    let x = v.z > 1 ? -v.x : v.x, y = v.z > 1 ? -v.y : v.y;
+    const M = 0.9;
+    const off = v.z > 1 || Math.abs(x) > M || Math.abs(y) > M;
+    if (off) {
+      const k = M / Math.max(Math.abs(x), Math.abs(y), 1e-6);
+      x *= k;
+      y *= k;
+    }
+    // sin pisar el HUD de arriba ni los botones de abajo
+    const px = THREE.MathUtils.clamp((x * 0.5 + 0.5) * w, 26, w - 26);
+    const py = THREE.MathUtils.clamp((-y * 0.5 + 0.5) * h, 120, h - 130);
+    el.hidden = false;
+    el.classList.toggle('off', off);
+    el.style.transform = `translate(${px.toFixed(1)}px, ${py.toFixed(1)}px)`;
+    el.style.setProperty('--a', `${off ? Math.atan2(-y, x) : Math.PI / 2}rad`);
   }
 
   // ---------- input ----------
@@ -1476,6 +1516,7 @@ export class GolfGame {
     this.skinHandle.update(this.t, dt, this.matCtx);
     this.particles.update(dt, this.camera);
     this.waves.update(realDt);
+    this.#updateCupMarker();
     this.renderPass.scene = this.scene;
     this.composer.render(realDt);
   }
