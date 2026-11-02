@@ -241,7 +241,7 @@ function normalMapFromHeight(h, n, strength) {
  * pequeñas piedras. Color, normales y rugosidad salen del mismo relieve, así
  * que la luz rasante marca los surcos y los granos de verdad.
  */
-export function sandMaps() {
+export function sandMaps(snow = false) {
   const n = detailSize(256);
   const k = n / 256;
   const r = rand(11);
@@ -250,7 +250,10 @@ export function sandMaps() {
   const col = new Float32Array(n * n * 3);
   const rough = new Uint8ClampedArray(n * n);
   // tono base y variaciones (arena dorada de campo de golf)
-  const base = [236, 208, 150], warm = [222, 178, 112], pale = [246, 230, 190];
+  // (snow: nieve polvo, blanca con sombras azuladas)
+  const [base, warm, pale] = snow
+    ? [[238, 244, 250], [214, 228, 242], [252, 253, 255]]
+    : [[236, 208, 150], [222, 178, 112], [246, 230, 190]];
   const RAKE = 9; // surcos por tesela
   for (let y = 0; y < n; y++) {
     for (let x = 0; x < n; x++) {
@@ -282,7 +285,10 @@ export function sandMaps() {
     }
   }
   // granos sueltos de distintos minerales y alguna piedrecita, con borde periódico
-  const grains = [
+  const grains = snow ? [
+    { c: [255, 255, 255], a: 0.85, w: 0.7 }, // cristal de nieve que brilla
+    { c: [190, 214, 236], a: 0.5, w: 0.3 }, // sombra azul entre los copos
+  ] : [
     { c: [255, 250, 236], a: 0.75, w: 0.55 }, // cuarzo
     { c: [214, 160, 128], a: 0.55, w: 0.2 }, // feldespato rosado
     { c: [120, 96, 70], a: 0.55, w: 0.15 }, // grano oscuro
@@ -303,7 +309,7 @@ export function sandMaps() {
     if (k >= 2 && r() > 0.5) put(x + 1, y, g.c, a * 0.6, 0.05);
   }
   // piedrecitas: óvalos con sombra abajo y brillo arriba
-  for (let i = 0; i < 8 * k; i++) {
+  for (let i = 0; i < (snow ? 0 : 8) * k; i++) {
     const cx = r() * n, cy = r() * n, rx = (1.2 + r() * 1.8) * k, ry = rx * (0.6 + r() * 0.35);
     const tint = 175 + r() * 50;
     for (let dy = -Math.ceil(ry) - 1; dy <= Math.ceil(ry) + 1; dy++) {
@@ -453,6 +459,66 @@ export function stripeTexture(a, b) {
       g.lineTo(x + 8, 0);
       g.lineTo(x + 8 + n, n);
       g.lineTo(x + n, n);
+      g.fill();
+    }
+  });
+}
+
+/**
+ * Placa de hielo: azul translúcido con vetas claras, burbujas y grietas finas.
+ * El brillo lo pone el material (poca rugosidad); aquí solo el dibujo.
+ */
+export function iceTexture() {
+  return canvasTexture(detailSize(256), (g, n) => {
+    const r = rand(29);
+    g.fillStyle = '#9fd6ee';
+    g.fillRect(0, 0, n, n);
+    // manchas de hielo más profundo (oscuro) y más blanco (escarcha)
+    for (let i = 0; i < 30; i++) {
+      const x = r() * n, y = r() * n, rad = n * (0.08 + r() * 0.2);
+      const spot = g.createRadialGradient(x, y, 0, x, y, rad);
+      spot.addColorStop(0, r() > 0.5 ? 'rgba(60,140,195,0.28)' : 'rgba(240,250,255,0.35)');
+      spot.addColorStop(1, 'rgba(0,0,0,0)');
+      for (const ox of [-n, 0, n]) for (const oy of [-n, 0, n]) {
+        g.setTransform(1, 0, 0, 1, ox, oy);
+        g.fillStyle = spot;
+        g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+      }
+    }
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    // vetas del patinaje: rayas largas y claras casi paralelas
+    g.lineCap = 'round';
+    for (let i = 0; i < 26; i++) {
+      const y = r() * n, a = (r() - 0.5) * 0.5, len = n * (0.3 + r() * 0.6), x = r() * n;
+      g.strokeStyle = `rgba(255,255,255,${0.15 + r() * 0.25})`;
+      g.lineWidth = 0.6 + r() * 1.2;
+      for (const ox of [-n, 0, n]) {
+        g.beginPath();
+        g.moveTo(x + ox, y);
+        g.lineTo(x + ox + Math.cos(a) * len, y + Math.sin(a) * len);
+        g.stroke();
+      }
+    }
+    // grietas finas que se ramifican
+    for (let i = 0; i < 7; i++) {
+      let x = r() * n, y = r() * n, a = r() * Math.PI * 2;
+      g.strokeStyle = 'rgba(235,250,255,0.7)';
+      g.lineWidth = 0.8;
+      g.beginPath();
+      g.moveTo(x, y);
+      for (let j = 0; j < 9; j++) {
+        a += (r() - 0.5) * 1.2;
+        x += Math.cos(a) * n * 0.04;
+        y += Math.sin(a) * n * 0.04;
+        g.lineTo(x, y);
+      }
+      g.stroke();
+    }
+    // burbujas atrapadas
+    for (let i = 0; i < 60; i++) {
+      g.fillStyle = `rgba(255,255,255,${0.25 + r() * 0.4})`;
+      g.beginPath();
+      g.arc(r() * n, r() * n, 0.5 + r() * 1.6, 0, Math.PI * 2);
       g.fill();
     }
   });

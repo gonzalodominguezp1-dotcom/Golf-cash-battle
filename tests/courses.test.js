@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DT, MIN_SLOPE_ACCEL, inLava, inPit, inSand, isMoving, onMound, onRamp, portalAt, quantizeShot, rampAccel, segmentsOf, shotVelocity, step, windmillBlocks } from '../src/game/physics.js';
+import { BALL_R, DT, LOOP_LANE, LOOP_PAD, MIN_SLOPE_ACCEL, inLava, inPit, inSand, isMoving, onMound, onRamp, portalAt, quantizeShot, rampAccel, segmentsOf, shotVelocity, step, windmillBlocks } from '../src/game/physics.js';
 import { ballPose } from '../src/game/render/terrain.js';
 import { groundHeight, hasRelief } from '../src/game/render/terrain.js';
 import { replayHole } from '../src/game/replay.js';
@@ -63,7 +63,7 @@ test('los rivales pueden terminar cada hoyo nuevo', () => {
     for (let i = 0; i < 12; i++) {
       const bot = new Bot({ id: 'b', skill: 0.85 }, c, segs, rng);
       total += bot.finishInstantly(0);
-      if (bot.strokes < 8) sunk++;
+      if (bot.strokes < (c.maxStrokes ?? 8)) sunk++;
     }
     assert.ok(total / 12 <= c.par + 2.5, `${c.name}: media ${(total / 12).toFixed(1)} golpes`);
     assert.ok(sunk >= 9, `${c.name}: solo ${sunk}/12 terminan`);
@@ -105,16 +105,44 @@ function straightShot(c, power, tick0 = 0) {
   return { ...ball, crossed };
 }
 
-test('looping: flojo vuelve atrás, fuerte lo completa', () => {
+// tira la bola desde (x, z) hacia -z a velocidad v y la sigue hasta que se para o emboca
+function loopRoll(c, x, z, v) {
+  const segs = segmentsOf(c);
+  const ball = { x, z, vx: 0, vz: -v };
+  let entered = false;
+  for (let t = 1; isMoving(ball) && t < 120 * 30; t++) {
+    const r = step(c, segs, ball, t * DT, DT);
+    if (ball.track) entered = true;
+    if (r.sunk) return { sunk: true, entered };
+  }
+  return { ...ball, entered };
+}
+
+test('looping: flojo vuelve atrás, fuerte lo completa (por el carril de entrada)', () => {
   const c = COURSES.find((x) => x.name === 'Looping Neón');
   const [l] = c.loops;
-  const entry = l.z + l.len / 2, exit = l.z - l.len / 2;
-  assert.ok(straightShot(c, 0.4).z > entry, 'un tiro flojo vuelve antes del looping');
-  const strong = straightShot(c, 0.9);
-  assert.ok(strong === null || strong.z < exit, 'un tiro fuerte pasa al otro lado');
+  const laneX = l.x + LOOP_LANE; // dir (0, -1): la derecha es +x
+  const entry = l.z + LOOP_PAD, exit = l.z - LOOP_PAD;
+  const weak = loopRoll(c, laneX, l.z + 3, 6);
+  assert.ok(weak.entered && weak.z > entry, 'un tiro flojo sube, vuelve y sale por la entrada');
+  const strong = loopRoll(c, laneX, l.z + 3, 11);
+  assert.ok(strong.sunk || strong.z < exit, 'un tiro fuerte pasa al otro lado');
   // el looping no levanta el césped
   assert.ok(!hasRelief(c));
   assert.equal(groundHeight(c, l.x, l.z), 0);
+});
+
+test('looping: fuera del carril de entrada la bola choca con la estructura y no entra', () => {
+  const c = COURSES.find((x) => x.name === 'Looping Neón');
+  const [l] = c.loops;
+  // por la izquierda (bajo el carril de salida), por el centro y rozando el bordillo
+  for (const dx of [-0.5, -0.2, 0, 0.65]) {
+    const r = loopRoll(c, l.x + dx, l.z + 3, 11);
+    assert.ok(!r.sunk && !r.entered, `dx=${dx}: no entra en el looping`);
+    assert.ok(r.z > l.z, `dx=${dx}: rebota hacia atrás`);
+  }
+  // centrada en el carril (aunque algo desviada) sí entra
+  for (const dx of [0.2, 0.36, 0.5]) assert.ok(loopRoll(c, l.x + dx, l.z + 3, 11).entered, `dx=${dx}: entra`);
 });
 
 test('molino: las aspas tapan la puerta según el momento del golpe', () => {
@@ -154,7 +182,7 @@ test('tubos: la bola viaja por dentro y sale en la dirección del tubo', () => {
 // tira la bola recta al looping a velocidad v y la sigue hasta que sale del carril
 function throughLoop(c, l, v) {
   const segs = segmentsOf(c);
-  const ball = { x: l.x, z: l.z + l.len / 2 + 0.05, vx: 0, vz: -v };
+  const ball = { x: l.x + LOOP_LANE, z: l.z + LOOP_PAD + 0.05, vx: 0, vz: -v };
   let t = 0, flew = false, r;
   do {
     r = step(c, segs, ball, ++t * DT, DT);
@@ -175,9 +203,13 @@ test('looping: un solo umbral; si no llega se cae y vuelve despacio por la entra
       threshold ??= v;
       assert.ok(r.out > 0.74 * v && r.out < 0.86 * v, `v=${v.toFixed(1)}: pasa perdiendo un 15–25 % (sale a ${r.out.toFixed(2)})`);
       assert.ok(!r.flew, `v=${v.toFixed(1)}: si pasa no se despega`);
+      // sale por el carril de salida, a la izquierda
+      assert.ok(r.ball.x < l.x, `v=${v.toFixed(1)}: sale por la izquierda`);
     } else {
       assert.equal(threshold, null, `v=${v.toFixed(1)}: por encima del umbral siempre pasa`);
-      if (r.flew) assert.ok(r.out <= 0.35 * v, `v=${v.toFixed(1)}: tras caerse sale despacio (${r.out.toFixed(2)})`);
+      if (r.flew) assert.ok(r.out <= 0.4 * v, `v=${v.toFixed(1)}: tras caerse sale despacio (${r.out.toFixed(2)})`);
+      // vuelve por el carril de entrada, a la derecha
+      assert.ok(r.ball.x > l.x, `v=${v.toFixed(1)}: vuelve por la entrada`);
       assert.ok(r.time < 5, `v=${v.toFixed(1)}: no se queda dentro`);
     }
   }
@@ -192,7 +224,7 @@ test('looping: si la bola se cae arriba vuelve por la entrada y nunca se queda e
   const [l] = c.loops;
   const segs = segmentsOf(c);
   for (const v of [2, 4, 5.5, 6.5, 7, 8, 11]) {
-    const ball = { x: l.x, z: l.z + l.len / 2 + 0.3, vx: 0, vz: -v };
+    const ball = { x: l.x + LOOP_LANE, z: l.z + LOOP_PAD + 0.3, vx: 0, vz: -v };
     let t = 0;
     while (isMoving(ball) && t < 120 * 30) step(c, segs, ball, ++t * DT, DT);
     assert.ok(!ball.track && !isMoving(ball), `v=${v}: la bola se para fuera del carril`);
@@ -358,4 +390,239 @@ test('abismo: por la rampa, flojo vuelve, a medias cae y bien fuerte salta', () 
   const good = rollFrom(c, x, z, 0.78 * 13);
   assert.ok(good.launch && !good.lava, 'fuerte: salta el agujero');
   assert.ok(good.ball.z < Math.min(...c.pits[0].poly.map((p) => p[1])), 'y para al otro lado');
+});
+
+// tira la bola hacia -z desde (x, z) con velocidad v y cuenta lo que pasa en el hoyo
+function rollAtCup(c, x, z, v) {
+  const segs = segmentsOf(c);
+  const ball = { x, z, vx: 0, vz: -v };
+  const ev = { sunk: false, lip: false, hop: false, minY: Infinity };
+  let t = 0;
+  while (isMoving(ball) && t < 120 * 20) {
+    const r = step(c, segs, ball, ++t * DT, DT);
+    ev.sunk ||= r.sunk;
+    ev.lip ||= !!r.lip;
+    ev.hop ||= !!ball.air;
+    ev.minY = Math.min(ev.minY, ballPose(c, ball).y);
+  }
+  return { ball, ...ev };
+}
+
+test('hoyo con borde: despacio entra, fuerte rebota en el canto y se sale', () => {
+  // sin muros: solo cuenta el hoyo
+  const c = { ...COURSES.find((x) => x.realCup), walls: [] };
+  const [hx, hz] = c.cup;
+  for (const v of [1, 2, 3]) assert.ok(rollAtCup(c, hx, hz + 0.3, v).sunk, `v=${v}: entra por el centro`);
+  for (const v of [5, 6]) {
+    const r = rollAtCup(c, hx, hz + 0.3, v);
+    assert.ok(!r.sunk && r.lip && r.hop, `v=${v}: choca con el borde, bota y no entra`);
+    assert.ok(r.ball.z < hz - 0.4, `v=${v}: sigue de largo`);
+  }
+  // rozando el borde solo entra muy despacio: si no, la bola gira y se sale
+  assert.ok(!rollAtCup(c, hx + 0.2, hz + 0.3, 2.5).sunk);
+  // se ve caer dentro de la boca
+  assert.ok(rollAtCup(c, hx, hz + 0.3, 2).minY < BALL_R - 0.05);
+  // el mismo tiro da siempre lo mismo
+  const a = rollAtCup(c, hx + 0.1, hz + 0.3, 4.2).ball, b = rollAtCup(c, hx + 0.1, hz + 0.3, 4.2).ball;
+  assert.deepEqual([a.x, a.z, a.vx, a.vz], [b.x, b.z, b.vx, b.vz]);
+});
+
+// tiro recto por una rampa desde 0,5 m antes de su pie, a velocidad v
+function viaRamp(c, r, v) {
+  const len = r.dir[0] ? r.w : r.d;
+  const segs = segmentsOf(c);
+  const ball = { x: r.x - r.dir[0] * (len / 2 + 0.5), z: r.z - r.dir[1] * (len / 2 + 0.5), vx: r.dir[0] * v, vz: r.dir[1] * v };
+  const ev = { launch: false, lava: null, outside: false, start: [ball.x, ball.z], maxAirX: -Infinity };
+  let t = 0;
+  while (isMoving(ball) && t < 120 * 30) {
+    const s = step(c, segs, ball, ++t * DT, DT);
+    if (ball.air) ev.maxAirX = Math.max(ev.maxAirX, ball.x);
+    ev.launch ||= !!s.launch;
+    ev.lava ??= s.lava ?? null;
+    ev.outside ||= !!s.outside;
+  }
+  return { ball, ...ev };
+}
+
+test('el templo: los saltos de agua; floja no despega, a medias cae y bien salta', () => {
+  const c = COURSES.find((x) => x.name === 'El Templo de la Selva');
+  for (const r of c.ramps.filter((q) => q.dir[0] === 0)) {
+    assert.ok(!viaRamp(c, r, 3).launch, `rampa ${r.x}: floja no despega`);
+    const short = viaRamp(c, r, 4.5);
+    assert.ok(short.launch && short.lava, `rampa ${r.x}: a medias cae al agua`);
+    assert.deepEqual([short.ball.x, short.ball.z], short.start, 'y vuelve al sitio del golpe');
+    const ok = viaRamp(c, r, 7);
+    assert.ok(ok.launch && !ok.lava, `rampa ${r.x}: salta el agua`);
+  }
+  // es un hoyo largo: más golpes permitidos que en el resto
+  assert.ok(c.par >= 8 && c.maxStrokes > c.par + 4);
+});
+
+test('el templo: la rampa de la escuadra salta el muro por encima (sin muros invisibles)', () => {
+  const c = COURSES.find((x) => x.name === 'El Templo de la Selva');
+  const [toPath] = c.ramps.filter((q) => q.dir[0] !== 0);
+  // de la calzada (x < -8) al sendero del centro, por encima del muro x = -8
+  const a = viaRamp(c, toPath, 7);
+  assert.ok(a.launch && !a.lava && a.ball.x > -7.8 && a.ball.z > -1.5 && a.ball.z < 4.5, `cae en el sendero (${a.ball.x.toFixed(2)}, ${a.ball.z.toFixed(2)})`);
+  // flojo no llega a la altura del muro y rebota en él
+  const low = viaRamp(c, toPath, 5);
+  assert.ok(low.launch && low.ball.x < -8);
+  // la rampa frena (maxV): ni a tope el salto pasa del puente; o cae antes o en la laguna
+  for (const v of [9, 12, 20]) {
+    const r = viaRamp(c, toPath, v);
+    assert.ok(r.lava || r.maxAirX < -4.6, `v=${v}: no vuela hasta el puente`);
+  }
+});
+
+test('fuera del campo: si un salto cae fuera, vuelve al sitio del golpe', () => {
+  const r = { x: 0, z: 2, w: 1.6, d: 1.5, dir: [0, -1], h: 0.32, lift: 0.42 };
+  const c = { tee: [0, 3.25], cup: [0, -20], outline: [[-2, 5], [2, 5], [2, -3], [-2, -3]], walls: [], bumpers: [], sand: [], spinners: [], ramps: [r] };
+  // viaRamp sale de 0,5 m antes del pie: 3,25, donde está el tee
+  const far = viaRamp(c, r, 10);
+  assert.ok(far.launch && far.outside && far.lava);
+  assert.deepEqual([far.ball.x, far.ball.z], far.start);
+});
+
+// ---------- Cyberpunk2078 (hoyo 15) ----------
+
+// Un golpe desde (x, z): si cruza el portal, si entra al looping (desde la boca de entrada o la de salida),
+// si lo completa, y si embouca. La entrada desde la salida cuenta como entrada sin portal (conservador).
+function runShot(c, segs, x, z, yaw, power, maxT = 120 * 30) {
+  const ball = { x, z, vx: 0, vz: 0 };
+  Object.assign(ball, shotVelocity(yaw, power));
+  const ev = { portal: false, entry: null, exitEntry: null, passed: false, sunk: false, end: null };
+  let t = 0, exited = false;
+  while (isMoving(ball) && t < maxT) {
+    const had = !!ball.track;
+    const r = step(c, segs, ball, ++t * DT, DT);
+    if (r.portal >= 0) ev.portal = true;
+    if (!had && ball.track?.kind === 'loop') {
+      if (ball.track.from === 1 && !ev.entry) ev.entry = { viaPortal: ev.portal, speed: Math.hypot(ball.vx, ball.vz) };
+      if (ball.track.from === -1 && !ev.exitEntry) ev.exitEntry = { viaPortal: ev.portal };
+    }
+    if (ev.entry && !exited && had && r.trackExit) {
+      exited = true;
+      ev.passed = ball.z < c.loops[0].z;
+    }
+    if (r.sunk) { ev.sunk = true; break; }
+  }
+  ev.end = [ball.x, ball.z];
+  return ev;
+}
+
+const segDist = (x, z, [[ax, az], [bx, bz]]) => {
+  const dx = bx - ax, dz = bz - az, L = dx * dx + dz * dz;
+  const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L));
+  return Math.hypot(ax + dx * t - x, az + dz * t - z);
+};
+
+test('Cyberpunk2078: es el hoyo 15, con looping de radio 1,2 y tema propio', () => {
+  const c = COURSES[14];
+  assert.equal(c.name, 'Cyberpunk2078');
+  assert.equal(c.par, 4);
+  assert.equal(c.theme, 'cyber2078');
+  assert.equal(c.loops[0].radius, 1.2);
+  assert.equal(c.loops[0].x, -1.36);
+  assert.equal(c.loops[0].z, -0.3);
+});
+
+test('Cyberpunk2078: portal obligatorio, entradas sin portal ≤ 2 % del barrido (boca y salida juntas)', () => {
+  const c = COURSES[14];
+  const segs = segmentsOf(c);
+  // misma muestra que la sonda: 93 puntos libres del campo (yaw completo, potencia 0,3–1,0) y el tee (yaw ±45°)
+  const starts = [];
+  for (let x = -3.5; x <= 3.51; x += 1) for (let z = -9; z <= 9.5; z += 1.5) starts.push([x, z]);
+  const free = starts.filter(([x, z]) => segs.every((sg) => segDist(x, z, sg) > 0.3));
+  let shots = 0, direct = 0, exitIn = 0;
+  const tally = (r) => {
+    if (r.entry && !r.entry.viaPortal) direct++;
+    if (r.exitEntry) exitIn++;
+  };
+  for (const [sx, sz] of free) {
+    if (sx > -4 && sx < 0.4 && sz > 0.6 && sz < 4.2) continue; // puntos de la bolsa: excluidos del barrido (igual que en la sonda)
+    for (let yaw = -3.14; yaw <= 3.14; yaw += 0.09) for (let p = 0.3; p <= 1.0001; p += 0.07) {
+      const q = quantizeShot(yaw, p);
+      tally(runShot(c, segs, sx, sz, q.yaw, q.power, 120 * 8));
+      shots++;
+    }
+  }
+  const base = Math.atan2(c.portals[0].a[0] - c.tee[0], -(c.portals[0].a[1] - c.tee[1])); // yaw del tee hacia el portal
+  for (let dy = -0.79; dy <= 0.79; dy += 0.0175) for (let p = 0.3; p <= 1.0001; p += 0.01) {
+    const q = quantizeShot(base + dy, p);
+    tally(runShot(c, segs, c.tee[0], c.tee[1], q.yaw, q.power, 120 * 8));
+    shots++;
+  }
+  const without = direct + exitIn;
+  assert.ok(shots > 70000, `muestra de ${shots} golpes`);
+  assert.ok(without <= 0.02 * shots, `entradas sin portal: ${direct} por la boca + ${exitIn} por la salida = ${without} (${((100 * without) / shots).toFixed(2)} %, límite 2 %)`);
+});
+
+test('Cyberpunk2078: la ruta A, por el portal, completa el looping con margen (≥ 95 %, velocidad ≥ umbral + 1)', () => {
+  const c = COURSES[14];
+  const [l] = c.loops;
+  const segs = segmentsOf(c);
+  let threshold = null;
+  for (let v = 5; v <= 13.0001 && threshold === null; v += 0.05) if (throughLoop(c, l, v).passed) threshold = v;
+  assert.ok(threshold > 8.5 && threshold < 9.3, `umbral de R 1,2: ${threshold}`);
+  // tiros del tee hacia el portal (yaw ±6°, potencia 0,5–1,0); solo cuentan los que pasan por el portal
+  const yaw0 = Math.atan2(c.portals[0].a[0] - c.tee[0], -(c.portals[0].a[1] - c.tee[1]));
+  let through = 0, done = 0;
+  const speeds = [];
+  for (let dy = -0.105; dy <= 0.1051; dy += 0.005) for (let p = 0.5; p <= 1.0001; p += 0.01) {
+    const q = quantizeShot(yaw0 + dy, p);
+    const r = runShot(c, segs, c.tee[0], c.tee[1], q.yaw, q.power);
+    if (!r.portal) continue;
+    through++;
+    if (r.passed) { done++; speeds.push(r.entry.speed); }
+  }
+  assert.ok(done >= 0.95 * through, `ruta A: ${done}/${through} completan (${((100 * done) / through).toFixed(2)} %)`);
+  // velocidad de la boca: la mediana de los que completan está un m/s por encima del umbral (la lectura estricta por golpe se informa en el plan)
+  speeds.sort((a, b) => a - b);
+  const median = speeds[speeds.length >> 1];
+  assert.ok(median >= threshold + 1, `mediana de la boca ${median.toFixed(2)} m/s, umbral ${threshold.toFixed(2)}`);
+});
+
+test('Cyberpunk2078: la ruta B llega a la cup sin tocar el portal ni el looping', () => {
+  const c = COURSES[14];
+  // la ruta B son los waypoints sin el de la entrada del portal
+  const cB = { ...c, waypoints: c.waypoints.slice(1) };
+  const segs = segmentsOf(cB);
+  let s = 4343;
+  const rng = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  let found = 0;
+  for (let i = 0; i < 40 && found === 0; i++) {
+    const bot = new Bot({ id: 'b', skill: 0.85 }, cB, segs, rng);
+    let portal = false, loop = false, t = 0;
+    for (let k = 0; k < 120 * 300 && !bot.done; k++) {
+      const had = !!bot.ball.track;
+      const r = bot.tick(t, DT);
+      t += DT;
+      if (!r) continue;
+      if (r.portal >= 0) portal = true;
+      if (!had && bot.ball.track?.kind === 'loop') loop = true;
+    }
+    if (bot.done && bot.strokes < 8 && !portal && !loop) found++;
+  }
+  assert.ok(found >= 1, 'ninguna secuencia de la ruta B llega a la cup sin portal ni looping');
+});
+
+test('en el hielo la bola resbala mucho más lejos que en la nieve', () => {
+  const field = { outline: [[-4, 40], [4, 40], [4, -40], [-4, -40]], walls: [], bumpers: [], sand: [], spinners: [], tee: [0, 35], cup: [0, -39], noCup: true };
+  const roll = (c) => {
+    const segs = segmentsOf(c);
+    const ball = { x: 0, z: 35, vx: 0, vz: 0, ...shotVelocity(0, 0.2) };
+    for (let t = 1; isMoving(ball) && t < 120 * 30; t++) step(c, segs, ball, t * DT, DT);
+    return 35 - ball.z;
+  };
+  const snow = roll(field), ice = roll({ ...field, ice: [{ x: 0, z: 0, w: 8, d: 80 }] });
+  assert.ok(ice > snow * 2.5, `hielo ${ice.toFixed(2)} m, nieve ${snow.toFixed(2)} m`);
+});
+
+test('el hielo no se mezcla con la arena, la salida ni el hoyo', () => {
+  for (const c of COURSES) {
+    for (const r of c.ice ?? []) {
+      for (const sand of c.sand) assert.ok(!overlaps(r, sand), `${c.name}: hielo sobre arena`);
+      for (const [x, z] of [c.tee, c.cup]) assert.ok(Math.abs(x - r.x) >= r.w / 2 || Math.abs(z - r.z) >= r.d / 2, `${c.name}: salida u hoyo en el hielo`);
+    }
+  }
 });

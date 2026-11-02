@@ -4,6 +4,7 @@ import { Bot } from './bots.js';
 import { THEMES } from './themes.js';
 import { buildEnvironment, courseBounds } from './render/environment.js';
 import { buildCourse } from './render/course.js';
+import { createCyberFx } from './render/cyberpunkFx.js';
 import { ballPose, groundHeight } from './render/terrain.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
@@ -17,7 +18,7 @@ import { labelTexture, softDotTexture } from './render/textures.js';
 import { createSkinMaterial } from './render/ballSkins.js';
 import { SkinFX } from './render/skins/skinFx.js';
 import { SKINS } from '../progress/skins.js';
-import { HOLE_TIME_LIMIT, MAX_STROKES_PER_HOLE } from '../config.js';
+import { HOLE_TIME_LIMIT, maxStrokesOf } from '../config.js';
 import { setAmbient, setCharge, setRolling, sfx, stopAmbient, stopRolling, unlockAudio } from './audio.js';
 
 const INTRO_SECONDS = 2.2;
@@ -71,8 +72,9 @@ export class GolfGame {
   #axis = new THREE.Vector3();
   #pos = new THREE.Vector3();
   #aimColor = new THREE.Color();
+  #cupV = new THREE.Vector3();
 
-  constructor(container, { onStroke, onSunk, onAim, onRest, onCup, onRival, onLip, onLava, onFall, onOpenSettings, onOverviewChange, onTimer, onTimeUp } = {}) {
+  constructor(container, { onStroke, onSunk, onAim, onRest, onCup, onRival, onLip, onLava, onWater, onOut, onFall, onOpenSettings, onOverviewChange, onTimer, onTimeUp } = {}) {
     this.onLava = onLava;
     this.onFall = onFall;
     this.container = container;
@@ -85,6 +87,8 @@ export class GolfGame {
     this.onCup = onCup;
     this.onRival = onRival;
     this.onLip = onLip;
+    this.onWater = onWater;
+    this.onOut = onOut;
     this.onOpenSettings = onOpenSettings;
     this.onOverviewChange = onOverviewChange;
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -95,6 +99,12 @@ export class GolfGame {
     this.renderer.toneMappingExposure = 1.05;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(this.renderer.domElement);
+    // indicador del hoyo: se ve a través de las paredes y, si queda fuera de pantalla, apunta hacia él
+    this.cupMarker = document.createElement('div');
+    this.cupMarker.className = 'cup-marker';
+    this.cupMarker.hidden = true;
+    this.cupMarker.innerHTML = '<i class="cup-arrow"></i><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 1v14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4.9 1.6 13 4.6 4.9 7.6z" fill="#ff4d4d"/></svg>';
+    container.appendChild(this.cupMarker);
     this.camera = new THREE.PerspectiveCamera(55, 1, 0.05, 400);
     // resplandor (bloom): limitado estrictamente a un máximo del 15% (0.15)
     this.composer = new EffectComposer(this.renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 }));
@@ -288,6 +298,7 @@ export class GolfGame {
     this.ball = { x: this.course.tee[0], z: this.course.tee[1], vx: 0, vz: 0 };
     this.strokes = 0;
     this.sunk = false;
+    this.lipped = false;
     this.timedOut = false;
     this.locked = false;
     this.endTick = null;
@@ -367,7 +378,7 @@ export class GolfGame {
     }
     const out = {};
     for (const b of this.bots ?? []) {
-      if (!b.done) Object.assign(b, { done: true, strokes: MAX_STROKES_PER_HOLE });
+      if (!b.done) Object.assign(b, { done: true, strokes: maxStrokesOf(this.course) });
       out[b.player.id] = b.strokes;
     }
     return out;
@@ -379,7 +390,7 @@ export class GolfGame {
     if (dl == null || this.course.noCup || tick <= dl) return false;
     for (const b of this.bots ?? []) {
       if (b.done) continue;
-      Object.assign(b, { done: true, dq: true, strokes: MAX_STROKES_PER_HOLE });
+      Object.assign(b, { done: true, dq: true, strokes: maxStrokesOf(this.course) });
       this.onRival?.(b.player, { strokes: b.strokes, sunk: false, done: true, dq: true });
     }
     return true;
@@ -412,6 +423,7 @@ export class GolfGame {
     this.composer.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
+    this.cupMarker?.remove();
   }
 
   // ---------- escena ----------
@@ -426,6 +438,8 @@ export class GolfGame {
     const rng = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
     this.env = buildEnvironment(scene, this.course, this.theme, rng);
     this.courseView = buildCourse(scene, this.course, this.theme);
+    // efectos del hoyo 15 (solo visuales: leen la bola y los eventos, no escriben la simulación)
+    this.cyberFx = this.theme.cyberCity ? createCyberFx(scene, this.course) : null;
     const q = quality();
     // reflejos suaves de un estudio: los plásticos y metales dejan de verse apagados
     // (de noche y en neón no: los metales oscuros reflejarían un estudio blanco y brillarían de más)
@@ -741,6 +755,38 @@ export class GolfGame {
       b.labelFade = THREE.MathUtils.lerp(b.labelFade ?? 1, hidden ? 0 : 1, 0.2);
       b.label.material.opacity *= b.labelFade;
     }
+  }
+
+  /** Marca del hoyo sobre la bandera; fuera de pantalla se pega al borde con una flecha hacia él. */
+  #updateCupMarker() {
+    const el = this.cupMarker;
+    if (!el) return;
+    const c = this.course;
+    const show = !c.noCup && !this.sunk && !this.timedOut && !this.paused && this.intro >= 1 && !this.overview
+      && !isMoving(this.ball) && this.distanceToCup() > 2.5;
+    if (!show) {
+      if (!el.hidden) el.hidden = true;
+      return;
+    }
+    const w = this.container.clientWidth || 1, h = this.container.clientHeight || 1;
+    this.camera.updateMatrixWorld();
+    const v = this.#cupV.set(c.cup[0], this.courseView.flag.pole.position.y + 1.1, c.cup[1]).project(this.camera);
+    // detrás de la cámara la proyección sale invertida
+    let x = v.z > 1 ? -v.x : v.x, y = v.z > 1 ? -v.y : v.y;
+    const M = 0.9;
+    const off = v.z > 1 || Math.abs(x) > M || Math.abs(y) > M;
+    if (off) {
+      const k = M / Math.max(Math.abs(x), Math.abs(y), 1e-6);
+      x *= k;
+      y *= k;
+    }
+    // sin pisar el HUD de arriba ni los botones de abajo
+    const px = THREE.MathUtils.clamp((x * 0.5 + 0.5) * w, 26, w - 26);
+    const py = THREE.MathUtils.clamp((-y * 0.5 + 0.5) * h, 120, h - 130);
+    el.hidden = false;
+    el.classList.toggle('off', off);
+    el.style.transform = `translate(${px.toFixed(1)}px, ${py.toFixed(1)}px)`;
+    el.style.setProperty('--a', `${off ? Math.atan2(-y, x) : Math.PI / 2}rad`);
   }
 
   // ---------- input ----------
@@ -1199,7 +1245,7 @@ export class GolfGame {
         if (this.genericFx.hit) this.particles.puff(new THREE.Vector3(b.ball.x, 0.05, b.ball.z), 0x9be37f, 8 + Math.round(r.shot * 10), 1 + r.shot, 0.18);
       }
       if (r.portal >= 0) this.particles.puff(new THREE.Vector3(b.ball.x, 0.1, b.ball.z), 0xffb020, 8, 1.2, 0.16);
-      if (r.lava) this.particles.puff(new THREE.Vector3(r.lava[0], 0, r.lava[1]), r.pit ? 0x2a2420 : 0xffa030, 10, 1.6, 0.12);
+      if (r.lava) this.particles.puff(new THREE.Vector3(r.lava[0], 0, r.lava[1]), r.pit ? 0x2a2420 : r.water ? 0x9fe8ff : 0xffa030, 10, 1.6, 0.12);
       if (r.bumper < 0 && r.hit > 2 && !r.shot) {
         if (this.genericFx.wall) this.particles.puff(new THREE.Vector3(b.ball.x, b.mesh.position.y, b.ball.z), 0xf3e3c3, 5, 0.8, 0.14);
       }
@@ -1247,6 +1293,7 @@ export class GolfGame {
       const r = step(this.course, this.segs, this.ball, this.t, DT);
       const pose = ballPose(this.course, this.ball);
       const pos = this.#pos.set(pose.x, pose.y, pose.z);
+      if (r.portal >= 0) this.cyberFx?.onPortal(r.portal);
       if (r.portal >= 0 && this.course.portals[r.portal].tube) {
         // entra en un tubo: la bola viaja por dentro y la cámara la sigue
         sfx.portal();
@@ -1287,6 +1334,23 @@ export class GolfGame {
         this.#addShake(0.25);
         navigator.vibrate?.([20, 30, 20]);
         this.onFall?.();
+      } else if (r.outside) {
+        // saltó por encima del muro de fuera: vuelve a su sitio
+        const [lx, lz] = r.lava;
+        sfx.fall();
+        this.particles.puff(new THREE.Vector3(lx, 0, lz), 0x8fbf5a, 12, 1.6, 0.18);
+        this.#addShake(0.2);
+        navigator.vibrate?.([20, 30, 20]);
+        this.onOut?.();
+      } else if (r.water) {
+        // cae al río: salpica y vuelve a su sitio
+        const [lx, lz] = r.lava;
+        sfx.fall();
+        this.particles.puff(new THREE.Vector3(lx, 0, lz), 0x9fe8ff, 18, 2, 0.16);
+        this.waves.emit(lx, lz, 0x7fdcff, 1.2, 2.2);
+        this.#addShake(0.25);
+        navigator.vibrate?.([20, 30, 20]);
+        this.onWater?.();
       } else if (r.lava) {
         // se quema en la lava: chispas y humo donde ha caído y vuelve a su sitio
         const [lx, lz] = r.lava;
@@ -1301,6 +1365,7 @@ export class GolfGame {
       }
       if (r.bumper >= 0) {
         this.courseView.bumpers[r.bumper].userData.squash = 0.18;
+        this.cyberFx?.onBumper(r.bumper);
         sfx.bumper();
         this.skinFx.onBumper(pos);
         if (this.genericFx.wall) {
@@ -1324,7 +1389,21 @@ export class GolfGame {
       }
       // pasa por encima del hoyo demasiado rápido: "¡uy!"
       const toCup = Math.hypot(this.ball.x - this.course.cup[0], this.ball.z - this.course.cup[1]);
-      if (!this.course.noCup && !r.sunk && toCup < CUP_R && Math.hypot(this.ball.vx, this.ball.vz) >= CUP_CAPTURE) {
+      if (this.course.realCup) {
+        // hoyo con borde: suena el golpe contra el canto y, si al final se sale, "¡uy!"
+        if (r.lip) {
+          sfx.lip();
+          this.particles.puff(pos, 0xffffff, 4, 0.8, 0.1);
+          this.#addShake(0.1);
+          this.lipped = true;
+        }
+        if (this.lipped && !r.sunk && !this.ball.cup && toCup > CUP_R + 0.1) {
+          this.lipped = false;
+          this.skinFx.onLip(pos);
+          if (this.genericFx.lip) this.particles.puff(pos, 0xffffff, 6, 1, 0.12);
+          this.onLip?.();
+        }
+      } else if (!this.course.noCup && !r.sunk && toCup < CUP_R && Math.hypot(this.ball.vx, this.ball.vz) >= CUP_CAPTURE) {
         if (!this.overCup) {
           this.overCup = true;
           sfx.lip();
@@ -1461,6 +1540,7 @@ export class GolfGame {
     this.env.update(this.t, dt);
     this.#placeCamera(realDt);
     this.courseView.update(this.t, this.camera.position, this.ball, this.camLook, this.overview);
+    this.cyberFx?.update(this.t, this.ball);
     this.fxCtx.speed = speed;
     this.fxCtx.moving = speed > 0.5;
     this.skinFx.update(this.t, dt, this.fxCtx);
@@ -1470,6 +1550,7 @@ export class GolfGame {
     this.skinHandle.update(this.t, dt, this.matCtx);
     this.particles.update(dt, this.camera);
     this.waves.update(realDt);
+    this.#updateCupMarker();
     this.renderPass.scene = this.scene;
     this.composer.render(realDt);
   }

@@ -1,5 +1,5 @@
 import './style.css';
-import { HOLES_PER_MATCH, HOLE_TIME_LIMIT, MAX_STROKES_PER_HOLE, PLATFORM_COMMISSION, PLAYERS_PER_MATCH, TIERS, potFor, prizeFor } from './config.js';
+import { HOLES_PER_MATCH, HOLE_TIME_LIMIT, PLATFORM_COMMISSION, PLAYERS_PER_MATCH, TIERS, maxStrokesOf, potFor, prizeFor } from './config.js';
 import { LocalWallet } from './wallet/LocalWallet.js';
 import { InsufficientFundsError } from './wallet/WalletService.js';
 import { MatchService, leaders } from './match/MatchService.js';
@@ -288,6 +288,8 @@ async function showLobby() {
 
 // ---------- skins ----------
 
+const LOCK_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10.5" rx="2.5" fill="currentColor"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
+
 const tierOrder = (s) => SKIN_TIERS[s.tier]?.order ?? 0;
 const FILTER_TIERS = Object.keys(SKIN_TIERS).reverse();
 
@@ -355,13 +357,13 @@ async function showSkins() {
           <span class="sk-ico" title="${tier.name}">${tier.icon}</span>
           <span class="sk-eq">Equipada</span>
           <img class="sk-thumb" src="${(open && thumbCached(skin, inst)) || ballPreview(skin, 152)}" width="76" height="76" alt="" draggable="false">
+          ${open ? '' : `<span class="sk-lock">${LOCK_SVG}</span>`}
           ${open && inst?.counter?.enabled ? '<span class="sk-chip">Marcador</span>' : ''}
           ${rare ? '<span class="sk-chip sk-chip-rare">✦ Patrón raro</span>' : ''}
         </div>
         <div class="sk-strip">
           <b>${skin.name}</b>
           <small>${tier.name}</small>
-          ${open ? '' : `<small class="req">${req.text}</small><span class="bar"><i style="width:${req.ratio * 100}%"></i></span>`}
         </div>
       </button>`);
     const img = card.querySelector('.sk-thumb');
@@ -424,24 +426,30 @@ async function showSkins() {
           <button type="button" class="sk-view-back" aria-label="Cerrar inspección">‹ Skins</button>
           <span class="sk-view-title">${tier.icon} ${skin.name}</span>
         </div>
-        <div class="sk-view-stage"><img class="sk-view-poster" src="${thumbCached(skin, progress.instance(skin.id)) ?? ballPreview(skin, 288)}" alt="" draggable="false"></div>
+        <div class="sk-view-stage">
+          <div class="sk-view-canvas"><img class="sk-view-poster" src="${thumbCached(skin, progress.instance(skin.id)) ?? ballPreview(skin, 288)}" alt="" draggable="false"></div>
+          <div class="sk-view-lock" hidden>
+            <span class="sk-lock sk-lock-big">${LOCK_SVG}</span>
+            <div class="sk-view-req"><small></small><span class="bar"><i></i></span></div>
+          </div>
+        </div>
         <div class="sk-view-actions">
-          <div class="sk-view-req"></div>
           <button type="button" class="primary sk-equip"></button>
         </div>
       </div>`);
     document.body.append(overlay);
     document.body.classList.add('sk-noscroll');
     const equipBtn = overlay.querySelector('.sk-equip');
-    const reqBox = overlay.querySelector('.sk-view-req');
+    const lockBox = overlay.querySelector('.sk-view-lock');
     const syncAction = () => {
       const req = progress.requirement(skin);
       const open = req.ratio >= 1;
       const isEq = progress.skin.id === skin.id;
       equipBtn.disabled = isEq || !open;
       equipBtn.textContent = isEq ? '✓ Equipada' : open ? 'Equipar' : 'Bloqueada';
-      reqBox.hidden = open;
-      reqBox.innerHTML = open ? '' : `<small>${req.text}</small><span class="bar"><i style="width:${req.ratio * 100}%"></i></span>`;
+      lockBox.hidden = open;
+      lockBox.querySelector('small').textContent = req.text;
+      lockBox.querySelector('.bar i').style.width = `${req.ratio * 100}%`;
     };
     syncAction();
     equipBtn.addEventListener('click', () => {
@@ -463,7 +471,9 @@ async function showSkins() {
     // el visor 3D (three.js + materiales) se descarga y crea solo ahora, al abrir
     loadSkinInspector().then(({ createSkinInspector }) => {
       if (view3d !== mine) return; // cerrado mientras cargaba
-      mine.inspector = createSkinInspector(overlay.querySelector('.sk-view-stage'), { skin, instance: progress.instance(skin.id) ?? undefined, mode: 'fullscreen' });
+      mine.inspector = createSkinInspector(overlay.querySelector('.sk-view-canvas'), { skin, instance: progress.instance(skin.id) ?? undefined, mode: 'fullscreen' });
+      // el candado va sobre el visor 3D, centrado en la bola (el visor vacía el contenedor al crearse)
+      overlay.querySelector('.sk-stage')?.append(lockBox);
     }).catch((err) => console.warn('inspector no disponible', err));
   }
 
@@ -1013,7 +1023,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         <span><kbd>Esc</kbd> Ajustes</span>
         ${freePlay ? '<span><kbd>R</kbd> Reiniciar hoyo</span>' : ''}
       </div>
-      <div class="power"><div class="fill"></div><span>0%</span></div>
+      <div class="power"><div class="fill"></div></div>
       <button class="map-btn" aria-label="Ver el hoyo completo">Ver mapa <kbd class="kbd-hint">Espacio</kbd></button>
     </main>`);
   const gameClass = loadGolfGame();
@@ -1221,7 +1231,6 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       },
       onAim: (p) => {
         power.querySelector('.fill').style.height = `${p * 100}%`;
-        power.querySelector('span').textContent = `${Math.round(p * 100)}%`;
         power.classList.toggle('active', p > 0);
         power.classList.toggle('full', p >= 1);
       },
@@ -1265,17 +1274,19 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         setChip('me', 'DQ', true);
         banner('¡Tiempo! Descalificado');
         cupBanner.classList.add('dq');
-        setTimeout(() => finish(MAX_STROKES_PER_HOLE), 1600);
+        setTimeout(() => finish(maxStrokesOf(course)), 1600);
       },
       onLip: () => toast('¡Uy! Demasiado fuerte para entrar', '#ffffff'),
       onLava: () => toast('🔥 ¡A la lava! Vuelves al sitio del golpe', '#ff8a3a'),
+      onWater: () => toast('💦 ¡Al agua! Vuelves al sitio del golpe', '#7fdcff'),
+      onOut: () => toast('🌴 ¡Fuera del campo! Vuelves al sitio del golpe', '#b8f07a'),
       onFall: () => toast('🕳️ ¡Al agujero! Vuelves al sitio del golpe', '#ffc400'),
       onRest: (n) => {
         showDistance();
         if (tiebreak) {
           setChip('me', `${game.distanceToCup().toFixed(2)}m`, true);
           setTimeout(() => finish(n), 900);
-        } else if (!freePlay && n >= MAX_STROKES_PER_HOLE) finish(n);
+        } else if (!freePlay && n >= maxStrokesOf(course)) finish(n);
       },
     });
     game.load(course, { bots: freePlay ? [] : players.filter((p) => p.isBot), skin: progress.skin, instance: progress.instance(progress.skin.id), firstSunkTick, timeLimit: freePlay ? null : timeLimit });
@@ -1370,7 +1381,7 @@ function playHole(match, index) {
       const dq = g.timedOut;
       match.myHoles[index] = { strokes, par: course.par };
       Promise.resolve()
-        .then(() => match.service.recordHole(match, index, course.par, strokes, bots))
+        .then(() => match.service.recordHole(match, index, course.par, strokes, bots, maxStrokesOf(course)))
         .then((standings) => showHoleResult(match, index, course, strokes, standings, dq))
         .catch(() => alertMsg('Se ha perdido la conexión con el servidor. Tu partida sigue guardada.'));
     },
@@ -1916,6 +1927,7 @@ const THEME_INFO = {
   beach: { name: 'Playa', icon: '', color: '#2fe0ff' },
   sunset: { name: 'Atardecer', icon: '', color: '#ff9a5c' },
   snow: { name: 'Nieve', icon: '', color: '#90d7ff' },
+  glacier: { name: 'Glaciar', icon: '', color: '#9fd6ee' },
   canyon: { name: 'Cañón', icon: '', color: '#e58f4a' },
   autumn: { name: 'Otoño', icon: '', color: '#e06b3a' },
   night: { name: 'Noche', icon: '', color: '#7a8bff' },
@@ -1941,6 +1953,7 @@ function getCourseFeatures(c) {
   if (c.movers?.length) feats.push('Bloques');
   if (c.spinners?.length) feats.push('Aspas');
   if (c.bumpers?.length) feats.push('Setas');
+  if (c.ice?.length) feats.push('Hielo');
   if (c.sand?.length) feats.push('Arena');
   return feats;
 }

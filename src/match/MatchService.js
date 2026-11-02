@@ -53,7 +53,7 @@ function pickCourses(total, n, rng) {
   return idx.sort((a, b) => a - b);
 }
 
-function botStrokes(par, skill, rng) {
+function botStrokes(par, skill, rng, max = MAX_STROKES_PER_HOLE) {
   const r = rng();
   let delta;
   if (r < 0.04 * skill) delta = -2;
@@ -61,7 +61,7 @@ function botStrokes(par, skill, rng) {
   else if (r < 0.3 * skill + 0.45) delta = 0;
   else if (r < 0.85) delta = 1;
   else delta = 2;
-  return Math.min(MAX_STROKES_PER_HOLE, Math.max(1, par + delta));
+  return Math.min(max, Math.max(1, par + delta));
 }
 
 export class MatchService {
@@ -85,10 +85,10 @@ export class MatchService {
    * Registra los golpes de un hoyo. botStrokes trae lo que hicieron los
    * rivales en el campo; si falta alguno se estima por su nivel.
    */
-  recordHole(match, holeIndex, par, myStrokes, botStrokesById = {}) {
+  recordHole(match, holeIndex, par, myStrokes, botStrokesById = {}, maxStrokes = MAX_STROKES_PER_HOLE) {
     for (const p of match.players) {
-      const s = p.isBot ? (botStrokesById[p.id] ?? botStrokes(par, p.skill, this.rng)) : myStrokes;
-      p.scores[holeIndex] = Math.min(s, MAX_STROKES_PER_HOLE);
+      const s = p.isBot ? (botStrokesById[p.id] ?? botStrokes(par, p.skill, this.rng, maxStrokes)) : myStrokes;
+      p.scores[holeIndex] = Math.min(s, maxStrokes);
       p.total = p.scores.reduce((a, b) => a + b, 0);
     }
     const ranked = [...match.players].sort((a, b) => a.total - b.total);

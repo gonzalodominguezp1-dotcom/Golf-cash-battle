@@ -11,6 +11,8 @@ export const MAX_SHOT_SPEED = 13;
 const ROLL_DRAG = 0.42; // proporcional a la velocidad
 const ROLL_DECEL = 1.1; // constante
 const SAND_FACTOR = 6.5;
+// en el hielo la bola apenas frena: resbala y llega mucho más lejos
+const ICE_FACTOR = 0.3;
 const RESTITUTION = 0.72;
 const CUP_CAPTURE_SPEED = 3.5;
 const STOP_SPEED = 0.06;
@@ -54,13 +56,19 @@ export function shotVelocity(yaw, power) {
   return { vx: dsin(yaw) * speed, vz: -dcos(yaw) * speed };
 }
 
-export function segmentsOf(course) {
+/** Paredes que se dibujan: el contorno, las zonas elevadas y las paredes del hoyo. */
+export function wallSegmentsOf(course) {
   const segs = [];
   // el contorno y las zonas elevadas aparte (tiers), cada una cerrada por paredes
   for (const o of [course.outline, ...(course.tiers ?? []).map((t) => t.poly)]) {
     for (let i = 0; i < o.length; i++) segs.push([o[i], o[(i + 1) % o.length]]);
   }
   return segs.concat(course.walls);
+}
+
+/** Todo contra lo que choca la bola: las paredes y la estructura de los loopings (que ya dibuja su carril). */
+export function segmentsOf(course) {
+  return wallSegmentsOf(course).concat((course.loops ?? []).flatMap(loopWalls));
 }
 
 export function spinnerSegment(sp, t) {
@@ -126,6 +134,12 @@ export function inSand(course, x, z) {
   return course.sand.some((s) => inRect(s, x, z));
 }
 
+/** Placas de hielo: rectángulos como la arena, pero casi sin rozamiento. */
+export const onIce = (course, x, z) => (course.ice ?? []).some((r) => inRect(r, x, z));
+
+// cuánto frena el suelo: la arena mucho, el hielo casi nada
+const grip = (course, x, z) => (inSand(course, x, z) ? SAND_FACTOR : course.ice && onIce(course, x, z) ? ICE_FACTOR : 1);
+
 /** Pendientes: rectángulos que empujan la bola cuesta abajo (dir) con aceleración accel. */
 export const onSlope = (course, x, z) => (course.slopes ?? []).find((s) => inRect(s, x, z));
 
@@ -186,6 +200,8 @@ export const WINDMILL_GATE_HALF = 0.08;
 // ball.air = { y, vy } mientras está en el aire, sin rozamiento y por encima
 // de la lava, las setas y las aspas. Al caer bota una vez y sigue rodando.
 
+// altura (de la parte de abajo de la bola) a la que pasa por encima de una pared
+export const WALL_TOP = 0.36;
 const LAND_KEEP = 0.8; // velocidad que conserva al tocar el suelo tras un salto
 const HOP_KEEP = 0.3; // el bote: parte de la velocidad vertical que devuelve el suelo
 const HOP_MIN = 1.6; // por debajo de esta velocidad de caída ya no bota
@@ -223,7 +239,9 @@ export const rampAccel = (r) => (GRAVITY * r.h) / rampLen(r);
 
 /** ¿Ha pasado la bola (de p a ball) por el labio de una rampa hacia delante? */
 function rampLaunch(course, ball, px, pz) {
-  for (const r of course.ramps ?? []) {
+  const ramps = course.ramps ?? [];
+  for (let i = 0; i < ramps.length; i++) {
+    const r = ramps[i];
     const len = rampLen(r);
     const lat = (px - r.x) * r.dir[1] - (pz - r.z) * r.dir[0];
     const across = r.dir[0] !== 0 ? r.d : r.w;
@@ -233,9 +251,12 @@ function rampLaunch(course, ball, px, pz) {
       // el labio levanta la bola con la pendiente lift (tangente del ángulo de salida)
       const lift = r.lift ?? r.h / len;
       const k = 1 / Math.sqrt(1 + lift * lift);
-      ball.vx *= k;
-      ball.vz *= k;
-      return { y: r.h, vy: u * lift * k };
+      // maxV: rampa que frena (barro, tablas); el salto no pasa de cierto largo
+      const v = Math.sqrt(ball.vx * ball.vx + ball.vz * ball.vz) * k;
+      const cap = r.maxV && v > r.maxV ? r.maxV / v : 1;
+      ball.vx *= k * cap;
+      ball.vz *= k * cap;
+      return { y: r.h, vy: u * lift * k * cap, ramp: i };
     }
   }
   return null;
@@ -249,7 +270,11 @@ function burn(course, ball) {
   return at;
 }
 
-/** Un paso en el aire: vuelo parabólico; las paredes siguen parando la bola. */
+/**
+ * Un paso en el aire: vuelo parabólico. Las paredes solo paran la bola si va
+ * más baja que su remate (WALL_TOP); por encima las salta, y si cae fuera
+ * del campo vuelve al sitio del golpe, como en el agua.
+ */
 function airStep(course, segs, ball, dt) {
   const a = ball.air;
   const vy = a.vy - GRAVITY * dt;
@@ -257,7 +282,7 @@ function airStep(course, segs, ball, dt) {
   ball.x += ball.vx * dt;
   ball.z += ball.vz * dt;
   let hit = 0;
-  for (const seg of segs) hit = Math.max(hit, collideSegment(ball, seg, 0, 0));
+  if (y < WALL_TOP) for (const seg of segs) hit = Math.max(hit, collideSegment(ball, seg, 0, 0));
   const out = { sunk: false, hit, bumper: -1, portal: -1, air: true, landed: false };
   if (y > 0) {
     ball.air = { y, vy };
@@ -266,9 +291,16 @@ function airStep(course, segs, ball, dt) {
   // toca el suelo: si cae en lava se quema; si no, bota o se queda rodando
   out.landed = true;
   out.impact = -vy;
+  if (!insidePoly(course.outline, ball.x, ball.z)) {
+    out.outside = true;
+    out.lava = burn(course, ball);
+    return out;
+  }
   const pit = inPit(course, ball.x, ball.z);
-  if (pit || inLava(course, ball.x, ball.z)) {
+  const lava = pit ? null : inLava(course, ball.x, ball.z);
+  if (pit || lava) {
     out.pit = !!pit;
+    out.water = !!lava?.water;
     out.lava = burn(course, ball);
     return out;
   }
@@ -291,7 +323,7 @@ const LOOP_SAMPLES = 160;
 const PAD_SAMPLES = 8;
 const TUBE_SAMPLES = 64;
 const TUBE_MIN_SPEED = 4;
-const TRACK_DRAG = 0.2; // el carril es liso: frena menos que el césped
+const TRACK_DRAG = 0.3; // el carril es liso: frena menos que el césped
 // al caerse dentro de la vuelta: velocidad que conserva al tocar el carril,
 // rozamiento hasta la boca y velocidad mínima para que siempre salga
 const FELL_KEEP = 0.3;
@@ -302,19 +334,29 @@ const TRACK_MIN_SPEED = 0.4;
 const FLY_KEEP_ALONG = 0.35;
 const HALF_TURN = 3.141592653589793;
 const tables = new WeakMap();
+// El carril del looping va en espiral: entra por delante a la derecha (lado
+// +LOOP_LANE del eje lateral), da la vuelta y sale por detrás a la izquierda.
+// Solo entra la bola que llega centrada en el carril de entrada; el resto
+// choca con los bordillos o con la parte baja del carril de salida.
+export const LOOP_LANE = 0.36; // del eje del looping al centro de cada carril
+export const LOOP_LANE_HALF = 0.33; // media anchura del carril con sus bordillos
+export const LOOP_PAD = 0.9; // tramo recto en el suelo antes y después de la vuelta
+export const LOOP_CAPTURE = LOOP_LANE_HALF - BALL_R; // la bola cabe entre los bordillos
+const LOOP_GUARD = 0.3; // dónde choca, delante y detrás del centro, la bola que va por fuera
 
 /**
- * Perfil del looping: un tramo recto, un anillo vertical de radio radius que
- * apoya en el suelo en el centro del looping (la bola entra por abajo, da la
- * vuelta por dentro y sale por el mismo punto hacia delante) y otro tramo
- * recto, en total len por el suelo. Muestras { s, along, y, th, kap, ny }:
+ * Perfil del looping: un tramo recto de LOOP_PAD, un anillo vertical de radio
+ * radius que apoya en el suelo en el centro del looping (la bola entra por
+ * abajo, da la vuelta por dentro y sale por el mismo punto hacia delante) y
+ * otro tramo recto de LOOP_PAD. along se mide desde la boca de entrada.
+ * Muestras { s, along, y, th, kap, ny }:
  * s = longitud de carril, kap la curvatura y ny la componente vertical de la
  * normal hacia dentro de la vuelta.
  */
 export function loopTable(loop) {
   let t = tables.get(loop);
   if (t) return t;
-  const R = loop.radius, pad = loop.len / 2;
+  const R = loop.radius, pad = LOOP_PAD;
   const pts = [];
   let s = 0;
   const push = (along, y, th, kap, ny) => {
@@ -396,37 +438,64 @@ export function sampleAt(table, s) {
 
 // eje lateral del looping: dir girado 90°
 const loopSide = (l) => [-l.dir[1], l.dir[0]];
-/** Punto de entrada del looping (al principio, en el suelo). */
-const loopEntry = (l) => [l.x - (l.dir[0] * l.len) / 2, l.z - (l.dir[1] * l.len) / 2];
+/** Boca de entrada del looping (donde empieza el carril, en el suelo). */
+const loopEntry = (l) => [l.x - l.dir[0] * LOOP_PAD, l.z - l.dir[1] * LOOP_PAD];
 
-/** ¿Ha cruzado la bola (de p a ball) la boca de un looping? Devuelve el carril nuevo o null. */
+/**
+ * Paredes de la estructura del looping, para la bola que no va por el carril:
+ * los bordillos de los dos tramos rectos y, junto al centro, la parte baja del
+ * carril de salida (por delante) y la del de entrada (por detrás).
+ */
+export function loopWalls(l) {
+  const [sx, sz] = loopSide(l), [dx, dz] = l.dir;
+  const p = (a, b) => [l.x + dx * a + sx * b, l.z + dz * a + sz * b];
+  // las paredes tienen grosor (WALL_HALF): su eje queda por fuera del bordillo
+  const inner = LOOP_LANE - LOOP_LANE_HALF - WALL_HALF, outer = LOOP_LANE + LOOP_LANE_HALF + WALL_HALF, side = l.w / 2;
+  return [
+    [p(-LOOP_PAD, inner), p(-LOOP_GUARD, inner)],
+    [p(-LOOP_PAD, outer), p(-LOOP_GUARD, outer)],
+    [p(-LOOP_GUARD, -side), p(-LOOP_GUARD, inner)],
+    [p(LOOP_GUARD, -inner), p(LOOP_PAD, -inner)],
+    [p(LOOP_GUARD, -outer), p(LOOP_PAD, -outer)],
+    [p(LOOP_GUARD, -inner), p(LOOP_GUARD, side)],
+  ];
+}
+
+/**
+ * ¿Ha cruzado la bola (de p a ball) la boca de un looping centrada en su
+ * carril? Devuelve el carril nuevo (lat: desvío respecto al centro del carril) o null.
+ */
 function enterLoop(course, ball, px, pz) {
   const loops = course.loops ?? [];
   for (let i = 0; i < loops.length; i++) {
     const l = loops[i];
     const [ex, ez] = loopEntry(l), [sx, sz] = loopSide(l);
-    const lat = (ball.x - ex) * sx + (ball.z - ez) * sz;
-    if (Math.abs(lat) > l.w / 2) continue;
+    const off = (ball.x - ex) * sx + (ball.z - ez) * sz;
     const before = (px - ex) * l.dir[0] + (pz - ez) * l.dir[1];
     const after = (ball.x - ex) * l.dir[0] + (ball.z - ez) * l.dir[1];
     const u = ball.vx * l.dir[0] + ball.vz * l.dir[1];
-    const len = loopTable(l).length;
-    // por la entrada hacia delante o por la salida marcha atrás
-    if (before < 0 && after >= 0 && u > 0) return { kind: 'loop', i, s: after, u, lat, from: 1 };
-    if (before > l.len && after <= l.len && u < 0) return { kind: 'loop', i, s: len - (l.len - after), u, lat, from: -1 };
+    const len = loopTable(l).length, end = 2 * LOOP_PAD;
+    // por la entrada (a la derecha) hacia delante o por la salida (a la izquierda) marcha atrás
+    const inLat = off - LOOP_LANE, outLat = off + LOOP_LANE;
+    if (before < 0 && after >= 0 && u > 0 && Math.abs(inLat) <= LOOP_CAPTURE) return { kind: 'loop', i, s: after, u, lat: inLat, from: 1 };
+    if (before > end && after <= end && u < 0 && Math.abs(outLat) <= LOOP_CAPTURE) return { kind: 'loop', i, s: len - (end - after), u, lat: outLat, from: -1 };
   }
   return null;
 }
+
+/** Desvío lateral del carril respecto al eje del looping: +LOOP_LANE al entrar, −LOOP_LANE al salir. */
+const loopLaneOffset = (th) => LOOP_LANE * dcos(th / 2);
 
 /** Coloca ball.x/z/vx/vz según el carril (proyección en el suelo). */
 function placeOnTrack(course, ball, loop) {
   const tr = ball.track;
   if (tr.kind === 'loop') {
     const l = loop ?? course.loops[tr.i];
-    const along = tr.fly ? tr.fly.a : sampleAt(loopTable(l), tr.s).along;
+    const q = tr.fly ? null : sampleAt(loopTable(l), tr.s);
+    const along = q ? q.along : tr.fly.a, lat = tr.lat + (q ? loopLaneOffset(q.th) : 0);
     const [ex, ez] = loopEntry(l), [sx, sz] = loopSide(l);
-    ball.x = ex + l.dir[0] * along + sx * tr.lat;
-    ball.z = ez + l.dir[1] * along + sz * tr.lat;
+    ball.x = ex + l.dir[0] * along + sx * lat;
+    ball.z = ez + l.dir[1] * along + sz * lat;
     const u = tr.fly ? tr.fly.va : tr.u;
     ball.vx = l.dir[0] * u;
     ball.vz = l.dir[1] * u;
@@ -503,10 +572,11 @@ function trackStep(course, ball, dt) {
 /** Sale del looping al suelo por la salida (forward) o por la entrada. */
 function leaveLoop(l, ball, forward, lat, u) {
   const [ex, ez] = loopEntry(l), [sx, sz] = loopSide(l);
-  const along = forward ? l.len + 0.001 : -0.001;
+  const along = forward ? 2 * LOOP_PAD + 0.001 : -0.001;
+  const side = lat + (forward ? -LOOP_LANE : LOOP_LANE);
   ball.track = null;
-  ball.x = ex + l.dir[0] * along + sx * lat;
-  ball.z = ez + l.dir[1] * along + sz * lat;
+  ball.x = ex + l.dir[0] * along + sx * side;
+  ball.z = ez + l.dir[1] * along + sz * side;
   ball.vx = l.dir[0] * u;
   ball.vz = l.dir[1] * u;
   return 'exit';
@@ -591,8 +661,8 @@ export function step(course, segs, ball, t, dt) {
   }
   const speed = hyp(ball.vx, ball.vz);
   if (speed > 0) {
-    const sand = inSand(course, ball.x, ball.z) ? SAND_FACTOR : 1;
-    const newSpeed = Math.max(0, speed - (ROLL_DECEL * sand + ROLL_DRAG * sand * speed) * dt);
+    const g = grip(course, ball.x, ball.z);
+    const newSpeed = Math.max(0, speed - (ROLL_DECEL * g + ROLL_DRAG * g * speed) * dt);
     const k = newSpeed / speed;
     ball.vx *= k;
     ball.vz *= k;
@@ -635,8 +705,8 @@ export function step(course, segs, ball, t, dt) {
 
   const air = ramp ? rampLaunch(course, ball, px, pz) : null;
   if (air) {
-    ball.air = air;
-    return { sunk: false, hit, bumper, portal, launch: true };
+    ball.air = { y: air.y, vy: air.vy };
+    return { sunk: false, hit, bumper, portal, launch: true, ramp: air.ramp };
   }
 
   const loop = course.loops ? enterLoop(course, ball, px, pz) : null;
@@ -686,24 +756,108 @@ export function step(course, segs, ball, t, dt) {
     ball.z = p.b[1];
   }
 
-  if (course.lava && inLava(course, ball.x, ball.z)) return { sunk: false, hit, bumper, portal, lava: burn(course, ball) };
+  const lava = course.lava ? inLava(course, ball.x, ball.z) : null;
+  if (lava) return { sunk: false, hit, bumper, portal, lava: burn(course, ball), water: !!lava.water };
   if (course.pits && inPit(course, ball.x, ball.z)) return { sunk: false, hit, bumper, portal, pit: true, lava: burn(course, ball) };
 
+  if (course.realCup && !course.noCup) {
+    const cup = cupStep(course, ball, dt);
+    if (cup) return { sunk: cup.sunk, hit, bumper, portal, lip: cup.lip };
+  }
   const [hx, hz] = course.cup;
   const toCup = hyp(ball.x - hx, ball.z - hz);
   const v = hyp(ball.vx, ball.vz);
-  if (!course.noCup && toCup < CUP_R && v < CUP_CAPTURE_SPEED) {
+  if (!course.noCup && !course.realCup && toCup < CUP_R && v < CUP_CAPTURE_SPEED) {
     ball.x = hx;
     ball.z = hz;
     ball.vx = ball.vz = 0;
     return { sunk: true, hit, bumper, portal };
   }
-  const rolls = incline > ROLL_DECEL * (inSand(course, ball.x, ball.z) ? SAND_FACTOR : 1);
+  const rolls = incline > ROLL_DECEL * grip(course, ball.x, ball.z);
   if (v < STOP_SPEED && !rolls) ball.vx = ball.vz = 0;
   if (ball.from && ball.vx === 0 && ball.vz === 0) ball.from = null;
   return { sunk: false, hit, bumper, portal };
 }
 
 export function isMoving(ball) {
-  return ball.vx !== 0 || ball.vz !== 0 || !!ball.track || !!ball.air;
+  return ball.vx !== 0 || ball.vz !== 0 || !!ball.track || !!ball.air || !!ball.cup;
+}
+
+// ---------- hoyo con borde (realCup) ----------
+//
+// En los hoyos con realCup la bola no entra solo por ir despacio: cuando su
+// centro pasa por encima de la boca pierde el suelo y empieza a caer
+// (ball.cup = { y, vy }, y es cuánto ha bajado respecto a rodar por el césped).
+// Si baja hasta tener el centro a la altura del borde (CUP_DEPTH) ya no sale.
+// Si antes toca el canto de la boca, choca con él como con una esquina: la
+// normal va del canto al centro de la bola, en el plano (radial, altura). Una
+// bola lenta ha caído mucho y choca de frente: rebota hacia dentro y entra.
+// Una rápida apenas ha caído y choca por debajo: el canto la levanta, sale
+// botando, frenada y torcida si no iba por el centro (se sale "de labio").
+// Como el resto de la física, solo usa + - * / y Math.sqrt.
+
+const CUP_DEPTH = BALL_R;
+const RIM_RESTITUTION = 0.3;
+const RIM_HOP_MAX = 1.3; // el bote al salir del hoyo, como mucho (m/s hacia arriba)
+const RIM_KEEP = 0.85; // velocidad que conserva al salir botando del borde
+
+/** Un paso de la bola sobre la boca del hoyo; null si no está en ella. */
+function cupStep(course, ball, dt) {
+  const [hx, hz] = course.cup;
+  const dx = ball.x - hx, dz = ball.z - hz;
+  const d = hyp(dx, dz);
+  const c = ball.cup;
+  if (!c && d >= CUP_R) return null;
+  let y = c ? c.y : 0, vy = c ? c.vy : 0;
+  // sobre la boca no hay suelo: cae
+  if (d < CUP_R) {
+    vy -= GRAVITY * dt;
+    y += vy * dt;
+  }
+  if (y <= -CUP_DEPTH) {
+    Object.assign(ball, { x: hx, z: hz, vx: 0, vz: 0, cup: null });
+    return { sunk: true, lip: false };
+  }
+  let lip = false;
+  if (d > 1e-6) {
+    const rx = dx / d, rz = dz / d;
+    // del canto (a CUP_R del centro, a ras de suelo) al centro de la bola
+    const ex = d - CUP_R, ey = BALL_R + y;
+    const el = hyp(ex, ey);
+    if (el < BALL_R && el > 1e-9) {
+      const nh = ex / el, ny = ey / el;
+      const push = BALL_R - el;
+      ball.x += rx * nh * push;
+      ball.z += rz * nh * push;
+      y += ny * push;
+      const vr = ball.vx * rx + ball.vz * rz;
+      const vn = vr * nh + vy * ny;
+      if (vn < 0) {
+        const j = -(1 + RIM_RESTITUTION) * vn;
+        ball.vx += rx * nh * j;
+        ball.vz += rz * nh * j;
+        vy += ny * j;
+        if (vy > RIM_HOP_MAX) vy = RIM_HOP_MAX;
+        // un golpe de verdad contra el canto (no rodar por encima al entrar)
+        lip = j > 0.6;
+      }
+    }
+  }
+  const dOut = hyp(ball.x - hx, ball.z - hz) - CUP_R;
+  const out = dOut >= 0;
+  // ya pasado el canto (sin tocarlo) vuelve a tener césped debajo
+  if (out && y < 0 && dOut * dOut + (BALL_R + y) * (BALL_R + y) >= BALL_R * BALL_R) y = 0;
+  if (out && y >= 0) {
+    // fuera de la boca otra vez: rueda o sale botando
+    ball.cup = null;
+    if (vy > 0) {
+      ball.vx *= RIM_KEEP;
+      ball.vz *= RIM_KEEP;
+      ball.air = { y, vy };
+    }
+    return { sunk: false, lip };
+  }
+  // sobre la boca, o tocando el canto por debajo del césped
+  ball.cup = { y, vy };
+  return { sunk: false, lip };
 }

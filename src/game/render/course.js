@@ -1,12 +1,31 @@
 import * as THREE from 'three';
-import { BALL_R, CUP_R, WALL_HALF, moverPos, segmentsOf, tubeTable } from '../physics.js';
+import { BALL_R, CUP_R, LOOP_LANE, LOOP_LANE_HALF, WALL_HALF, moverPos, tubeTable, wallSegmentsOf } from '../physics.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { abyssTexture, chevronTexture, crateTexture, dirtMaps, grassMaps, rockFloorMaps, roughTone, sandMaps, slopeShadeTexture, softDotTexture, stripeTexture, woodMaps } from './textures.js';
+import { abyssTexture, chevronTexture, crateTexture, dirtMaps, grassMaps, iceTexture, rockFloorMaps, roughTone, sandMaps, slopeShadeTexture, softDotTexture, stripeTexture, woodMaps } from './textures.js';
 import { buildPortal } from './portal.js';
 import { groundHeight, hasRelief, tierHeight } from './terrain.js';
-import { lavaMaterial } from './lava.js';
+import { lavaMaterial, waterMaterial } from './lava.js';
 import { attractionStyle, buildLoop, buildTube, buildTunnel, buildWindmill, neonGridTexture } from './attractions.js';
+import { quality } from './quality.js';
+import { createPuddles } from './cyberpunkPuddles.js';
+
+// pulso que recorre un acelerador hacia +v (la dirección del impulso, ver chevronTexture)
+function pulseAlong(material) {
+  const u = { uPulse: { value: 0 } };
+  material.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, u);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('void main() {', 'uniform float uPulse;\nvoid main() {')
+      .replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+  diffuseColor.rgb *= 0.7 + 0.5 * pow(0.5 + 0.5 * sin(vMapUv.y * 7.0 - uPulse), 3.0);`
+      );
+  };
+  material.customProgramCacheKey = () => 'boost-pulse';
+  return u;
+}
 
 const WALL_H = 0.32;
 const PLATFORM_DEPTH = 2.4;
@@ -64,6 +83,8 @@ export function buildCourse(scene, course, theme) {
   const grassMat = neon
     ? new THREE.MeshStandardMaterial({ map: grass, emissiveMap: grass, emissive: 0xffffff, emissiveIntensity: 0.22, roughness: 0.6, metalness: 0.2 })
     : new THREE.MeshStandardMaterial({ map: grass, normalMap: grassM.normalMap, normalScale: new THREE.Vector2(0.6, 0.6), roughness: 0.92 });
+  // hoyo 15: charcos estáticos sobre el césped (solo visual, una malla; sin charcos en calidad baja)
+  if (theme.cyberCity) createPuddles(scene, course, lift, quality().puddles);
   let platformMat = grassMat;
   if (!grounded) {
     // lateral de la maqueta: corte de terreno con capas de tierra y roca
@@ -106,7 +127,8 @@ export function buildCourse(scene, course, theme) {
   cupBottom.position.set(hx, hc - 0.38, hz);
   const rim = new THREE.Mesh(new THREE.RingGeometry(CUP_R, CUP_R + 0.035, 40), new THREE.MeshBasicMaterial({ color: neon ? neonColor(0) : 0xffffff }));
   rim.rotation.x = -Math.PI / 2;
-  rim.position.set(hx, hc + 0.003, hz);
+  // hoyo 15: el aro sube a 6 mm (no 3) para separarse de la lámina del green en lejanía (ver cyberpunk2078)
+  rim.position.set(hx, hc + (theme.cyberCity ? 0.006 : 0.003), hz);
   if (!course.noCup) scene.add(cupInside, cupBottom, rim);
   else scene.add(bullseye(hx, hz));
   // volcán: el hoyo es un cráter con lava brillante dentro y grietas incandescentes alrededor
@@ -116,21 +138,47 @@ export function buildCourse(scene, course, theme) {
 
   // ríos y charcos de lava que corren por los canales
   const lavaMats = (course.lava ?? []).map((l) => buildLava(scene, l));
-  if (pitRects.length) buildPits(scene, course, pitRects);
+  if (pitRects.length) buildPits(scene, course, pitRects, theme);
 
   // arena: un montoncito con volumen que se deshace en granos sobre el césped,
   // sin borde dibujado. La zona de juego (física) es el rectángulo; el fundido
   // queda repartido a ambos lados de su borde
-  const sandM = course.sand.length ? sandMaps() : null;
+  const sandM = course.sand.length ? sandMaps(!!theme.snowSand) : null;
   if (sandM) sandM.map.repeat.set(0.5, 0.5);
   course.sand.forEach((s, i) => {
     const m = new THREE.Mesh(bunkerGeometry(s.w, s.d), bunkerMaterial(sandM, s.w, s.d, i, theme));
     m.rotation.x = -Math.PI / 2;
-    m.position.set(s.x, lift(s.x, s.z) + 0.002, s.z);
+    // la arena va a 2 mm del green: en el hoyo 15 a 6 mm, para no parpadear con el césped a distancia
+    m.position.set(s.x, lift(s.x, s.z) + (theme.cyberCity ? 0.006 : 0.002), s.z);
     m.receiveShadow = true;
     m.renderOrder = 1;
     scene.add(m);
   });
+
+  // hielo: placas azules lisas que brillan con el sol; el agua que cae dentro
+  // queda recortada para que se vea debajo
+  if (course.ice?.length) {
+    const iceMap = iceTexture();
+    iceMap.repeat.set(0.35, 0.35);
+    const iceMat = new THREE.MeshStandardMaterial({ map: iceMap, roughness: 0.08, metalness: 0.1, envMapIntensity: 1.4, transparent: true, opacity: 0.94 });
+    for (const r of course.ice) {
+      const x0 = r.x - r.w / 2, x1 = r.x + r.w / 2, z0 = r.z - r.d / 2, z1 = r.z + r.d / 2;
+      const plate = new THREE.Shape([[x0, z0], [x1, z0], [x1, z1], [x0, z1]].map(([x, z]) => new THREE.Vector2(x, -z)));
+      for (const l of course.lava ?? []) {
+        if (l.poly.every(([x, z]) => x > x0 && x < x1 && z > z0 && z < z1)) plate.holes.push(new THREE.Path(l.poly.map(([x, z]) => new THREE.Vector2(x, -z))));
+      }
+      const geo = new THREE.ShapeGeometry(plate, 16);
+      // UV en metros, como el césped
+      const pos = geo.attributes.position, uv = geo.attributes.uv;
+      for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i), pos.getY(i));
+      geo.rotateX(-Math.PI / 2);
+      const m = new THREE.Mesh(geo, iceMat);
+      m.position.y = lift(r.x, r.z) + 0.003;
+      m.receiveShadow = true;
+      m.renderOrder = 1;
+      scene.add(m);
+    }
+  }
 
   // paredes de madera (en neón: oscuras con una línea de luz arriba)
   const night = !!theme.rim && theme.sunIntensity < 2;
@@ -141,7 +189,7 @@ export function buildCourse(scene, course, theme) {
   const aoStrips = [];
   // a ras de suelo, normal hacia fuera de cada lado del contorno (para la sombra exterior)
   const outward = grounded ? outwardNormals(course.outline) : [];
-  segmentsOf(course).forEach(([[ax, az], [bx, bz]], i) => {
+  wallSegmentsOf(course).forEach(([[ax, az], [bx, bz]], i) => {
     // materiales propios para poder transparentar la pared que tapa la bola
     // glowWalls (pradera de día): cuerpo verde y remate que brilla esmeralda a la
     // izquierda y cian a la derecha, con los colores de theme.rim
@@ -150,14 +198,22 @@ export function buildCourse(scene, course, theme) {
       ? new THREE.MeshStandardMaterial({ color: 0x0d0c1c, roughness: 0.4, metalness: 0.5, transparent: true })
       : glowColor !== null
       ? new THREE.MeshStandardMaterial({ normalMap: wood.normalMap, color: 0x23724f, roughness: 0.6, transparent: true })
+      : theme.iceWalls
+      ? new THREE.MeshStandardMaterial({ normalMap: wood.normalMap, color: 0x8fcbe8, roughness: 0.15, metalness: 0.1, transparent: true })
       : theme.rockFloor
         ? new THREE.MeshStandardMaterial({ ...rockWall, color: 0x8a7470, roughness: 0.95, transparent: true })
-        : new THREE.MeshStandardMaterial({ ...wood, roughness: 0.75, transparent: true });
+        : theme.stoneWalls
+          ? new THREE.MeshStandardMaterial({ normalMap: wood.normalMap, color: 0xd99a4e, roughness: 0.9, transparent: true })
+          : new THREE.MeshStandardMaterial({ ...wood, roughness: 0.75, transparent: true });
     const capMat = neon
       ? new THREE.MeshStandardMaterial({ color: neonColor(i), emissive: neonColor(i), emissiveIntensity: 0.35, roughness: 0.3, transparent: true })
       : glowColor !== null
       ? new THREE.MeshStandardMaterial({ color: new THREE.Color(glowColor).multiplyScalar(0.12), emissive: glowColor, emissiveIntensity: 0.85, roughness: 0.3, transparent: true })
-      : new THREE.MeshStandardMaterial({ color: 0xeeeeea, roughness: 0.75, envMapIntensity: 0.4, transparent: true });
+      : theme.stoneWalls
+        ? new THREE.MeshStandardMaterial({ color: 0xf0bb6e, roughness: 0.85, transparent: true })
+        : theme.iceWalls
+          ? new THREE.MeshStandardMaterial({ color: 0xfafdff, roughness: 0.9, transparent: true }) // remate de nieve
+          : new THREE.MeshStandardMaterial({ color: 0xeeeeea, roughness: 0.75, envMapIntensity: 0.4, transparent: true });
     // de noche el remate de las paredes es una tira de luz del color del contraluz
     const baseEmissive = capMat.emissiveIntensity || 0;
     walls.push({ a: [ax, az], b: [bx, bz], mats: [wallMat, capMat], opacity: 1, baseEmissive });
@@ -169,8 +225,11 @@ export function buildCourse(scene, course, theme) {
     const bodyGeo = relief ? new THREE.BoxGeometry(len, WALL_H + sink, WALL_HALF * 2, segs) : new RoundedBoxGeometry(len, WALL_H + sink, WALL_HALF * 2, 2, 0.03);
     scaleUV(bodyGeo, len / 1.5, 1);
     bodyGeo.translate(0, (WALL_H - sink) / 2, 0);
-    const capGeo = relief ? new THREE.BoxGeometry(len + 0.02, 0.05, WALL_HALF * 2 + 0.04, segs) : new RoundedBoxGeometry(len + 0.02, 0.06, WALL_HALF * 2 + 0.04, 2, 0.025);
-    capGeo.translate(0, WALL_H + 0.02, 0);
+    // hoyo 15: cada remate de color sube 1,5 mm más que el anterior (el orden de la lista), así en las
+    // esquinas y empalmes no compiten dos caras a la misma altura (parpadeo y solape). Su base no se mueve.
+    const capTop = theme.cyberCity && !relief ? 0.0015 * i : 0;
+    const capGeo = relief ? new THREE.BoxGeometry(len + 0.02, 0.05, WALL_HALF * 2 + 0.04, segs) : new RoundedBoxGeometry(len + 0.02, 0.06 + capTop, WALL_HALF * 2 + 0.04, 2, 0.025);
+    capGeo.translate(0, relief ? WALL_H + 0.02 : WALL_H - 0.01 + (0.06 + capTop) / 2, 0);
     // sombra de contacto: una franja oscura y difuminada al pie de la pared
     const out = outward[i];
     const ao = new THREE.PlaneGeometry(len, WALL_HALF * 2 + 0.5, relief ? segs : 1, out ? 2 : 1);
@@ -222,17 +281,25 @@ export function buildCourse(scene, course, theme) {
   // postes en las esquinas
   const corners = new Set();
   const posts = [];
-  for (const seg of segmentsOf(course)) for (const p of seg) corners.add(p.join(','));
+  for (const seg of wallSegmentsOf(course)) for (const p of seg) corners.add(p.join(','));
   let corner = 0;
   for (const k of corners) {
     const [x, z] = k.split(',').map(Number);
     const h = lift(x, z);
     const postMat = neon
       ? new THREE.MeshStandardMaterial({ color: 0x1a1830, roughness: 0.3, metalness: 0.6, transparent: true })
-      : new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.4, transparent: true });
+      : theme.stoneWalls
+        ? new THREE.MeshStandardMaterial({ color: 0xc88a48, roughness: 0.9, transparent: true })
+        : theme.iceWalls
+          ? new THREE.MeshStandardMaterial({ color: 0xb4dcf0, roughness: 0.15, metalness: 0.1, transparent: true })
+          : new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.4, transparent: true });
     const ballMat = neon
       ? new THREE.MeshStandardMaterial({ color: neonColor(corner++), emissive: neonColor(corner - 1), emissiveIntensity: 0.35, transparent: true })
-      : new THREE.MeshStandardMaterial({ color: 0xff5a4e, emissive: 0xff3a2e, emissiveIntensity: night ? 0.35 : 0.15, transparent: true });
+      : theme.stoneWalls
+        ? new THREE.MeshStandardMaterial({ color: 0xe6b46a, roughness: 0.85, transparent: true })
+        : theme.iceWalls
+          ? new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, transparent: true }) // bola de nieve
+          : new THREE.MeshStandardMaterial({ color: 0xff5a4e, emissive: 0xff3a2e, emissiveIntensity: night ? 0.35 : 0.15, transparent: true });
     const baseEmissive = ballMat.emissiveIntensity || 0;
 
     // con relieve el poste baja hasta el suelo de la maqueta; en una zona elevada empieza en ella
@@ -353,11 +420,18 @@ export function buildCourse(scene, course, theme) {
     return g;
   });
 
-  // aceleradores con flechas animadas
+  // aceleradores con flechas animadas; en el hoyo 15 son amarillas y un pulso recorre cada una
+  // hacia la dirección del impulso (solo en cyber2078: los demás hoyos no cambian)
+  const cyber = !!theme.cyberCity;
+  const boostPulse = [];
   const boostTextures = (course.boosts ?? []).map((b) => {
-    const tex = chevronTexture();
+    const tex = cyber ? chevronTexture('#1a1400', '#ffd23f') : chevronTexture();
     tex.repeat.set(1, b.d / b.w);
-    const pad = new THREE.Mesh(new THREE.PlaneGeometry(b.w, b.d), new THREE.MeshBasicMaterial({ map: tex }));
+    // el pad (+5 mm) y el marco (+4 mm) son planos casi iguales que se solapan: en el hoyo 15 el pad
+    // gana por polygonOffset (1 mm de separación no basta a 30-40 m con la profundidad de 24 bits)
+    const padMat = new THREE.MeshBasicMaterial({ map: tex, ...(cyber ? { polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 } : {}) });
+    if (cyber) boostPulse.push(pulseAlong(padMat));
+    const pad = new THREE.Mesh(new THREE.PlaneGeometry(b.w, b.d), padMat);
     pad.rotation.x = -Math.PI / 2;
     pad.rotation.z = Math.atan2(b.dir[0], -b.dir[1]) * -1;
     pad.position.set(b.x, lift(b.x, b.z) + 0.005, b.z);
@@ -385,7 +459,17 @@ export function buildCourse(scene, course, theme) {
 
   // atracciones
   const attractions = [
-    ...(course.loops ?? []).map((l, i) => buildLoop(scene, l, style, i)),
+    // solo el hoyo 15 (tema cyber2078) transparenta el looping cuando tapa la bola
+    ...(course.loops ?? []).map((l, i) =>
+      buildLoop(scene, l, style, i, theme.cyberCity
+        ? {
+            // la placa de la boca sale 0,15 m por fuera de la entrada: no pisa el acelerador (z 0,8)
+            outReach: 0.15,
+            // placa lisa: la rejilla de metal se veía como una pieza oscura aparte junto a la base del looping
+            plainPlate: true,
+            blocks: (cam, ball) => loopBlocksBall(cam, ball, { x: l.x, z: l.z, dir: l.dir, radius: l.radius, halfWidth: LOOP_LANE + LOOP_LANE_HALF }),
+          }
+        : {})),
     ...(course.windmills ?? []).map((wm) => buildWindmill(scene, wm, style, lift(wm.x, wm.z))),
     ...(course.tunnels ?? []).map((tn, i) => buildTunnel(scene, tn, style, lift(tn.x, tn.z), i)),
   ];
@@ -436,7 +520,7 @@ export function buildCourse(scene, course, theme) {
     neon ? new THREE.MeshStandardMaterial({ color: neonColor(2), emissive: neonColor(2), emissiveIntensity: 0.6 }) : new THREE.MeshStandardMaterial({ color: 0x2f7d32, roughness: 1 }),
   );
   tee.rotation.x = -Math.PI / 2;
-  tee.position.set(course.tee[0], lift(...course.tee) + 0.003, course.tee[1]);
+  tee.position.set(course.tee[0], lift(...course.tee) + (theme.cyberCity ? 0.006 : 0.003), course.tee[1]);
   tee.receiveShadow = true;
   scene.add(tee);
 
@@ -456,6 +540,7 @@ export function buildCourse(scene, course, theme) {
       tubes.forEach((tb) => tb?.update(t));
       lavaCup?.update(t);
       boostTextures.forEach((tex) => (tex.offset.y = -t * 1.5));
+      boostPulse.forEach((u) => (u.uPulse.value = t * 9));
       rampTextures.forEach((tex) => (tex.offset.y = -t * 0.9));
       lavaMats.forEach((m) => m.update(t));
       portalTime.value = t;
@@ -479,9 +564,10 @@ export function buildCourse(scene, course, theme) {
       pole.position.y += (hc + 0.85 + targetY - pole.position.y) * 0.1;
       cloth.position.y = pole.position.y + 0.83;
 
-      // un poste se vuelve 90% invisible (10% opacidad) ÚNICA Y EXCLUSIVAMENTE si tapa la pelota
+      // un poste se vuelve 90% invisible (10% opacidad) si tapa la pelota o si está pegado a la cámara
       for (const p of posts) {
-        const blocks = ball ? postBlocksBall(cam, ball, p) : false;
+        // o si está pegado a la cámara: de cerca su bola roja tapaba media pantalla en el móvil
+        const blocks = ball ? postBlocksBall(cam, ball, p) || Math.hypot(p.x - cam.x, p.z - cam.z) < 1.4 : false;
         p.opacity += ((blocks ? 0.1 : 1) - p.opacity) * 0.2;
         p.meshes.forEach((m) => (m.visible = true));
         for (const m of p.mats) {
@@ -635,11 +721,12 @@ function pitRect(course, p) {
 }
 
 /** Agujeros: oscuridad que se traga la bola y borde de aviso amarillo y negro. */
-function buildPits(scene, course, rects) {
+function buildPits(scene, course, rects, theme) {
   const xs = course.outline.map((q) => q[0]), zs = course.outline.map((q) => q[1]);
   const dark = new THREE.MeshBasicMaterial({ map: abyssTexture(), transparent: true, side: THREE.BackSide, depthWrite: false });
   const hidden = new THREE.MeshBasicMaterial({ visible: false });
-  const hazard = stripeTexture('#ffc400', '#1a1a1a');
+  // en el glaciar es una grieta: el borde avisa en azul hielo y blanco
+  const hazard = theme.iceWalls ? stripeTexture('#e8f6ff', '#2f7fb3') : stripeTexture('#ffc400', '#1a1a1a');
   const depth = PLATFORM_DEPTH - 0.2;
   for (const r of rects) {
     const w = r.x1 - r.x0, d = r.z1 - r.z0, cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2;
@@ -663,11 +750,18 @@ function buildPits(scene, course, rects) {
   }
 }
 
-/** Río o charco de lava en su canal, con una luz que parpadea. */
+/** Río o charco de lava en su canal, con una luz que parpadea (o un río de agua, sin luz). */
 function buildLava(scene, l) {
   const shape = new THREE.Shape(l.poly.map(([x, z]) => new THREE.Vector2(x, -z)));
   const geo = new THREE.ShapeGeometry(shape);
   geo.rotateX(-Math.PI / 2);
+  if (l.water) {
+    const water = waterMaterial({ flow: l.flow });
+    const mesh = new THREE.Mesh(geo, water);
+    mesh.position.y = -0.12;
+    scene.add(mesh);
+    return { update: (t) => (water.uniforms.uTime.value = t) };
+  }
   const mat = lavaMaterial({ flow: l.flow, heat: 0.06 });
   const lava = new THREE.Mesh(geo, mat);
   lava.position.y = -0.09;
@@ -897,6 +991,54 @@ function moverBlocksBall(cam, ball, m) {
     return rayY < m.userData.h;
   }
   return false;
+}
+
+// Semigrosor radial del anillo visible de un looping (casco, bordillos y raíles) alrededor del radio R
+const LOOP_BAND = 0.12;
+
+/**
+ * Comprueba si el anillo vertical de un looping corta la línea de visión entre la
+ * cámara y la bola. Función pura (solo geometría). geo: { x, z } centro del anillo en
+ * planta, dir [dx, dz] eje del looping, radius R y halfWidth semianchura lateral del
+ * volumen (pista con bordillos). El anillo está centrado a altura R sobre el suelo.
+ * Usa el mismo criterio de t que el resto: solo cuenta el tramo 0.02 < t < 0.98.
+ */
+export function loopBlocksBall(cam, ball, geo) {
+  const [dx, dz] = geo.dir;
+  const R = geo.radius, hw = geo.halfWidth;
+  // coordenadas de cámara y bola: a lo largo del eje, lateral y altura respecto al centro del anillo
+  const along = (p) => (p.x - geo.x) * dx + (p.z - geo.z) * dz;
+  const lat = (p) => -(p.x - geo.x) * dz + (p.z - geo.z) * dx;
+  const a0 = along(cam), l0 = lat(cam), v0 = cam.y - R;
+  const ea = along(ball) - a0, el = lat(ball) - l0, ev = ball.y - R - v0;
+
+  // t donde el segmento queda dentro de la franja lateral |l| <= hw
+  let lo = 0.02, hi = 0.98;
+  if (Math.abs(el) < 1e-9) {
+    if (Math.abs(l0) > hw) return false;
+  } else {
+    const ta = (-hw - l0) / el, tb = (hw - l0) / el;
+    lo = Math.max(lo, Math.min(ta, tb));
+    hi = Math.min(hi, Math.max(ta, tb));
+  }
+  if (lo > hi) return false;
+
+  // distancia al centro del anillo al cuadrado, r2(t), es convexa en t: su imagen sobre [lo, hi] es [min, max]
+  const r2 = (t) => {
+    const a = a0 + t * ea, v = v0 + t * ev;
+    return a * a + v * v;
+  };
+  const A = ea * ea + ev * ev;
+  let minR2 = Math.min(r2(lo), r2(hi));
+  if (A > 1e-12) {
+    const tv = Math.min(hi, Math.max(lo, -(a0 * ea + v0 * ev) / A));
+    minR2 = Math.min(minR2, r2(tv));
+  }
+  const maxR2 = Math.max(r2(lo), r2(hi));
+
+  // el segmento toca la banda del anillo si su rango de distancias se solapa con [R - banda, R + banda]
+  const rMin = R - LOOP_BAND, rMax = R + LOOP_BAND;
+  return minR2 <= rMax * rMax && maxR2 >= rMin * rMin;
 }
 
 const insidePoly = (x, z, poly) => {

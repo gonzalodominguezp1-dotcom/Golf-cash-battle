@@ -64,7 +64,8 @@ test('los hoyos están bien definidos', () => {
   for (const c of ALL) {
     assert.ok(!names.has(c.name), `nombre repetido: ${c.name}`);
     names.add(c.name);
-    assert.ok(Number.isInteger(c.par) && c.par >= 1 && c.par <= 8, `${c.name}: par`);
+    // los hoyos largos llevan su propio máximo de golpes, siempre por encima del par
+    assert.ok(Number.isInteger(c.par) && c.par >= 1 && c.par < (c.maxStrokes ?? 9), `${c.name}: par`);
     // la salida puede estar en una zona elevada (el sendero del volcán)
     assert.ok([c.outline, ...(c.tiers ?? []).map((t) => t.poly)].some((p) => inside(c.tee, p)), `${c.name}: salida fuera del campo`);
     assert.ok(inside(c.cup, c.outline), `${c.name}: hoyo fuera del campo`);

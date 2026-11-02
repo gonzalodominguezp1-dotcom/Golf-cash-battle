@@ -43,3 +43,27 @@ export function lavaMaterial({ flow = [0, 0], scale = 1, heat = 0 } = {}) {
     fog: true,
   });
 }
+
+// Agua de un río que corre hacia flow: turquesa con brillos que se desplazan.
+const WATER_FRAG = `uniform float uTime; uniform vec2 uFlow; varying vec2 vP;
+  #include <fog_pars_fragment>
+  float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
+  void main(){
+    vec2 p = vP * 2.2 - uFlow * uTime * 1.2;
+    float n = vnoise(p) * 0.6 + vnoise(p * 2.7 + 3.1) * 0.4;
+    vec3 col = mix(vec3(0.05, 0.42, 0.55), vec3(0.16, 0.7, 0.78), n);
+    col += smoothstep(0.78, 0.95, n) * 0.55;
+    gl_FragColor = vec4(col, 1.0);
+    #include <fog_fragment>
+  }`;
+
+export function waterMaterial({ flow = [0, 0] } = {}) {
+  return new THREE.ShaderMaterial({
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uTime: { value: 0 }, uFlow: { value: new THREE.Vector2(...flow) } }]),
+    vertexShader: VERT,
+    fragmentShader: WATER_FRAG,
+    fog: true,
+  });
+}

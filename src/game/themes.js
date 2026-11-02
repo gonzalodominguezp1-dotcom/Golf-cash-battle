@@ -47,6 +47,31 @@ export const THEMES = {
     glowWalls: true,
     woodMill: true, // molino de madera en lugar de torre blanca con tejado rojo
     teePad: { color: 0xff2bd6, w: 1.8, d: 2.2 },
+    lushEnv: true, // árboles, rocas y montañas lisos (ver lushEnvironment.js)
+  },
+  // selva: cielo verdoso de mediodía, césped a cuadros y muros de piedra arenisca
+  jungle: {
+    sound: 'birds',
+    skyTop: 0x37b5c2,
+    skyHorizon: 0xbfe6cf,
+    sunColor: 0xfff1cc,
+    sunIntensity: 2.5,
+    sunDir: [-0.45, 0.85, 0.3],
+    ambient: 0.95,
+    groundLow: 0x2f6a2a,
+    groundMid: 0x3f7f2f,
+    groundHigh: 0x5c9a3a,
+    grass: ['#5f9a2c', '#4d8524'],
+    terrainOffset: -0.4,
+    waterLevel: -1.6,
+    water: 0x2aa6b8,
+    trees: ['round', 'round', 'pine'],
+    leaves: [0x2f7d32, 0x3e8e2f, 0x1f6b3a, 0x5a9e2f],
+    flowers: true,
+    clouds: 0xeefaf2,
+    lowClouds: true,
+    mountains: 0x4f8a72,
+    stoneWalls: true, // muros de piedra arenisca, como un templo
   },
   beach: {
     rim: [0xff007f, 0x00f5d4], // contraluces magenta y turquesa bioluminiscente
@@ -108,6 +133,32 @@ export const THEMES = {
     flowers: false,
     clouds: 0x112338,
     snowfall: true,
+  },
+  // glaciar: mañana fría de cielo azul pálido, pista nevada, placas de hielo
+  // azul, muros de hielo con remate de nieve, pinos nevados y montañas blancas
+  glacier: {
+    sound: 'wind',
+    skyTop: 0x5d9fd6,
+    skyHorizon: 0xe4f1fa,
+    sunColor: 0xfff6ea,
+    sunIntensity: 2.3,
+    sunDir: [0.45, 0.75, 0.4],
+    ambient: 1,
+    groundLow: 0xb7cad8,
+    groundMid: 0xd5e3ee,
+    groundHigh: 0xf1f6fa,
+    grass: ['#e3edf4', '#d3e1ec'], // nieve pisada, un poco azulada para que se vea la bola
+    terrainOffset: -0.6,
+    waterLevel: -1.5,
+    water: 0x3f9fc9,
+    trees: ['snowpine', 'snowpine', 'pine'],
+    flowers: false,
+    clouds: 0xffffff,
+    lowClouds: true,
+    mountains: 0xc9dceb,
+    snowfall: true,
+    iceWalls: true, // muros de hielo azul con remate de nieve
+    snowSand: true, // la "arena" es nieve polvo
   },
   canyon: {
     rim: [0xff2a6d, 0xffa000], // contraluces carmesí y ámbar cósmico
@@ -318,3 +369,6 @@ export const THEMES = {
     floaters: { color: 0x7affea, count: 50, size: 0.07, speed: 0.04, glow: true },
   },
 };
+
+// Cyberpunk2078 (hoyo 15): clon de neon con clave propia, para que el entorno de ciudad no toque «Looping Neón»
+THEMES.cyber2078 = { ...THEMES.neon, cyberCity: true, cyberFog: 0x6a1758 };

@@ -42,8 +42,8 @@ test('no valen tiros después de acabarse el tiempo', () => {
 });
 
 test('la bola que entra cuenta el paso en el que entró, y solo si es antes del límite', () => {
-  // busca un tiro que emboque en algún hoyo
-  for (const course of COURSES) {
+  // busca un tiro que emboque en algún hoyo (desde el tee o desde cerca del hoyo)
+  for (const course of [...COURSES, ...COURSES.map((c) => ({ ...c, tee: [c.cup[0], c.cup[1] + 1.5] }))]) {
     const yaw = Math.atan2(course.cup[0] - course.tee[0], -(course.cup[1] - course.tee[1]));
     for (let p = 0.1; p <= 1; p += 0.01) {
       const shot = { tick: 300, ...quantizeShot(yaw, p) };

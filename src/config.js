@@ -3,6 +3,8 @@ export const PLAYERS_PER_MATCH = 8;
 export const PLATFORM_COMMISSION = 0.1; // 10% del bote
 export const HOLES_PER_MATCH = 3;
 export const MAX_STROKES_PER_HOLE = 8;
+// los hoyos largos (par alto) llevan su propio máximo de golpes
+export const maxStrokesOf = (course) => course?.maxStrokes ?? MAX_STROKES_PER_HOLE;
 // cuando el primero emboca, los demás tienen estos segundos; quien no emboque
 // queda descalificado en el hoyo y se apunta el máximo de golpes
 export const HOLE_TIME_LIMIT = 20;
