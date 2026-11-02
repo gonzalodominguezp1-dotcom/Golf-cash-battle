@@ -9,6 +9,7 @@ import { Bot } from './game/bots.js';
 import { segmentsOf } from './game/physics.js';
 import { enterFinale, isMuted, leaveFinale, setMuted, sfx, unlockAudio } from './game/audio.js';
 import { Progress } from './progress/Progress.js';
+import { AVATAR_ICONS, AvatarStore, checkAvatarFile, iconById, imageToAvatar } from './progress/avatar.js';
 import { FRAMES, frameById, framesUnlocked, frameStyle } from './progress/prestige.js';
 import { CHALLENGES, TIERS as SKIN_TIERS, SKINS } from './progress/skins.js';
 import { ballPreview } from './game/render/ballPaint.js';
@@ -62,6 +63,19 @@ const ball = (skin, size = 96, cls = '') => {
   return `<img class="ball-img ${cls}" src="${cached ?? ballPreview(skin, size * 2)}" data-skin-id="${skin.id}"${cached ? ' data-hd="1"' : ''} width="${size}" height="${size}" alt="">`;
 };
 
+let avatar = new AvatarStore(null);
+let accountTab = 'profile';
+
+/** Cara del avatar: imagen propia, icono elegido o la inicial del nombre. */
+const avatarFace = (av, initial) =>
+  av?.image ? `<img src="${av.image}" alt="">`
+    : av?.icon ? `<span class="pf-glyph">${iconById(av.icon).glyph}</span>`
+      : `<b class="pf-initial">${esc(String(initial || '?')[0])}</b>`;
+
+/** Avatar con marco de prestigio. size: xs | sm | lg. */
+const avatarHtml = ({ size = 'sm', frame = null, av = null, initial = '?' }) =>
+  `<span class="pf pf-${size} ${frame ? `pf-framed pf-${frame.id}` : ''}" style="${frameStyle(frame)}"><i class="pf-halo"></i><i class="pf-wing l"></i><i class="pf-wing r"></i><i class="pf-ring"></i><span class="pf-face">${avatarFace(av, initial)}</span><i class="pf-gem"></i></span>`;
+
 let game = null;
 let screen = 'lobby';
 let activeSkinInspector = null;
@@ -98,13 +112,12 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
             <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}">Jugar <kbd>1</kbd></button>
             <button data-go="freeplay" class="${screen === 'freeplay' ? 'on' : ''}">Juego Libre <kbd>2</kbd></button>
             <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}">Skins <kbd>3</kbd></button>
-            <button data-go="wallet" class="${screen === 'wallet' ? 'on' : ''}">Wallet <kbd>4</kbd></button>
-            <button data-go="ranking" class="${screen === 'ranking' ? 'on' : ''}">Ranking <kbd>5</kbd></button>
-            <button data-go="account" class="${screen === 'account' ? 'on' : ''}">Cuenta <kbd>6</kbd></button>
+            <button data-go="ranking" class="${screen === 'ranking' ? 'on' : ''}">Ranking <kbd>4</kbd></button>
+            <button data-go="account" class="${screen === 'account' ? 'on' : ''}">Cuenta <kbd>5</kbd></button>
           </nav>
         </div>
         <div class="topbar-right">
-          <button class="balance" data-go="wallet" title="Tu saldo">${coin(balance)}<span class="plus">+</span></button>
+          <button class="balance" data-go="wallet" title="Tu saldo: abre el wallet de tu cuenta">${coin(balance)}<span class="plus">+</span></button>
           <button class="pill mute topbar-sound-btn" aria-label="Sonido" title="Silenciar / Activar sonido (M)">${isMuted() ? 'Mudo' : 'Sonido'}</button>
         </div>
       </header>`),
@@ -126,7 +139,6 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
         <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}">Jugar</button>
         <button data-go="freeplay" class="${screen === 'freeplay' ? 'on' : ''}">Libre</button>
         <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}">Skins</button>
-        <button data-go="wallet" class="${screen === 'wallet' ? 'on' : ''}">Wallet</button>
         <button data-go="ranking" class="${screen === 'ranking' ? 'on' : ''}">Ranking</button>
         <button data-go="account" class="${screen === 'account' ? 'on' : ''}">Cuenta</button>
       </nav>`),
@@ -173,9 +185,8 @@ window.addEventListener('keydown', (e) => {
   if (isNum(1)) triggerNav('lobby');
   else if (isNum(2)) triggerNav('freeplay');
   else if (isNum(3)) triggerNav('skins');
-  else if (isNum(4)) triggerNav('wallet');
-  else if (isNum(5)) triggerNav('ranking');
-  else if (isNum(6)) triggerNav('account');
+  else if (isNum(4)) triggerNav('ranking');
+  else if (isNum(5)) triggerNav('account');
   else if (e.code === 'KeyM') {
     setMuted(!isMuted());
     const topMute = document.querySelector('.topbar-sound-btn');
@@ -185,7 +196,7 @@ window.addEventListener('keydown', (e) => {
 });
 
 function go(to) {
-  if (to === 'wallet') return showWallet();
+  if (to === 'wallet') return showAccount('', 'wallet');
   if (to === 'skins') return showSkins();
   if (to === 'account') return showAccount();
   if (to === 'ranking') return showRanking();
@@ -569,7 +580,7 @@ async function showRanking() {
     const f = frameById(r.frame);
     return `<li class="rank-row ${r.me ? 'me' : ''} ${r.pos <= 3 ? `podium p${r.pos}` : ''}">
       <b class="rank-pos">${r.pos}</b>
-      <span class="avatar rank-avatar ${f ? 'framed' : ''}" style="${frameStyle(f)}">${esc((r.name ?? '?')[0])}</span>
+      ${avatarHtml({ size: 'sm', frame: f, av: r.me ? avatar.get() : null, initial: (r.name ?? '?')[0] })}
       <span class="rank-name">${esc(r.name)}<small>Nv. ${r.level}${f ? ` · ${esc(f.name)}` : ''}</small></span>
       <span class="rank-wins"><b>${r.wins}</b><small>victoria${r.wins === 1 ? '' : 's'}</small></span>
     </li>`;
@@ -597,14 +608,36 @@ async function showRanking() {
   load(rankingTab);
 }
 
-async function showAccount(note = '') {
+const accountTabs = (balance) => `
+  <div class="rank-tabs acc-tabs">
+    <button data-acc="profile">Perfil</button>
+    <button data-acc="wallet">Wallet <small>${coin(balance)}</small></button>
+  </div>`;
+
+/** Muestra una sola pestaña de la cuenta (Perfil o Wallet) sin volver a pintar. */
+function bindAccountTabs(view) {
+  const apply = (tab) => {
+    accountTab = tab;
+    view.querySelectorAll('[data-acc]').forEach((b) => b.classList.toggle('on', b.dataset.acc === tab));
+    view.querySelectorAll('[data-pane]').forEach((el) => { el.hidden = el.dataset.pane !== tab; });
+  };
+  view.querySelectorAll('[data-acc]').forEach((b) => b.addEventListener('click', () => { sfx.tap(); apply(b.dataset.acc); }));
+  apply(accountTab);
+}
+
+async function showAccount(note = '', tab = 'profile') {
   screen = 'account';
+  accountTab = tab;
   const account = backend.account;
+  const [balance, txs] = await Promise.all([wallet.getBalance(), wallet.getTransactions()]);
   if (!account) {
-    await shell(
-      h(`<main class="screen account"><div class="section-head"><h1>Cuenta</h1></div>
-        <p class="offline">Sin conexión con el servidor: las cuentas no están disponibles en este modo.</p></main>`),
-    );
+    const offline = h(`<main class="screen account"><div class="section-head"><h1>Cuenta</h1></div>
+      ${accountTabs(balance)}
+      <div data-pane="profile" class="acc-pane"><p class="offline">Sin conexión con el servidor: el perfil no está disponible en este modo.</p></div>
+      <div data-pane="wallet" class="acc-pane wallet-pane">${walletPane(balance, txs)}</div></main>`);
+    bindAccountTabs(offline);
+    bindWallet(offline);
+    await shell(offline);
     return;
   }
   const p = await account.load().catch(() => account.profile);
@@ -620,17 +653,18 @@ async function showAccount(note = '') {
       <div class="profile-card passport-card holo">
         <div class="shine"></div>
         <div class="passport-header">
-          <div class="avatar-wrap ${prestige.frame ? 'framed' : ''}" style="${frameStyle(prestige.frame)}">
-            <span class="avatar big">${p.username ? esc(name[0]) : '?'}</span>
+          <button class="avatar-wrap edit-avatar" title="Cambiar avatar" aria-label="Cambiar avatar">
+            ${avatarHtml({ size: 'lg', frame: prestige.frame, av: avatar.get(), initial: p.username ? name : '?' })}
             <span class="avatar-lvl-badge">Nv.${lvl.level}</span>
-          </div>
+            <span class="avatar-edit-tag">Editar</span>
+          </button>
           <div class="passport-info">
             <div class="passport-tag-row">
               <span class="passport-status ${confirmed ? 'vip' : 'guest'}">${confirmed ? 'Jugador Oficial' : 'Email sin confirmar'}</span>
               <span class="kyc-mini-pill ${kyc === 'verified' ? 'verified' : ''}">${KYC_TEXT[kyc]}</span>
             </div>
             <strong class="passport-name">${esc(name)}</strong>
-            <button class="chip-btn rename">Cambiar nombre</button>
+            <div class="chip-row"><button class="chip-btn rename">Cambiar nombre</button><button class="chip-btn edit-avatar">Cambiar avatar</button></div>
           </div>
         </div>
 
@@ -657,6 +691,8 @@ async function showAccount(note = '') {
           </div>
         </div>
       </div>
+      ${accountTabs(balance)}
+      <div data-pane="profile" class="acc-pane">
       <div class="account-card-panel frames-panel">
         <div class="panel-head">
           <h2>Marco de prestigio</h2>
@@ -666,7 +702,7 @@ async function showAccount(note = '') {
           ${FRAMES.map((f) => {
             const open = lvl.level >= f.level;
             return `<button class="frame-opt ${open ? '' : 'locked'} ${prestige.frame?.id === f.id ? 'on' : ''}" data-frame="${f.id}" ${open ? '' : 'disabled'} style="${frameStyle(f)}" title="${open ? f.name : `Nivel ${f.level}`}">
-              <span class="frame-ring"></span><b>${f.name}</b><small>${open ? 'Nv. ' + f.level : '🔒 Nv. ' + f.level}</small>
+              ${avatarHtml({ size: 'xs', frame: f, av: avatar.get(), initial: name })}<b>${f.name}</b><small>${open ? 'Nv. ' + f.level : '🔒 Nv. ' + f.level}</small>
             </button>`;
           }).join('')}
         </div>
@@ -693,7 +729,12 @@ async function showAccount(note = '') {
 
       <p class="legal">Para jugar mesas con entrada hace falta cuenta con email, ser mayor de 18 años y verificar tu identidad (una cuenta por persona). La práctica es libre.</p>
       <button class="ghost logout">Cerrar sesión</button>
+      </div>
+      <div data-pane="wallet" class="acc-pane wallet-pane">${walletPane(balance, txs)}</div>
     </main>`);
+  bindAccountTabs(view);
+  bindWallet(view);
+  view.querySelectorAll('.edit-avatar').forEach((b) => b.addEventListener('click', () => avatarEditor(() => showAccount(note))));
 
   view.querySelector('.rename').addEventListener('click', () => renameForm(view, name));
   view.querySelectorAll('.frame-opt:not(.locked)').forEach((b) => b.addEventListener('click', () => {
@@ -769,6 +810,54 @@ function passwordForm() {
   return form;
 }
 
+// elegir icono o subir imagen propia (máx. 2,5 MB); se guarda en este dispositivo
+function avatarEditor(done) {
+  app.querySelector('.overlay')?.remove();
+  const overlay = h(`
+    <div class="overlay">
+      <div class="card avatar-editor">
+        <h2>Tu avatar</h2>
+        <div class="ae-preview"></div>
+        <div class="ae-icons">${AVATAR_ICONS.map((i) => `<button data-icon="${i.id}" title="${i.name}" aria-label="${i.name}">${i.glyph}</button>`).join('')}</div>
+        <div class="row">
+          <button class="secondary ae-upload">Subir imagen</button>
+          <button class="secondary ae-clear">Quitar</button>
+        </div>
+        <input type="file" class="ae-file" accept="image/png,image/jpeg,image/webp" hidden>
+        <p class="ae-msg legal">PNG, JPG o WebP, máximo 2,5 MB. Se recorta en cuadrado y solo se guarda en este dispositivo.</p>
+        <button class="primary ae-done">Listo</button>
+      </div>
+    </div>`);
+  const msg = overlay.querySelector('.ae-msg');
+  const paint = () => {
+    const av = avatar.get();
+    overlay.querySelector('.ae-preview').innerHTML = avatarHtml({ size: 'lg', frame: progress.prestige.frame, av, initial: backend.account?.profile?.username ?? '?' });
+    overlay.querySelectorAll('[data-icon]').forEach((b) => b.classList.toggle('on', b.dataset.icon === av.icon));
+  };
+  overlay.querySelectorAll('[data-icon]').forEach((b) => b.addEventListener('click', () => { avatar.setIcon(b.dataset.icon); paint(); }));
+  overlay.querySelector('.ae-clear').addEventListener('click', () => { avatar.clear(); paint(); });
+  const file = overlay.querySelector('.ae-file');
+  overlay.querySelector('.ae-upload').addEventListener('click', () => file.click());
+  file.addEventListener('change', async () => {
+    const f = file.files[0];
+    file.value = '';
+    if (!f) return;
+    const bad = checkAvatarFile(f);
+    if (bad) { msg.textContent = bad === 'size' ? 'La imagen pesa más de 2,5 MB.' : 'Usa una imagen PNG, JPG o WebP.'; msg.classList.add('err'); return; }
+    try {
+      avatar.setImage(await imageToAvatar(f));
+      msg.classList.remove('err');
+      paint();
+    } catch {
+      msg.textContent = 'No se ha podido leer esa imagen.';
+      msg.classList.add('err');
+    }
+  });
+  overlay.querySelector('.ae-done').addEventListener('click', () => { overlay.remove(); done(); });
+  paint();
+  app.append(overlay);
+}
+
 function renameForm(view, current) {
   const card = view.querySelector('.profile-card');
   const form = h(`
@@ -816,13 +905,11 @@ function kycStubForm(box) {
 
 const TX_LABEL = { bonus: 'Bienvenida', withdrawal: 'Retirada', deposit: 'Recarga', entry: 'Entrada', prize: 'Premio', refund: 'Devolución' };
 
-async function showWallet() {
-  screen = 'wallet';
-  const [balance, txs] = await Promise.all([wallet.getBalance(), wallet.getTransactions()]);
+function walletPane(balance, txs) {
   const prizeTotal = txs.filter((t) => t.type === 'prize' && t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
   const matchesPlayed = txs.filter((t) => t.type === 'entry').length;
-  const view = h(`
-    <main class="screen wallet">
+  return `
+    <div class="wallet-pane-inner">
       <div class="wallet-dashboard-col">
         <div class="wallet-card holo">
           <div class="shine"></div>
@@ -891,7 +978,10 @@ async function showWallet() {
     }
         </ul>
       </div>
-    </main>`);
+    </div>`;
+}
+
+function bindWallet(view) {
   view.querySelectorAll('[data-add]').forEach((b) =>
     b.addEventListener('click', async () => {
       b.disabled = true;
@@ -902,7 +992,7 @@ async function showWallet() {
         throw e;
       }
       sfx.coins();
-      showWallet();
+      showAccount('', 'wallet');
     }),
   );
   view.querySelectorAll('[data-crypto]').forEach((b) =>
@@ -916,7 +1006,6 @@ async function showWallet() {
       }
     }),
   );
-  await shell(view);
 }
 
 // ---------- matchmaking ----------
@@ -934,7 +1023,7 @@ async function startMatch(tier, rematchOf = null) {
   try {
     match = await service.join(tier);
   } catch (e) {
-    if (e instanceof InsufficientFundsError) return showWallet();
+    if (e instanceof InsufficientFundsError) return showAccount('', 'wallet');
     return alertMsg('No se ha podido crear la partida. Prueba otra vez.');
   }
   match.service = service;
@@ -1607,7 +1696,7 @@ async function startTournament(tier, rematchOf = null) {
       throw e;
     });
   } catch (e) {
-    if (e instanceof InsufficientFundsError) return showWallet();
+    if (e instanceof InsufficientFundsError) return showAccount('', 'wallet');
     if (e.blocked) {
       backend.account?.load().catch(() => { });
       return showBlocked(e.code);
@@ -2187,6 +2276,7 @@ if (skinLab) {
     backend = b;
     ({ wallet, matches } = b);
     if (b.account) {
+      avatar = new AvatarStore(b.user.id);
       progress.attach(b.user.id, b.account.profile?.progress, (s) => b.account.saveProgress(s), (id) => b.account.setFrame(id));
       // hitos de ranking y marco elegido: pueden desbloquear bolas, que se ofrecen al acabar la próxima partida
       b.account.myRanking().then((r) => progress.setServerStats(r)).catch(() => {});

@@ -3146,3 +3146,91 @@ body.sk-noscroll { overflow: hidden; }
   .hud .pill.restart-btn { font-size: 0 !important; width: 34px; padding: 0 !important; }
   .hud .pill.restart-btn::before { content: '\21BB'; font-size: 18px; line-height: 1; }
 }
+
+/* ---------- avatar con marco de prestigio (estilo Wild Rift) ---------- */
+.pf { --s: 56px; --pt: 4px; --frame: #5b6472; --frame-glow: #9aa4b2; position: relative; display: inline-grid; place-items: center; width: var(--s); height: var(--s); margin: calc(var(--s) * 0.16); flex: none; vertical-align: middle; isolation: isolate; }
+.pf-xs { --s: 42px; --pt: 3px; }
+.pf-sm { --s: 38px; --pt: 3px; }
+.pf-lg { --s: 84px; --pt: 6px; }
+.pf-face { position: relative; z-index: 1; width: 100%; height: 100%; border-radius: 50%; overflow: hidden; display: grid; place-items: center; background: radial-gradient(circle at 35% 30%, #fff, #ffd700 55%, #996515 100%); color: #120924; box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.55), inset 0 0 calc(var(--s) * 0.2) rgba(0, 0, 0, 0.5); }
+.pf-face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pf-initial { font-family: var(--display); font-size: calc(var(--s) * 0.44); text-transform: uppercase; }
+.pf-glyph { font-size: calc(var(--s) * 0.52); line-height: 1; }
+.pf-face:has(.pf-glyph) { background: radial-gradient(circle at 50% 35%, #3b2a66, #120924 75%); }
+
+/* aro metálico con facetas */
+.pf-ring { position: absolute; z-index: 2; inset: calc(var(--pt) * -1.5); border-radius: 50%; pointer-events: none;
+  background: conic-gradient(from 25deg, var(--frame-glow), var(--frame), color-mix(in srgb, var(--frame) 40%, #000), var(--frame), var(--frame-glow), var(--frame), color-mix(in srgb, var(--frame) 40%, #000), var(--frame), var(--frame-glow));
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--pt)), #000 calc(100% - var(--pt) + 0.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - var(--pt)), #000 calc(100% - var(--pt) + 0.5px));
+  filter: drop-shadow(0 0 calc(var(--pt) * 1.2) var(--frame-glow)); }
+.pf-halo { position: absolute; z-index: 0; inset: calc(var(--pt) * -3.4); border-radius: 50%; pointer-events: none; display: none; }
+.pf-wing { position: absolute; z-index: 0; top: 6%; width: calc(var(--s) * 0.58); height: calc(var(--s) * 0.82); display: none; pointer-events: none;
+  background: linear-gradient(165deg, var(--frame-glow), var(--frame) 55%, color-mix(in srgb, var(--frame) 35%, #000));
+  clip-path: polygon(100% 20%, 74% 0, 76% 22%, 46% 8%, 52% 34%, 18% 24%, 32% 50%, 0 54%, 34% 68%, 14% 90%, 52% 80%, 100% 72%);
+  filter: drop-shadow(0 0 4px var(--frame-glow)); }
+.pf-wing.l { left: calc(var(--s) * -0.46); }
+.pf-wing.r { right: calc(var(--s) * -0.46); transform: scaleX(-1); }
+.pf-gem { position: absolute; z-index: 3; left: 50%; bottom: calc(var(--s) * -0.19); width: calc(var(--s) * 0.28); height: calc(var(--s) * 0.28); transform: translateX(-50%); display: none; pointer-events: none;
+  clip-path: polygon(50% 0, 100% 38%, 50% 100%, 0 38%); background: linear-gradient(135deg, #fff, var(--frame-glow) 35%, var(--frame) 70%, color-mix(in srgb, var(--frame) 50%, #000)); }
+
+/* Bronce: aro grueso y bisel interior */
+.pf-p25 { --pt: 5px; }
+.pf-p25.pf-lg { --pt: 8px; }
+.pf-p25 .pf-face { box-shadow: inset 0 0 0 2px var(--frame), inset 0 0 0 4px rgba(0, 0, 0, 0.6), inset 0 0 12px rgba(0, 0, 0, 0.5); }
+/* Plata: + corona de puntos */
+.pf-p50 .pf-halo { display: block; border: 2px dotted var(--frame); opacity: 0.85; }
+.pf-p50 .pf-face { box-shadow: inset 0 0 0 2px var(--frame-glow), inset 0 0 0 4px rgba(0, 0, 0, 0.6); }
+/* Oro: + alas y corona continua */
+.pf-p75 .pf-halo { display: block; border: 1.5px solid var(--frame); box-shadow: 0 0 10px var(--frame-glow); }
+.pf-p75 .pf-wing { display: block; width: calc(var(--s) * 0.5); }
+/* Platino: alas grandes, gema y corona de rayas */
+.pf-p100 .pf-halo { display: block; border: 2px dashed var(--frame-glow); animation: pf-spin 24s linear infinite; }
+.pf-p100 .pf-wing, .pf-p125 .pf-wing, .pf-p150 .pf-wing { display: block; }
+.pf-p100 .pf-gem, .pf-p125 .pf-gem, .pf-p150 .pf-gem { display: block; }
+/* Diamante: alas cristalinas y púas alrededor */
+.pf-p125 .pf-halo { display: block; inset: calc(var(--pt) * -4.2); background: repeating-conic-gradient(from -4deg, var(--frame-glow) 0 8deg, transparent 8deg 30deg);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--pt) * 1.6), #000 calc(100% - var(--pt) * 1.6 + 0.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - var(--pt) * 1.6), #000 calc(100% - var(--pt) * 1.6 + 0.5px)); filter: drop-shadow(0 0 5px var(--frame)); }
+.pf-p125 .pf-wing { width: calc(var(--s) * 0.62); clip-path: polygon(100% 24%, 70% 0, 68% 20%, 36% 2%, 44% 30%, 8% 18%, 28% 46%, 0 50%, 30% 64%, 6% 92%, 50% 78%, 100% 74%); }
+/* Maestro: todo lo anterior, aura viva y corona superior */
+.pf-p150 .pf-halo { display: block; inset: calc(var(--pt) * -4.4); background: repeating-conic-gradient(from 0deg, var(--frame-glow) 0 10deg, var(--frame) 10deg 14deg, transparent 14deg 36deg);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--pt) * 1.8), #000 calc(100% - var(--pt) * 1.8 + 0.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - var(--pt) * 1.8), #000 calc(100% - var(--pt) * 1.8 + 0.5px));
+  animation: pf-spin 18s linear infinite; filter: drop-shadow(0 0 7px var(--frame-glow)); }
+.pf-p150 .pf-wing { width: calc(var(--s) * 0.68); height: calc(var(--s) * 0.92); top: 0; animation: pf-glow 2.6s ease-in-out infinite; }
+.pf-p150 .pf-ring { animation: pf-glow 2.6s ease-in-out infinite; }
+@keyframes pf-spin { to { transform: rotate(360deg); } }
+@keyframes pf-glow { 50% { filter: drop-shadow(0 0 calc(var(--pt) * 2.4) var(--frame-glow)) brightness(1.2); } }
+/* en pequeño no caben las alas: queda aro, corona y gema */
+.pf-sm .pf-wing { display: none !important; }
+@media (prefers-reduced-motion: reduce) { .pf-halo, .pf-ring, .pf-wing { animation: none !important; } }
+
+.frame-opt { gap: 12px; }
+.frame-opt.locked .pf { filter: grayscale(1) brightness(0.7); }
+.rank-row .pf-sm { margin: 4px 10px; }
+
+/* ---------- cuenta: perfil + wallet ---------- */
+.avatar-wrap.edit-avatar { background: none; border: 0; padding: 0; cursor: pointer; color: inherit; }
+.avatar-wrap.edit-avatar .avatar-lvl-badge { bottom: 4px; right: 2px; z-index: 4; }
+.avatar-edit-tag { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 5; padding: 3px 9px; border-radius: 999px; background: rgba(9, 4, 20, 0.85); color: #fff; font-size: 11px; font-weight: 800; opacity: 0; transition: opacity 0.15s; pointer-events: none; }
+.avatar-wrap.edit-avatar:hover .avatar-edit-tag, .avatar-wrap.edit-avatar:focus-visible .avatar-edit-tag { opacity: 1; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.acc-pane { display: contents; }
+.acc-pane[hidden] { display: none; }
+.acc-tabs { margin-top: 14px; }
+.acc-tabs button small { color: var(--yellow); font-weight: 800; margin-left: 4px; }
+.screen.account > .acc-tabs, .screen.account > .wallet-pane { grid-column: 1 / -1; }
+.wallet-pane { display: block; margin-top: 14px; }
+.wallet-pane[hidden] { display: none; }
+.wallet-pane-inner { display: grid; gap: 22px; }
+@media (min-width: 900px) {
+  .wallet-pane-inner { grid-template-columns: 380px 1fr; gap: 28px; align-items: start; }
+}
+
+.avatar-editor { text-align: center; }
+.ae-preview { display: grid; place-items: center; padding: 14px 0 10px; }
+.ae-icons { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin: 6px 0 12px; }
+.ae-icons button { aspect-ratio: 1; border-radius: 12px; font-size: 22px; background: rgba(255, 255, 255, 0.05); border: 1.5px solid var(--line); cursor: pointer; }
+.ae-icons button.on { border-color: #ffd700; background: rgba(255, 215, 0, 0.12); }
+.ae-msg.err { color: #ff7a7a; }
