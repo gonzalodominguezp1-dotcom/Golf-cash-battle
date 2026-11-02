@@ -1,0 +1,88 @@
+// Avatar del jugador: un icono de la lista o una imagen propia (máx. 2,5 MB).
+// Es cosmético y se guarda en este dispositivo, por cuenta.
+
+export const MAX_AVATAR_BYTES = 2.5 * 1024 * 1024;
+export const AVATAR_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+const SIZE = 256;
+
+export const AVATAR_ICONS = [
+  { id: 'golf', glyph: '⛳', name: 'Bandera' },
+  { id: 'ball', glyph: '🏌️', name: 'Golfista' },
+  { id: 'crown', glyph: '👑', name: 'Corona' },
+  { id: 'fire', glyph: '🔥', name: 'Fuego' },
+  { id: 'bolt', glyph: '⚡', name: 'Rayo' },
+  { id: 'skull', glyph: '💀', name: 'Calavera' },
+  { id: 'dragon', glyph: '🐉', name: 'Dragón' },
+  { id: 'wolf', glyph: '🐺', name: 'Lobo' },
+  { id: 'eagle', glyph: '🦅', name: 'Águila' },
+  { id: 'robot', glyph: '🤖', name: 'Robot' },
+  { id: 'gem', glyph: '💎', name: 'Gema' },
+  { id: 'star', glyph: '⭐', name: 'Estrella' },
+];
+
+export const iconById = (id) => AVATAR_ICONS.find((i) => i.id === id) ?? null;
+
+/** null si el archivo vale; 'type' o 'size' si no. */
+export function checkAvatarFile(file) {
+  if (!file || !AVATAR_TYPES.includes(file.type)) return 'type';
+  if (file.size > MAX_AVATAR_BYTES) return 'size';
+  return null;
+}
+
+const isImageUrl = (v) => typeof v === 'string' && /^data:image\/(png|jpeg|webp);base64,/.test(v) && v.length < 600_000;
+
+const defaultStorage = () => {
+  try {
+    return globalThis.localStorage;
+  } catch {
+    return null;
+  }
+};
+
+/** Avatar elegido, guardado por cuenta. Sin nada elegido: { icon: null, image: null }. */
+export class AvatarStore {
+  constructor(owner, storage = defaultStorage()) {
+    this.key = `gcb.avatar.v1.${owner ?? 'guest'}`;
+    this.storage = storage;
+    this.memory = { icon: null, image: null };
+  }
+
+  get() {
+    try {
+      const raw = JSON.parse(this.storage?.getItem(this.key) ?? 'null');
+      if (raw) return { icon: iconById(raw.icon)?.id ?? null, image: isImageUrl(raw.image) ? raw.image : null };
+    } catch {}
+    return { ...this.memory };
+  }
+
+  #put(v) {
+    this.memory = v;
+    try {
+      this.storage?.setItem(this.key, JSON.stringify(v));
+    } catch {}
+    return v;
+  }
+
+  setIcon(id) {
+    return iconById(id) ? this.#put({ icon: id, image: null }) : this.get();
+  }
+
+  setImage(dataUrl) {
+    return isImageUrl(dataUrl) ? this.#put({ icon: null, image: dataUrl }) : this.get();
+  }
+
+  clear() {
+    return this.#put({ icon: null, image: null });
+  }
+}
+
+/** Recorta la foto al centro y la reduce a 256 px para que ocupe poco. Solo navegador. */
+export async function imageToAvatar(file) {
+  const bmp = await createImageBitmap(file);
+  const side = Math.min(bmp.width, bmp.height);
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = SIZE;
+  canvas.getContext('2d').drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, SIZE, SIZE);
+  bmp.close?.();
+  return canvas.toDataURL('image/webp', 0.88);
+}
