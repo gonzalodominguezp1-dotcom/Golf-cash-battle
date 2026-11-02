@@ -116,11 +116,10 @@ function renderLogin(step = 'email', error = '') {
         options: { shouldCreateUser: false, emailRedirectTo: here() },
       });
       if (error) {
-        const msg = /signups not allowed|not found/i.test(error.message)
-          ? 'No hay ninguna cuenta con ese email. Créala primero en el juego (pestaña Cuenta).'
-          : /rate|seconds/i.test(error.message)
-            ? 'Espera un momento antes de pedir otro código.'
-            : error.message;
+        // mismo texto exista o no la cuenta: este formulario no debe decir qué emails la tienen
+        const msg = /rate|seconds/i.test(error.message)
+          ? 'Espera un momento antes de pedir otro código.'
+          : 'No se ha podido enviar el código. Revisa el email e inténtalo otra vez.';
         return renderLogin('email', msg);
       }
       renderLogin('code');

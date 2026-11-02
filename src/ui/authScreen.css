@@ -1,0 +1,29 @@
+/* Pantallas de entrada (login, registro, recuperar contraseña). Reutilizan .screen, .form, .primary, .ghost y .link de style.css. */
+.auth-screen { min-height: 100dvh; display: flex; flex-direction: column; justify-content: center; padding-bottom: calc(env(safe-area-inset-bottom) + 24px); }
+.auth-brand { text-align: center; font-family: var(--display); margin: 0 0 16px; }
+.auth-card {
+  padding: 8px 20px 20px; border-radius: var(--radius-lg); background: var(--panel-card);
+  box-shadow: var(--shadow-card); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+}
+.auth-card h2 { margin-top: 16px; }
+.auth-card > .sub { margin: 0 0 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.auth-form { margin-top: 0; }
+.auth-pw { position: relative; display: grid; }
+.auth-pw input { padding-right: 84px; }
+.auth-eye {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%); min-width: 72px; min-height: 40px; padding: 0 10px;
+  border-radius: 10px; background: transparent; color: var(--text-dim); font-size: 13px; font-weight: 700;
+}
+.auth-eye:hover { color: #fff; background: rgba(255, 255, 255, 0.06); }
+.auth-checks { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; padding: 0; list-style: none; font-size: 12px; color: var(--muted); }
+.auth-checks li::before { content: '○ '; }
+.auth-checks li.ok { color: var(--pos); }
+.auth-checks li.ok::before { content: '✓ '; }
+.auth-error { min-height: 1.2em; margin: 0; font-size: 13px; font-weight: 700; color: var(--neg); line-height: 1.4; }
+.auth-error.ok { color: var(--pos); }
+.auth-error:empty { min-height: 0; }
+.auth-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 16px; }
+.auth-card > .link, .auth-card > .ghost { margin-top: 10px; }
+.auth-card > .ghost { margin-bottom: 4px; }
+.auth-screen .legal { text-align: center; }
+.auth-form input { font-size: 16px; }

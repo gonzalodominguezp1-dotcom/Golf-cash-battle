@@ -9,12 +9,15 @@ import { Bot } from './game/bots.js';
 import { segmentsOf } from './game/physics.js';
 import { enterFinale, isMuted, leaveFinale, setMuted, sfx, unlockAudio } from './game/audio.js';
 import { Progress } from './progress/Progress.js';
+import { FRAMES, frameById, framesUnlocked, frameStyle } from './progress/prestige.js';
 import { CHALLENGES, TIERS as SKIN_TIERS, SKINS } from './progress/skins.js';
 import { ballPreview } from './game/render/ballPaint.js';
 import { showSkinReveal } from './ui/skinReveal.js';
 import { installThumbObserver, thumbCached, upgradeImg, warmThumbs } from './ui/skinThumbs.js';
 import { rarePatternOf } from './progress/inventory.js';
 import { getCourseDistance, staticCoursePreview } from './game/render/coursePreviewStatic.js';
+import { mountAuth } from './ui/authScreen.js';
+import { validatePassword, authMessage } from './account/authRules.js';
 import { QUALITY_LEVELS, QUALITY_NAMES, getQuality, setQuality } from './game/render/quality.js';
 
 let backend, wallet, matches;
@@ -96,7 +99,8 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
             <button data-go="freeplay" class="${screen === 'freeplay' ? 'on' : ''}">Juego Libre <kbd>2</kbd></button>
             <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}">Skins <kbd>3</kbd></button>
             <button data-go="wallet" class="${screen === 'wallet' ? 'on' : ''}">Wallet <kbd>4</kbd></button>
-            <button data-go="account" class="${screen === 'account' ? 'on' : ''}">Cuenta <kbd>5</kbd></button>
+            <button data-go="ranking" class="${screen === 'ranking' ? 'on' : ''}">Ranking <kbd>5</kbd></button>
+            <button data-go="account" class="${screen === 'account' ? 'on' : ''}">Cuenta <kbd>6</kbd></button>
           </nav>
         </div>
         <div class="topbar-right">
@@ -123,6 +127,7 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
         <button data-go="freeplay" class="${screen === 'freeplay' ? 'on' : ''}">Libre</button>
         <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}">Skins</button>
         <button data-go="wallet" class="${screen === 'wallet' ? 'on' : ''}">Wallet</button>
+        <button data-go="ranking" class="${screen === 'ranking' ? 'on' : ''}">Ranking</button>
         <button data-go="account" class="${screen === 'account' ? 'on' : ''}">Cuenta</button>
       </nav>`),
     );
@@ -169,7 +174,8 @@ window.addEventListener('keydown', (e) => {
   else if (isNum(2)) triggerNav('freeplay');
   else if (isNum(3)) triggerNav('skins');
   else if (isNum(4)) triggerNav('wallet');
-  else if (isNum(5)) triggerNav('account');
+  else if (isNum(5)) triggerNav('ranking');
+  else if (isNum(6)) triggerNav('account');
   else if (e.code === 'KeyM') {
     setMuted(!isMuted());
     const topMute = document.querySelector('.topbar-sound-btn');
@@ -182,6 +188,7 @@ function go(to) {
   if (to === 'wallet') return showWallet();
   if (to === 'skins') return showSkins();
   if (to === 'account') return showAccount();
+  if (to === 'ranking') return showRanking();
   if (to === 'freeplay') return showFreePlayCourseSelect();
   return showLobby();
 }
@@ -234,7 +241,7 @@ async function showLobby() {
         </div>
       </section>
       ${backend.mode === 'local' ? `<p class="offline">Modo sin conexión: el saldo se guarda solo en este ${DEVICE}</p>` : ''}
-      ${backend.account?.profile?.paid_block ? `<button class="notice account-hint" data-go="account">${{ account_required: 'Guarda tu cuenta con email para jugar mesas con entrada →', kyc_required: 'Verifica tu edad e identidad para jugar mesas con entrada →', account_review: 'Tu cuenta está en revisión: de momento solo Práctica', underage: 'Mesas con entrada solo para mayores de 18' }[backend.account.profile.paid_block]}</button>` : ''}
+      ${backend.account?.profile?.paid_block ? `<button class="notice account-hint" data-go="account">${{ account_required: 'Confirma tu email para jugar mesas con entrada →', kyc_required: 'Verifica tu edad e identidad para jugar mesas con entrada →', account_review: 'Tu cuenta está en revisión: de momento solo Práctica', underage: 'Mesas con entrada solo para mayores de 18' }[backend.account.profile.paid_block]}</button>` : ''}
       <div class="my-tournaments"></div>
       <div class="section-head">
         <div class="section-title-row">
@@ -477,7 +484,7 @@ async function showSkins() {
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 const BLOCK_TEXT = {
-  account_required: 'Para jugar con créditos necesitas una cuenta con email. Así no pierdes tu saldo si cambias de dispositivo.',
+  account_required: 'Para jugar con créditos tienes que confirmar el email de tu cuenta. Revisa tu bandeja de entrada.',
   kyc_required: 'Antes de jugar con créditos tienes que verificar tu edad e identidad. Solo se hace una vez.',
   underage: 'Las mesas con entrada son solo para mayores de 18 años. Puedes seguir jugando en Práctica.',
   account_review: 'Tu cuenta está en revisión por el sistema antitrampas. Mientras tanto puedes jugar en Práctica.',
@@ -513,6 +520,73 @@ function showBlocked(code) {
   app.append(overlay);
 }
 
+// ---------- ranking de victorias ----------
+
+const RANKING_TABS = { weekly: 'Semanal', monthly: 'Mensual', historic: 'Histórico' };
+let rankingTab = 'weekly';
+
+/** Aviso de marco nuevo si la partida hizo cruzar un nivel de prestigio. */
+const prestigeNote = (gained) => {
+  const now = framesUnlocked(gained.level.level);
+  if (now.length <= framesUnlocked(gained.levelBefore).length) return '';
+  const f = now.at(-1);
+  return `<p class="reward-note prestige-note" style="${frameStyle(f)}"><i></i>¡Marco de prestigio ${esc(f.name)} desbloqueado!</p>`;
+};
+
+async function showRanking() {
+  screen = 'ranking';
+  const account = backend.account;
+  if (!account) {
+    await shell(
+      h(`<main class="screen ranking"><div class="section-head"><h1>Ranking</h1></div>
+        <p class="offline">El ranking de victorias necesita conexión con el servidor.</p></main>`),
+    );
+    return;
+  }
+  const view = h(`
+    <main class="screen ranking">
+      <div class="section-head"><h1>Ranking</h1><span class="sub">Victorias en mesas online</span></div>
+      <div class="rank-tabs">${Object.entries(RANKING_TABS).map(([k, v]) => `<button data-tab="${k}" class="${k === rankingTab ? 'on' : ''}">${v}</button>`).join('')}</div>
+      <p class="rank-period"></p>
+      <ol class="rank-list"></ol>
+      <div class="rank-me"></div>
+      <p class="legal">Cuentan las mesas con jugadores reales ya liquidadas. Semana de lunes a domingo y mes natural (hora UTC). En empate gana quien llegó antes a esas victorias. Terminar un periodo entre los mejores desbloquea bolas exclusivas en Skins.</p>
+    </main>`);
+  const list = view.querySelector('.rank-list');
+  const me = view.querySelector('.rank-me');
+  const period = view.querySelector('.rank-period');
+  const row = (r) => {
+    const f = frameById(r.frame);
+    return `<li class="rank-row ${r.me ? 'me' : ''} ${r.pos <= 3 ? `podium p${r.pos}` : ''}">
+      <b class="rank-pos">${r.pos}</b>
+      <span class="avatar rank-avatar ${f ? 'framed' : ''}" style="${frameStyle(f)}">${esc((r.name ?? '?')[0])}</span>
+      <span class="rank-name">${esc(r.name)}<small>Nv. ${r.level}${f ? ` · ${esc(f.name)}` : ''}</small></span>
+      <span class="rank-wins"><b>${r.wins}</b><small>victoria${r.wins === 1 ? '' : 's'}</small></span>
+    </li>`;
+  };
+  const load = async (tab) => {
+    rankingTab = tab;
+    view.querySelectorAll('.rank-tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
+    list.innerHTML = '<li class="rank-empty">Cargando…</li>';
+    me.innerHTML = '';
+    try {
+      const r = await account.ranking(tab);
+      if (rankingTab !== tab || !view.isConnected) return;
+      period.textContent = tab === 'historic' ? 'Desde el principio' : `${new Date(r.from).toLocaleDateString('es', { day: 'numeric', month: 'short', timeZone: 'UTC' })} – ${new Date(new Date(r.to) - 1).toLocaleDateString('es', { day: 'numeric', month: 'short', timeZone: 'UTC' })}`;
+      list.innerHTML = r.top.length ? r.top.map(row).join('') : '<li class="rank-empty">Aún no hay victorias en este periodo. ¡Sé el primero!</li>';
+      const inTop = r.top.some((x) => x.me);
+      me.innerHTML = inTop ? '' : r.me
+        ? `<p class="rank-mine">Tu posición: <b>#${r.me.pos}</b> · ${r.me.wins} victoria${r.me.wins === 1 ? '' : 's'}</p>`
+        : '<p class="rank-mine">Aún no tienes victorias en este periodo. Gana una mesa online para entrar.</p>';
+    } catch {
+      if (rankingTab === tab && view.isConnected) list.innerHTML = '<li class="rank-empty">No se ha podido cargar el ranking. Prueba otra vez.</li>';
+    }
+  };
+  view.querySelectorAll('.rank-tabs button').forEach((b) => b.addEventListener('click', () => load(b.dataset.tab)));
+  await shell(view);
+  load(rankingTab);
+}
+
 async function showAccount(note = '') {
   screen = 'account';
   const account = backend.account;
@@ -524,10 +598,11 @@ async function showAccount(note = '') {
     return;
   }
   const p = await account.load().catch(() => account.profile);
-  const guest = p.is_anonymous || !p.email_confirmed;
+  const confirmed = Boolean(p.email) && p.email_confirmed && !p.is_anonymous;
   const kyc = p.kyc_status;
   const name = p.username ?? 'Sin nombre';
   const lvl = progress.level;
+  const prestige = progress.prestige;
   const unlockedSkins = SKINS.filter((s) => progress.isUnlocked(s)).length;
   const completedChallenges = CHALLENGES.filter((c) => progress.challenge(c.id).done).length;
   const view = h(`
@@ -535,13 +610,13 @@ async function showAccount(note = '') {
       <div class="profile-card passport-card holo">
         <div class="shine"></div>
         <div class="passport-header">
-          <div class="avatar-wrap">
+          <div class="avatar-wrap ${prestige.frame ? 'framed' : ''}" style="${frameStyle(prestige.frame)}">
             <span class="avatar big">${p.username ? esc(name[0]) : '?'}</span>
             <span class="avatar-lvl-badge">Nv.${lvl.level}</span>
           </div>
           <div class="passport-info">
             <div class="passport-tag-row">
-              <span class="passport-status ${guest ? 'guest' : 'vip'}">${guest ? 'Pase Invitado' : 'Jugador Oficial'}</span>
+              <span class="passport-status ${confirmed ? 'vip' : 'guest'}">${confirmed ? 'Jugador Oficial' : 'Email sin confirmar'}</span>
               <span class="kyc-mini-pill ${kyc === 'verified' ? 'verified' : ''}">${KYC_TEXT[kyc]}</span>
             </div>
             <strong class="passport-name">${esc(name)}</strong>
@@ -572,13 +647,28 @@ async function showAccount(note = '') {
           </div>
         </div>
       </div>
+      <div class="account-card-panel frames-panel">
+        <div class="panel-head">
+          <h2>Marco de prestigio</h2>
+          <span class="panel-badge ${prestige.frame ? 'verified' : 'pending'}">${prestige.frame ? esc(prestige.frame.name) : 'Sin marco'}</span>
+        </div>
+        <div class="frames">
+          ${FRAMES.map((f) => {
+            const open = lvl.level >= f.level;
+            return `<button class="frame-opt ${open ? '' : 'locked'} ${prestige.frame?.id === f.id ? 'on' : ''}" data-frame="${f.id}" ${open ? '' : 'disabled'} style="${frameStyle(f)}" title="${open ? f.name : `Nivel ${f.level}`}">
+              <span class="frame-ring"></span><b>${f.name}</b><small>${open ? 'Nv. ' + f.level : '🔒 Nv. ' + f.level}</small>
+            </button>`;
+          }).join('')}
+        </div>
+        <p class="sub">Se muestra en tu perfil y en el ranking. Siguiente marco: ${(() => { const n = FRAMES.find((f) => f.level > lvl.level); return n ? `${n.name} en el nivel ${n.level}` : 'ya los tienes todos'; })()}.</p>
+      </div>
       ${note ? `<p class="notice">${note}</p>` : ''}
       ${p.in_review ? `<p class="offline">Tu cuenta está en revisión por el sistema antitrampas.${p.held > 0 ? ` Tienes ${coin(Number(p.held))} en premios retenidos hasta que termine.` : ''}</p>` : ''}
 
       <div class="account-card-panel">
         <div class="panel-head">
           <h2>Email</h2>
-          <span class="panel-badge ${guest ? 'pending' : 'verified'}">${guest ? 'Sin vincular' : 'Vinculado'}</span>
+          <span class="panel-badge ${confirmed ? 'verified' : 'pending'}">${confirmed ? 'Confirmado' : 'Sin confirmar'}</span>
         </div>
         <div class="email-box"></div>
       </div>
@@ -592,42 +682,23 @@ async function showAccount(note = '') {
       </div>
 
       <p class="legal">Para jugar mesas con entrada hace falta cuenta con email, ser mayor de 18 años y verificar tu identidad (una cuenta por persona). La práctica es libre.</p>
-      ${guest ? '' : '<button class="ghost logout">Cerrar sesión</button>'}
+      <button class="ghost logout">Cerrar sesión</button>
     </main>`);
 
   view.querySelector('.rename').addEventListener('click', () => renameForm(view, name));
+  view.querySelectorAll('.frame-opt:not(.locked)').forEach((b) => b.addEventListener('click', () => {
+    if (progress.equipFrame(b.dataset.frame)) showAccount(note);
+  }));
 
   const emailBox = view.querySelector('.email-box');
-  if (!guest) {
-    emailBox.innerHTML = `<p class="field-ok">${esc(p.email)}</p>`;
-  } else {
-    emailBox.append(
-      emailForm({
-        intro: p.pending_email
-          ? `Te enviamos un email a <b>${esc(p.pending_email)}</b>. Pulsa el enlace para confirmarlo, o escribe otro email.`
-          : 'Juegas como invitado. Añade tu email para guardar tu saldo, nivel y skins y poder entrar desde otro dispositivo.',
-        button: 'Guardar mi cuenta',
-        send: (email) => account.register(email),
-        codeType: 'email_change',
-      }),
-    );
-    const other = h('<button class="link">¿Ya tienes cuenta? Entrar</button>');
-    other.addEventListener('click', () => {
-      other.replaceWith(
-        emailForm({
-          intro: `Entra en tu cuenta. El saldo de este invitado se queda en este ${DEVICE}.`,
-          button: 'Enviarme el enlace',
-          send: (email) => account.signIn(email),
-          codeType: 'email',
-        }),
-      );
-    });
-    emailBox.append(other);
-  }
+  emailBox.innerHTML = `<p class="field-ok">${esc(p.email ?? '')}</p>${confirmed ? '' : '<p class="sub">Abre el enlace que te enviamos al registrarte para confirmar el email.</p>'}`;
+  const changePw = h('<button class="link">Cambiar contraseña</button>');
+  changePw.addEventListener('click', () => changePw.replaceWith(passwordForm()));
+  emailBox.append(changePw);
 
   const kycBox = view.querySelector('.kyc-box');
-  if (guest) {
-    kycBox.innerHTML = '<p class="sub">Primero guarda tu cuenta con email.</p>';
+  if (!confirmed) {
+    kycBox.innerHTML = '<p class="sub">Primero confirma tu email.</p>';
   } else if (kyc === 'verified') {
     kycBox.innerHTML = `<p class="field-ok">Identidad verificada${p.adult ? ' · mayor de 18' : ''}</p>`;
   } else {
@@ -657,49 +728,35 @@ async function showAccount(note = '') {
   await shell(view);
 }
 
-// formulario de email que, tras enviar, deja escribir el código del correo
-function emailForm({ intro, button, send, codeType }) {
-  const box = h(`
+// cambio de contraseña desde la cuenta: pide la actual antes de aceptar la nueva
+function passwordForm() {
+  const pw = (label, name, ac) => `<label>${label}<input type="password" name="${name}" required autocomplete="${ac}" maxlength="72" autocapitalize="off" spellcheck="false"></label>`;
+  const form = h(`
     <form class="form">
-      <p class="sub">${intro}</p>
-      <input type="email" name="email" required autocomplete="email" placeholder="tu@email.com">
-      <button class="primary">${button}</button>
+      ${pw('Contraseña actual', 'current', 'current-password')}
+      ${pw('Contraseña nueva', 'next', 'new-password')}
+      ${pw('Repite la contraseña nueva', 'again', 'new-password')}
+      <p class="sub">Mínimo 8 caracteres, con letras y números.</p>
+      <p class="auth-error" role="alert"></p>
+      <button class="primary">Guardar contraseña</button>
     </form>`);
-  let sentTo = null;
-  box.addEventListener('submit', async (e) => {
+  const error = form.querySelector('.auth-error');
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const btn = box.querySelector('button');
+    const btn = form.querySelector('button');
+    error.textContent = '';
+    const bad = validatePassword(form.next.value) ?? (form.next.value !== form.again.value ? 'password_mismatch' : null);
+    if (bad) return void (error.textContent = authMessage(bad));
     btn.disabled = true;
-    if (sentTo) {
-      try {
-        await backend.account.verifyCode(sentTo, box.code.value.trim(), codeType);
-        // si cambia de usuario la app se recarga sola; si es el mismo, se refresca
-        showAccount('Cuenta guardada');
-      } catch {
-        btn.disabled = false;
-        alertMsg('El código no es válido o ha caducado.');
-      }
-      return;
-    }
-    const email = box.email.value.trim();
     try {
-      await send(email);
+      await backend.account.changePassword(form.current.value, form.next.value);
+      showAccount('Contraseña cambiada');
     } catch (err) {
       btn.disabled = false;
-      const msg = {
-        email_taken: 'Ese email ya tiene cuenta. Usa “¿Ya tienes cuenta? Entrar”.',
-        no_account: 'No hay ninguna cuenta con ese email.',
-        rate_limited: 'Espera un minuto antes de pedir otro email.',
-      }[err.code];
-      return alertMsg(msg ?? 'No se ha podido enviar el email. Prueba otra vez.');
+      error.textContent = authMessage(err.code);
     }
-    sentTo = email;
-    box.innerHTML = `
-      <p class="sub">Te hemos enviado un email a <b>${esc(email)}</b>. Pulsa el enlace desde este ${DEVICE}, o escribe aquí el código si viene uno.</p>
-      <input name="code" required inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="Código">
-      <button class="secondary">Confirmar código</button>`;
   });
-  return box;
+  return form;
 }
 
 function renameForm(view, current) {
@@ -1486,6 +1543,7 @@ function showEndOverlay({ won, position, total, prize, ranking, legal, holes, ga
           <div class="xp-head"><b>+${gained.xp} XP</b><span>${levelUp ? `¡Nivel ${gained.level.level}!` : `Nivel ${gained.level.level}`}</span></div>
           <span class="bar"><i style="--to:${(gained.level.into / gained.level.need) * 100}%"></i></span>
         </div>
+        ${prestigeNote(gained)}
         ${pending ? `<p class="reward-note"><i></i>${pending === 1 ? 'Tienes 1 recompensa por reclamar' : `Tienes ${pending} recompensas por reclamar`}</p>` : ''}
         ${statsGrid(holes)}
         ${standingsTable(ranking, true)}
@@ -1760,7 +1818,8 @@ async function showOnlineResults(match) {
       ? `<div class="xp-card">
         <div class="xp-head"><b>+${gained.xp} XP</b><span>${gained.level.level > gained.levelBefore ? `¡Nivel ${gained.level.level}!` : `Nivel ${gained.level.level}`}</span></div>
         <span class="bar"><i style="--to:${(gained.level.into / gained.level.need) * 100}%"></i></span>
-      </div>`
+      </div>
+        ${prestigeNote(gained)}`
       : ''
     }
       ${standingsTable(ranking, !open)}
@@ -2107,9 +2166,18 @@ if (skinLab) {
 } else {
   app.innerHTML = '<main class="screen loading"><h1>Golf Cash Battle</h1><p class="sub">Conectando…</p></main>';
   createBackend().then((b) => {
+    if (b.mode === 'auth') {
+      // sin sesión: pantallas de entrada. Al entrar se recarga para arrancar limpio con la cuenta
+      mountAuth(app, b.auth, { recovery: b.recovery, guest: b.guest, onDone: () => location.replace(location.origin + location.pathname + location.hash) });
+      return;
+    }
     backend = b;
     ({ wallet, matches } = b);
-    if (b.account) progress.attach(b.user.id, b.account.profile?.progress, (s) => b.account.saveProgress(s));
+    if (b.account) {
+      progress.attach(b.user.id, b.account.profile?.progress, (s) => b.account.saveProgress(s), (id) => b.account.setFrame(id));
+      // hitos de ranking y marco elegido: pueden desbloquear bolas, que se ofrecen al acabar la próxima partida
+      b.account.myRanking().then((r) => progress.setServerStats(r)).catch(() => {});
+    }
     wallet.subscribe((n) => {
       const el = app.querySelector('.balance');
       if (el) el.innerHTML = `${coin(n)}<span class="plus">+</span>`;

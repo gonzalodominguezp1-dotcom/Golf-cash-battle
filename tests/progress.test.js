@@ -7,9 +7,11 @@ import { Bot } from '../src/game/bots.js';
 
 test('niveles por XP', () => {
   assert.equal(levelOf(0).level, 1);
-  assert.equal(levelOf(100).level, 2);
-  assert.equal(levelOf(259).level, 2);
-  assert.equal(levelOf(260).level, 3);
+  assert.equal(levelOf(199).level, 1);
+  assert.equal(levelOf(200).level, 2);
+  assert.equal(levelOf(399).level, 2);
+  assert.equal(levelOf(400).level, 3);
+  assert.equal(levelOf(30 * 200).level, 31);
 });
 
 test('ganar desbloquea skins y no se puede equipar una bloqueada', () => {
@@ -136,4 +138,18 @@ test('las skins nuevas se desbloquean con su desafío o nivel y no antes', () =>
   Object.assign(p.state, { bigWins: 5, matches: 150, birdies: 50, xp: 100000 });
   for (const id of ['antimatter_void', 'tormenta_voltaica', 'anima_errante', 'cronometro_laton', 'abyssal_tide']) assert.equal(p.equip(id), true, id);
   assert.equal(p.skin.id, 'abyssal_tide');
+});
+
+test('ganar una partida sube al menos un nivel, con entrada o en práctica', () => {
+  for (const entryFee of [0, 1, 10]) {
+    for (const lvl of [1, 20, 80]) {
+      const p = new Progress(null);
+      p.state.xp = 200 * (lvl - 1);
+      const r = p.recordMatch({ position: 1, won: true, entryFee, holes: [{ strokes: 3, par: 3 }] });
+      assert.ok(r.level.level >= r.levelBefore + 1, `entrada ${entryFee}, nivel ${lvl}`);
+    }
+  }
+  const p = new Progress(null);
+  const r = p.recordMatch({ position: 1, won: true, entryFee: 10, holes: [{ strokes: 3, par: 3 }] });
+  assert.ok(r.xp / 200 <= 1.6, 'una victoria normal no pasa de ~1,5 niveles');
 });

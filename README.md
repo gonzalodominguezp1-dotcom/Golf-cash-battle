@@ -54,14 +54,13 @@ Las reglas completas están en la [constitución del proyecto](02-DOCS/wiki/sdd/
 
 ## Backend (Supabase)
 
-Proyecto `golf-cash-battle` (`oyawgvqbmvtmlnyqwgdf`). Cada jugador entra como invitado (cuenta anónima) y recibe 100 créditos demo.
+Proyecto `golf-cash-battle` (`oyawgvqbmvtmlnyqwgdf`). Cada jugador crea una cuenta con email y contraseña (pantalla de registro al abrir la app) y recibe 100 créditos demo. La sesión queda guardada en el dispositivo.
 
 - **Tablas principales:** `wallets`, `transactions`, `matches`, `match_players`, `tiers`, `app_config`, `profiles`, `tournaments`, `tournament_entries`, `tournament_holes`, `shot_signals`, `player_risk`, `held_payouts`, `deposits`. RLS: cada usuario solo lee lo suyo y nadie escribe directamente.
 - **El saldo cambia solo dentro de funciones del servidor:** `join_match`, `submit_hole`, `finish_match`, `abandon_match`, `demo_deposit`, y para torneos `join_tournament`, `start_round`, `leave_tournament`, `tournament_status`, `my_tournaments`.
 - **Configuración en el panel de Supabase:**
-  - Authentication → Sign In / Providers: activar *Allow anonymous sign-ins* y *Allow manual linking*.
-  - URL Configuration: la dirección de la web (Vercel) como Site URL y en Redirect URLs.
-  - Para que el email traiga código además de enlace, añadir `{{ .Token }}` a las plantillas *Change email address* y *Magic link*.
+  - Lista completa de Auth (confirmar email, contraseñas, URLs, CAPTCHA, límites) en [02-DOCS/wiki/backend/supabase.md](02-DOCS/wiki/backend/supabase.md#configuración-en-el-panel-de-supabase).
+  - Auditoría de seguridad de la base de datos: ejecutar `supabase/audit/auth_security_audit.sql` en el SQL Editor (solo lee).
 
 ### Validación de golpes
 
@@ -71,8 +70,8 @@ Los rivales no ven las puntuaciones hasta terminar su ronda. Al final, todos hac
 
 ### Cuentas
 
-- Se empieza como invitado. Al añadir un email (pestaña Cuenta), la misma cuenta pasa a permanente y conserva saldo, nivel y skins.
-- Para entrar desde otro móvil se pide un enlace o código por email.
+- Registro y entrada con email y contraseña; hay que confirmar el email con el enlace del correo. "He olvidado mi contraseña" envía un enlace de recuperación.
+- La sesión se guarda en el dispositivo: no hace falta volver a entrar cada vez. El último email usado se recuerda; la contraseña nunca.
 - Perfil en `profiles` (nombre público y progreso), con las funciones `my_profile`, `set_username` y `save_progress`.
 
 ### Torneos

@@ -329,7 +329,7 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 }
 .tabbar button {
   display: flex; align-items: center; justify-content: center; background: none;
-  padding: 8px 16px; border-radius: 16px; font-family: var(--body); font-size: 13px; font-weight: 700;
+  padding: 8px 12px; border-radius: 16px; font-family: var(--body); font-size: 13px; font-weight: 700;
   color: var(--muted); transition: all 0.24s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
   overflow: hidden;
@@ -3052,3 +3052,41 @@ body.sk-noscroll { overflow: hidden; }
 .reward-note { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 12px 0 0; padding: 8px 12px; border-radius: 12px; font-weight: 800; font-size: 14px; color: var(--yellow); background: rgba(255, 210, 63, 0.12); box-shadow: 0 0 0 1px rgba(255, 210, 63, 0.3) inset; }
 .reward-note i { width: 8px; height: 8px; border-radius: 50%; background: var(--yellow); box-shadow: 0 0 8px var(--yellow); animation: pulse-dot 1.4s ease-in-out infinite; }
 @keyframes pulse-dot { 50% { opacity: 0.35; } }
+
+/* ---------- prestigio: marcos de avatar ---------- */
+.avatar-wrap.framed .avatar.big,
+.avatar.rank-avatar.framed {
+  box-shadow: 0 0 0 3px #090414, 0 0 0 6px var(--frame), 0 0 18px var(--frame-glow);
+}
+.frames { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 10px 0; }
+.frame-opt {
+  display: grid; justify-items: center; gap: 4px; padding: 12px 6px; border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04); border: 1.5px solid var(--line); color: inherit; cursor: pointer;
+}
+.frame-opt b { font-size: 13px; }
+.frame-opt small { color: var(--muted); font-size: 11px; font-weight: 700; }
+.frame-opt .frame-ring { width: 34px; height: 34px; border-radius: 50%; background: #120924; box-shadow: 0 0 0 3px #090414, 0 0 0 5px var(--frame), 0 0 12px var(--frame-glow); }
+.frame-opt.on { border-color: var(--frame); background: rgba(255, 255, 255, 0.09); }
+.frame-opt.locked { opacity: 0.45; cursor: default; }
+.frame-opt.locked .frame-ring { box-shadow: 0 0 0 3px #090414, 0 0 0 5px #4b5563; }
+.prestige-note i { background: var(--frame); }
+
+/* ---------- ranking ---------- */
+.rank-tabs { display: flex; gap: 6px; padding: 4px; border-radius: 14px; background: rgba(255, 255, 255, 0.05); margin-bottom: 8px; }
+.rank-tabs button { flex: 1; padding: 9px 6px; border-radius: 11px; background: none; color: var(--muted); font-weight: 800; font-size: 13px; }
+.rank-tabs button.on { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.rank-period { color: var(--muted); font-size: 12px; font-weight: 700; margin: 0 0 8px; }
+.rank-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.rank-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 14px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); }
+.rank-row.me { border-color: #ffd700; background: rgba(255, 215, 0, 0.08); }
+.rank-row.podium.p1 .rank-pos { color: #ffd700; }
+.rank-row.podium.p2 .rank-pos { color: #d3dbe6; }
+.rank-row.podium.p3 .rank-pos { color: #cd7f32; }
+.rank-pos { width: 28px; text-align: center; font-family: var(--display); font-size: 18px; }
+.rank-avatar { width: 38px; height: 38px; font-size: 16px; text-transform: uppercase; flex: none; margin: 0 6px; }
+.rank-name { flex: 1; min-width: 0; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank-name small, .rank-wins small { display: block; color: var(--muted); font-size: 11px; font-weight: 700; }
+.rank-wins { text-align: right; }
+.rank-wins b { font-family: var(--display); font-size: 18px; }
+.rank-empty { padding: 22px 12px; text-align: center; color: var(--muted); }
+.rank-mine { margin: 12px 0 0; padding: 10px 12px; border-radius: 12px; border: 1px dashed #ffd700; text-align: center; }

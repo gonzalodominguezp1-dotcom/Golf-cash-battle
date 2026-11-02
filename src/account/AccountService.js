@@ -1,14 +1,15 @@
 import { rpcError } from '../backend/supabase.js';
+import { AuthService } from './AuthService.js';
 
 /**
- * Cuenta del jugador en Supabase. Se empieza como invitado (cuenta anónima);
- * al añadir el email la misma cuenta pasa a ser permanente y conserva saldo,
- * nivel y skins. Para entrar en otro móvil se pide un enlace o código por email.
+ * Cuenta del jugador en Supabase: perfil, nombre público, progreso y verificación
+ * de identidad. Entrar y registrarse está en AuthService, que funciona sin sesión.
  */
 export class AccountService {
   constructor(db) {
     this.db = db;
     this.profile = null;
+    this.auth = new AuthService(db);
   }
 
   async #rpc(fn, args) {
@@ -31,26 +32,26 @@ export class AccountService {
     return this.#rpc('save_progress', { p_state: state });
   }
 
-  /** Invitado → cuenta con email. Llega un email con enlace (y código si la plantilla lo incluye). */
-  async register(email) {
-    const { error } = await this.db.auth.updateUser({ email }, { emailRedirectTo: here() });
-    if (error) throw authError(error);
+  /** Hitos de ranking que dan bolas y marco elegido. */
+  myRanking() {
+    return this.#rpc('my_ranking');
   }
 
-  /** Entrar en una cuenta que ya existe (otro móvil o tras cerrar sesión). */
-  async signIn(email) {
-    const { error } = await this.db.auth.signInWithOtp({ email, options: { shouldCreateUser: false, emailRedirectTo: here() } });
-    if (error) throw authError(error);
+  /** period: 'weekly' | 'monthly' | 'historic'. Devuelve { top: [...], me: { pos, wins } | null }. */
+  ranking(period) {
+    return this.#rpc('get_ranking', { p_period: period });
   }
 
-  /** Código de 6 cifras del email. type: 'email_change' al registrarse, 'email' al entrar. */
-  async verifyCode(email, token, type) {
-    const { error } = await this.db.auth.verifyOtp({ email, token, type });
-    if (error) throw authError(error);
+  setFrame(id) {
+    return this.#rpc('set_frame', { p_frame: id });
   }
 
-  async signOut() {
-    await this.db.auth.signOut();
+  changePassword(current, next) {
+    return this.auth.changePassword(current, next);
+  }
+
+  signOut() {
+    return this.auth.signOut();
   }
 
   /** Abre la verificación de identidad. { mode: 'stub' } o { mode, url } para ir al proveedor. */
@@ -76,14 +77,4 @@ export class AccountService {
 }
 
 const here = () => location.href.split('#')[0];
-
-function authError(error) {
-  const msg = (error?.code ?? error?.message ?? '').toLowerCase();
-  const e = new Error(msg);
-  if (/already|exists|registered/.test(msg)) e.code = 'email_taken';
-  else if (/rate|seconds|too many/.test(msg)) e.code = 'rate_limited';
-  else if (/expired|invalid|otp/.test(msg)) e.code = 'bad_code';
-  else if (/not found|signups not allowed/.test(msg)) e.code = 'no_account';
-  else e.code = 'unknown';
-  return e;
-}
+

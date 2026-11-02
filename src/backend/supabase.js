@@ -3,25 +3,32 @@ import { SupabaseWallet } from '../wallet/SupabaseWallet.js';
 import { SupabaseMatchService } from '../match/SupabaseMatchService.js';
 import { TournamentService } from '../match/TournamentService.js';
 import { AccountService } from '../account/AccountService.js';
+import { AuthService } from '../account/AuthService.js';
 
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL ?? 'https://oyawgvqbmvtmlnyqwgdf.supabase.co';
 // clave pública: solo deja llamar a lo que permiten RLS y las funciones
 export const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY ?? 'sb_publishable_-fSLfcF-N9H9V7XgcDCwsg_YtaqRsbe';
 
 /**
- * Entra con la sesión guardada (o una cuenta de invitado nueva) y monta los
- * servicios. Si cambia el usuario (enlace de email, cerrar sesión) se recarga
- * la app para empezar limpia con la cuenta nueva.
+ * Entra con la sesión guardada en el dispositivo y monta los servicios. Sin sesión
+ * (o con una de invitado de la versión anterior, o llegando desde el enlace de
+ * "olvidé mi contraseña") devuelve { mode: 'auth' } y la app enseña las pantallas
+ * de entrada. Si cambia el usuario (cerrar sesión, otra cuenta) se recarga la app
+ * para empezar limpia.
  */
 export async function connectSupabase() {
-  const db = createClient(SUPABASE_URL, SUPABASE_KEY);
-  let {
+  // PKCE: el enlace del correo trae un código de un solo uso que solo canjea este navegador
+  const db = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { flowType: 'pkce' } });
+  // antes de getSession(): el aviso del enlace de recuperación sale mientras arranca el cliente
+  let recovery = false;
+  db.auth.onAuthStateChange((event) => {
+    if (event === 'PASSWORD_RECOVERY') recovery = true;
+  });
+  const {
     data: { session },
   } = await db.auth.getSession();
-  if (!session) {
-    const { data, error } = await db.auth.signInAnonymously();
-    if (error) throw error;
-    session = data.session;
+  if (!session || session.user.is_anonymous || recovery) {
+    return { mode: 'auth', db, auth: new AuthService(db), recovery, guest: Boolean(session?.user.is_anonymous) && !recovery };
   }
   const uid = session.user.id;
   db.auth.onAuthStateChange((event, s) => {
