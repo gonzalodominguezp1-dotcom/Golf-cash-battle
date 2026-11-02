@@ -1,7 +1,9 @@
 ---
 author: la-chaqueta-bionica
 branch: la-chaqueta-bionica
-status: in-progress
+status: done
+merged: 2026-11-02
+merged_by: Chakets
 ---
 
 # Login y registro con email y contraseña
@@ -28,4 +30,4 @@ Pantalla de entrada obligatoria (login, registro, recuperar contraseña) con Sup
 - Con PKCE, supabase-js 2.118 emite `PASSWORD_RECOVERY` al canjear el código (`GoTrueClient.ts`, `_exchangeCodeForSession`).
 
 ## Next
-Revisar los ajustes de Auth del panel, correr la auditoría SQL y probar un registro completo con un email propio.
+Fusionado en main el 2026-11-02 (0af27a4).
