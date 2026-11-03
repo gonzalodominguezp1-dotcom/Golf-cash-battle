@@ -250,3 +250,9 @@
 /* acciones: misma rejilla y mismo tamaño para todos los botones */
 .sr-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
 .sr-actions button { width: 100%; max-width: none; flex: none; }
+
+/* bola en vivo (calidad máxima, giro continuo) que sustituye a la imagen al terminar la revelación */
+.sr-live { position: absolute; inset: -14%; z-index: 1; }
+.sr-live .sk-insp { height: 100%; min-height: 0; background: transparent; border: 0; box-shadow: none; }
+.sr-live .sk-stage { width: 100%; height: 100%; max-height: none; min-height: 0; aspect-ratio: auto; background: transparent; }
+.sr-live-on .sr-ball img { visibility: hidden; animation: none; }

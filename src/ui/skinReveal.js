@@ -5,6 +5,8 @@ import { TIERS } from '../progress/skins.js';
 import { rarePatternOf } from '../progress/inventory.js';
 import { upgradeImg } from './skinThumbs.js';
 
+const loadInspector = () => import('./skinInspector.js');
+
 // Animación de reveal/desbloqueo de skins (P10).
 //   await showSkinReveal(skins, { progress })
 // Una secuencia por skin, de menor a mayor tier (la mejor al final). Un toque (o Esc) salta al final
@@ -290,9 +292,24 @@ export function showSkinReveal(skins, { progress = null } = {}) {
       });
       nextBtn.addEventListener('click', () => (last ? finish() : play(i + 1)));
 
+      // Al terminar la secuencia, la imagen estática se sustituye por la bola en vivo (calidad máxima, girando 360°).
+      const mountLive = () => {
+        if (inspector || calm) return;
+        const holder = document.createElement('div');
+        holder.className = 'sr-live';
+        root.querySelector('.sr-ball').append(holder);
+        loadInspector().then(({ createSkinInspector }) => {
+          if (!holder.isConnected) return;
+          const api = createSkinInspector(holder, { skin, instance: inst ?? undefined, mode: 'panel', bare: true, autoSpin: true, quality: 'high' });
+          inspector = { api, el: holder };
+          root.classList.add('sr-live-on');
+        }).catch(() => holder.remove());
+      };
+
       const settle = () => {
         done = true;
         stage.classList.add('sr-done');
+        mountLive();
         (list.length > 1 && !last ? nextBtn : equipBtn && !equipBtn.disabled ? equipBtn : nextBtn).focus({ preventScroll: true });
       };
 
