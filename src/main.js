@@ -2407,11 +2407,11 @@ async function showLiveResults(live) {
       ${match.status === 'settled' ? `<p class="legal">Bote ${fmt(match.pot)} · comisión ${fmt(match.commission)} · premio ${fmt(match.prize)} · los bots no cuentan</p>` : ''}
       ${open ? '<p class="legal">Si alguien se ha desconectado, en menos de un minuto se le da por terminado. Si sales, el premio te llega igual al saldo.</p>' : ''}
       <div class="row">
-        <button class="primary again">${open ? 'Jugar otra' : 'Revancha'}</button>
-        <button class="ghost" data-go="lobby">Lobby</button>
+        ${open ? '' : '<button class="primary again">Revancha</button>'}
+        <button class="${open ? 'primary' : 'ghost'}" data-go="lobby">Lobby</button>
       </div>
     </main>`);
-  view.querySelector('.again').addEventListener('click', () => startMatch(tier, open ? null : match.id));
+  view.querySelector('.again')?.addEventListener('click', () => startMatch(tier, match.id));
   const key = `${match.status}:${waiting.length}`;
   await shell(view, { nav: false });
   if (!open) return stopLive();
