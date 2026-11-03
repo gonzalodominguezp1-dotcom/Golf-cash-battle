@@ -32,9 +32,9 @@ alter table public.ranking_closed enable row level security;
 
 -- Nivel a partir de la XP: cada nivel cuesta 200 (XP_PER_LEVEL en src/progress/Progress.js).
 create or replace function public._level_of_xp(p_xp numeric)
-returns int language sql immutable set search_path = '' as $
+returns int language sql immutable set search_path = '' as $$
   select 1 + floor(greatest(p_xp, 0) / 200)::int
-$;
+$$;
 
 -- Marco que se luce: el elegido si ya se alcanzó, si no el más alto alcanzado, o null.
 create or replace function public._frame_for(p_frame text, p_level int)
