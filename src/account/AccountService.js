@@ -46,6 +46,29 @@ export class AccountService {
     return this.#rpc('set_frame', { p_frame: id });
   }
 
+  /** avatar en formato de servidor (ver toWire en progress/avatar.js), o null para quitarlo. */
+  setAvatar(wire) {
+    return this.#rpc('set_avatar', { p_avatar: wire });
+  }
+
+  /** { friends: [{ name, avatar, level, frame }], incoming: [{ name }], outgoing: [{ name }] } */
+  friends() {
+    return this.#rpc('my_friends');
+  }
+
+  /** Devuelve 'pending' o 'accepted'. */
+  addFriend(username) {
+    return this.#rpc('add_friend', { p_username: username });
+  }
+
+  respondFriend(username, accept) {
+    return this.#rpc('respond_friend', { p_username: username, p_accept: accept });
+  }
+
+  removeFriend(username) {
+    return this.#rpc('remove_friend', { p_username: username });
+  }
+
   changePassword(current, next) {
     return this.auth.changePassword(current, next);
   }
@@ -77,4 +100,4 @@ export class AccountService {
 }
 
 const here = () => location.href.split('#')[0];
-
+

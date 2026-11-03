@@ -1,5 +1,6 @@
 // Avatar del jugador: un icono de la lista o una imagen propia (máx. 2,5 MB).
-// Es cosmético y se guarda en este dispositivo, por cuenta.
+// Es cosmético. Se guarda en la cuenta (profiles.avatar) y se deja una copia en este
+// dispositivo, por cuenta, para pintarlo sin esperar a la red.
 
 export const MAX_AVATAR_BYTES = 2.5 * 1024 * 1024;
 export const AVATAR_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
@@ -31,6 +32,15 @@ export function checkAvatarFile(file) {
 
 const isImageUrl = (v) => typeof v === 'string' && /^data:image\/(png|jpeg|webp);base64,/.test(v) && v.length < 600_000;
 
+/** Formato en el servidor: 'icon:<id>', la imagen como data URL, o null si no hay nada. */
+export const toWire = (v) => (v.image ? v.image : v.icon ? `icon:${v.icon}` : null);
+
+export function fromWire(s) {
+  if (typeof s !== 'string') return { icon: null, image: null };
+  if (s.startsWith('icon:')) return { icon: iconById(s.slice(5))?.id ?? null, image: null };
+  return { icon: null, image: isImageUrl(s) ? s : null };
+}
+
 const defaultStorage = () => {
   try {
     return globalThis.localStorage;
@@ -39,12 +49,43 @@ const defaultStorage = () => {
   }
 };
 
-/** Avatar elegido, guardado por cuenta. Sin nada elegido: { icon: null, image: null }. */
+/**
+ * Avatar elegido, guardado por cuenta. Sin nada elegido: { icon: null, image: null }.
+ * onChange(avatar) lo pone quien quiera subir cada cambio al servidor (puede devolver una promesa).
+ */
 export class AvatarStore {
   constructor(owner, storage = defaultStorage()) {
     this.key = `gcb.avatar.v1.${owner ?? 'guest'}`;
+    this.syncedKey = `${this.key}.synced`;
     this.storage = storage;
     this.memory = { icon: null, image: null };
+    this.onChange = null;
+  }
+
+  /**
+   * Junta lo que hay en el servidor con lo local al entrar. Manda el servidor. Si el servidor no
+   * tiene nada y es la primera vez en esta cuenta, sube el avatar que ya había en el dispositivo
+   * (los de antes de que se guardaran en la cuenta).
+   */
+  hydrate(remote) {
+    const markSynced = () => {
+      try {
+        this.storage?.setItem(this.syncedKey, '1');
+      } catch {}
+    };
+    const server = fromWire(remote);
+    if (server.icon || server.image) {
+      this.#store(server);
+      markSynced();
+      return;
+    }
+    let synced = null;
+    try {
+      synced = this.storage?.getItem(this.syncedKey);
+    } catch {}
+    const local = this.get();
+    if (synced || !(local.icon || local.image)) return markSynced();
+    Promise.resolve(this.onChange?.(local)).then(markSynced, () => {});
   }
 
   get() {
@@ -55,10 +96,18 @@ export class AvatarStore {
     return { ...this.memory };
   }
 
-  #put(v) {
+  #store(v) {
     this.memory = v;
     try {
       this.storage?.setItem(this.key, JSON.stringify(v));
+    } catch {}
+    return v;
+  }
+
+  #put(v) {
+    this.#store(v);
+    try {
+      Promise.resolve(this.onChange?.(v)).catch(() => {});
     } catch {}
     return v;
   }
