@@ -7,9 +7,16 @@ const KEY = 'gcb.progress.v1';
 const EMPTY = { xp: 0, matches: 0, wins: 0, streak: 0, bestStreak: 0, birdies: 0, aces: 0, tiebreakWins: 0, bigWins: 0, equipped: 'classic', framePick: null, rankStats: {} };
 const fresh = () => ({ ...EMPTY, inventory: {} });
 
-/** XP para pasar del nivel n al n+1: fija, para que ganar una partida sea siempre subir 1 nivel o más. */
-export const XP_PER_LEVEL = 200;
-export const xpForLevel = () => XP_PER_LEVEL;
+/**
+ * XP para pasar del nivel n al n+1: crece 20 por nivel (200 en el 1, ~680 en el 25, ~3.200 en el 150).
+ * El servidor repite la cuenta en public._level_of_xp (migración 20261103120000_xp_curve.sql): si cambia aquí, cambia allí.
+ */
+export const XP_BASE = 200;
+export const XP_STEP = 20;
+export const xpForLevel = (n) => XP_BASE + XP_STEP * (n - 1);
+
+/** XP acumulada necesaria para llegar al nivel n. */
+export const xpToReach = (n) => (n - 1) * XP_BASE + (XP_STEP * (n - 1) * (n - 2)) / 2;
 
 export function levelOf(xp) {
   let level = 1;

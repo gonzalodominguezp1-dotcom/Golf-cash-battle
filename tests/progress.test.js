@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Progress, levelOf } from '../src/progress/Progress.js';
+import { Progress, levelOf, xpForLevel, xpToReach } from '../src/progress/Progress.js';
 import { TIEBREAK_COURSE } from '../src/game/courses.js';
 import { segmentsOf, step, isMoving } from '../src/game/physics.js';
 import { Bot } from '../src/game/bots.js';
@@ -9,9 +9,21 @@ test('niveles por XP', () => {
   assert.equal(levelOf(0).level, 1);
   assert.equal(levelOf(199).level, 1);
   assert.equal(levelOf(200).level, 2);
-  assert.equal(levelOf(399).level, 2);
-  assert.equal(levelOf(400).level, 3);
-  assert.equal(levelOf(30 * 200).level, 31);
+  assert.equal(levelOf(419).level, 2);
+  assert.equal(levelOf(420).level, 3); // el nivel 2 cuesta 220
+  assert.equal(levelOf(xpToReach(25)).level, 25);
+  assert.equal(levelOf(xpToReach(25) - 1).level, 24);
+  assert.equal(levelOf(xpToReach(150)).level, 150);
+  assert.equal(levelOf(xpToReach(150)).into, 0);
+});
+
+test('el coste por nivel crece y xpToReach cuadra con la suma', () => {
+  let sum = 0;
+  for (let n = 1; n <= 150; n++) {
+    assert.equal(xpToReach(n), sum, 'nivel ' + n);
+    assert.ok(xpForLevel(n + 1) > xpForLevel(n));
+    sum += xpForLevel(n);
+  }
 });
 
 test('ganar desbloquea skins y no se puede equipar una bloqueada', () => {
@@ -140,16 +152,17 @@ test('las skins nuevas se desbloquean con su desafío o nivel y no antes', () =>
   assert.equal(p.skin.id, 'abyssal_tide');
 });
 
-test('ganar una partida sube al menos un nivel, con entrada o en práctica', () => {
+test('ganar una partida en el nivel 1 sube al menos un nivel, con entrada o en práctica', () => {
   for (const entryFee of [0, 1, 10]) {
-    for (const lvl of [1, 20, 80]) {
-      const p = new Progress(null);
-      p.state.xp = 200 * (lvl - 1);
-      const r = p.recordMatch({ position: 1, won: true, entryFee, holes: [{ strokes: 3, par: 3 }] });
-      assert.ok(r.level.level >= r.levelBefore + 1, `entrada ${entryFee}, nivel ${lvl}`);
-    }
+    const p = new Progress(null);
+    const r = p.recordMatch({ position: 1, won: true, entryFee, holes: [{ strokes: 3, par: 3 }] });
+    assert.ok(r.level.level >= r.levelBefore + 1, `entrada ${entryFee}`);
   }
-  const p = new Progress(null);
-  const r = p.recordMatch({ position: 1, won: true, entryFee: 10, holes: [{ strokes: 3, par: 3 }] });
-  assert.ok(r.xp / 200 <= 1.6, 'una victoria normal no pasa de ~1,5 niveles');
+});
+
+test('ganar da más XP que perder y una victoria normal no pasa de ~1,5 niveles al empezar', () => {
+  const win = new Progress(null).recordMatch({ position: 1, won: true, entryFee: 10, holes: [{ strokes: 3, par: 3 }] });
+  const loss = new Progress(null).recordMatch({ position: 2, won: false, entryFee: 10, holes: [{ strokes: 3, par: 3 }] });
+  assert.ok(win.xp > loss.xp);
+  assert.ok(win.xp / xpForLevel(1) <= 1.6);
 });

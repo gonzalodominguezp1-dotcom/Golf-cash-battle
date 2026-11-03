@@ -1,11 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Progress } from '../src/progress/Progress.js';
+import { Progress, xpToReach } from '../src/progress/Progress.js';
 import { FRAMES, frameFor, framesUnlocked } from '../src/progress/prestige.js';
 import { CHALLENGES, SKINS } from '../src/progress/skins.js';
 
-// XP acumulada para llegar al nivel n (200 por nivel).
-const xpAt = (n) => 200 * (n - 1);
+const xpAt = xpToReach;
 
 test('hay seis marcos, en los niveles 25-50-75-100-125-150', () => {
   assert.deepEqual(FRAMES.map((f) => f.level), [25, 50, 75, 100, 125, 150]);
