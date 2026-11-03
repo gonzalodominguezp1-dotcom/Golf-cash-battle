@@ -12,6 +12,7 @@ import {
   setupCyberpunkEnvironment,
   buildCyberCity,
 } from './cyberpunkEnvironment.js';
+import { addGrassField, floraOf, groundDetailTexture, makeBush, makeLilyPad, makeReeds, makeRiver, TERRAIN_FOCUS, warpCoord } from './flora.js';
 import { lushMountains, makeGrassClump, makeLushCloud, makeLushBush, makeLushRock, makeLushTree, meadowGroundTexture } from './lushEnvironment.js';
 
 // tiempo compartido por los sombreadores animados (viento, agua)
@@ -130,12 +131,27 @@ export function buildEnvironment(scene, course, theme, rng) {
   }
 
   // --- terreno: colinas suaves con color por altura ---
-  const size = 220, seg = lush ? 180 : 110;
+  const flora = floraOf(theme);
+  const size = 220, seg = Math.round((lush ? 180 : 130) * q.terrainSeg);
   const geo = new THREE.PlaneGeometry(size, size, seg, seg);
   geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position;
   const volcano = theme.caldera ? volcanoShape(course) : null;
-  const heightAt = (x, z) => {
+  // malla más fina cerca del hoyo y más gruesa hacia el horizonte (mismos triángulos)
+  const focus = !isNeon && !volcano;
+  if (focus) {
+    const uv = geo.attributes.uv;
+    for (let i = 0; i < pos.count; i++) {
+      const x = warpCoord(pos.getX(i) / (size / 2), size / 2), z = warpCoord(pos.getZ(i) / (size / 2), size / 2);
+      pos.setX(i, x);
+      pos.setZ(i, z);
+      uv.setXY(i, x / size + 0.5, 0.5 - z / size);
+    }
+  }
+  // río que cruza el paisaje (solo en los temas donde pega): se excava en el terreno
+  const river = makeRiver(bounds, theme, rng, { grounded, enabled: flora.river && !volcano && !theme.lava });
+  const waterY = river?.grounded ? river.y : theme.waterLevel;
+  const baseHeight = (x, z) => {
     // fuera del volcán: llanura de ceniza con lomas al pie de la montaña
     if (volcano) return FOOT - 0.4 + fbm(x * 0.05, z * 0.05) * 5 * THREE.MathUtils.smoothstep(volcano.q(x, z), 2.8, 4.5);
     const d = distToBounds(bounds, x, z);
@@ -167,11 +183,12 @@ export function buildEnvironment(scene, course, theme, rng) {
     const ramp = THREE.MathUtils.smoothstep(d, 2, 16);
     return theme.terrainOffset * (1 - ramp * 0.3) - 0.55 + fbm(x * 0.06, z * 0.06) * 9 * ramp - 2.2 * ramp + ramp * ramp * 1.5;
   };
+  const heightAt = river ? (x, z) => river.carve(x, z, baseHeight(x, z)) : baseHeight;
   for (let i = 0; i < pos.count; i++) pos.setY(i, heightAt(pos.getX(i), pos.getZ(i)));
   if (grounded && !course.noCup) {
     // sin losa debajo, el terreno se vería dentro del agujero: se hunden los
     // vértices de las celdas que tocan el hoyo (quedan tapados por el green)
-    const [hx, hz] = course.cup, cell = size / seg + CUP_R + 0.02;
+    const [hx, hz] = course.cup, cell = (size / seg) * (focus ? TERRAIN_FOCUS : 1) + CUP_R + 0.02;
     for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getX(i) - hx) < cell && Math.abs(pos.getZ(i) - hz) < cell) pos.setY(i, -0.6);
   }
   const colors = new Float32Array(pos.count * 3);
@@ -193,7 +210,7 @@ export function buildEnvironment(scene, course, theme, rng) {
       continue;
     }
     // la orilla pasa a arena con un degradado, no de golpe
-    const shore = THREE.MathUtils.smoothstep(y, theme.waterLevel + 0.2, theme.waterLevel + 0.7);
+    const shore = THREE.MathUtils.smoothstep(y, waterY + 0.2, waterY + 0.7);
     if (y < 2.5) c.copy(mid).lerp(high, THREE.MathUtils.clamp((y - 0.5) / 3, 0, 1));
     else c.copy(high).lerp(new THREE.Color(0x8a8f86), THREE.MathUtils.clamp((y - 4) / 4, 0, 0.7));
     c.lerp(low, 1 - shore);
@@ -215,7 +232,9 @@ export function buildEnvironment(scene, course, theme, rng) {
       })
     : lush
     ? new THREE.MeshStandardMaterial({ vertexColors: true, map: meadowGroundTexture(), roughness: 0.95 })
-    : new THREE.MeshLambertMaterial({ vertexColors: true });
+    : new THREE.MeshLambertMaterial({ vertexColors: true, map: flora.ground ? groundDetailTexture(flora.ground) : null });
+  // la textura de detalle se repite cada ~3 m (con la malla deformada, las UV van en metros)
+  if (terrainMat.map && !isNeon) terrainMat.map.repeat.set(size / 3, size / 3);
   const terrain = new THREE.Mesh(geo, terrainMat);
   terrain.receiveShadow = true;
   scene.add(terrain);
@@ -248,17 +267,21 @@ export function buildEnvironment(scene, course, theme, rng) {
           opacity: 0.88,
           flatShading: true,
         })
-      : new THREE.MeshPhongMaterial({ color: theme.water ?? 0x2bb3e6, shininess: 110, specular: 0xffffff, transparent: true, opacity: 0.86, flatShading: true });
+      : new THREE.MeshPhongMaterial({ color: theme.water ?? (theme.sunIntensity < 2 ? 0x1b5f86 : 0x2bb3e6), shininess: 110, specular: 0xffffff, transparent: true, opacity: 0.86, flatShading: true });
     waterShader(waterMat, theme);
     const water = new THREE.Mesh(waterGeo, waterMat);
     water.position.y = theme.waterLevel;
-    // a ras de suelo el terreno no baja hasta el agua: no se dibuja
-    if (!grounded) scene.add(water);
+    // a ras de suelo el terreno no baja hasta el agua: no se dibuja (salvo por el cauce del río)
+    if (river?.grounded) water.position.y = river.y;
+    if (!grounded || river) scene.add(water);
     if (theme.lava) animated.push((t) => (water.material.emissiveIntensity = 0.9 + Math.sin(t * 1.7) * 0.25));
     else if (isNeon) animated.push((t) => (water.material.emissiveIntensity = 0.22 + Math.sin(t * 2.2) * 0.06));
   }
 
   // --- decorado ---
+  // lo que queda lejos de la pista no proyecta sombra (no entra en la caja de la sombra)
+  // y, en los temas lisos, se dibuja con menos detalle
+  const FAR = 15;
   const place = (minD, maxD, tries, fn) => {
     for (let i = 0; i < Math.round(tries * q.decor); i++) {
       const x = (bounds.minX + bounds.maxX) / 2 + (rng() - 0.5) * 2 * (maxD + 8);
@@ -266,11 +289,15 @@ export function buildEnvironment(scene, course, theme, rng) {
       const d = distToBounds(bounds, x, z);
       const y = heightAt(x, z);
       if (d < minD || d > maxD) continue;
-      // nada bajo el agua, ni dentro o encima del volcán
-      if (volcano ? volcano.q(x, z) < 2.9 : y < theme.waterLevel + 0.25) continue;
+      // nada bajo el agua, ni dentro o encima del volcán, ni en el cauce del río
+      if (volcano ? volcano.q(x, z) < 2.9 : y < waterY + 0.25) continue;
+      if (river && river.dist(x, z) < river.w + 1.1) continue;
+      const before = decor.children.length;
       fn(x, y, z, d);
+      if (d > FAR) for (let k = before; k < decor.children.length; k++) decor.children[k].traverse((o) => (o.castShadow = false));
     }
   };
+  const detail = (d) => (d > FAR ? Math.max(0, q.lod - 1) : q.lod);
 
   if (isNeon) {
     // Props perimetrales minimalistas, elegantes y bien separados del campo
@@ -291,14 +318,14 @@ export function buildEnvironment(scene, course, theme, rng) {
     const grass = addWind(new THREE.MeshStandardMaterial({ color: new THREE.Color(theme.groundHigh).multiplyScalar(0.9), vertexColors: true, roughness: 0.9, side: THREE.DoubleSide }), windUniforms, WIND * 3);
     const [tx, tz] = course.tee;
     const clear = (x, z) => !grounded || Math.hypot(x - tx, z - tz) > 9;
-    place(grounded ? 4.5 : 2.2, 40, 140, (x, y, z) => {
+    place(grounded ? 4.5 : 2.2, 40, 140, (x, y, z, d) => {
       if (!clear(x, z)) return;
-      const tree = makeLushTree(theme.trees[Math.floor(rng() * theme.trees.length)], rng, x, y, z, leaves);
+      const tree = makeLushTree(theme.trees[Math.floor(rng() * theme.trees.length)], rng, x, y, z, leaves, detail(d));
       tree.userData.swayRoot = true;
       decor.add(tree);
     });
-    place(grounded ? 3.2 : 2, 22, 60, (x, y, z) => clear(x, z) && decor.add(makeLushBush(rng, x, y, z, leaves)));
-    place(grounded ? 2.8 : 1.8, 30, 34, (x, y, z) => clear(x, z) && decor.add(makeLushRock(rng, x, y, z, theme.groundLow)));
+    place(grounded ? 3.2 : 2, 22, 60, (x, y, z, d) => clear(x, z) && decor.add(makeLushBush(rng, x, y, z, leaves, detail(d))));
+    place(grounded ? 2.8 : 1.8, 30, 34, (x, y, z, d) => clear(x, z) && decor.add(makeLushRock(rng, x, y, z, theme.groundLow, detail(d))));
     if (theme.flowers) place(grounded ? 1.6 : 1.2, 12, 140, (x, y, z) => decor.add(makeFlower(rng, x, y, z)));
     place(grounded ? 1.6 : 1, 16, 220, (x, y, z) => decor.add(makeGrassClump(rng, x, y, z, grass)));
   } else {
@@ -314,6 +341,12 @@ export function buildEnvironment(scene, course, theme, rng) {
       decor.add(tree);
     });
     place(grounded ? 2.8 : 1.8, 30, 40, (x, y, z) => clear(x, z) && decor.add(makeRock(rng, x, y, z)));
+    // arbustos y grupitos de piedras junto a la pista: el paisaje no queda pelado
+    if (flora.ground === 'grass') place(grounded ? 2.2 : 1.4, 14, 55, (x, y, z) => clear(x, z) && decor.add(makeBush(rng, x, y, z, leaves ?? leafMats)));
+    place(grounded ? 2.2 : 1.3, 10, 16, (x, y, z) => {
+      if (!clear(x, z)) return;
+      for (let k = 0; k < 3; k++) decor.add(makeRock(rng, x + (rng() - 0.5) * 1.2, y - 0.05, z + (rng() - 0.5) * 1.2, 0.45));
+    });
     if (theme.flowers) place(grounded ? 1.6 : 1.2, 12, 110, (x, y, z) => decor.add(makeFlower(rng, x, y, z)));
     place(grounded ? 1.6 : 1, 14, 90, (x, y, z) => decor.add(makeTuft(rng, x, y, z, theme)));
     if (theme.lanterns) {
@@ -336,6 +369,47 @@ export function buildEnvironment(scene, course, theme, rng) {
       });
     }
   }
+  // --- orillas del río: piedras, juncos y nenúfares (solo cerca: de lejos no se ven) ---
+  if (river) {
+    const greenBank = flora.ground === 'grass';
+    const rockAt = (x, y, z) => (lush ? makeLushRock(rng, x, y, z, theme.groundLow, 0) : makeRock(rng, x, y, z, 0.7));
+    const reach = 46 * Math.max(0.6, q.decor);
+    for (let t = -reach; t < reach; t += 1.6) {
+      for (const sideK of [-1, 1]) {
+        const r = rng();
+        const lat = sideK * (river.w + 0.15 + rng() * 1.1);
+        const [x, z] = river.along(t + (rng() - 0.5), lat);
+        const d = distToBounds(bounds, x, z);
+        if (d < 1.5 || r > 0.62 * q.decor + 0.15) continue;
+        const y = heightAt(x, z);
+        const before = decor.children.length;
+        if (r < 0.22) decor.add(rockAt(x, Math.max(y, river.y - 0.1), z));
+        else if (greenBank && y > river.y - 0.05) decor.add(makeReeds(rng, x, y, z));
+        if (d > FAR) for (let k = before; k < decor.children.length; k++) decor.children[k].traverse((o) => (o.castShadow = false));
+      }
+      // nenúfares en los remansos
+      if (greenBank && rng() < 0.16 * q.decor + 0.04) {
+        const [x, z] = river.along(t, (rng() - 0.5) * (river.w * 1.2));
+        decor.add(makeLilyPad(rng, x, river.y, z));
+      }
+    }
+  }
+
+  // --- hierba: miles de briznas instanciadas alrededor de la pista ---
+  const [tx0, tz0] = course.tee;
+  const grassField = !volcano && flora.grass > 0 && q.grass > 0
+    ? addGrassField(scene, {
+        bounds,
+        heightAt,
+        rng,
+        density: flora.grass * q.grass,
+        tint: flora.tint ?? [new THREE.Color(theme.groundMid).getHex(), new THREE.Color(theme.groundHigh).offsetHSL(0, 0.06, 0.1).getHex()],
+        uniforms: windUniforms,
+        // fuera del agua y del cauce, y sin tapar el tee (la cámara está ahí detrás)
+        ok: (x, z, y) => y > waterY + 0.18 && (!river || river.dist(x, z) > river.w + 0.3) && Math.hypot(x - tx0, z - tz0) > 1.2,
+      })
+    : null;
+
   if (volcano) volcanoShell(scene, course, volcano, animated);
   else if (theme.lava) volcanoBackdrop(scene, course, bounds, heightAt, animated, rng);
   if (theme.mountains) lush ? lushMountains(scene, theme.mountains, theme.skyHorizon, rng) : distantMountains(scene, theme.mountains, rng);
@@ -343,6 +417,7 @@ export function buildEnvironment(scene, course, theme, rng) {
   // --- nubes ---
   // nubes de algodón (solo para temas naturales, no en neón cyberpunk)
   if (theme.clouds && !isNeon) {
+    const cloudDetail = [2, 3, 4][q.lod];
     // de día (lowClouds): más bajas, más gordas y de un blanco que apenas se sombrea
     const low = !!theme.lowClouds;
     const cloudMat = new THREE.MeshLambertMaterial({ color: theme.clouds, emissive: theme.clouds, emissiveIntensity: low ? 0.45 : 0.3 });
@@ -350,7 +425,7 @@ export function buildEnvironment(scene, course, theme, rng) {
     // decorado suave: nubes lisas y altas, que no se apoyan en el horizonte
     const lushCloudMat = lush ? new THREE.MeshLambertMaterial({ color: theme.clouds, emissive: theme.clouds, emissiveIntensity: 0.55, vertexColors: true }) : null;
     for (let i = 0; i < 12 && lush; i++) {
-      const g = makeLushCloud(rng, lushCloudMat);
+      const g = makeLushCloud(rng, lushCloudMat, cloudDetail);
       const a = rng() * Math.PI * 2, r = 55 + rng() * 55;
       g.position.set(Math.cos(a) * r, 24 + rng() * 16, Math.sin(a) * r);
       g.userData.speed = 0.4 + rng() * 0.6;
@@ -430,8 +505,16 @@ export function buildEnvironment(scene, course, theme, rng) {
     });
   }
 
-  bakeStatic(decor, scene);
-  return { sun, sunDir, shadowAnchor, update: (t, dt) => animated.forEach((f) => f(t, dt)) };
+  bakeStatic(decor, scene, { center: new THREE.Vector3((bounds.minX + bounds.maxX) / 2, 0, (bounds.minZ + bounds.maxZ) / 2) });
+  return {
+    sun,
+    sunDir,
+    shadowAnchor,
+    river,
+    update: (t, dt) => animated.forEach((f) => f(t, dt)),
+    // trozos de hierba lejanos: fuera
+    lod: (cam) => grassField?.update(cam),
+  };
 }
 
 const WIND = 0.025;
@@ -597,8 +680,8 @@ function makeTree(kind, rng, x, y, z, leaves = leafMats) {
 }
 
 const rockMat = new THREE.MeshLambertMaterial({ color: 0x9aa3a0, flatShading: true });
-function makeRock(rng, x, y, z) {
-  const m = new THREE.Mesh(lumpy(new THREE.IcosahedronGeometry(0.3 + rng() * 0.6, 1), rng, 0.22), rockMat);
+function makeRock(rng, x, y, z, size = 1) {
+  const m = new THREE.Mesh(lumpy(new THREE.IcosahedronGeometry((0.3 + rng() * 0.6) * size, 1), rng, 0.22), rockMat);
   m.position.set(x, y + 0.1, z);
   m.scale.set(1, 0.6 + rng() * 0.4, 1 + rng() * 0.4);
   m.rotation.set(rng(), rng() * 3, rng());

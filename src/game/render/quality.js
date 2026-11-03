@@ -13,18 +13,28 @@ export const QUALITY_NAMES = { low: 'Bajo', medium: 'Medio', high: 'Alto' };
 // - dimpleRes: resolución {w, h} del mapa normal de hoyuelos.
 // - rain: gotas de la lluvia del hoyo 15 (cyber2078); 0 = sin lluvia (una sola malla).
 // - puddles: charcos estáticos sobre el suelo del campo del hoyo 15 (0 = ninguno; una sola malla).
+// - minPixelRatio: hasta dónde puede bajar la resolución el gobernador si el móvil no llega
+//   (resolutionGovernor.js); pixelRatio es el máximo.
+// - msaa: muestras de antialias de la imagen intermedia del resplandor (0 = sin).
+// - softShadows: sombras PCF suaves (caras) o PCF normales.
+// - grass: densidad de las briznas de hierba instanciadas (0 = ninguna); flora.js.
+// - lod: detalle de árboles y rocas lisos (0 bajo, 1 medio, 2 alto); de lejos siempre bajan un punto.
+// - terrainSeg: factor de subdivisión del terreno de fondo.
 // Ni la física ni `quality()` cambian la simulación.
 const PRESETS = {
   low: {
-    pixelRatio: 1, shadows: false, shadowRes: 1024, bloom: false, decor: 0.45, texScale: 0.5, maxLights: 0, env: false,
+    pixelRatio: 1, minPixelRatio: 0.65, shadows: false, shadowRes: 1024, softShadows: false, bloom: false, msaa: 0,
+    decor: 0.45, texScale: 0.5, maxLights: 0, env: false, grass: 0.3, lod: 0, terrainSeg: 0.55,
     skinFx: 'low', ballSegments: { w: 24, h: 16 }, dimpleRes: { w: 512, h: 256 }, rain: 0, puddles: 0,
   },
   medium: {
-    pixelRatio: 1.5, shadows: true, shadowRes: 2048, bloom: true, decor: 0.75, texScale: 1, maxLights: 4, env: true,
+    pixelRatio: 1.5, minPixelRatio: 0.8, shadows: true, shadowRes: 1024, softShadows: false, bloom: true, msaa: 2,
+    decor: 0.75, texScale: 1, maxLights: 3, env: true, grass: 0.65, lod: 1, terrainSeg: 0.75,
     skinFx: 'medium', ballSegments: { w: 48, h: 32 }, dimpleRes: { w: 1024, h: 512 }, rain: 900, puddles: 4,
   },
   high: {
-    pixelRatio: 2, shadows: true, shadowRes: 4096, bloom: true, decor: 1, texScale: 2, maxLights: 8, env: true,
+    pixelRatio: 2, minPixelRatio: 1, shadows: true, shadowRes: 4096, softShadows: true, bloom: true, msaa: 4,
+    decor: 1, texScale: 2, maxLights: 8, env: true, grass: 1, lod: 2, terrainSeg: 1,
     skinFx: 'high', ballSegments: { w: 64, h: 48 }, dimpleRes: { w: 1024, h: 512 }, rain: 2200, puddles: 9,
   },
 };
@@ -39,8 +49,17 @@ function isDesktop() {
   return window.innerWidth >= 900 && (window.matchMedia?.('(pointer: fine)').matches ?? true);
 }
 
+/** Móvil modesto (Android con poca memoria o pocos núcleos): mejor empezar en Bajo. */
+function isWeakMobile() {
+  if (typeof navigator === 'undefined') return false;
+  const mem = navigator.deviceMemory, cores = navigator.hardwareConcurrency;
+  const android = /Android/i.test(navigator.userAgent ?? '');
+  return (mem != null && mem <= 3) || (android && cores != null && cores <= 4);
+}
+
 export function defaultQuality() {
-  return isDesktop() ? 'high' : 'medium';
+  if (isDesktop()) return 'high';
+  return isWeakMobile() ? 'low' : 'medium';
 }
 
 export function getQuality() {

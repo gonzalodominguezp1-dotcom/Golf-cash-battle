@@ -14,6 +14,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { getQuality, quality } from './render/quality.js';
 import { PerfGovernor } from './render/perfGovernor.js';
+import { ResolutionGovernor } from './render/resolutionGovernor.js';
 import { AimDots, Particles, Shockwaves } from './render/effects.js';
 import { labelTexture, softDotTexture } from './render/textures.js';
 import { createSkinMaterial } from './render/ballSkins.js';
@@ -92,10 +93,13 @@ export class GolfGame {
     this.onOut = onOut;
     this.onOpenSettings = onOpenSettings;
     this.onOverviewChange = onOverviewChange;
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    // en Bajo, sin antialias: en un móvil modesto cada píxel cuenta
+    this.renderer = new THREE.WebGLRenderer({ antialias: getQuality() !== 'low', powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, quality().pixelRatio));
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = quality().softShadows ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+    // la sombra solo se vuelve a dibujar cuando algo cambia (ver #updateShadows)
+    this.renderer.shadowMap.autoUpdate = false;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -108,12 +112,9 @@ export class GolfGame {
     container.appendChild(this.cupMarker);
     this.camera = new THREE.PerspectiveCamera(55, 1, 0.05, 400);
     // resplandor (bloom): limitado estrictamente a un máximo del 15% (0.15)
-    this.composer = new EffectComposer(this.renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 }));
-    this.renderPass = new RenderPass(null, this.camera);
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.14, 0.4, 0.88);
-    this.composer.addPass(this.renderPass);
-    this.composer.addPass(this.bloom);
-    this.composer.addPass(new OutputPass());
+    this.#makeComposer(quality().msaa);
+    // resolución dinámica: baja los píxeles si el móvil no llega y los sube cuando sobra
+    this.resGov = new ResolutionGovernor({ min: 1, max: 1, apply: (pr) => this.#setPixelRatio(pr) });
     this.clock = new THREE.Clock();
     this.acc = 0;
     this.t = 0;
@@ -139,6 +140,10 @@ export class GolfGame {
       busy: () => !!this.ball && isMoving(this.ball),
     });
     this.#bindInput();
+    // ?perf=1: expone el juego para medir (pruebas de rendimiento)
+    try {
+      if (new URLSearchParams(location.search).get('perf') === '1') window.__golf = this;
+    } catch {}
     this.resizeObserver = new ResizeObserver(() => this.#resize());
     this.resizeObserver.observe(container);
   }
@@ -209,6 +214,8 @@ export class GolfGame {
     if (course.aimYaw !== undefined) this.yaw = course.aimYaw;
     this.camYaw = this.yaw;
     this.#buildScene();
+    this.#prevPose.ok = false;
+    this.#shadowAt.x = NaN;
     this.perf.reset();
     this.#resize();
     this.intro = 0;
@@ -220,17 +227,52 @@ export class GolfGame {
     }
   }
 
+  /**
+   * Resplandor: imagen intermedia (con o sin antialias) + bloom + salida. Solo
+   * se usa cuando el resplandor se ve; si no, se dibuja directo a la pantalla.
+   */
+  #makeComposer(samples) {
+    const old = this.composer;
+    if (old) {
+      old.renderTarget1.dispose();
+      old.renderTarget2.dispose();
+      this.bloom?.dispose();
+    }
+    this.composerSamples = samples;
+    this.composer = new EffectComposer(this.renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples }));
+    this.renderPass = new RenderPass(null, this.camera);
+    const strength = this.bloom?.strength ?? 0.14, threshold = this.bloom?.threshold ?? 0.88;
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), strength, 0.4, threshold);
+    this.composer.addPass(this.renderPass);
+    this.composer.addPass(this.bloom);
+    this.composer.addPass(new OutputPass());
+  }
+
+  #setPixelRatio(pr) {
+    if (this.renderer.getPixelRatio() === pr) return;
+    this.renderer.setPixelRatio(pr);
+    this.#resize();
+  }
+
   /** Aplica la calidad elegida en Ajustes (también a mitad de partida). */
   #applyQuality() {
     const q = quality();
     this.quality = q;
-    this.bloom.enabled = q.bloom;
-    this.renderer.shadowMap.enabled = q.shadows;
-    const pr = Math.min(window.devicePixelRatio, q.pixelRatio);
-    if (this.renderer.getPixelRatio() !== pr) {
-      this.renderer.setPixelRatio(pr);
+    if (q.msaa !== this.composerSamples) {
+      this.#makeComposer(q.msaa);
       this.#resize();
     }
+    this.bloom.enabled = q.bloom;
+    // de día el resplandor apenas se nota: en Medio no se paga (solo en Alto)
+    const glowy = !this.theme || this.theme.sunIntensity < 2 || this.theme.lava || this.theme.neon;
+    this.usePost = q.bloom && (glowy || getQuality() === 'high');
+    this.renderer.shadowMap.enabled = q.shadows;
+    const type = q.softShadows ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+    if (this.renderer.shadowMap.type !== type) this.renderer.shadowMap.type = type;
+    this.renderer.shadowMap.needsUpdate = true;
+    const max = Math.min(window.devicePixelRatio, q.pixelRatio);
+    this.resGov.configure(Math.min(max, q.minPixelRatio), max);
+    this.#setPixelRatio(max);
   }
 
   /** Cambia la calidad en caliente: resolución y resplandor al momento, el resto al volver a cargar el hoyo. */
@@ -641,11 +683,13 @@ export class GolfGame {
     const baseHeight = (isWidescreen ? 1.6 : FOLLOW_HEIGHT) * (0.85 + 0.15 * zoom);
     const dist = baseDist + this.power * 0.7;
     // con relieve la cámara sube con el césped; en un looping o un tubo, casi tanto como la bola
-    const pose = ballPose(this.course, this.ball);
+    const pose = this.#renderPose();
     const rise = pose.onTrack ? pose.ground + (pose.y - BALL_R - pose.ground) * 0.75 : pose.ground;
-    const pos = new THREE.Vector3(this.ball.x, 0, this.ball.z).addScaledVector(fwd, -dist);
+    // fuera de un looping o un tubo la bola está en (ball.x, ball.z): se sigue su posición dibujada
+    const bx = pose.onTrack ? this.ball.x : pose.x, bz = pose.onTrack ? this.ball.z : pose.z;
+    const pos = new THREE.Vector3(bx, 0, bz).addScaledVector(fwd, -dist);
     pos.y = rise + baseHeight + this.power * 0.35;
-    const look = new THREE.Vector3(this.ball.x, rise + 0.15, this.ball.z).addScaledVector(fwd, LOOK_AHEAD);
+    const look = new THREE.Vector3(bx, rise + 0.15, bz).addScaledVector(fwd, LOOK_AHEAD);
     return { pos, look };
   }
 
@@ -1248,6 +1292,12 @@ export class GolfGame {
   #tickBots() {
     this.#disqualifyLateBots(this.tick);
     for (const b of this.bots) {
+      // dónde estaba antes del paso, para dibujarla entre pasos (ver #renderPose)
+      const p = ballPose(this.course, b.ball);
+      b.prevPose ??= { x: 0, y: 0, z: 0 };
+      b.prevPose.x = p.x;
+      b.prevPose.y = p.y;
+      b.prevPose.z = p.z;
       const r = b.tick(this.t, DT);
       if (!r) continue;
       const dx = b.ball.x - this.ball.x, dz = b.ball.z - this.ball.z;
@@ -1287,7 +1337,9 @@ export class GolfGame {
   // ---------- bucle ----------
 
   #frame() {
-    this.perf?.tick(performance.now());
+    const now = performance.now();
+    this.perf?.tick(now);
+    this.resGov.tick(now);
     const realDt = Math.min(this.clock.getDelta(), 0.1);
     if (this.intro < 1) this.intro = Math.min(1, this.intro + realDt / INTRO_SECONDS);
     this.timeScale += ((this.#willSinkSoon() ? SLOWMO : 1) - this.timeScale) * damp(this.timeScale > 0.6 ? 14 : 5, realDt);
@@ -1301,6 +1353,7 @@ export class GolfGame {
       if (this.live ? this.tick >= this.botStartTick : this.intro >= 1 && !this.locked) this.#tickBots();
       // se acabó el tiempo: lo que entre en el paso del límite aún vale
       if (!this.sunk && !this.timedOut && this.deadlineTick != null && this.tick > this.deadlineTick) this.#timeUp();
+      this.#keepPrevPose();
       if (this.sunk || this.paused || this.timedOut) continue;
       const wasMoving = isMoving(this.ball);
       const vx0 = this.ball.vx, vz0 = this.ball.vz;
@@ -1492,15 +1545,14 @@ export class GolfGame {
       : lerpAngle(this.camYaw, targetCamYaw, damp(10, dt));
 
     if (this.renderer?.domElement) {
-      if (this.orbiting) this.renderer.domElement.style.cursor = 'grabbing';
-      else if (this.charging) this.renderer.domElement.style.cursor = 'crosshair';
-      else if (!isMoving(this.ball) && !this.sunk && this.intro >= 1) this.renderer.domElement.style.cursor = 'crosshair';
-      else this.renderer.domElement.style.cursor = 'default';
+      // solo se toca el estilo cuando cambia (cada escritura obliga al navegador a recalcular estilos)
+      const cursor = this.orbiting ? 'grabbing' : this.charging || (!isMoving(this.ball) && !this.sunk && this.intro >= 1) ? 'crosshair' : 'default';
+      if (cursor !== this.cursorShown) this.renderer.domElement.style.cursor = this.cursorShown = cursor;
     }
 
     // bola: rodar y caer en el hoyo
     const sinkT = this.sunk ? Math.min(1, (this.t - this.sunkAt) * 4) : 0;
-    const pose = ballPose(this.course, this.ball);
+    const pose = this.#renderPose();
     this.ballRoot.position.set(pose.x, pose.y - sinkT * 0.3, pose.z);
     if (speed > 0) {
       this.ballMesh.rotateOnWorldAxis(this.#axis.set(-this.ball.vz, 0, this.ball.vx).normalize(), (speed * dt) / BALL_R);
@@ -1521,7 +1573,13 @@ export class GolfGame {
     setRolling(this.sunk ? 0 : speed, this.wasInSand);
     for (const b of this.bots) {
       if (b.sunk) b.sinkT = Math.min(1, b.sinkT + dt * 4);
-      const bp = ballPose(this.course, b.ball);
+      const bp = ballPose(this.course, b.ball), pp = b.prevPose;
+      if (pp && Math.abs(bp.x - pp.x) + Math.abs(bp.z - pp.z) < 0.6) {
+        const a = THREE.MathUtils.clamp(this.acc / DT, 0, 1);
+        bp.x = pp.x + (bp.x - pp.x) * a;
+        bp.y = pp.y + (bp.y - pp.y) * a;
+        bp.z = pp.z + (bp.z - pp.z) * a;
+      }
       b.mesh.position.set(bp.x, bp.y - b.sinkT * 0.3, bp.z);
       const v = Math.hypot(b.ball.vx, b.ball.vz);
       if (v > 0) b.mesh.rotateOnWorldAxis(this.#axis.set(-b.ball.vz, 0, b.ball.vx).normalize(), (v * dt) / BALL_R);
@@ -1555,6 +1613,7 @@ export class GolfGame {
 
     this.env.update(this.t, dt);
     this.#placeCamera(realDt);
+    this.env.lod?.(this.camera.position);
     this.courseView.update(this.t, this.camera.position, this.ball, this.camLook, this.overview);
     this.cyberFx?.update(this.t, this.ball);
     this.fxCtx.speed = speed;
@@ -1567,7 +1626,68 @@ export class GolfGame {
     this.particles.update(dt, this.camera);
     this.waves.update(realDt);
     this.#updateCupMarker();
-    this.renderPass.scene = this.scene;
-    this.composer.render(realDt);
+    this.#updateShadows(pose);
+    if (this.usePost) {
+      this.renderPass.scene = this.scene;
+      this.composer.render(realDt);
+    } else this.renderer.render(this.scene, this.camera);
+  }
+
+  // ---------- suavidad ----------
+
+  #prevPose = { x: 0, y: 0, z: 0, ground: 0, onTrack: false, ok: false };
+  #lerpPose = { x: 0, y: 0, z: 0, ground: 0, onTrack: false };
+  #shadowAt = { x: NaN, y: NaN, z: NaN, frame: 0 };
+
+  /** Antes de cada paso de física: guarda dónde estaba la bola para dibujar entre dos pasos. */
+  #keepPrevPose() {
+    const p = ballPose(this.course, this.ball), o = this.#prevPose;
+    o.x = p.x;
+    o.y = p.y;
+    o.z = p.z;
+    o.ground = p.ground;
+    o.ok = true;
+  }
+
+  /**
+   * Posición dibujada de la bola: entre el paso anterior y el actual según el
+   * tiempo que sobra (acc / DT). La física va a 120 pasos/s y la pantalla a 60,
+   * 90 o 120 Hz: sin esto la bola avanza a saltos desiguales (tirones). Solo es
+   * dibujo: la simulación y lo que se manda al servidor no cambian.
+   */
+  #renderPose() {
+    const cur = ballPose(this.course, this.ball), prev = this.#prevPose, o = this.#lerpPose;
+    const a = THREE.MathUtils.clamp(this.acc / DT, 0, 1);
+    // tras un salto (portal, vuelta al tee) no se interpola
+    const jump = !prev.ok || Math.abs(cur.x - prev.x) + Math.abs(cur.z - prev.z) + Math.abs(cur.y - prev.y) > 0.6;
+    const k = jump || this.sunk ? 1 : a;
+    o.x = prev.x + (cur.x - prev.x) * k;
+    o.y = prev.y + (cur.y - prev.y) * k;
+    o.z = prev.z + (cur.z - prev.z) * k;
+    o.ground = prev.ground + (cur.ground - prev.ground) * k;
+    if (jump) o.ground = cur.ground;
+    o.onTrack = cur.onTrack;
+    return o;
+  }
+
+  /**
+   * El mapa de sombras es una pasada entera de la escena: solo se repite si la
+   * bola se ha movido o hay piezas que se mueven (aspas, molinos, bloques).
+   * En Alto, cada frame; en Medio, las piezas móviles cada dos frames.
+   */
+  #updateShadows(pose) {
+    const sm = this.renderer.shadowMap;
+    if (!sm.enabled) return;
+    const s = this.#shadowAt;
+    s.frame++;
+    const c = this.course;
+    const movers = (c.spinners?.length || 0) + (c.movers?.length || 0) + (c.windmills?.length || 0) > 0;
+    const moved = Math.abs(pose.x - s.x) + Math.abs(pose.y - s.y) + Math.abs(pose.z - s.z) > 0.002 || !(s.x === s.x);
+    if (moved || (movers && (getQuality() === 'high' || s.frame % 2 === 0))) {
+      sm.needsUpdate = true;
+      s.x = pose.x;
+      s.y = pose.y;
+      s.z = pose.z;
+    }
   }
 }
