@@ -3,9 +3,10 @@ import { rpcError } from '../backend/supabase.js';
 import { HOLE_TIME_LIMIT } from '../config.js';
 
 /**
- * Torneos asíncronos contra jugadores reales. Cada uno juega los mismos hoyos
- * a su ritmo; el cliente solo manda sus tiros (cuándo, hacia dónde y con qué
- * fuerza) y el servidor los repite con la física para contar los golpes.
+ * Partidas en vivo contra jugadores reales (los huecos los rellenan bots que
+ * no cobran). Todos juegan los mismos hoyos a la vez; el cliente solo manda
+ * sus tiros (cuándo, hacia dónde y con qué fuerza) y el servidor los repite
+ * con la física para contar los golpes.
  */
 // por qué una cuenta no puede entrar en mesas de pago (ver _paid_block)
 export const PAID_BLOCKS = ['account_required', 'kyc_required', 'underage', 'account_review'];
@@ -69,6 +70,7 @@ export class TournamentService {
     return { strokes: data.strokes, distance: data.distance, timedOut: !!data.timed_out };
   }
 
+  /** Estado de la partida; además es el latido que dice al servidor que sigues conectado. */
   async status(match) {
     const was = match.status;
     update(match, await this.#rpc('tournament_status', { p_t: match.id }));
@@ -81,6 +83,11 @@ export class TournamentService {
     update(match, await this.#rpc('leave_tournament', { p_t: match.id }));
     await this.wallet.getBalance();
     return match;
+  }
+
+  /** Has terminado tu ronda (sin desempate): el servidor puede cerrar cuando acaben los demás. */
+  async finish(match) {
+    return this.leave(match);
   }
 
   /** Un torneo en el que estás (p. ej. el que acaba de buscar tu grupo). */
@@ -113,6 +120,9 @@ export function toMatch(t, tier) {
     timeLimit: Number(t.time_limit ?? HOLE_TIME_LIMIT),
     seats: t.seats,
     closesAt: new Date(t.closes_at),
+    // en vivo: cuándo arranca la partida para todos, y cuánto va adelantado el reloj del servidor
+    startsAt: t.starts_at ? new Date(t.starts_at) : null,
+    clockOffset: t.server_now ? new Date(t.server_now) - Date.now() : 0,
     pot: Number(t.pot),
     commission: Number(t.commission),
     prize: Number(t.prize),
@@ -129,6 +139,8 @@ function toPlayer(p) {
     name: p.name,
     color: p.color,
     holesPlayed: p.holes_played,
+    started: !!p.started,
+    online: p.online !== false,
     finished: p.finished,
     // las puntuaciones de los demás llegan vacías hasta que terminas tu ronda
     scores: p.scores ?? null,

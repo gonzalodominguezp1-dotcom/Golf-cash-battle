@@ -21,6 +21,8 @@ import { mountAuth } from './ui/authScreen.js';
 import { validatePassword, authMessage } from './account/authRules.js';
 import { addedMessage, cleanFriendName, friendMessage } from './account/friendRules.js';
 import { newPartyMatch, partyErrorText, partyMessage, readyLabel } from './match/partyRules.js';
+import { LiveRoom } from './match/LiveRoom.js';
+import { buildRoster, humanLeaders, liveStandings, seededRng } from './match/liveRules.js';
 import { QUALITY_LEVELS, QUALITY_NAMES, getQuality, setQuality } from './game/render/quality.js';
 
 let backend, wallet, matches;
@@ -233,6 +235,7 @@ function bindHolo(root) {
 
 async function showLobby() {
   leaveFinale();
+  stopLive();
   screen = 'lobby';
   const balance = await wallet.getBalance();
   const skin = progress.skin;
@@ -255,7 +258,6 @@ async function showLobby() {
       </section>
       ${backend.mode === 'local' ? `<p class="offline">Modo sin conexión: el saldo se guarda solo en este ${DEVICE}</p>` : ''}
       ${backend.account?.profile?.paid_block ? `<button class="notice account-hint" data-go="account">${{ account_required: 'Confirma tu email para jugar mesas con entrada →', kyc_required: 'Verifica tu edad e identidad para jugar mesas con entrada →', account_review: 'Tu cuenta está en revisión: de momento solo Práctica', underage: 'Mesas con entrada solo para mayores de 18' }[backend.account.profile.paid_block]}</button>` : ''}
-      <div class="my-tournaments"></div>
       ${backend.parties ? '<section class="party-box"></section>' : ''}
       <div class="section-head">
         <div class="section-title-row">
@@ -269,7 +271,7 @@ async function showLobby() {
         </div>
       </div>
       <div class="tiers"></div>
-      <p class="legal">Créditos de demostración sin valor real. ${backend.tournaments ? 'Las mesas de pago son torneos contra jugadores reales: cada uno juega los mismos hoyos a su ritmo y el servidor repite cada golpe para validarlo. La práctica es contra rivales simulados. ' : ''}El resultado depende solo de la habilidad: mismo campo para todos y sin elementos aleatorios. En empate, tiro de desempate: gana quien deje la bola más cerca. Comisión de la plataforma: ${Math.round(PLATFORM_COMMISSION * 100)}% del bote.</p>
+      <p class="legal">Créditos de demostración sin valor real. ${backend.tournaments ? 'Las mesas de pago son partidas en vivo contra jugadores reales: todos jugáis los mismos hoyos a la vez y el servidor repite cada golpe para validarlo. Los huecos libres los ocupan bots, que nunca cuentan para el premio. La práctica es contra rivales simulados. ' : ''}El resultado depende solo de la habilidad: mismo campo para todos y sin elementos aleatorios. En empate, tiro de desempate: gana quien deje la bola más cerca. Comisión de la plataforma: ${Math.round(PLATFORM_COMMISSION * 100)}% del bote.</p>
     </main>`);
   const list = view.querySelector('.tiers');
   for (const tier of TIERS) {
@@ -299,7 +301,6 @@ async function showLobby() {
     list.append(card);
   }
   await shell(view);
-  if (backend.tournaments) showMyTournaments(view.querySelector('.my-tournaments'));
   if (backend.parties) partyPanel(view.querySelector('.party-box'), list, balance);
   claimRewards();
 }
@@ -341,8 +342,7 @@ async function partyPanel(box, tierList, balance) {
     if (match.status !== 'open' || !match.me || match.me.finished) return false;
     await wallet.getBalance();
     sfx.tick();
-    if (match.me.holesPlayed > 0) continueRound(match);
-    else showTournamentLobby(match);
+    enterLive(match);
     return true;
   }
 
@@ -1323,7 +1323,7 @@ async function startMatch(tier, rematchOf = null) {
  * Pantalla de juego. mode 'hole' es un hoyo normal; 'tiebreak' es el hoyo
  * sin agujero del desempate (un tiro, gana el más cercano).
  */
-function playScreen(match, { course, title, subtitle, players, onDone, firstSunkTick = null, timeLimit = HOLE_TIME_LIMIT, freePlay = false, onRestartHole = null, onSelectMap = null }) {
+function playScreen(match, { course, title, subtitle, players, onDone, firstSunkTick = null, timeLimit = HOLE_TIME_LIMIT, freePlay = false, onRestartHole = null, onSelectMap = null, rivals = null, live = false, onGame = null, onShots = null }) {
   const tiebreak = !!course.noCup;
   const view = h(`
     <main class="play-screen ${tiebreak ? 'is-tiebreak' : ''} ${freePlay ? 'is-freeplay' : ''}">
@@ -1345,7 +1345,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         <button class="pill desktop-esc-hint" aria-label="Ajustes">Ajustes <kbd class="kbd-hint">Esc</kbd></button>
       </div>
       <div class="rivals ${freePlay ? 'rivals-hidden' : ''}">${freePlay ? '' : players
-      .map((p) => `<div class="chip ${p.id === 'me' ? 'me' : ''}" data-id="${p.id}" style="--c:${p.color}"><i>${p.name[0]}</i><b>${tiebreak ? '·' : 0}</b></div>`)
+      .map((p) => `<div class="chip ${p.id === 'me' ? 'me' : ''} ${live && p.isBot ? 'bot' : ''}" data-id="${p.id}" style="--c:${p.color}"><i>${p.name[0]}</i><b>${tiebreak ? '·' : 0}</b></div>`)
       .join('')}</div>
       <div class="toasts"></div>
       <div class="intro-banner">
@@ -1593,6 +1593,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         if (st.sunk) toast(`${p.name} ha embocado en ${st.strokes}`, p.color);
       },
       onStroke: (n) => {
+        if (n > 0) onShots?.(game.shots);
         if (!tiebreak) setChip('me', n, false);
         if (strokesEl) strokesEl.textContent = n;
         hint.classList.add('gone');
@@ -1635,7 +1636,8 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         } else if (!freePlay && n >= maxStrokesOf(course)) finish(n);
       },
     });
-    game.load(course, { bots: freePlay ? [] : players.filter((p) => p.isBot), skin: progress.skin, instance: progress.instance(progress.skin.id), firstSunkTick, timeLimit: freePlay ? null : timeLimit });
+    game.load(course, { bots: freePlay ? [] : rivals ?? players.filter((p) => p.isBot), skin: progress.skin, instance: progress.instance(progress.skin.id), firstSunkTick, timeLimit: freePlay ? null : timeLimit, live });
+    onGame?.(game, { toast, view });
     showDistance();
     if (freePlay) {
       view.querySelector('.restart-btn')?.addEventListener('click', (e) => {
@@ -1937,14 +1939,38 @@ function statsGrid(holes) {
   </div>`;
 }
 
-// ---------- torneos contra jugadores reales ----------
+// ---------- partidas en vivo contra jugadores reales ----------
 //
-// Asíncronos: cada jugador juega los mismos hoyos cuando quiere y el bote se
-// reparte cuando han terminado todos. Los golpes los cuenta el servidor.
+// Al entrar en una mesa de pago se espera unos segundos en la sala a que entre
+// más gente y la partida arranca a la vez para todos. Los huecos libres los
+// ocupan bots (los mismos en todos los móviles) que nunca cuentan para el
+// premio. Las bolas de los demás se ven en directo: llegan sus tiros por el
+// canal en tiempo real y se repiten con la misma física. Los golpes que
+// cuentan los sigue calculando el servidor.
 
-const POLL_MS = 5000;
+const LIVE_BEAT_MS = 4000; // latido: estado de la partida (y "sigo conectado")
+const LIVE_NEXT_S = 6; // pausa entre hoyos
+const LIVE_GRACE_TICKS = 120 * 6; // margen tras acabarse el contador del hoyo
+const LIVE_HOLE_CAP_MS = 150000; // como mucho se espera esto a los demás en un hoyo
+
+let currentLive = null;
+
+function stopLive() {
+  const live = currentLive;
+  if (!live) return;
+  currentLive = null;
+  live.stopped = true;
+  clearTimeout(live.beat);
+  clearInterval(live.timer);
+  live.room?.close();
+  // salir a mitad de partida cuenta como abandono (lo que falte, con el máximo)
+  if (!live.finished) backend.tournaments.leave(live.match).catch(() => { });
+}
+
+const liveNow = (match) => Date.now() + (match.clockOffset ?? 0);
 
 async function startTournament(tier, rematchOf = null) {
+  stopLive();
   let match;
   try {
     // revancha: el servidor junta en la misma sala a quienes la piden; si ya no vale, mesa normal
@@ -1958,90 +1984,171 @@ async function startTournament(tier, rematchOf = null) {
       backend.account?.load().catch(() => { });
       return showBlocked(e.code);
     }
-    return alertMsg('No se ha podido entrar en el torneo. Prueba otra vez.');
+    return alertMsg('No se ha podido entrar en la partida. Prueba otra vez.');
   }
-  if (match.resumed && match.me.holesPlayed > 0) return continueRound(match);
-  showTournamentLobby(match);
+  enterLive(match);
 }
 
-function continueRound(match) {
-  const i = match.me.holesPlayed;
-  if (i < match.holes) playOnlineHole(match, i);
-  else offerTiebreak(match);
+/** Entra en una partida: a la sala si aún no ha empezado, o al hoyo por el que vas. */
+function enterLive(match) {
+  stopLive();
+  const live = { match, botScores: [], finished: false, hole: -1 };
+  currentLive = live;
+  const beat = async () => {
+    if (live.stopped) return;
+    try {
+      await backend.tournaments.status(match);
+    } catch { }
+    if (live.stopped) return;
+    live.onStatus?.();
+    live.beat = setTimeout(beat, live.fast ? 1500 : LIVE_BEAT_MS);
+  };
+  live.beat = setTimeout(beat, 1500);
+  if (match.me.finished) return showLiveResults(live);
+  if (match.me.started || !match.startsAt || liveNow(match) >= match.startsAt) return beginLive(live);
+  showLiveRoom(live);
 }
 
-const minutesLeft = (date) => Math.max(0, Math.ceil((date - Date.now()) / 60000));
+function seatHtml(p) {
+  if (!p) return '<span>…</span>';
+  return `<span class="avatar">${esc(p.name[0])}</span><span>${esc(p.name)}</span>${p.isBot ? '<em class="bot-tag">BOT</em>' : ''}`;
+}
 
-function showTournamentLobby(match) {
+function showLiveRoom(live) {
+  const { match } = live;
   const { tier } = match;
+  live.fast = true;
   const view = h(`
-    <main class="screen matchmaking tier--${tier.id}">
+    <main class="screen matchmaking live-room tier--${tier.id}">
       <div class="radar"><span></span><span></span><span></span>${ball(progress.skin, 64)}</div>
-      <h1>Torneo ${tier.name}</h1>
+      <h1>${tier.name} · en vivo</h1>
       <p class="sub count"></p>
       <div class="seats"></div>
       ${match.rematchOf ? '<p class="legal">Revancha: quienes pidan revancha como tú entrarán juntos en esta sala.</p>' : ''}
-      <p class="legal alone-hint"></p>
-      <p class="legal">Todos jugáis los mismos ${match.holes} hoyos, cada uno a su ritmo. El torneo se cierra en cuanto terminan todos los que han entrado (o se llena la mesa): gana quien menos golpes haga y se reparte el bote. El servidor repite cada golpe para que nadie pueda hacer trampas.</p>
-      <button class="primary start">Empezar a jugar</button>
+      <p class="legal">Empezáis todos a la vez y verás las bolas de los demás en directo. Los huecos libres los ocupan bots: juegan contigo, pero nunca cuentan para el premio (el bote es solo de los jugadores reales). Si no entra nadie más, juegas contra bots y se te devuelve la entrada.</p>
       <button class="ghost cancel">Salir y recuperar entrada</button>
     </main>`);
   const seats = view.querySelector('.seats');
+  let launching = false;
   const render = () => {
     const n = match.players.length;
-    view.querySelector('.count').innerHTML = `${n}/${match.seats} jugadores · bote ${coin(tier.entryFee * n)} · cierra en ${minutesLeft(match.closesAt)} min`;
-    view.querySelector('.alone-hint').textContent = n < 2 ? 'De momento estás solo. Puedes esperar a que entre alguien o empezar ya; si terminas y nadie más ha entrado, se te devuelve la entrada.' : '';
+    const secs = match.startsAt ? Math.max(0, Math.ceil((match.startsAt - liveNow(match)) / 1000)) : 0;
+    view.querySelector('.count').innerHTML = launching
+      ? 'Rellenando los huecos con bots…'
+      : `${n}/${match.seats} jugadores · empieza en <b>${secs} s</b> · bote ${coin(tier.entryFee * n)}`;
+    if (launching) return;
     seats.innerHTML = '';
     for (let i = 0; i < match.seats; i++) {
-      const p = match.players.find((q) => q.seat === i) ?? match.players[i];
-      const s = h(`<div class="seat"><span>…</span></div>`);
+      const p = match.players.find((q) => q.seat === i);
+      const s = h(`<div class="seat">${seatHtml(p && { name: p.id === 'me' ? 'Tú' : p.name })}</div>`);
       if (p) {
         s.classList.add('filled', ...(p.id === 'me' ? ['me'] : []));
         s.style.setProperty('--c', p.color);
-        s.innerHTML = `<span class="avatar">${p.name[0]}</span><span>${p.id === 'me' ? 'Tú' : p.name}</span>`;
       }
       seats.append(s);
     }
   };
-  render();
-  const poll = async () => {
-    if (!view.isConnected) return;
-    const before = match.players.length;
+  let count = match.players.length;
+  live.onStatus = () => {
+    if (!view.isConnected || launching) return;
+    if (match.players.length > count) sfx.tick();
+    count = match.players.length;
+    render();
+  };
+  const launch = async () => {
+    launching = true;
+    clearInterval(live.timer);
+    view.querySelector('.cancel').disabled = true;
     try {
       await backend.tournaments.status(match);
-      if (match.players.length > before) sfx.tick();
-      if (view.isConnected) render();
     } catch { }
-    setTimeout(poll, POLL_MS);
-  };
-  setTimeout(poll, POLL_MS);
-  view.querySelector('.start').addEventListener('click', async (e) => {
-    e.target.disabled = true;
+    if (live.stopped) return;
+    live.roster = buildRoster(match);
+    render();
+    for (const r of live.roster) {
+      if (!r.isBot) continue;
+      const s = seats.children[r.seat];
+      if (!s) continue;
+      await wait(140);
+      s.classList.add('filled', 'bot');
+      s.style.setProperty('--c', r.color);
+      s.innerHTML = seatHtml(r);
+      sfx.tick();
+    }
     try {
       await backend.tournaments.start(match);
     } catch {
-      return alertMsg('No se ha podido empezar. Prueba otra vez.');
+      if (live.stopped) return;
+      return retryMsg('No se ha podido empezar la partida.', launch);
     }
-    playOnlineHole(match, 0);
-  });
+    await wait(500);
+    if (!live.stopped) beginLive(live);
+  };
+  live.timer = setInterval(() => {
+    if (!view.isConnected) return clearInterval(live.timer);
+    render();
+    if (!launching && match.startsAt && liveNow(match) >= match.startsAt) launch();
+  }, 250);
   view.querySelector('.cancel').addEventListener('click', async (e) => {
     e.target.disabled = true;
+    clearInterval(live.timer);
+    live.finished = true;
     await backend.tournaments.leave(match).catch(() => { });
     showLobby();
   });
+  render();
   shell(view, { nav: false });
 }
 
-function playOnlineHole(match, index) {
+async function beginLive(live) {
+  const { match } = live;
+  live.fast = false;
+  live.onStatus = null;
+  // volviendo a una partida que ya arrancó sin haber pulsado nada
+  if (!match.me.started) await backend.tournaments.start(match).catch(() => { });
+  if (live.stopped) return;
+  live.roster ??= buildRoster(match);
+  const others = live.roster.filter((r) => !r.isBot && r.id !== 'me').map((r) => r.seat);
+  live.room ??= new LiveRoom(backend.db, match.id, match.me.seat, others);
+  live.room.onDone = (_seat, hole, final) => {
+    if (hole === live.hole && final.sunk) live.game?.noteRemoteSunk(final.sunkTick);
+    live.check?.();
+  };
+  const i = match.me.holesPlayed;
+  if (i < match.holes) playLiveHole(live, i);
+  else liveAfterRound(live);
+}
+
+function playLiveHole(live, index) {
+  const { match } = live;
+  app.querySelector('.overlay')?.remove();
   const course = COURSES[match.courses[index]];
+  live.hole = index;
+  live.game = null;
+  live.check = null;
+  const me = live.roster.find((r) => r.id === 'me');
+  const rivals = live.roster
+    .filter((r) => r.id !== 'me')
+    .map((r) => (r.isBot ? { ...r, rng: seededRng(`${match.id}:${index}:${r.seat}`) } : { ...r, remote: live.room.feed(r.seat, index) }));
   playScreen(match, {
     course,
     title: `Hoyo ${index + 1}/${match.holes}`,
-    subtitle: `Torneo ${match.tier.name} · hoyo ${index + 1}`,
-    players: [match.me],
-    firstSunkTick: match.firstTicks?.[index] ?? null,
+    subtitle: `${match.tier.name} · en vivo`,
+    players: [me, ...rivals],
+    rivals,
+    live: true,
     timeLimit: match.timeLimit,
-    onDone: (g) => submitOnline(match, index, g, (r) => showOnlineHoleResult(match, index, course, r.strokes, r.timedOut)),
+    onGame: (g, ui) => {
+      live.game = g;
+      live.ui = ui;
+      // si alguien ya embocó antes de que cargara este hoyo, su contador ya corre
+      for (const r of rivals) if (r.remote?.final?.sunk) g.noteRemoteSunk(r.remote.final.sunkTick);
+    },
+    onShots: (shots) => live.room.sendShots(index, shots),
+    onDone: (g, strokes) => {
+      live.room.sendDone(index, { shots: g.shots, strokes, sunk: g.sunk, sunkTick: g.sunkTick, dq: g.timedOut });
+      submitOnline(match, index, g, (r) => waitLiveHole(live, index, course, r));
+    },
   });
 }
 
@@ -2050,65 +2157,158 @@ async function submitOnline(match, hole, g, then) {
   try {
     then(await backend.tournaments.submitHole(match, hole, shots, aim, endTick));
   } catch (e) {
+    if (currentLive?.match !== match) return;
     if (e.code === 'invalid_shots') return alertMsg('El servidor no ha podido validar los golpes de este hoyo.');
-    if (['time_up', 'match_closed', 'wrong_hole'].includes(e.code)) return showOnlineResults(match);
+    if (['time_up', 'match_closed', 'wrong_hole', 'match_not_found'].includes(e.code)) return showLiveResults(currentLive);
     retryMsg(`Se ha perdido la conexión con el servidor. Tus golpes siguen guardados en este ${DEVICE}.`, () => submitOnline(match, hole, { shots, aim, endTick }, then));
   }
 }
 
-function showOnlineHoleResult(match, index, course, strokes, dq = false) {
-  const last = index + 1 >= match.holes;
-  const done = match.players.filter((p) => p.finished && p.id !== 'me').length;
-  const overlay = h(`
-    <div class="overlay">
-      <div class="card ${!dq && strokes <= course.par ? 'good' : ''}">
-        ${holeHeader(strokes, course.par, dq)}
-        <p class="sub">Tu ronda: <b>${match.me.scores.join(' · ')}</b> · total <b>${match.me.total}</b></p>
-        <p class="legal">${match.players.length} jugadores en el torneo${done ? ` · ${done} ya han terminado` : ''}. Verás sus golpes cuando acabes.</p>
-        <button class="primary next">${last ? 'Tiro de desempate' : 'Siguiente hoyo'}</button>
-      </div>
-    </div>`);
-  overlay.querySelector('.next').addEventListener('click', () => (last ? offerTiebreak(match) : playOnlineHole(match, index + 1)));
-  app.append(overlay);
+/**
+ * Ya has terminado el hoyo: sigues viendo cómo juegan los demás hasta que
+ * acaben todos los jugadores reales, se acabe el contador o pase demasiado
+ * tiempo (quien se desconecta no bloquea a nadie).
+ */
+function waitLiveHole(live, index, course, result) {
+  if (live.stopped || live.hole !== index) return;
+  const { match } = live;
+  const g = live.game;
+  const since = Date.now();
+  const panel = h('<div class="live-wait"><b>Esperando a los demás…</b><small></small></div>');
+  live.ui?.view?.append(panel);
+  const pending = () =>
+    live.roster.filter((r) => {
+      if (r.isBot || r.id === 'me') return false;
+      const p = match.players.find((q) => q.id === r.id);
+      if (!p || p.finished || !p.online || p.holesPlayed > index) return false;
+      return !live.room.feed(r.seat, index).final;
+    });
+  let closed = false;
+  const check = () => {
+    if (closed || live.stopped || live.hole !== index) return;
+    const left = pending();
+    const secs = g?.deadlineTick != null ? Math.max(0, Math.ceil((g.deadlineTick - g.tick) / 120)) : null;
+    const timeUp = g?.deadlineTick != null && g.tick > g.deadlineTick + LIVE_GRACE_TICKS;
+    if (left.length && !timeUp && Date.now() - since < LIVE_HOLE_CAP_MS) {
+      panel.querySelector('b').textContent = `Esperando a ${left.map((r) => r.name).join(', ')}`;
+      panel.querySelector('small').textContent = secs != null ? (secs > 0 ? `${secs} s para que acabe el hoyo` : 'Se acabó el tiempo') : 'Mira cómo juegan en directo';
+      return;
+    }
+    closed = true;
+    clearInterval(iv);
+    panel.remove();
+    finishLiveHole(live, index, course, result);
+  };
+  live.check = check;
+  live.onStatus = check;
+  const iv = setInterval(check, 500);
+  check();
 }
 
-// en asíncrono no se sabe aún si habrá empate: todos tiran una vez y solo
-// cuenta para desempatar en cabeza
-function offerTiebreak(match) {
+async function finishLiveHole(live, index, course, result) {
+  const { match } = live;
+  live.check = null;
+  live.onStatus = null;
+  live.botScores[index] = live.game ? live.game.finishBots() : {};
+  try {
+    await backend.tournaments.status(match);
+  } catch { }
+  if (live.stopped || live.hole !== index) return;
+  if (match.status !== 'open') return showLiveResults(live);
+  const last = index + 1 >= match.holes;
+  const standings = liveStandings(match, live.roster, live.botScores);
+  const overlay = h(`
+    <div class="overlay">
+      <div class="card ${!result.timedOut && result.strokes <= course.par ? 'good' : ''}">
+        ${holeHeader(result.strokes, course.par, result.timedOut)}
+        ${standingsTable(standings)}
+        <p class="legal">Los bots no cuentan para el premio.</p>
+        <button class="primary next">${last ? 'Ver resultado' : 'Siguiente hoyo'} <span class="secs">${LIVE_NEXT_S}</span></button>
+      </div>
+    </div>`);
+  let left = LIVE_NEXT_S;
+  const go = () => {
+    clearInterval(live.timer);
+    if (live.stopped || live.hole !== index || !overlay.isConnected) return;
+    if (last) liveAfterRound(live);
+    else playLiveHole(live, index + 1);
+  };
+  overlay.querySelector('.next').addEventListener('click', go);
   app.querySelector('.overlay')?.remove();
+  app.append(overlay);
+  clearInterval(live.timer);
+  live.timer = setInterval(() => {
+    left--;
+    const el = overlay.querySelector('.secs');
+    if (el) el.textContent = left;
+    if (left <= 0) go();
+  }, 1000);
+}
+
+/** Tras el último hoyo: desempate si empatas en cabeza con otro jugador real; si no, has terminado. */
+async function liveAfterRound(live) {
+  const { match } = live;
+  app.querySelector('.overlay')?.remove();
+  const tied = humanLeaders(match.players, match.holes);
+  if (tied.length >= 2 && tied.some((p) => p.id === 'me')) return liveTiebreak(live, tied);
+  live.finished = true;
+  try {
+    await backend.tournaments.finish(match);
+  } catch { }
+  showLiveResults(live);
+}
+
+function liveTiebreak(live, tied) {
+  const { match } = live;
+  const names = tied.map((p) => (p.id === 'me' ? 'Tú' : esc(p.name)));
   const overlay = h(`
     <div class="overlay">
       <div class="card tiebreak-card">
-        <h2 class="score-title">Tiro de desempate</h2>
-        <p class="sub">Un solo tiro en un hoyo sin agujero: deja la bola lo más cerca posible de la diana. Solo cuenta si empatas en cabeza.</p>
-        <button class="primary next">Tirar</button>
-        <button class="ghost skip">Saltar</button>
+        <div class="vs">${tied.map((p) => `<span class="avatar" style="--c:${p.color}">${esc((p.id === 'me' ? 'Tú' : p.name)[0])}</span>`).join('<em>VS</em>')}</div>
+        <h2 class="score-title">¡Empate a ${tied[0].total}!</h2>
+        <p class="sub">${names.join(', ')} vais al desempate. Hoyo sin agujero: un solo tiro y gana quien deje la bola más cerca de la diana.</p>
+        <button class="primary next">Jugar desempate</button>
       </div>
     </div>`);
-  overlay.querySelector('.next').addEventListener('click', () => playOnlineTiebreak(match));
-  overlay.querySelector('.skip').addEventListener('click', async (e) => {
-    e.target.disabled = true;
-    await backend.tournaments.leave(match).catch(() => { });
-    showOnlineResults(match);
-  });
+  const play = () => {
+    clearTimeout(auto);
+    if (live.stopped || !overlay.isConnected) return;
+    const hole = match.holes;
+    live.hole = hole;
+    const me = live.roster.find((r) => r.id === 'me');
+    const rivals = tied
+      .filter((p) => p.id !== 'me')
+      .map((p) => live.roster.find((r) => r.id === p.id))
+      .filter(Boolean)
+      .map((r) => ({ ...r, remote: live.room.feed(r.seat, hole) }));
+    playScreen(match, {
+      course: TIEBREAK_COURSE,
+      title: 'Desempate',
+      subtitle: 'Un tiro',
+      players: [me, ...rivals],
+      rivals,
+      live: true,
+      onGame: (g, ui) => {
+        live.game = g;
+        live.ui = ui;
+      },
+      onShots: (shots) => live.room.sendShots(hole, shots),
+      onDone: (g, _strokes, banner) => {
+        live.room.sendDone(hole, { shots: g.shots, strokes: 1, sunk: false, dq: false });
+        submitOnline(match, hole, g, (r) => {
+          live.finished = true;
+          banner(`${r.distance.toFixed(2)} m`);
+          setTimeout(() => showLiveResults(live), 1800);
+        });
+      },
+    });
+  };
+  const auto = setTimeout(play, 5000);
+  overlay.querySelector('.next').addEventListener('click', play);
   app.append(overlay);
 }
 
-function playOnlineTiebreak(match) {
-  playScreen(match, {
-    course: TIEBREAK_COURSE,
-    title: 'Desempate',
-    subtitle: 'Un tiro',
-    players: [match.me],
-    onDone: (g, _strokes, banner) =>
-      submitOnline(match, match.holes, g, (r) => {
-        banner(`${r.distance.toFixed(2)} m`);
-        setTimeout(() => showOnlineResults(match), 1400);
-      }),
-  });
-}
-
-function recordOnce(match) {
+function recordOnce(match, rows) {
   const KEY = 'gcb.tournaments.recorded';
   let seen = [];
   try {
@@ -2119,49 +2319,79 @@ function recordOnce(match) {
     localStorage.setItem(KEY, JSON.stringify([match.id, ...seen].slice(0, 50)));
   } catch { }
   const me = match.me;
-  const won = me.position === 1 || me.payout > 0;
+  // solo bots (se devolvió la entrada): cuenta como una partida de práctica
+  const cancelled = match.status === 'cancelled';
+  const mine = rows.find((r) => r.id === 'me');
+  const position = cancelled ? mine?.position ?? 1 : me.position ?? match.players.length;
+  const won = cancelled ? position === 1 : me.position === 1 || me.payout > 0;
   const leaders = match.players.filter((p) => p.total === me.total).length;
   return progress.recordMatch({
-    position: me.position ?? match.players.length,
+    position,
     won,
-    entryFee: match.tier.entryFee,
+    entryFee: cancelled ? 0 : match.tier.entryFee,
     holes: me.scores.map((strokes, i) => ({ strokes, par: COURSES[match.courses[i]].par })),
-    tiebreakWon: won && leaders > 1,
+    tiebreakWon: !cancelled && won && leaders > 1,
   });
 }
 
-async function showOnlineResults(match) {
+/** Clasificación final: jugadores reales por su puesto y, aparte, los bots (sin puesto ni premio). */
+function liveRanking(live) {
+  const { match } = live;
+  const all = liveStandings(match, live.roster ?? buildRoster(match), live.botScores);
+  const humans = all
+    .filter((r) => !r.isBot)
+    .sort((a, b) => (a.position ?? 99) - (b.position ?? 99) || a.total - b.total)
+    .map((r) => ({ ...r, position: match.status === 'settled' ? match.players.find((p) => p.id === r.id)?.position : r.position }));
+  const bots = all.filter((r) => r.isBot).map((r) => ({ ...r, position: '–' }));
+  return { all, humans, rows: [...humans, ...bots] };
+}
+
+async function showLiveResults(live) {
+  if (!live || live.stopped) return showLobby();
+  const { match } = live;
+  live.finished = true;
+  live.check = null;
+  live.onStatus = null;
+  clearInterval(live.timer);
   app.querySelector('.overlay')?.remove();
   try {
     await backend.tournaments.status(match);
   } catch { }
+  if (live.stopped) return;
   screen = 'lobby';
   const { me, tier } = match;
   const open = match.status === 'open';
   const cancelled = match.status === 'cancelled';
-  const won = !open && (me.position === 1 || me.payout > 0);
-  const waiting = match.players.filter((p) => !p.finished).length;
-  const gained = match.status === 'settled' ? recordOnce(match) : null;
-  const ranking = [...match.players].sort((a, b) => (a.position ?? 99) - (b.position ?? 99) || (a.total ?? 999) - (b.total ?? 999));
-  if (gained) {
-    return showEndOverlay({
-      onRematch: () => startMatch(tier, match.id),
-      won,
-      position: me.position,
-      total: match.players.length,
-      prize: won ? `Premio ${coin(me.payout)}` : `Bote ${coin(match.pot)} para el ganador`,
-      ranking,
-      legal: `Bote ${fmt(match.pot)} · comisión ${fmt(match.commission)} · premio ${fmt(match.prize)}`,
-      holes: me.scores.map((strokes, i) => ({ strokes, par: COURSES[match.courses[i]].par })),
-      gained,
-    });
+  const { all, rows } = liveRanking(live);
+  if (!open) {
+    const gained = recordOnce(match, all);
+    if (gained) {
+      const mine = all.find((r) => r.id === 'me');
+      const won = cancelled ? mine?.position === 1 : me.position === 1 || me.payout > 0;
+      showEndOverlay({
+        onRematch: () => startMatch(tier, match.id),
+        won,
+        position: cancelled ? mine?.position ?? 1 : me.position,
+        total: cancelled ? all.length : match.players.length,
+        prize: cancelled ? 'Solo jugaron bots: te hemos devuelto la entrada' : won ? `Premio ${coin(me.payout)}` : `Bote ${coin(match.pot)} para el ganador`,
+        ranking: rows,
+        legal: cancelled ? 'Los bots no cuentan para el premio.' : `Bote ${fmt(match.pot)} · comisión ${fmt(match.commission)} · premio ${fmt(match.prize)} · los bots no cuentan`,
+        holes: me.scores.map((strokes, i) => ({ strokes, par: COURSES[match.courses[i]].par })),
+        gained,
+      });
+      stopLive();
+      if (won && !cancelled) sfx.coins();
+      return;
+    }
   }
+  const won = !open && !cancelled && (me.position === 1 || me.payout > 0);
+  const waiting = match.players.filter((p) => !p.finished && p.online);
   let title, sub;
   if (open) {
     title = 'Esperando a los demás';
-    sub = waiting ? `Faltan ${waiting} jugador${waiting === 1 ? '' : 'es'} por terminar · la inscripción cierra en ${minutesLeft(match.closesAt)} min` : 'Cerrando el torneo…';
+    sub = waiting.length ? `Están terminando: ${waiting.map((p) => esc(p.name)).join(', ')}` : 'Cerrando la partida…';
   } else if (cancelled) {
-    title = 'No hubo rivales';
+    title = 'Solo jugaron bots';
     sub = 'Te hemos devuelto la entrada';
   } else {
     title = won ? '¡Has ganado!' : `Posición ${me.position} de ${match.players.length}`;
@@ -2170,68 +2400,27 @@ async function showOnlineResults(match) {
   const view = h(`
     <main class="screen results ${won ? 'won' : ''}">
       ${won ? '<div class="rays"></div>' : ''}
-      <div class="trophy">${open ? 'En espera' : won ? 'Victoria' : cancelled ? 'Cancelado' : `Puesto #${me.position}`}</div>
+      <div class="trophy">${open ? 'En espera' : won ? 'Victoria' : cancelled ? 'Devuelto' : `Puesto #${me.position}`}</div>
       <h1 class="score-title">${title}</h1>
       <p class="sub">${sub}</p>
-      ${gained
-      ? `<div class="xp-card">
-        <div class="xp-head"><b>+${gained.xp} XP</b><span>${gained.level.level > gained.levelBefore ? `¡Nivel ${gained.level.level}!` : `Nivel ${gained.level.level}`}</span></div>
-        <span class="bar"><i style="--to:${(gained.level.into / gained.level.need) * 100}%"></i></span>
-      </div>
-        ${prestigeNote(gained)}`
-      : ''
-    }
-      ${standingsTable(ranking, !open)}
-      ${match.status === 'settled' ? `<p class="legal">Bote ${fmt(match.pot)} · comisión ${fmt(match.commission)} · premio ${fmt(match.prize)}</p>` : ''}
-      ${open ? '<p class="legal">Puedes salir: el resultado y el premio aparecerán en el lobby, en «Tus torneos».</p>' : ''}
+      ${standingsTable(rows, !open)}
+      ${match.status === 'settled' ? `<p class="legal">Bote ${fmt(match.pot)} · comisión ${fmt(match.commission)} · premio ${fmt(match.prize)} · los bots no cuentan</p>` : ''}
+      ${open ? '<p class="legal">Si alguien se ha desconectado, en menos de un minuto se le da por terminado. Si sales, el premio te llega igual al saldo.</p>' : ''}
       <div class="row">
-        <button class="primary again">${open ? 'Jugar otro' : 'Revancha'}</button>
+        <button class="primary again">${open ? 'Jugar otra' : 'Revancha'}</button>
         <button class="ghost" data-go="lobby">Lobby</button>
       </div>
     </main>`);
-  view.querySelector('.again').addEventListener('click', () => startMatch(tier));
+  view.querySelector('.again').addEventListener('click', () => startMatch(tier, open ? null : match.id));
+  const key = `${match.status}:${waiting.length}`;
   await shell(view, { nav: false });
-  if (won && gained) sfx.coins();
-  if (open) {
-    const key = `${match.status}:${waiting}`;
-    const poll = async () => {
-      if (!view.isConnected) return;
-      try {
-        await backend.tournaments.status(match);
-      } catch { }
-      if (!view.isConnected) return;
-      if (`${match.status}:${match.players.filter((p) => !p.finished).length}` !== key) showOnlineResults(match);
-      else setTimeout(poll, POLL_MS);
-    };
-    setTimeout(poll, POLL_MS);
-  }
-}
-
-async function showMyTournaments(box) {
-  let list;
-  try {
-    list = await backend.tournaments.mine(TIERS);
-  } catch {
-    return;
-  }
-  if (!list.length || !box.isConnected) return;
-  const label = (m) => {
-    if (m.status === 'cancelled') return 'Sin rivales · entrada devuelta';
-    if (m.status === 'settled') return m.me.payout > 0 ? `Ganaste ${coin(m.me.payout)}` : `Posición ${m.me.position} de ${m.players.length}`;
-    if (!m.me.finished) return `Sin terminar · ${m.me.holesPlayed}/${m.holes} hoyos`;
-    return `Esperando · ${m.players.filter((p) => p.finished).length}/${m.players.length} han terminado`;
+  if (!open) return stopLive();
+  live.fast = true;
+  live.onStatus = () => {
+    if (!view.isConnected) return;
+    const now = `${match.status}:${match.players.filter((p) => !p.finished && p.online).length}`;
+    if (now !== key) showLiveResults(live);
   };
-  box.append(h(`<div class="section-head"><h2>Tus torneos</h2></div>`));
-  const ul = h('<ul class="txs"></ul>');
-  for (const m of list.slice(0, 5)) {
-    const li = h(`<li class="tap"><div><b>${m.tier?.name ?? m.id}</b><small>${m.players.length} jugadores · bote ${fmt(m.tier ? m.tier.entryFee * m.players.length : m.pot)}</small></div><span>${label(m)}</span></li>`);
-    li.addEventListener('click', () => {
-      if (m.status === 'open' && !m.me.finished) return m.me.holesPlayed > 0 ? continueRound(m) : showTournamentLobby(m);
-      showOnlineResults(m);
-    });
-    ul.append(li);
-  }
-  box.append(ul);
 }
 
 function retryMsg(text, retry) {

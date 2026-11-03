@@ -1684,10 +1684,43 @@ body.sk-noscroll { overflow: hidden; }
   }
 }
 
-/* torneos */
-.my-tournaments .section-head { margin-top: 18px; }
-.my-tournaments .txs li.tap { cursor: pointer; }
-.my-tournaments .txs li > span { font-weight: 800; font-size: 13px; text-align: right; }
+/* partidas en vivo */
+.seat .bot-tag,
+.chip.bot::after {
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.7);
+}
+.seat .bot-tag { margin-left: auto; }
+.seat.bot { opacity: 0.85; }
+.chip.bot::after { content: 'BOT'; font-size: 8px; padding: 1px 4px; }
+.chip.bot { opacity: 0.8; }
+.live-wait {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  transform: translateX(-50%);
+  z-index: 6;
+  max-width: calc(100% - 32px);
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: rgba(10, 14, 22, 0.78);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+  color: #fff;
+  text-align: center;
+  pointer-events: none;
+  display: grid;
+  gap: 2px;
+}
+.live-wait b { font-size: 14px; }
+.live-wait small { font-size: 12px; opacity: 0.75; }
 
 /* ---------- cuenta ---------- */
 

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { BALL_R, CUP_R, DT, MAX_SHOT_SPEED, inSand, isMoving, onBoost, quantizeShot, segmentsOf, shotVelocity, spinnerSegment, step, tubeTable } from './physics.js';
 import { Bot } from './bots.js';
+import { RemoteBall } from './remoteBall.js';
 import { THEMES } from './themes.js';
 import { buildEnvironment, courseBounds } from './render/environment.js';
 import { buildCourse } from './render/course.js';
@@ -146,8 +147,12 @@ export class GolfGame {
    * firstSunkTick: en torneos, el paso en el que embocó el más rápido de los
    * que ya han jugado este hoyo (arranca el contador desde ese momento).
    */
-  load(course, { bots = [], skin = SKINS[0], instance = null, firstSunkTick = null, timeLimit = HOLE_TIME_LIMIT } = {}) {
+  load(course, { bots = [], skin = SKINS[0], instance = null, firstSunkTick = null, timeLimit = HOLE_TIME_LIMIT, live = false } = {}) {
     this.botPlayers = bots;
+    // en vivo: los rivales siguen jugando cuando terminas, los bots empiezan en un paso fijo
+    // (todos los móviles ven lo mismo) y solo los jugadores reales arrancan el contador
+    this.live = live;
+    this.botStartTick = live ? Math.round(INTRO_SECONDS / DT) : null;
     this.skin = skin;
     // instance: { seed, ... } de la skin equipada (progress.instance(id)); sin ella, el acabado base
     this.instance = instance;
@@ -167,6 +172,7 @@ export class GolfGame {
     this.sunk = false;
     this.timedOut = false;
     this.endTick = null; // paso en el que se acabó el tiempo (se manda al servidor)
+    this.sunkTick = null; // paso en el que embocaste
     this.firstSunkTick = course.noCup ? null : firstSunkTick;
     this.limitTicks = timeLimit != null && Number.isFinite(timeLimit) && timeLimit > 0 ? Math.round(timeLimit / DT) : null;
     this.timerShown = undefined;
@@ -324,6 +330,11 @@ export class GolfGame {
     if (this.firstSunkTick == null || tick < this.firstSunkTick) this.firstSunkTick = tick;
   }
 
+  /** En vivo: otro jugador ha embocado en ese paso de su hoyo (arranca o adelanta el contador). */
+  noteRemoteSunk(tick) {
+    if (this.course && Number.isInteger(tick) && tick > 0) this.#noteSunk(tick);
+  }
+
   #cancelAim() {
     this.drag = null;
     this.charging = false;
@@ -370,14 +381,15 @@ export class GolfGame {
    * quedan descalificados con el máximo).
    */
   finishBots() {
-    const left = (this.bots ?? []).filter((b) => !b.done);
+    const left = (this.bots ?? []).filter((b) => !b.done && !b.remote);
     for (let tick = this.tick; left.some((b) => !b.done) && tick < this.tick + 120 * 300; ) {
       tick++;
       if (this.#disqualifyLateBots(tick)) break;
-      for (const b of left) if (b.tick(tick * DT, DT)?.sunk) this.#noteSunk(tick);
+      for (const b of left) if (b.tick(tick * DT, DT)?.sunk && !this.live) this.#noteSunk(tick);
     }
     const out = {};
     for (const b of this.bots ?? []) {
+      if (b.remote) continue;
       if (!b.done) Object.assign(b, { done: true, strokes: maxStrokesOf(this.course) });
       out[b.player.id] = b.strokes;
     }
@@ -389,7 +401,8 @@ export class GolfGame {
     const dl = this.deadlineTick;
     if (dl == null || this.course.noCup || tick <= dl) return false;
     for (const b of this.bots ?? []) {
-      if (b.done) continue;
+      // los jugadores reales dicen ellos mismos si se quedaron sin tiempo
+      if (b.done || b.remote) continue;
       Object.assign(b, { done: true, dq: true, strokes: maxStrokesOf(this.course) });
       this.onRival?.(b.player, { strokes: b.strokes, sunk: false, done: true, dq: true });
     }
@@ -400,6 +413,7 @@ export class GolfGame {
   botDistances() {
     const out = {};
     for (const b of this.bots ?? []) {
+      if (b.remote) continue;
       if (!b.done) b.finishInstantly(this.t);
       out[b.player.id] = Math.hypot(b.ball.x - this.course.cup[0], b.ball.z - this.course.cup[1]);
     }
@@ -488,7 +502,7 @@ export class GolfGame {
     this.ghostHandles = new Map();
     const botSkins = pickRandomSkins(this.botPlayers.length);
     this.bots = this.botPlayers.map((p, i) => {
-      const bot = new Bot(p, this.course, this.segs, Math.random);
+      const bot = p.remote ? new RemoteBall(p, this.course, this.segs, p.remote) : new Bot(p, this.course, this.segs, p.rng ?? Math.random);
       const skin = botSkins[i];
       if (!this.ghostHandles.has(skin.id)) {
         const handle = createSkinMaterial(skin, { quality: 'low', instance: {}, theme: this.theme });
@@ -1251,11 +1265,12 @@ export class GolfGame {
       }
       if (r.sunk) {
         b.sunk = true;
-        this.#noteSunk(this.tick);
+        if (!this.live) this.#noteSunk(this.tick);
+        else if (b.remote) this.#noteSunk(r.sunkTick ?? this.tick);
         sfx.rivalCup(pan);
         this.particles.puff(new THREE.Vector3(b.ball.x, 0.1, b.ball.z), new THREE.Color(b.player.color).getHex(), 12, 1.2, 0.18);
       }
-      if (r.shot || r.finished) this.onRival?.(b.player, { strokes: b.strokes, sunk: !!r.sunk, done: b.done });
+      if (r.shot || r.finished) this.onRival?.(b.player, { strokes: b.strokes, sunk: !!r.sunk, done: b.done, dq: !!b.dq });
     }
   }
 
@@ -1283,7 +1298,7 @@ export class GolfGame {
       this.acc -= DT;
       this.tick++;
       this.t = this.tick * DT;
-      if (this.intro >= 1 && !this.locked) this.#tickBots();
+      if (this.live ? this.tick >= this.botStartTick : this.intro >= 1 && !this.locked) this.#tickBots();
       // se acabó el tiempo: lo que entre en el paso del límite aún vale
       if (!this.sunk && !this.timedOut && this.deadlineTick != null && this.tick > this.deadlineTick) this.#timeUp();
       if (this.sunk || this.paused || this.timedOut) continue;
@@ -1428,6 +1443,7 @@ export class GolfGame {
       if (r.sunk) {
         this.sunk = true;
         this.sunkAt = this.t;
+        this.sunkTick = this.tick;
         this.#noteSunk(this.tick);
         this.exitPointerLock();
         sfx.cup();
