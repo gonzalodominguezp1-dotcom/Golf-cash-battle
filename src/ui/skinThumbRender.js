@@ -58,7 +58,7 @@ const toBlob = (canvas, type, q) => new Promise((resolve) => {
 });
 
 /** Renderiza la skin una vez y devuelve un Blob (image/webp, o image/png de reserva). Lanza si no hay WebGL. */
-export async function renderThumb(skin, { seed = 0, quality = 'medium', px = 144 } = {}) {
+export async function renderThumb(skin, { seed = 0, quality = 'high', px = 144 } = {}) {
   const g = ensureGL();
   if (g.px !== px) {
     g.renderer.setSize(px, px, false);

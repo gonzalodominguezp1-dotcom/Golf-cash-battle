@@ -22,7 +22,10 @@ const ZOOM_MIN = 0.6;
 const ZOOM_MAX = 2;
 const FX_K = R / BALL_R; // unidades de juego -> unidades del inspector
 const SPHERE = { low: [32, 20], medium: [48, 32], high: [64, 48] };
-const MAX_DPR = { low: 1, medium: 1.5, high: 1.5 };
+const MAX_DPR = { low: 1, medium: 1.5, high: 2 };
+const SPIN = Math.PI / 4; // rad/s del giro continuo (vuelta completa en 8 s)
+// Las vistas previas de skins siempre se dibujan en calidad máxima, sea cual sea la calidad del juego.
+const PREVIEW_QUALITY = 'high';
 const EPS = 0.02; // rad/s de inercia por debajo de los cuales la bola se considera parada
 const FX_LOOP = 6;
 
@@ -93,10 +96,12 @@ export function createSkinInspector(container, opts = {}) {
   const mode = opts.mode === 'fullscreen' ? 'fullscreen' : 'panel';
   let skin = opts.skin ?? SKINS[0];
   let instance = opts.instance ?? SAFE_INSTANCE;
-  let level = QUALITY_LEVELS.includes(opts.quality) ? opts.quality : getQuality();
+  let level = QUALITY_LEVELS.includes(opts.quality) ? opts.quality : PREVIEW_QUALITY;
+  const autoSpin = !!opts.autoSpin;
+  const bare = !!opts.bare;
 
   // ---------------------------------------------------------------- DOM
-  const root = el('div', `sk-insp sk-${mode}`);
+  const root = el('div', `sk-insp sk-${mode}${bare ? ' sk-bare' : ''}`);
   const stage = el('div', 'sk-stage');
   const canvas = el('canvas', 'sk-canvas');
   const hint = el('p', 'sk-hint', 'Arrastra para girar · pellizca o usa la rueda para acercar · doble toque para voltear');
@@ -120,7 +125,7 @@ export function createSkinInspector(container, opts = {}) {
   // ---------------------------------------------------------------- WebGL
   let renderer;
   try {
-    renderer = makeRenderer(canvas, level !== 'low');
+    renderer = makeRenderer(canvas, true);
   } catch (err) {
     stage.replaceChildren(el('p', 'sk-hint', 'No se pudo iniciar WebGL en este dispositivo.'));
     renderPanel();
@@ -253,7 +258,7 @@ export function createSkinInspector(container, opts = {}) {
       vy *= decay;
       if (!dragging && Math.abs(vx) < EPS && Math.abs(vy) < EPS) vx = vy = 0;
       if (!dragging) {
-        qTmp.setFromAxisAngle(AY, vy * dt);
+        qTmp.setFromAxisAngle(AY, vy * dt + (autoSpin && !reducedMotion() ? SPIN * dt : 0));
         q.premultiply(qTmp);
         qTmp.setFromAxisAngle(AX, vx * dt);
         q.premultiply(qTmp);
@@ -462,7 +467,7 @@ export function createSkinInspector(container, opts = {}) {
   const visibleNow = () => intersecting && !document.hidden && root.isConnected && !destroyed;
   /** ¿Sigue moviéndose algo? Si no, el bucle se detiene hasta la próxima interacción. */
   const animating = () =>
-    !!tween || dragging || pointers.size > 0 || fxMode || sweep >= 0 || Math.abs(vx) >= EPS || Math.abs(vy) >= EPS ||
+    (autoSpin && !reducedMotion()) || !!tween || dragging || pointers.size > 0 || fxMode || sweep >= 0 || Math.abs(vx) >= EPS || Math.abs(vy) >= EPS ||
     Math.abs(zoomT - zoom) > 0.001 || Math.abs(camGoalY - camY) > 0.001 || Math.abs(lookGoalY - lookY) > 0.001;
   function invalidate() {
     dirty = true;
