@@ -1,7 +1,8 @@
 ---
 author: la-chaqueta-bionica
 branch: la-chaqueta-bionica
-status: in-progress
+status: done
+merged: 2026-11-03
 ---
 
 # Avatar guardado en la cuenta y amigos por nombre de usuario
@@ -26,4 +27,4 @@ La foto de perfil se perdía al volver a entrar: `AvatarStore` solo escribía en
 - El SQL no se ha ejecutado contra Postgres.
 
 ## Next
-Aplicar la migración con `supabase db push`, entrar con dos cuentas y recorrer: subir foto, cerrar sesión y volver a entrar, añadir por nombre, aceptar, quitar.
+Fusionado en main el 2026-11-03 (cd21bb6).
