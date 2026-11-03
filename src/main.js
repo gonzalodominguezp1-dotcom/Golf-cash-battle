@@ -9,7 +9,7 @@ import { Bot } from './game/bots.js';
 import { segmentsOf } from './game/physics.js';
 import { enterFinale, isMuted, leaveFinale, setMuted, sfx, unlockAudio } from './game/audio.js';
 import { Progress } from './progress/Progress.js';
-import { AVATAR_ICONS, AvatarStore, checkAvatarFile, iconById, imageToAvatar } from './progress/avatar.js';
+import { AVATAR_ICONS, AvatarStore, checkAvatarFile, fromWire, iconById, imageToAvatar, toWire } from './progress/avatar.js';
 import { FRAMES, frameById, framesUnlocked, frameStyle } from './progress/prestige.js';
 import { CHALLENGES, TIERS as SKIN_TIERS, SKINS } from './progress/skins.js';
 import { ballPreview } from './game/render/ballPaint.js';
@@ -19,6 +19,7 @@ import { rarePatternOf } from './progress/inventory.js';
 import { getCourseDistance, staticCoursePreview } from './game/render/coursePreviewStatic.js';
 import { mountAuth } from './ui/authScreen.js';
 import { validatePassword, authMessage } from './account/authRules.js';
+import { addedMessage, cleanFriendName, friendMessage } from './account/friendRules.js';
 import { QUALITY_LEVELS, QUALITY_NAMES, getQuality, setQuality } from './game/render/quality.js';
 
 let backend, wallet, matches;
@@ -708,6 +709,13 @@ async function showAccount(note = '', tab = 'profile') {
         </div>
         <p class="sub">Se muestra en tu perfil y en el ranking. Siguiente marco: ${(() => { const n = FRAMES.find((f) => f.level > lvl.level); return n ? `${n.name} en el nivel ${n.level}` : 'ya los tienes todos'; })()}.</p>
       </div>
+      <div class="account-card-panel friends-panel">
+        <div class="panel-head">
+          <h2>Amigos</h2>
+          <span class="panel-badge friends-count"></span>
+        </div>
+        <div class="friends-box"><p class="sub">Cargando…</p></div>
+      </div>
       ${note ? `<p class="notice">${note}</p>` : ''}
       ${p.in_review ? `<p class="offline">Tu cuenta está en revisión por el sistema antitrampas.${p.held > 0 ? ` Tienes ${coin(Number(p.held))} en premios retenidos hasta que termine.` : ''}</p>` : ''}
 
@@ -740,6 +748,8 @@ async function showAccount(note = '', tab = 'profile') {
   view.querySelectorAll('.frame-opt:not(.locked)').forEach((b) => b.addEventListener('click', () => {
     if (progress.equipFrame(b.dataset.frame)) showAccount(note);
   }));
+
+  friendsPanel(view.querySelector('.friends-box'), view.querySelector('.friends-count'), Boolean(p.username));
 
   const emailBox = view.querySelector('.email-box');
   emailBox.innerHTML = `<p class="field-ok">${esc(p.email ?? '')}</p>${confirmed ? '' : '<p class="sub">Abre el enlace que te enviamos al registrarte para confirmar el email.</p>'}`;
@@ -777,6 +787,66 @@ async function showAccount(note = '', tab = 'profile') {
     await account.signOut();
   });
   await shell(view);
+}
+
+// amigos: se añaden por nombre de usuario y la otra persona acepta o rechaza
+async function friendsPanel(box, badge, hasName) {
+  const account = backend.account;
+  const paint = (data, msg = '', isErr = false) => {
+    badge.textContent = `${data.friends.length} ${data.friends.length === 1 ? 'amigo' : 'amigos'}`;
+    const row = (f) => {
+      const frame = frameById(f.frame);
+      return `<li class="friend">
+        ${avatarHtml({ size: 'sm', frame, av: fromWire(f.avatar), initial: f.name })}
+        <span class="friend-name"><b>${esc(f.name)}</b><small>Nv. ${esc(f.level)}</small></span>
+        <button class="chip-btn" data-remove="${esc(f.name)}">Quitar</button>
+      </li>`;
+    };
+    const asks = (list, buttons) => list.map((r) => `<li class="friend">
+        <span class="friend-name"><b>${esc(r.name)}</b></span>${buttons(esc(r.name))}
+      </li>`).join('');
+    box.innerHTML = `
+      <form class="friend-add form">
+        <div class="row"><input name="name" maxlength="17" placeholder="Nombre de usuario" autocomplete="off" autocapitalize="off" spellcheck="false" ${hasName ? '' : 'disabled'}><button class="primary" ${hasName ? '' : 'disabled'}>Añadir</button></div>
+        <p class="friend-msg ${isErr ? 'err' : 'ok'}" role="status">${esc(msg || (hasName ? '' : 'Ponte primero un nombre de usuario para añadir amigos.'))}</p>
+      </form>
+      ${data.incoming.length ? `<h3 class="friends-sub">Peticiones recibidas</h3><ul class="friend-list">${asks(data.incoming, (n) => `<span class="friend-actions"><button class="chip-btn" data-accept="${n}">Aceptar</button><button class="chip-btn" data-decline="${n}">Rechazar</button></span>`)}</ul>` : ''}
+      ${data.friends.length ? `<ul class="friend-list">${data.friends.map(row).join('')}</ul>` : '<p class="sub">Aún no tienes amigos. Añade a alguien por su nombre de usuario.</p>'}
+      ${data.outgoing.length ? `<h3 class="friends-sub">Peticiones enviadas</h3><ul class="friend-list">${asks(data.outgoing, (n) => `<button class="chip-btn" data-remove="${n}">Cancelar</button>`)}</ul>` : ''}`;
+    const run = (name, job, ok) => async () => {
+      try {
+        await job(name);
+        refresh(ok);
+      } catch (err) {
+        refresh(friendMessage(err.code), true);
+      }
+    };
+    box.querySelectorAll('[data-accept]').forEach((b) => b.addEventListener('click', run(b.dataset.accept, (n) => account.respondFriend(n, true), `Ahora eres amigo de ${b.dataset.accept}.`)));
+    box.querySelectorAll('[data-decline]').forEach((b) => b.addEventListener('click', run(b.dataset.decline, (n) => account.respondFriend(n, false), 'Petición rechazada.')));
+    box.querySelectorAll('[data-remove]').forEach((b) => b.addEventListener('click', run(b.dataset.remove, (n) => account.removeFriend(n), 'Hecho.')));
+    box.querySelector('.friend-add').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = cleanFriendName(e.target.name.value);
+      if (!name) return void refresh(friendMessage('invalid_username'), true, e.target.name.value);
+      e.target.querySelector('button').disabled = true;
+      try {
+        refresh(addedMessage(await account.addFriend(name), name));
+      } catch (err) {
+        refresh(friendMessage(err.code), true, name);
+      }
+    });
+  };
+  async function refresh(msg = '', isErr = false, keep = '') {
+    let data;
+    try {
+      data = await account.friends();
+    } catch {
+      return void (box.innerHTML = '<p class="sub">No se han podido cargar tus amigos.</p>');
+    }
+    paint(data, msg, isErr);
+    if (keep) box.querySelector('[name=name]').value = keep;
+  }
+  await refresh();
 }
 
 // cambio de contraseña desde la cuenta: pide la actual antes de aceptar la nueva
@@ -2277,6 +2347,8 @@ if (skinLab) {
     ({ wallet, matches } = b);
     if (b.account) {
       avatar = new AvatarStore(b.user.id);
+      avatar.onChange = (v) => b.account.setAvatar(toWire(v));
+      avatar.hydrate(b.account.profile?.avatar);
       progress.attach(b.user.id, b.account.profile?.progress, (s) => b.account.saveProgress(s), (id) => b.account.setFrame(id));
       // hitos de ranking y marco elegido: pueden desbloquear bolas, que se ofrecen al acabar la próxima partida
       b.account.myRanking().then((r) => progress.setServerStats(r)).catch(() => {});

@@ -3234,3 +3234,17 @@ body.sk-noscroll { overflow: hidden; }
 .ae-icons button { aspect-ratio: 1; border-radius: 12px; font-size: 22px; background: rgba(255, 255, 255, 0.05); border: 1.5px solid var(--line); cursor: pointer; }
 .ae-icons button.on { border-color: #ffd700; background: rgba(255, 215, 0, 0.12); }
 .ae-msg.err { color: #ff7a7a; }
+
+/* ---------- amigos ---------- */
+.friend-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.friend { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 14px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); }
+.friend-name { display: grid; flex: 1; min-width: 0; }
+.friend-name b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.friend-name small { color: var(--muted); font-weight: 700; }
+.friend-actions { display: flex; gap: 6px; }
+.friends-sub { margin: 4px 0 0; font-size: 13px; color: var(--muted); font-weight: 800; }
+.friend-add .row { display: flex; gap: 8px; }
+.friend-add input { flex: 1; min-width: 0; }
+.friend-msg { margin: 0; min-height: 1.2em; font-size: 13px; }
+.friend-msg.err { color: #ff6b8a; }
+.friend-msg.ok { color: var(--muted); }
