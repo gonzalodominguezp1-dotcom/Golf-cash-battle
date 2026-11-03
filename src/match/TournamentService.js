@@ -83,6 +83,12 @@ export class TournamentService {
     return match;
   }
 
+  /** Un torneo en el que estás (p. ej. el que acaba de buscar tu grupo). */
+  async get(id, tiers) {
+    const t = await this.#rpc('tournament_status', { p_t: id });
+    return toMatch(t, tiers.find((x) => x.id === t.tier_id));
+  }
+
   async mine(tiers) {
     const list = await this.#rpc('my_tournaments');
     return list.map((t) => toMatch(t, tiers.find((x) => x.id === t.tier_id)));

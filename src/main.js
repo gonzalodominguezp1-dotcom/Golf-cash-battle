@@ -20,6 +20,7 @@ import { getCourseDistance, staticCoursePreview } from './game/render/coursePrev
 import { mountAuth } from './ui/authScreen.js';
 import { validatePassword, authMessage } from './account/authRules.js';
 import { addedMessage, cleanFriendName, friendMessage } from './account/friendRules.js';
+import { newPartyMatch, partyErrorText, partyMessage, readyLabel } from './match/partyRules.js';
 import { QUALITY_LEVELS, QUALITY_NAMES, getQuality, setQuality } from './game/render/quality.js';
 
 let backend, wallet, matches;
@@ -255,6 +256,7 @@ async function showLobby() {
       ${backend.mode === 'local' ? `<p class="offline">Modo sin conexión: el saldo se guarda solo en este ${DEVICE}</p>` : ''}
       ${backend.account?.profile?.paid_block ? `<button class="notice account-hint" data-go="account">${{ account_required: 'Confirma tu email para jugar mesas con entrada →', kyc_required: 'Verifica tu edad e identidad para jugar mesas con entrada →', account_review: 'Tu cuenta está en revisión: de momento solo Práctica', underage: 'Mesas con entrada solo para mayores de 18' }[backend.account.profile.paid_block]}</button>` : ''}
       <div class="my-tournaments"></div>
+      ${backend.parties ? '<section class="party-box"></section>' : ''}
       <div class="section-head">
         <div class="section-title-row">
           <h1>Mesas de Torneo</h1>
@@ -290,12 +292,197 @@ async function showLobby() {
         </div>
         <button class="play" ${enough ? '' : 'disabled'}>${!enough ? 'Saldo insuficiente' : free ? 'Practicar' : 'Jugar Torneo'}</button>
       </div>`);
-    card.querySelector('.play').addEventListener('click', () => startMatch(tier));
+    const play = card.querySelector('.play');
+    play.dataset.tier = tier.id;
+    play.dataset.label = play.textContent;
+    play.addEventListener('click', () => (!free && party.state?.party ? party.pickTier(tier) : startMatch(tier)));
     list.append(card);
   }
   await shell(view);
   if (backend.tournaments) showMyTournaments(view.querySelector('.my-tournaments'));
+  if (backend.parties) partyPanel(view.querySelector('.party-box'), list, balance);
   claimRewards();
+}
+
+// ---------- grupos ----------
+// Hasta 4 amigos: el líder elige la mesa, cada uno pulsa «Listo» y el servidor
+// los mete juntos en el mismo torneo. Se consulta cada pocos segundos mientras
+// se ve el lobby; cuando aparece un torneo nuevo del grupo, se abre su sala.
+
+const PARTY_POLL_MS = 3000;
+const PARTY_SEEN = 'gcb.party.seen';
+const party = { state: null, pickTier: () => { } };
+
+async function partyPanel(box, tierList, balance) {
+  const svc = backend.parties;
+  const hasName = Boolean(backend.account?.profile?.username);
+  let friends = null;
+  let msg = '';
+  let busy = false;
+
+  const seen = () => {
+    try { return localStorage.getItem(PARTY_SEEN); } catch { return null; }
+  };
+  const markSeen = (id) => {
+    try { localStorage.setItem(PARTY_SEEN, id); } catch { }
+  };
+
+  // si el grupo acaba de entrar en un torneo, a su sala (o a seguir jugando)
+  async function openIfNew(state) {
+    const id = newPartyMatch(state?.party, seen());
+    if (!id) return false;
+    markSeen(id);
+    let match;
+    try {
+      match = await backend.tournaments.get(id, TIERS);
+    } catch {
+      return false;
+    }
+    if (match.status !== 'open' || !match.me || match.me.finished) return false;
+    await wallet.getBalance();
+    sfx.tick();
+    if (match.me.holesPlayed > 0) continueRound(match);
+    else showTournamentLobby(match);
+    return true;
+  }
+
+  async function apply(job, okMsg = '') {
+    if (busy) return;
+    busy = true;
+    try {
+      const state = await job();
+      msg = okMsg;
+      if (await openIfNew(state)) return;
+      paint(state);
+    } catch (e) {
+      msg = partyMessage(e.code);
+      paint(party.state);
+    } finally {
+      busy = false;
+    }
+  }
+
+  party.pickTier = (tier) =>
+    apply(async () => {
+      if (!party.state.party.leader) {
+        // un miembro solo puede confirmar la mesa que ya eligió el líder
+        if (party.state.party.tier_id !== tier.id) throw Object.assign(new Error(), { code: 'not_leader' });
+        return svc.ready(true);
+      }
+      await svc.setTier(tier.id);
+      return svc.ready(true);
+    });
+
+  // los botones de las mesas dicen qué pasa al pulsarlos estando en grupo
+  function paintTiers(p) {
+    for (const b of tierList.querySelectorAll('.play')) {
+      const tier = TIERS.find((t) => t.id === b.dataset.tier);
+      if (!tier || tier.entryFee === 0 || balance < tier.entryFee) continue;
+      b.classList.toggle('party-pick', Boolean(p) && p.tier_id === tier.id);
+      if (!p) {
+        b.textContent = b.dataset.label;
+        b.disabled = false;
+      } else if (p.leader) {
+        b.textContent = p.tier_id === tier.id ? 'Mesa del grupo' : 'Jugar con el grupo';
+        b.disabled = false;
+      } else {
+        b.textContent = p.tier_id === tier.id ? 'Mesa del grupo · Listo' : 'La elige el líder';
+        b.disabled = p.tier_id !== tier.id;
+      }
+    }
+  }
+
+  function paint(state) {
+    if (!box.isConnected) return;
+    party.state = state;
+    const p = state?.party ?? null;
+    const invites = state?.invites ?? [];
+    paintTiers(p);
+    const inviteRows = invites.map((i) => `<li class="friend">
+        <span class="friend-name"><b>${esc(i.from)}</b><small>te invita a su grupo</small></span>
+        <span class="friend-actions"><button class="chip-btn" data-join="${esc(i.party)}">Unirme</button><button class="chip-btn" data-no="${esc(i.party)}">No</button></span>
+      </li>`).join('');
+    const inParty = new Set([...(p?.members ?? []).map((m) => m.name.toLowerCase()), ...(p?.invited ?? []).map((n) => n.toLowerCase())]);
+    const room = p ? p.size - p.members.length - p.invited.length : 3;
+    const candidates = (friends ?? []).filter((f) => !inParty.has(f.name.toLowerCase())).slice(0, 6);
+    const friendRows = room > 0 && candidates.length
+      ? `<ul class="friend-list">${candidates.map((f) => `<li class="friend">
+          ${avatarHtml({ size: 'sm', frame: frameById(f.frame), av: fromWire(f.avatar), initial: f.name })}
+          <span class="friend-name"><b>${esc(f.name)}</b><small>Nv. ${esc(f.level)}</small></span>
+          <button class="chip-btn" data-invite="${esc(f.name)}">Invitar</button>
+        </li>`).join('')}</ul>`
+      : '';
+    const tier = p?.tier_id ? TIERS.find((t) => t.id === p.tier_id) : null;
+    let body;
+    if (!hasName) {
+      body = `<p class="sub">Ponte un nombre de usuario y añade amigos para buscar partida juntos.</p><button class="chip-btn" data-go="account">Ir a la cuenta</button>`;
+    } else if (!p) {
+      body = `
+        ${inviteRows ? `<ul class="friend-list">${inviteRows}</ul>` : ''}
+        <p class="sub">Invita a tus amigos y entraréis juntos en el mismo torneo.</p>
+        ${friends === null ? '<p class="sub">Cargando amigos…</p>' : friendRows || '<p class="sub">Aún no tienes amigos. Añádelos en tu cuenta.</p><button class="chip-btn" data-go="account">Añadir amigos</button>'}`;
+    } else {
+      const members = p.members.map((m) => `<li class="party-member ${m.ready ? 'ready' : ''}">
+          <span class="avatar">${esc(m.name[0] ?? '?')}</span>
+          <span><b>${m.me ? 'Tú' : esc(m.name)}</b><small>${m.leader ? 'Líder · ' : ''}${m.ready ? 'Listo' : 'Esperando'}</small></span>
+        </li>`).join('');
+      const invited = p.invited.map((n) => `<li class="party-member invited"><span class="avatar">${esc(n[0] ?? '?')}</span><span><b>${esc(n)}</b><small>Invitado</small></span></li>`).join('');
+      const me = p.members.find((m) => m.me);
+      const alone = p.members.length < 2;
+      body = `
+        <ul class="party-members">${members}${invited}</ul>
+        <p class="sub">${tier ? `Mesa: <b>${tier.name}</b> · entrada ${coin(tier.entryFee)} cada uno` : p.leader ? 'Elige abajo la mesa del torneo.' : 'El líder está eligiendo la mesa.'}</p>
+        ${p.last_error ? `<p class="party-err">${esc(partyErrorText(p.last_error))}</p>` : ''}
+        ${tier ? `<button class="primary party-ready" ${alone && !me?.ready ? 'disabled' : ''}>${alone ? 'Espera a que entre un amigo' : readyLabel(p)}</button>` : ''}
+        <p class="legal">Al pulsar «${p.leader ? 'Buscar partida' : 'Estoy listo'}» aceptas pagar tu entrada. Cuando estéis todos listos entráis juntos en el mismo torneo; cada uno juega su ronda y gana quien menos golpes haga.</p>
+        ${inviteRows ? `<ul class="friend-list">${inviteRows}</ul>` : ''}
+        ${friendRows ? `<h3 class="friends-sub">Invitar a más amigos</h3>${friendRows}` : ''}`;
+    }
+    box.innerHTML = `
+      <div class="party-card">
+        <div class="section-head party-head">
+          <h2>${p ? `Tu grupo · ${p.members.length}/${p.size}` : 'Juega con amigos'}</h2>
+          ${p ? '<button class="chip-btn party-leave">Salir del grupo</button>' : ''}
+        </div>
+        ${msg ? `<p class="party-msg" role="status">${esc(msg)}</p>` : ''}
+        ${body}
+      </div>`;
+    box.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => go(b.dataset.go)));
+    box.querySelectorAll('[data-invite]').forEach((b) => b.addEventListener('click', () => apply(() => svc.invite(b.dataset.invite), `Invitación enviada a ${b.dataset.invite}.`)));
+    box.querySelectorAll('[data-join]').forEach((b) => b.addEventListener('click', () => apply(() => svc.respond(b.dataset.join, true))));
+    box.querySelectorAll('[data-no]').forEach((b) => b.addEventListener('click', () => apply(() => svc.respond(b.dataset.no, false))));
+    box.querySelector('.party-leave')?.addEventListener('click', () => apply(() => svc.leave()));
+    box.querySelector('.party-ready')?.addEventListener('click', () => apply(() => svc.ready(!p.members.find((m) => m.me)?.ready)));
+  }
+
+  if (hasName) {
+    backend.account.friends().then((d) => {
+      friends = d.friends;
+      paint(party.state);
+    }).catch(() => { friends = []; });
+  }
+
+  const poll = async () => {
+    if (!box.isConnected) return;
+    if (!busy) {
+      try {
+        const state = await svc.mine();
+        if (!box.isConnected) return;
+        if (await openIfNew(state)) return;
+        // no repintar si no ha cambiado nada (no se pierde lo que estés tocando)
+        if (JSON.stringify(state) !== JSON.stringify(party.state)) {
+          msg = '';
+          paint(state);
+        }
+      } catch { }
+    }
+    setTimeout(poll, PARTY_POLL_MS);
+  };
+  party.state = null;
+  if (hasName) {
+    paint(null);
+    poll();
+  } else paint(null);
 }
 
 // ---------- skins ----------
@@ -1794,7 +1981,8 @@ function showTournamentLobby(match) {
       <p class="sub count"></p>
       <div class="seats"></div>
       ${match.rematchOf ? '<p class="legal">Revancha: quienes pidan revancha como tú entrarán juntos en esta sala.</p>' : ''}
-      <p class="legal">Todos jugáis los mismos ${match.holes} hoyos, cada uno a su ritmo. Cuando terminéis todos (o se cierre la inscripción) gana quien menos golpes haga y se reparte el bote. El servidor repite cada golpe para que nadie pueda hacer trampas.</p>
+      <p class="legal alone-hint"></p>
+      <p class="legal">Todos jugáis los mismos ${match.holes} hoyos, cada uno a su ritmo. El torneo se cierra en cuanto terminan todos los que han entrado (o se llena la mesa): gana quien menos golpes haga y se reparte el bote. El servidor repite cada golpe para que nadie pueda hacer trampas.</p>
       <button class="primary start">Empezar a jugar</button>
       <button class="ghost cancel">Salir y recuperar entrada</button>
     </main>`);
@@ -1802,6 +1990,7 @@ function showTournamentLobby(match) {
   const render = () => {
     const n = match.players.length;
     view.querySelector('.count').innerHTML = `${n}/${match.seats} jugadores · bote ${coin(tier.entryFee * n)} · cierra en ${minutesLeft(match.closesAt)} min`;
+    view.querySelector('.alone-hint').textContent = n < 2 ? 'De momento estás solo. Puedes esperar a que entre alguien o empezar ya; si terminas y nadie más ha entrado, se te devuelve la entrada.' : '';
     seats.innerHTML = '';
     for (let i = 0; i < match.seats; i++) {
       const p = match.players.find((q) => q.seat === i) ?? match.players[i];
