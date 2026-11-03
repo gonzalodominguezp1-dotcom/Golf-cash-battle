@@ -2355,7 +2355,10 @@ async function showLiveResults(live) {
   clearInterval(live.timer);
   app.querySelector('.overlay')?.remove();
   try {
-    await backend.tournaments.status(match);
+    // si llegas aquí sin haber cerrado tu ronda en el servidor (p. ej. te rechazó un
+    // hoyo), ciérrala: si no, tu latido la tendría abierta y nadie cobraría hasta que salieras
+    if (match.status === 'open' && !match.me.finished) await backend.tournaments.finish(match);
+    else await backend.tournaments.status(match);
   } catch { }
   if (live.stopped) return;
   screen = 'lobby';
