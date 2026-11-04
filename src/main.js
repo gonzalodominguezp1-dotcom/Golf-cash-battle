@@ -58,10 +58,8 @@ document.addEventListener('click', (e) => {
 const app = document.getElementById('app');
 // build de portal: nombre GolfitoBattle e interfaz en inglés si el navegador no está en español
 installI18n();
-// en portales el logo dice "Golf Cash Battle": se cambia por el nombre en texto
-const brandMark = () => (IS_PORTAL
-  ? `<span class="brand-text" aria-label="${BRAND}">Golfito<b>Battle</b></span>`
-  : `<img src="${import.meta.env.BASE_URL}logo-header.png" alt="Golf Cash Battle" class="brand-logo" />`);
+// mismo logo que el juego normal (en portales Gonzalo lo quiere igual)
+const brandMark = () => `<img src="${import.meta.env.BASE_URL}logo-header.png" alt="${IS_PORTAL ? BRAND : 'Golf Cash Battle'}" class="brand-logo" />`;
 
 const fmt = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
 const coin = (n) => `<span class="coin"></span>${fmt(n)}`;
