@@ -24,6 +24,8 @@ import { newPartyMatch, partyErrorText, partyMessage, readyLabel } from './match
 import { LiveRoom } from './match/LiveRoom.js';
 import { buildRoster, humanLeaders, liveStandings, seededRng } from './match/liveRules.js';
 import { IS_PORTAL, gameplayStart, gameplayStop, initPortal, loadingStart, loadingStop, midgameAd } from './portal.js';
+import { BRAND, installI18n } from './i18n.js';
+import { startTutorial, tutorialPending } from './tutorial.js';
 import { QUALITY_LEVELS, QUALITY_NAMES, getQuality, setQuality } from './game/render/quality.js';
 
 let backend, wallet, matches;
@@ -54,6 +56,12 @@ document.addEventListener('click', (e) => {
   sfx.tap();
 });
 const app = document.getElementById('app');
+// build de portal: nombre GolfitoBattle e interfaz en inglés si el navegador no está en español
+installI18n();
+// en portales el logo dice "Golf Cash Battle": se cambia por el nombre en texto
+const brandMark = () => (IS_PORTAL
+  ? `<span class="brand-text" aria-label="${BRAND}">Golfito<b>Battle</b></span>`
+  : `<img src="${import.meta.env.BASE_URL}logo-header.png" alt="Golf Cash Battle" class="brand-logo" />`);
 
 const fmt = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
 const coin = (n) => `<span class="coin"></span>${fmt(n)}`;
@@ -103,7 +111,7 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
       <header class="topbar game-hud-topbar">
         <div class="topbar-left">
           <button class="brand-btn desktop-brand-btn" data-go="lobby" aria-label="Golf Cash Battle">
-            <img src="${import.meta.env.BASE_URL}logo-header.png" alt="Golf Cash Battle" class="brand-logo" />
+            ${brandMark()}
           </button>
           <button class="level" data-go="skins" style="--p:${(into / need) * 100}%" title="Nivel ${level} · ${(into / need * 100).toFixed(0)}%">
             <span class="level-ring"><b>${level}</b></span>
@@ -112,7 +120,7 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
         </div>
         <div class="topbar-center">
           <button class="brand-btn mobile-brand-btn" data-go="lobby" aria-label="Golf Cash Battle">
-            <img src="${import.meta.env.BASE_URL}logo-header.png" alt="Golf Cash Battle" class="brand-logo" />
+            ${brandMark()}
           </button>
           <nav class="desktop-nav">
             <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}">Jugar <kbd>1</kbd></button>
@@ -1289,6 +1297,11 @@ async function startMatch(tier, rematchOf = null) {
   }
   match.service = service;
   match.myHoles = [];
+  // primera partida en el portal: tutorial en el primer hoyo, que es el más sencillo
+  if (!forced && !tier.entryFee && tutorialPending()) {
+    match.tutorial = true;
+    match.courses = [0, ...match.courses.filter((c) => c !== 0)].slice(0, match.courses.length);
+  }
   if (forced) Object.assign(match, { courses: [Number(forced[1]) - 1], holes: 1, forceTie: !!forced[2] });
   const view = h(`
     <main class="screen matchmaking tier--${tier.id}">
@@ -1724,7 +1737,13 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
 
 function playHole(match, index) {
   const course = COURSES[match.courses[index]];
+  let tutorial = null;
+  const guided = match.tutorial && index === 0 ? {
+    onGame: (_g, { view }) => { tutorial = startTutorial(view); },
+    onShots: () => tutorial?.stroke(1),
+  } : {};
   playScreen(match, {
+    ...guided,
     course,
     title: `Hoyo ${index + 1}/${match.holes}`,
     subtitle: `Hoyo ${index + 1}`,

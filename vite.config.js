@@ -26,7 +26,8 @@ export default defineConfig(({ mode }) => {
   if (PORTAL_MODES.includes(mode)) {
     return {
       base: './',
-      plugins: [siteUrlPlugin],
+      // en portales el juego se llama GolfitoBattle (sin dinero, "Cash" confundiría)
+      plugins: [siteUrlPlugin, { name: 'portal-brand', transformIndexHtml: (html) => html.replaceAll('Golf Cash Battle', 'GolfitoBattle') }],
       build: {
         outDir: `dist-${mode}`,
         emptyOutDir: true,
