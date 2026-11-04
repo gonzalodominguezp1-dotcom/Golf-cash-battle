@@ -23,6 +23,7 @@ import { addedMessage, cleanFriendName, friendMessage } from './account/friendRu
 import { newPartyMatch, partyErrorText, partyMessage, readyLabel } from './match/partyRules.js';
 import { LiveRoom } from './match/LiveRoom.js';
 import { buildRoster, humanLeaders, liveStandings, seededRng } from './match/liveRules.js';
+import { IS_PORTAL, gameplayStart, gameplayStop, initPortal, loadingStart, loadingStop, midgameAd } from './portal.js';
 import { QUALITY_LEVELS, QUALITY_NAMES, getQuality, setQuality } from './game/render/quality.js';
 
 let backend, wallet, matches;
@@ -85,6 +86,7 @@ let screen = 'lobby';
 let activeSkinInspector = null;
 
 async function shell(content, { hideHeader = false, nav = true } = {}) {
+  gameplayStop();
   game?.dispose();
   game = null;
   if (activeSkinInspector) {
@@ -101,7 +103,7 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
       <header class="topbar game-hud-topbar">
         <div class="topbar-left">
           <button class="brand-btn desktop-brand-btn" data-go="lobby" aria-label="Golf Cash Battle">
-            <img src="/logo-header.png" alt="Golf Cash Battle" class="brand-logo" />
+            <img src="${import.meta.env.BASE_URL}logo-header.png" alt="Golf Cash Battle" class="brand-logo" />
           </button>
           <button class="level" data-go="skins" style="--p:${(into / need) * 100}%" title="Nivel ${level} · ${(into / need * 100).toFixed(0)}%">
             <span class="level-ring"><b>${level}</b></span>
@@ -110,18 +112,18 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
         </div>
         <div class="topbar-center">
           <button class="brand-btn mobile-brand-btn" data-go="lobby" aria-label="Golf Cash Battle">
-            <img src="/logo-header.png" alt="Golf Cash Battle" class="brand-logo" />
+            <img src="${import.meta.env.BASE_URL}logo-header.png" alt="Golf Cash Battle" class="brand-logo" />
           </button>
           <nav class="desktop-nav">
             <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}">Jugar <kbd>1</kbd></button>
             <button data-go="freeplay" class="${screen === 'freeplay' ? 'on' : ''}">Juego Libre <kbd>2</kbd></button>
             <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}">Skins <kbd>3</kbd></button>
-            <button data-go="ranking" class="${screen === 'ranking' ? 'on' : ''}">Ranking <kbd>4</kbd></button>
-            <button data-go="account" class="${screen === 'account' ? 'on' : ''}">Cuenta <kbd>5</kbd></button>
+            ${IS_PORTAL ? '' : `<button data-go="ranking" class="${screen === 'ranking' ? 'on' : ''}">Ranking <kbd>4</kbd></button>
+            <button data-go="account" class="${screen === 'account' ? 'on' : ''}">Cuenta <kbd>5</kbd></button>`}
           </nav>
         </div>
         <div class="topbar-right">
-          <button class="balance" data-go="wallet" title="Tu saldo: abre el wallet de tu cuenta">${coin(balance)}<span class="plus">+</span></button>
+          ${IS_PORTAL ? '' : `<button class="balance" data-go="wallet" title="Tu saldo: abre el wallet de tu cuenta">${coin(balance)}<span class="plus">+</span></button>`}
           <button class="pill mute topbar-sound-btn" aria-label="Sonido" title="Silenciar / Activar sonido (M)">${isMuted() ? 'Mudo' : 'Sonido'}</button>
         </div>
       </header>`),
@@ -143,8 +145,8 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
         <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}">Jugar</button>
         <button data-go="freeplay" class="${screen === 'freeplay' ? 'on' : ''}">Libre</button>
         <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}">Skins</button>
-        <button data-go="ranking" class="${screen === 'ranking' ? 'on' : ''}">Ranking</button>
-        <button data-go="account" class="${screen === 'account' ? 'on' : ''}">Cuenta</button>
+        ${IS_PORTAL ? '' : `<button data-go="ranking" class="${screen === 'ranking' ? 'on' : ''}">Ranking</button>
+        <button data-go="account" class="${screen === 'account' ? 'on' : ''}">Cuenta</button>`}
       </nav>`),
     );
   }
@@ -189,8 +191,8 @@ window.addEventListener('keydown', (e) => {
   if (isNum(1)) triggerNav('lobby');
   else if (isNum(2)) triggerNav('freeplay');
   else if (isNum(3)) triggerNav('skins');
-  else if (isNum(4)) triggerNav('ranking');
-  else if (isNum(5)) triggerNav('account');
+  else if (isNum(4) && !IS_PORTAL) triggerNav('ranking');
+  else if (isNum(5) && !IS_PORTAL) triggerNav('account');
   else if (e.code === 'KeyM') {
     setMuted(!isMuted());
     const topMute = document.querySelector('.topbar-sound-btn');
@@ -200,6 +202,7 @@ window.addEventListener('keydown', (e) => {
 });
 
 function go(to) {
+  if (IS_PORTAL && ['wallet', 'account', 'ranking'].includes(to)) to = 'lobby';
   if (to === 'wallet') return showAccount('', 'wallet');
   if (to === 'skins') return showSkins();
   if (to === 'account') return showAccount();
@@ -256,13 +259,13 @@ async function showLobby() {
           <button class="chip-btn" data-go="skins">Personalizar skin</button>
         </div>
       </section>
-      ${backend.mode === 'local' ? `<p class="offline">Modo sin conexión: el saldo se guarda solo en este ${DEVICE}</p>` : ''}
+      ${backend.mode === 'local' && !IS_PORTAL ? `<p class="offline">Modo sin conexión: el saldo se guarda solo en este ${DEVICE}</p>` : ''}
       ${backend.account?.profile?.paid_block ? `<button class="notice account-hint" data-go="account">${{ account_required: 'Confirma tu email para jugar mesas con entrada →', kyc_required: 'Verifica tu edad e identidad para jugar mesas con entrada →', account_review: 'Tu cuenta está en revisión: de momento solo Práctica', underage: 'Mesas con entrada solo para mayores de 18' }[backend.account.profile.paid_block]}</button>` : ''}
       ${backend.parties ? '<section class="party-box"></section>' : ''}
       <div class="section-head">
         <div class="section-title-row">
-          <h1>Mesas de Torneo</h1>
-          <span class="live-pill"><i class="pulse-dot"></i> EN VIVO</span>
+          <h1>${IS_PORTAL ? 'Partida rápida' : 'Mesas de Torneo'}</h1>
+          ${IS_PORTAL ? '' : '<span class="live-pill"><i class="pulse-dot"></i> EN VIVO</span>'}
         </div>
         <div class="lobby-specs">
           <span class="spec-chip">${PLAYERS_PER_MATCH} Jugadores</span>
@@ -271,10 +274,11 @@ async function showLobby() {
         </div>
       </div>
       <div class="tiers"></div>
-      <p class="legal">Créditos de demostración sin valor real. ${backend.tournaments ? 'Las mesas de pago son partidas en vivo contra jugadores reales: todos jugáis los mismos hoyos a la vez y el servidor repite cada golpe para validarlo. Los huecos libres los ocupan bots, que nunca cuentan para el premio. La práctica es contra rivales simulados. ' : ''}El resultado depende solo de la habilidad: mismo campo para todos y sin elementos aleatorios. En empate, tiro de desempate: gana quien deje la bola más cerca. Comisión de la plataforma: ${Math.round(PLATFORM_COMMISSION * 100)}% del bote.</p>
+      ${IS_PORTAL ? '<p class="legal">Juega contra 7 rivales en 3 hoyos. Mismos hoyos para todos: gana quien menos golpes da.</p>' : `<p class="legal">Créditos de demostración sin valor real. ${backend.tournaments ? 'Las mesas de pago son partidas en vivo contra jugadores reales: todos jugáis los mismos hoyos a la vez y el servidor repite cada golpe para validarlo. Los huecos libres los ocupan bots, que nunca cuentan para el premio. La práctica es contra rivales simulados. ' : ''}El resultado depende solo de la habilidad: mismo campo para todos y sin elementos aleatorios. En empate, tiro de desempate: gana quien deje la bola más cerca. Comisión de la plataforma: ${Math.round(PLATFORM_COMMISSION * 100)}% del bote.</p>`}
     </main>`);
   const list = view.querySelector('.tiers');
-  for (const tier of TIERS) {
+  // en portales solo hay partidas gratis: nada de entradas ni premios
+  for (const tier of IS_PORTAL ? TIERS.filter((t) => t.entryFee === 0) : TIERS) {
     const free = tier.entryFee === 0;
     const enough = balance >= tier.entryFee;
     const card = h(`
@@ -284,15 +288,15 @@ async function showLobby() {
         <div class="tier-top">
           <div class="gem-wrapper"><span class="gem gem--${tier.id}"></span></div>
           <div class="tier-identity">
-            <span class="tier-name">${tier.name}</span>
-            <span class="tier-tagline">${free ? 'Entrenamiento' : 'Torneo Esports'}</span>
+            <span class="tier-name">${IS_PORTAL ? 'Partida rápida' : tier.name}</span>
+            <span class="tier-tagline">${IS_PORTAL ? 'Contra 7 rivales' : free ? 'Entrenamiento' : 'Torneo Esports'}</span>
           </div>
-          <span class="tier-fee">${free ? 'Gratis' : `Entrada ${coin(tier.entryFee)}`}</span>
+          ${IS_PORTAL ? '' : `<span class="tier-fee">${free ? 'Gratis' : `Entrada ${coin(tier.entryFee)}`}</span>`}
         </div>
         <div class="tier-mid">
-          ${free ? '<span class="tier-prize small">Entrena sin arriesgar créditos</span>' : `<span class="tier-label">Premio Garantizado</span><span class="tier-prize">${coin(prizeFor(tier))}</span><span class="tier-pot">Bote ${fmt(potFor(tier))}</span>`}
+          ${IS_PORTAL ? '<span class="tier-prize small">8 jugadores · 3 hoyos</span>' : free ? '<span class="tier-prize small">Entrena sin arriesgar créditos</span>' : `<span class="tier-label">Premio Garantizado</span><span class="tier-prize">${coin(prizeFor(tier))}</span><span class="tier-pot">Bote ${fmt(potFor(tier))}</span>`}
         </div>
-        <button class="play" ${enough ? '' : 'disabled'}>${!enough ? 'Saldo insuficiente' : free ? 'Practicar' : 'Jugar Torneo'}</button>
+        <button class="play" ${enough ? '' : 'disabled'}>${IS_PORTAL ? 'Jugar' : !enough ? 'Saldo insuficiente' : free ? 'Practicar' : 'Jugar Torneo'}</button>
       </div>`);
     const play = card.querySelector('.play');
     play.dataset.tier = tier.id;
@@ -1290,9 +1294,9 @@ async function startMatch(tier, rematchOf = null) {
     <main class="screen matchmaking tier--${tier.id}">
       <div class="radar"><span></span><span></span><span></span>${ball(progress.skin, 64)}</div>
       <h1>Buscando rivales…</h1>
-      <p class="sub">${tier.entryFee ? `${tier.name} · bote ${coin(potFor(tier))}` : 'Práctica contra rivales simulados'}</p>
+      <p class="sub">${tier.entryFee ? `${tier.name} · bote ${coin(potFor(tier))}` : IS_PORTAL ? 'Partida rápida · 8 jugadores' : 'Práctica contra rivales simulados'}</p>
       <div class="seats"></div>
-      <button class="ghost cancel">Cancelar y recuperar entrada</button>
+      <button class="ghost cancel">${tier.entryFee ? 'Cancelar y recuperar entrada' : 'Cancelar'}</button>
     </main>`);
   const seats = view.querySelector('.seats');
   for (let i = 0; i < PLAYERS_PER_MATCH; i++) seats.append(h(`<div class="seat"><span>…</span></div>`));
@@ -1566,6 +1570,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       view.append(overlay);
     }
 
+    gameplayStart();
     game = new GolfGame(view.querySelector('.stage'), {
       onOpenSettings: openSettingsMenu,
       onOverviewChange: (isOverview) => {
@@ -1864,7 +1869,7 @@ async function showResults(match, tiebreak = {}) {
     won,
     position: result.me.position,
     total: PLAYERS_PER_MATCH,
-    prize: match.tier.entryFee ? (won ? `Premio ${coin(result.me.payout)}` : `Bote ${coin(result.pot)} para el ganador`) : 'Partida de práctica',
+    prize: match.tier.entryFee ? (won ? `Premio ${coin(result.me.payout)}` : `Bote ${coin(result.pot)} para el ganador`) : IS_PORTAL ? 'Partida rápida' : 'Partida de práctica',
     ranking: result.ranking,
     legal: match.tier.entryFee ? `Bote ${fmt(result.pot)} · comisión ${fmt(result.commission)} · premio ${fmt(result.prize)}` : '',
     holes: match.myHoles.filter(Boolean),
@@ -1916,10 +1921,14 @@ function showEndOverlay({ won, position, total, prize, ranking, legal, holes, ga
   overlay.querySelector('.again').addEventListener('click', (e) => {
     e.target.disabled = true;
     overlay.remove();
-    onRematch();
+    midgameAd().then(onRematch);
   });
-  overlay.querySelector('.next').addEventListener('click', () => showLobby());
+  overlay.querySelector('.next').addEventListener('click', (e) => {
+    e.target.disabled = true;
+    midgameAd().then(showLobby);
+  });
   app.append(overlay);
+  gameplayStop();
   enterFinale();
   sfx.endJingle(won, position);
 }
@@ -2647,6 +2656,7 @@ export function playFreePlay(courseIndex) {
 }
 
 export function showFreePlayHoleResult(courseIndex, course, strokes) {
+  gameplayStop();
   const isTiebreak = courseIndex === 'tiebreak';
   const parDiff = strokes - course.par;
   const scoreName = scoreLabel(strokes, course.par);
@@ -2718,7 +2728,18 @@ if (skinLab) {
   loadSkinInspector().then(({ mountSkinLab }) => mountSkinLab(app));
 } else {
   app.innerHTML = '<main class="screen loading"><h1>Golf Cash Battle</h1><p class="sub">Conectando…</p></main>';
-  createBackend().then((b) => {
+  // en portales: el SDK silencia el juego durante los anuncios sin tocar la preferencia del jugador
+  let mutedBeforeAd = false;
+  const portalReady = initPortal({
+    mute: () => { mutedBeforeAd = isMuted(); setMuted(true); },
+    unmute: () => setMuted(mutedBeforeAd),
+    setMuted: (portalMute) => {
+      let mine = false;
+      try { mine = localStorage.getItem(MUTE_KEY) === '1'; } catch { }
+      setMuted(portalMute || mine);
+    },
+  }).then(loadingStart);
+  portalReady.then(createBackend).then((b) => {
     if (b.mode === 'auth') {
       // sin sesión: pantallas de entrada. Al entrar se recarga para arrancar limpio con la cuenta
       mountAuth(app, b.auth, { recovery: b.recovery, guest: b.guest, onDone: () => location.replace(location.origin + location.pathname + location.hash) });
@@ -2738,6 +2759,6 @@ if (skinLab) {
       const el = app.querySelector('.balance');
       if (el) el.innerHTML = `${coin(n)}<span class="plus">+</span>`;
     });
-    showLobby();
+    showLobby().then(loadingStop);
   });
 }

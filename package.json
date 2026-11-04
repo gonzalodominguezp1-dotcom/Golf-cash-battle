@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",
+    "build:crazygames": "vite build --mode crazygames && node scripts/zip-portal.mjs crazygames",
+    "build:poki": "vite build --mode poki && node scripts/zip-portal.mjs poki",
     "preview": "vite preview --host",
     "test": "node --test tests/*.test.js",
     "sync:functions": "node scripts/sync-functions.mjs",

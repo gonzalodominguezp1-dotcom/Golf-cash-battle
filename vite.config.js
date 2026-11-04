@@ -16,15 +16,33 @@ const siteUrlPlugin = {
   transformIndexHtml: { order: 'pre', handler: (html) => html.replaceAll('%SITE_URL%', siteUrl) },
 };
 
+// Builds para portales de juegos (CrazyGames, Poki...): `vite build --mode crazygames`
+// lee .env.crazygames (VITE_PORTAL, VITE_BACKEND=local). Rutas relativas (el portal
+// sirve el juego desde su CDN dentro de un iframe) y sin panel de administración.
+const PORTAL_MODES = ['crazygames', 'poki'];
+
 // Dos páginas: el juego (index.html) y el panel de administración (admin.html).
-export default defineConfig({
-  plugins: [siteUrlPlugin],
-  build: {
-    rollupOptions: {
-      input: {
-        main: resolve(import.meta.dirname, 'index.html'),
-        admin: resolve(import.meta.dirname, 'admin.html'),
+export default defineConfig(({ mode }) => {
+  if (PORTAL_MODES.includes(mode)) {
+    return {
+      base: './',
+      plugins: [siteUrlPlugin],
+      build: {
+        outDir: `dist-${mode}`,
+        emptyOutDir: true,
+        rollupOptions: { input: { main: resolve(import.meta.dirname, 'index.html') } },
+      },
+    };
+  }
+  return {
+    plugins: [siteUrlPlugin],
+    build: {
+      rollupOptions: {
+        input: {
+          main: resolve(import.meta.dirname, 'index.html'),
+          admin: resolve(import.meta.dirname, 'admin.html'),
+        },
       },
     },
-  },
+  };
 });

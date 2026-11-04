@@ -64,3 +64,6 @@ ideas_skins/
 
 # estado local de la CLI de Supabase (enlace al proyecto, cache de versión)
 supabase/.temp/
+dist-crazygames
+dist-poki
+*.portal.zip
