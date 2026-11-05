@@ -25,6 +25,7 @@ import { LiveRoom } from './match/LiveRoom.js';
 import { buildRoster, humanLeaders, liveStandings, seededRng } from './match/liveRules.js';
 import { IS_PORTAL, gameplayStart, gameplayStop, initPortal, loadingStart, loadingStop, midgameAd } from './portal.js';
 import { BRAND, installI18n } from './i18n.js';
+import { maybeFpsMeter } from './fpsMeter.js';
 import { startTutorial, tutorialPending } from './tutorial.js';
 import { QUALITY_LEVELS, QUALITY_NAMES, getQuality, setQuality } from './game/render/quality.js';
 
@@ -58,6 +59,7 @@ document.addEventListener('click', (e) => {
 const app = document.getElementById('app');
 // build de portal: nombre GolfitoBattle e interfaz en inglés si el navegador no está en español
 installI18n();
+maybeFpsMeter();
 // en portales, el mismo logo con "GOLFITO BATTLE" en vez de "GOLF CASH BATTLE"
 const brandMark = () => `<img src="${import.meta.env.BASE_URL}${IS_PORTAL ? 'logo-golfito-header.png' : 'logo-header.png'}" alt="${IS_PORTAL ? BRAND : 'Golf Cash Battle'}" class="brand-logo" />`;
 
