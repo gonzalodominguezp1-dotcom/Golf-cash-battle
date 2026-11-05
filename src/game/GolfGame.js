@@ -12,7 +12,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { getQuality, quality } from './render/quality.js';
+import { IS_TOUCH, getQuality, quality } from './render/quality.js';
 import { PerfGovernor } from './render/perfGovernor.js';
 import { ResolutionGovernor } from './render/resolutionGovernor.js';
 import { AimDots, Particles, Shockwaves } from './render/effects.js';
@@ -1673,7 +1673,7 @@ export class GolfGame {
   /**
    * El mapa de sombras es una pasada entera de la escena: solo se repite si la
    * bola se ha movido o hay piezas que se mueven (aspas, molinos, bloques).
-   * En Alto, cada frame; en Medio, las piezas móviles cada dos frames.
+   * En Alto, cada frame; en Medio, las piezas móviles cada dos frames (tres en el móvil).
    */
   #updateShadows(pose) {
     const sm = this.renderer.shadowMap;
@@ -1683,7 +1683,7 @@ export class GolfGame {
     const c = this.course;
     const movers = (c.spinners?.length || 0) + (c.movers?.length || 0) + (c.windmills?.length || 0) > 0;
     const moved = Math.abs(pose.x - s.x) + Math.abs(pose.y - s.y) + Math.abs(pose.z - s.z) > 0.002 || !(s.x === s.x);
-    if (moved || (movers && (getQuality() === 'high' || s.frame % 2 === 0))) {
+    if (moved || (movers && (getQuality() === 'high' || s.frame % (IS_TOUCH ? 3 : 2) === 0))) {
       sm.needsUpdate = true;
       s.x = pose.x;
       s.y = pose.y;

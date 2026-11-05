@@ -77,7 +77,14 @@ export function setQuality(q) {
   } catch {}
 }
 
+// En el móvil, Medio sin resplandor ni antialias de la imagen intermedia: en las GPU de
+// móvil cada pasada a una imagen intermedia (bloom, MSAA) cuesta mucho más que en un PC,
+// y el resplandor se nota poco en una pantalla pequeña. Quien lo quiera tiene Alto.
+export const IS_TOUCH = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+const MOBILE_MEDIUM = { ...PRESETS.medium, bloom: false, msaa: 0 };
+
 /** Ajustes de la calidad elegida. */
 export function quality() {
-  return PRESETS[getQuality()];
+  const q = getQuality();
+  return IS_TOUCH && q === 'medium' ? MOBILE_MEDIUM : PRESETS[q];
 }
