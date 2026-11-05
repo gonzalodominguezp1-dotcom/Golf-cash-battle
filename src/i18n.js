@@ -258,6 +258,8 @@ function fixTree(root) {
 export function installI18n() {
   if (!IS_PORTAL) return;
   document.documentElement.lang = LANG;
+  // el portal tiene su propio botón de pantalla completa (el nuestro no funciona dentro de su iframe)
+  document.documentElement.classList.add('is-portal');
   document.title = BRAND;
   const nativeConfirm = window.confirm.bind(window);
   const nativeAlert = window.alert.bind(window);
