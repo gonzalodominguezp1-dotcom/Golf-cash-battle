@@ -408,23 +408,38 @@ function rollAtCup(c, x, z, v) {
   return { ball, ...ev };
 }
 
-test('hoyo con borde: despacio entra, fuerte rebota en el canto y se sale', () => {
-  // sin muros: solo cuenta el hoyo
-  const c = { ...COURSES.find((x) => x.realCup), walls: [] };
-  const [hx, hz] = c.cup;
-  for (const v of [1, 2, 3]) assert.ok(rollAtCup(c, hx, hz + 0.3, v).sunk, `v=${v}: entra por el centro`);
-  for (const v of [5, 6]) {
-    const r = rollAtCup(c, hx, hz + 0.3, v);
-    assert.ok(!r.sunk && r.lip && r.hop, `v=${v}: choca con el borde, bota y no entra`);
-    assert.ok(r.ball.z < hz - 0.4, `v=${v}: sigue de largo`);
+test('el hoyo tiene borde: despacio entra, fuerte rebota en el labio, rozando se sale torcida', () => {
+  // en todos los hoyos; sin muros: solo cuenta el hoyo
+  for (const name of ['Zigzag', 'El Templo de la Selva']) {
+    const c = { ...COURSES.find((x) => x.name === name), walls: [] };
+    const [hx, hz] = c.cup;
+    for (const v of [1.5, 2.5, 3.5]) assert.ok(rollAtCup(c, hx, hz + 0.3, v).sunk, `${name} v=${v}: entra por el centro`);
+    for (const v of [5, 6]) {
+      const r = rollAtCup(c, hx, hz + 0.3, v);
+      assert.ok(!r.sunk && r.lip && r.hop, `${name} v=${v}: choca con el labio, bota y no entra`);
+      assert.ok(r.ball.z < hz - 0.4, `${name} v=${v}: sigue de largo`);
+    }
+    // se ve caer dentro de la boca
+    assert.ok(rollAtCup(c, hx, hz + 0.3, 2).minY < BALL_R - 0.05);
+    // el mismo tiro da siempre lo mismo
+    const a = rollAtCup(c, hx + 0.1, hz + 0.3, 4.2).ball, b = rollAtCup(c, hx + 0.1, hz + 0.3, 4.2).ball;
+    assert.deepEqual([a.x, a.z, a.vx, a.vz], [b.x, b.z, b.vx, b.vz]);
   }
-  // rozando el borde solo entra muy despacio: si no, la bola gira y se sale
-  assert.ok(!rollAtCup(c, hx + 0.2, hz + 0.3, 2.5).sunk);
-  // se ve caer dentro de la boca
-  assert.ok(rollAtCup(c, hx, hz + 0.3, 2).minY < BALL_R - 0.05);
-  // el mismo tiro da siempre lo mismo
-  const a = rollAtCup(c, hx + 0.1, hz + 0.3, 4.2).ball, b = rollAtCup(c, hx + 0.1, hz + 0.3, 4.2).ball;
-  assert.deepEqual([a.x, a.z, a.vx, a.vz], [b.x, b.z, b.vx, b.vz]);
+  // campo abierto: sin paredes cerca que devuelvan la bola al hoyo
+  const z = COURSES.find((x) => x.name === 'Zigzag');
+  const [hx, hz] = z.cup;
+  const c = { ...z, outline: [[hx - 20, hz + 20], [hx + 20, hz + 20], [hx + 20, hz - 20], [hx - 20, hz - 20]], walls: [], bumpers: [], sand: [], spinners: [] };
+  // rozando el borde: el canto la hace girar alrededor de la boca y sale hacia el otro lado (lip-out)
+  const lipOut = rollAtCup(c, hx + 0.14, hz + 0.3, 3.5);
+  assert.ok(!lipOut.sunk && lipOut.lip && lipOut.ball.x < hx - 0.1, `lip-out: sale torcida (x ${lipOut.ball.x.toFixed(2)})`);
+  // por el filo (centro casi fuera de la boca): se desvía un poco hacia el hoyo y sigue, sin botar
+  const edge = rollAtCup(c, hx + 0.21, hz + 0.3, 3.5);
+  assert.ok(!edge.sunk && !edge.hop && edge.ball.x < hx + 0.21 && edge.ball.x > hx, `filo: se desvía un poco (x ${edge.ball.x.toFixed(2)})`);
+  // a toda velocidad no atraviesa el canto sin tocarlo (sub-pasos)
+  for (const v of [8, 10, 13]) {
+    const r = rollAtCup(c, hx, hz + 0.3, v);
+    assert.ok(!r.sunk && r.lip, `v=${v}: choca con el labio`);
+  }
 });
 
 // tiro recto por una rampa desde 0,5 m antes de su pie, a velocidad v

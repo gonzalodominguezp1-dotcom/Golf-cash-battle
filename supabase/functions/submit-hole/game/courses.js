@@ -401,8 +401,6 @@ export const COURSES = [
     par: 10,
     maxStrokes: 20,
     theme: 'jungle',
-    // hoyo con borde: la bola cae en la boca y, si va fuerte, choca con el canto y se sale
-    realCup: true,
     tee: [-10, 12.6],
     cup: [10.6, -11.2],
     // la U: calzada izquierda (x -12..-8), templo arriba (z -14..-10) y bajada

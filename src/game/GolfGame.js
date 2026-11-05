@@ -28,7 +28,6 @@ const FOLLOW_DIST = 3.2;
 const FOLLOW_HEIGHT = 1.45;
 const LOOK_AHEAD = 2.2;
 const SLOWMO = 0.35; // cámara lenta cuando la bola va a entrar
-const CUP_CAPTURE = 3.5; // igual que en physics.js: más rápido, la bola salta el hoyo
 const BALL_TOUCH_PX = 56; // radio mínimo en pantalla para coger la bola con el dedo
 
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
@@ -208,7 +207,6 @@ export class GolfGame {
     this.fovKick = 0;
     this.squash = 0;
     this.timeScale = 1;
-    this.overCup = false;
     this.fullPower = false;
     this.yaw = Math.atan2(course.cup[0] - course.tee[0], -(course.cup[1] - course.tee[1]));
     if (course.aimYaw !== undefined) this.yaw = course.aimYaw;
@@ -1455,10 +1453,9 @@ export class GolfGame {
           this.#addShake(Math.min(0.35, (r.hit - 4) * 0.06));
         }
       }
-      // pasa por encima del hoyo demasiado rápido: "¡uy!"
+      // el hoyo tiene borde: suena el golpe contra el canto y, si al final se sale, "¡uy!"
       const toCup = Math.hypot(this.ball.x - this.course.cup[0], this.ball.z - this.course.cup[1]);
-      if (this.course.realCup) {
-        // hoyo con borde: suena el golpe contra el canto y, si al final se sale, "¡uy!"
+      if (!this.course.noCup) {
         if (r.lip) {
           sfx.lip();
           this.particles.puff(pos, 0xffffff, 4, 0.8, 0.1);
@@ -1471,16 +1468,7 @@ export class GolfGame {
           if (this.genericFx.lip) this.particles.puff(pos, 0xffffff, 6, 1, 0.12);
           this.onLip?.();
         }
-      } else if (!this.course.noCup && !r.sunk && toCup < CUP_R && Math.hypot(this.ball.vx, this.ball.vz) >= CUP_CAPTURE) {
-        if (!this.overCup) {
-          this.overCup = true;
-          sfx.lip();
-          this.skinFx.onLip(pos);
-          if (this.genericFx.lip) this.particles.puff(pos, 0xffffff, 6, 1, 0.12);
-          this.#addShake(0.15);
-          this.onLip?.();
-        }
-      } else if (toCup > CUP_R + 0.1) this.overCup = false;
+      }
       const sand = inSand(this.course, this.ball.x, this.ball.z);
       if (sand && !this.wasInSand && wasMoving) {
         sfx.sand();
