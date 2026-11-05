@@ -3354,3 +3354,10 @@ body.sk-noscroll { overflow: hidden; }
 /* portal: la pista de abajo repite el tutorial y, en horizontal, tapa la bola */
 .is-portal .play-screen:has(.tutorial-card) .hint { display: none; }
 @media (orientation: landscape) and (max-height: 520px) { .is-portal .play-screen .hint { display: none; } }
+/* con la cuenta atrás en pantalla, los avisos van debajo (antes se montaban encima) */
+.play-screen:has(.hole-timer:not([hidden])) .toasts { top: calc(env(safe-area-inset-top) + 186px); }
+/* portal en móvil: sin desenfoque detrás de los botones del juego. Cada elemento con
+   backdrop-filter sobre el 3D obliga a la GPU a desenfocar ese trozo en cada fotograma */
+@media (pointer: coarse) {
+  .is-portal .play-screen *, .is-portal .overlay, .is-portal .overlay * { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+}
