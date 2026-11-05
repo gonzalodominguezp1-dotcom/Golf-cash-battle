@@ -3301,3 +3301,8 @@ body.sk-noscroll { overflow: hidden; }
 .party-msg { margin: 0; color: var(--muted); font-size: 13px; }
 .party-ready { width: 100%; }
 .tier .play.party-pick { outline: 2px solid rgba(16, 185, 129, 0.8); outline-offset: 2px; }
+
+/* Rendimiento: el desenfoque de fondo (backdrop-filter) sobre el lienzo 3D obliga a la gráfica a
+   redibujar y desenfocar la escena entera en cada fotograma. En el juego y sus ventanas se quita:
+   los paneles ya son casi opacos, así que apenas se nota y sube mucho los FPS (sobre todo en móvil). */
+.play-screen *, .overlay, .overlay * { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
