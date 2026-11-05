@@ -131,7 +131,7 @@ const EN = {
   'Cruza la puerta del molino o arriésgate por el carril del looping': 'Go through the mill door or risk the loop lane',
   'Salta los agujeros con las rampas: si caes, vuelves a tirar desde donde estabas': 'Jump the gaps with the ramps: if you fall, you shoot again from where you were',
   'Ruta A: el portal te deja en el acelerador y el looping te lanza a la cup. Ruta B: rodea por la derecha entre el bloque y el molino': 'Route A: the portal drops you on the booster and the loop launches you to the cup. Route B: go around the right between the block and the windmill',
-  'Tres caminos: la U entera, el sendero del puente o saltar la escuadra de la calzada. Llega suave: si vas fuerte la bola rebota en el borde del hoyo': 'Three paths: the whole U, the bridge trail or jumping the corner. Arrive soft: too fast and the ball bounces off the rim',
+  'El hoyo está al fondo a la derecha. Tres caminos: por arriba cruzando el templo, por el sendero y el puente, o saltando la escuadra de la calzada. Llega suave: si vas fuerte la bola rebota en el borde del hoyo': 'The hole is at the far right. Three paths: across the top through the temple, along the trail and over the bridge, or jumping the causeway corner. Arrive gently: hit it hard and the ball bounces off the rim',
   'El hielo resbala: la bola apenas frena. Salta la grieta con la rampa o arriésgate por el puente de hielo': 'Ice is slippery: the ball barely slows down. Jump the crack with the ramp or risk the ice bridge',
   'Deja la bola lo más cerca de la diana': 'Leave the ball as close to the target as you can',
   // búsqueda y partida
