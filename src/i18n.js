@@ -77,6 +77,18 @@ const EN = {
   'Alcanza el nivel 25': 'Reach level 25', 'Alcanza el nivel 50': 'Reach level 50', 'Alcanza el nivel 75': 'Reach level 75', 'Alcanza el nivel 100': 'Reach level 100',
   'Termina una semana en el top 10': 'Finish a week in the top 10', 'Sé el nº 1 de una semana': 'Be #1 of a week',
   'Termina un mes en el top 10': 'Finish a month in the top 10', 'Sé el nº 1 de un mes': 'Be #1 of a month', 'Entra en el top 100 histórico': 'Enter the all-time top 100',
+  'Gana 10 partidas': 'Win 10 matches', 'Gana 25 partidas': 'Win 25 matches', 'Gana 100 partidas': 'Win 100 matches',
+  'Juega 25 partidas': 'Play 25 matches', 'Gana 3 desempates': 'Win 3 tiebreaks', 'Consigue 25 birdies': 'Get 25 birdies',
+  'Gana 10 partidas seguidas': 'Win 10 matches in a row', 'Juega 300 partidas': 'Play 300 matches',
+  'Trofeos': 'Trophies',
+  'Veinticinco partidas a sus espaldas.': 'Twenty-five matches under its belt.',
+  'En la muerte súbita nunca tiembla.': 'Never flinches in sudden death.',
+  'Colecciona birdies como quien colecciona sellos.': 'Collects birdies like stamps.',
+  'Diez victorias seguidas sin despeinarse.': 'Ten wins in a row without breaking a sweat.',
+  'Trescientas partidas. Una leyenda del minigolf.': 'Three hundred matches. A minigolf legend.',
+  'Lleva una tormenta encerrada en cristal.': 'A storm trapped in glass.',
+  'Todo lo que rueda se vuelve oro.': 'Everything it rolls over turns to gold.',
+  'Su nombre figura entre los cien mayores ganadores.': 'Its name is among the hundred greatest winners.',
   // recompensas
   'Recompensa': 'Reward', 'Pulsa para abrir': 'Tap to open', 'Mantén pulsado para abrir': 'Hold to open',
   '¡Skin rara!': 'Rare ball!', '¡Skin desbloqueada!': 'Ball unlocked!', 'Continuar': 'Continue', 'Siguiente': 'Next',
@@ -189,6 +201,7 @@ const EN_PATTERNS = [
   [/^Patrón #(\d+)$/, 'Pattern #$1'],
   [/^¡Marco de prestigio (.+) desbloqueado!$/, 'Prestige frame $1 unlocked!'],
   [/^Nv\. ?(\d+)$/, 'Lv. $1'],
+  [/^“(.+)”$/, (_, q) => (EN[q] ? `“${EN[q]}”` : null)],
   [/^Jugando · (\d+) hoyos?$/, (_, n) => `Playing · ${n} hole${n === '1' ? '' : 's'}`],
 ];
 

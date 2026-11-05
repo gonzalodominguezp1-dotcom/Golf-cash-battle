@@ -97,7 +97,28 @@ const RAW_SKINS = [
   { id: 'rank_historico', name: 'Salón de la Fama', tier: 'legendary', sfx: 'steel', collection: 'ranking', lore: 'Su nombre figura entre los cien mayores ganadores.', pattern: 'dual', base: '#1b1b2f', accent: '#ffd23f', secondary: '#ffffff', trail: '#ffd23f', unlock: { challenge: 'rankHistTop100' } },
 ];
 
-export const SKINS = RAW_SKINS.map(defineSkin);
+// Build de portal (VITE_PORTAL): no hay mesas de pago ni ranking online, así que las
+// bolas de esos desafíos se ganan con otros que sí se pueden hacer jugando gratis.
+const PORTAL = Boolean(import.meta.env?.VITE_PORTAL);
+const PORTAL_SKINS = {
+  rank_semanal: { collection: 'trofeos', lore: 'Veinticinco partidas a sus espaldas.' },
+  rank_semanal_oro: { collection: 'trofeos', lore: 'En la muerte súbita nunca tiembla.' },
+  rank_mensual: { collection: 'trofeos', lore: 'Colecciona birdies como quien colecciona sellos.' },
+  rank_mensual_oro: { collection: 'trofeos', lore: 'Diez victorias seguidas sin despeinarse.' },
+  rank_historico: { collection: 'trofeos', lore: 'Trescientas partidas. Una leyenda del minigolf.' },
+};
+const PORTAL_CHALLENGES = {
+  bigwin: { name: 'Gana 10 partidas', goal: 10, stat: 'wins' },
+  bigwins3: { name: 'Gana 25 partidas', goal: 25, stat: 'wins' },
+  bigwins5: { name: 'Gana 100 partidas', goal: 100, stat: 'wins' },
+  rankWeekTop10: { name: 'Juega 25 partidas', goal: 25, stat: 'matches' },
+  rankWeekFirst: { name: 'Gana 3 desempates', goal: 3, stat: 'tiebreakWins' },
+  rankMonthTop10: { name: 'Consigue 25 birdies', goal: 25, stat: 'birdies' },
+  rankMonthFirst: { name: 'Gana 10 partidas seguidas', goal: 10, stat: 'bestStreak' },
+  rankHistTop100: { name: 'Juega 300 partidas', goal: 300, stat: 'matches' },
+};
+
+export const SKINS = RAW_SKINS.map((d) => defineSkin(PORTAL && PORTAL_SKINS[d.id] ? { ...d, ...PORTAL_SKINS[d.id] } : d));
 
 export const CHALLENGES = [
   { id: 'matches10', name: 'Juega 10 partidas', goal: 10, stat: 'matches' },
@@ -126,6 +147,6 @@ export const CHALLENGES = [
   { id: 'rankMonthTop10', name: 'Termina un mes en el top 10', goal: 1, stat: 'monthlyTop10' },
   { id: 'rankMonthFirst', name: 'Sé el nº 1 de un mes', goal: 1, stat: 'monthlyFirst' },
   { id: 'rankHistTop100', name: 'Entra en el top 100 histórico', goal: 1, stat: 'histTop100' },
-];
+].map((c) => (PORTAL && PORTAL_CHALLENGES[c.id] ? { ...c, ...PORTAL_CHALLENGES[c.id] } : c));
 
 export const skinById = (id) => SKINS.find((s) => s.id === id) ?? SKINS[0];
