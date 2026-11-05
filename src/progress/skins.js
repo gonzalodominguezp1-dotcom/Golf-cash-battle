@@ -99,7 +99,7 @@ const RAW_SKINS = [
 
 // Build de portal (VITE_PORTAL): no hay mesas de pago ni ranking online, así que las
 // bolas de esos desafíos se ganan con otros que sí se pueden hacer jugando gratis.
-const PORTAL = Boolean(import.meta.env?.VITE_PORTAL);
+const PORTAL = Boolean(import.meta.env?.VITE_PORTAL || globalThis.__GB_PORTAL_TEST__);
 const PORTAL_SKINS = {
   rank_semanal: { collection: 'trofeos', lore: 'Veinticinco partidas a sus espaldas.' },
   rank_semanal_oro: { collection: 'trofeos', lore: 'En la muerte súbita nunca tiembla.' },
@@ -118,7 +118,19 @@ const PORTAL_CHALLENGES = {
   rankHistTop100: { name: 'Juega 300 partidas', goal: 300, stat: 'matches' },
 };
 
-export const SKINS = RAW_SKINS.map((d) => defineSkin(PORTAL && PORTAL_SKINS[d.id] ? { ...d, ...PORTAL_SKINS[d.id] } : d));
+// Exclusivas del portal: no se ganan con desafíos, solo caen al azar (al acabar
+// partidas, más fácil ganando) o en el cofre del anuncio recompensado. Gratis.
+const PORTAL_DROPS = ['galaxy', 'gold', 'holo', 'diamond', 'midas_touch', 'event_horizon'];
+for (const id of PORTAL_DROPS) PORTAL_SKINS[id] = { ...PORTAL_SKINS[id], collection: 'exclusivas', unlock: { drop: true } };
+
+// Bola de maestría: se gana al tener todas las que se consiguen jugando (no cuenta las exclusivas).
+const MASTERY_SKIN = { id: 'maestria_oro_diamante', name: 'Maestría Oro y Diamante', tier: 'mythic', sfx: 'gold', collection: 'maestría', lore: 'Solo para quien lo ha conseguido todo.', pattern: 'gem', base: '#ffd86b', accent: '#e0fbff', secondary: '#ffffff', shimmer: '#ffffff', trail: '#ffe9a8', finish: { roughness: 0.08, metalness: 1, clearcoat: 0.7, clearcoatRoughness: 0.04, iridescence: 0.35, envMapIntensity: 1.4, dimples: 0.2 }, unlock: { challenge: 'mastery' } };
+
+export const SKINS = [...RAW_SKINS, ...(PORTAL ? [MASTERY_SKIN] : [])].map((d) => defineSkin(PORTAL && PORTAL_SKINS[d.id] ? { ...d, ...PORTAL_SKINS[d.id] } : d));
+export const DROP_SKINS = SKINS.filter((s) => s.unlock?.drop);
+export const isMasterySkin = (s) => s.unlock?.challenge === 'mastery';
+/** Skins que cuentan para la maestría: las que se ganan jugando. */
+export const COLLECTION_SKINS = SKINS.filter((s) => !s.unlock?.drop && !isMasterySkin(s));
 
 export const CHALLENGES = [
   { id: 'matches10', name: 'Juega 10 partidas', goal: 10, stat: 'matches' },
@@ -147,6 +159,10 @@ export const CHALLENGES = [
   { id: 'rankMonthTop10', name: 'Termina un mes en el top 10', goal: 1, stat: 'monthlyTop10' },
   { id: 'rankMonthFirst', name: 'Sé el nº 1 de un mes', goal: 1, stat: 'monthlyFirst' },
   { id: 'rankHistTop100', name: 'Entra en el top 100 histórico', goal: 1, stat: 'histTop100' },
-].map((c) => (PORTAL && PORTAL_CHALLENGES[c.id] ? { ...c, ...PORTAL_CHALLENGES[c.id] } : c));
+  ...(PORTAL ? [{ id: 'mastery', name: 'Consigue todas las bolas que se ganan jugando', goal: COLLECTION_SKINS.length, stat: 'collection' }] : []),
+]
+  .map((c) => (PORTAL && PORTAL_CHALLENGES[c.id] ? { ...c, ...PORTAL_CHALLENGES[c.id] } : c))
+  // en el portal, los desafíos cuya bola pasó a exclusiva ya no dan nada: fuera
+  .filter((c) => !PORTAL || SKINS.some((s) => s.unlock?.challenge === c.id));
 
 export const skinById = (id) => SKINS.find((s) => s.id === id) ?? SKINS[0];

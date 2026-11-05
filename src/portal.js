@@ -48,6 +48,18 @@ function crazyAdapter() {
         adError: () => { adHooks.unmute(); resolve(); },
       });
     }),
+    // 'ok' visto entero; 'unavailable' sin anuncios ahora (Basic Launch, sin relleno); 'adblock'
+    rewarded: () => new Promise((resolve) => {
+      C.ad.requestAd('rewarded', {
+        adStarted: () => adHooks.mute(),
+        adFinished: () => { adHooks.unmute(); resolve('ok'); },
+        adError: (err) => {
+          adHooks.unmute();
+          const code = err?.code ?? err;
+          resolve(code === 'adblock' ? 'adblock' : code === 'adsDisabled' ? 'disabled' : 'unavailable');
+        },
+      });
+    }),
     // el jugador puede silenciar desde el propio portal
     onMuteSetting: (cb) => {
       const read = () => cb(Boolean(C.game.settings?.muteAudio));
@@ -66,6 +78,7 @@ function pokiAdapter() {
     gameplayStop: () => P.gameplayStop(),
     happytime: () => {},
     midgame: () => P.commercialBreak(() => adHooks.mute()).finally(() => adHooks.unmute()),
+    rewarded: () => P.rewardedBreak(() => adHooks.mute()).then((ok) => (ok ? 'ok' : 'unavailable')).finally(() => adHooks.unmute()),
     onMuteSetting: () => {},
   };
 }
@@ -121,5 +134,23 @@ export async function midgameAd() {
   } catch (e) {
     adHooks.unmute();
     console.warn('portal.midgame', e);
+  }
+}
+
+/**
+ * Anuncio recompensado (cofre). Devuelve 'ok' si hay que dar el premio, 'adblock' o
+ * 'unavailable' si no. Sin SDK o con los anuncios desactivados (Basic Launch de
+ * CrazyGames) se da el premio igualmente: es solo cosmético y así el cofre funciona.
+ */
+export async function rewardedAd() {
+  if (!sdk) return 'ok';
+  gameplayStop();
+  try {
+    const r = await withTimeout(sdk.rewarded(), 90000);
+    return r === 'disabled' ? 'ok' : r;
+  } catch (e) {
+    adHooks.unmute();
+    console.warn('portal.rewarded', e);
+    return 'unavailable';
   }
 }

@@ -1,11 +1,15 @@
-import { CHALLENGES, SKINS, skinById } from './skins.js';
+import { CHALLENGES, COLLECTION_SKINS, DROP_SKINS, SKINS, skinById } from './skins.js';
 import { bumpCounter, ensureInstances, sanitizeInventory } from './inventory.js';
 import { MAX_STROKES_PER_HOLE } from '../config.js';
 import { frameFor, framesUnlocked } from './prestige.js';
 
 const KEY = 'gcb.progress.v1';
 const EMPTY = { xp: 0, matches: 0, wins: 0, streak: 0, bestStreak: 0, birdies: 0, aces: 0, tiebreakWins: 0, bigWins: 0, equipped: 'classic', framePick: null, rankStats: {} };
-const fresh = () => ({ ...EMPTY, inventory: {} });
+const fresh = () => ({ ...EMPTY, inventory: {}, drops: [] });
+
+/** Probabilidad de exclusiva al acabar una partida (solo portal) y en el cofre del anuncio. */
+export const DROP_CHANCE = { win: 0.04, loss: 0.01, chest: 0.15 };
+export const CHEST_XP = 100;
 
 /**
  * XP para pasar del nivel n al n+1: crece 20 por nivel (200 en el 1, ~680 en el 25, ~3.200 en el 150).
@@ -30,13 +34,15 @@ export function levelOf(xp) {
  * no perderlo al cambiar de móvil.
  */
 export class Progress {
-  constructor(storage = defaultStorage()) {
+  constructor(storage = defaultStorage(), { rng = Math.random } = {}) {
     this.storage = storage;
+    this.rng = rng;
     this.state = fresh();
     try {
       Object.assign(this.state, JSON.parse(storage?.getItem(KEY) ?? '{}'));
     } catch {}
     this.state.inventory = sanitizeInventory(this.state.inventory);
+    if (!Array.isArray(this.state.drops)) this.state.drops = [];
     // estado antiguo sin inventario: se crean las instancias de lo ya desbloqueado
     if (!this.state.deviceId) this.state.deviceId = newDeviceId();
     // recompensas ya abiertas: lo que ya estaba desbloqueado antes de existir este registro cuenta como reclamado
@@ -142,6 +148,7 @@ export class Progress {
   /** Valor de una estadística: el nivel se calcula, los hitos de ranking los concede el servidor. */
   #stat(stat) {
     if (stat === 'level') return this.level.level;
+    if (stat === 'collection') return COLLECTION_SKINS.filter((s) => this.isUnlocked(s)).length;
     return this.state[stat] ?? this.state.rankStats?.[stat] ?? 0;
   }
 
@@ -175,6 +182,7 @@ export class Progress {
   requirement(skin) {
     const u = skin.unlock;
     if (!u) return { text: 'De serie', ratio: 1 };
+    if (u.drop) return { text: 'Premio raro al azar', ratio: this.state.drops?.includes(skin.id) ? 1 : 0 };
     if (u.level) return { text: `Nivel ${u.level}`, ratio: Math.min(1, this.level.level / u.level) };
     if (u.wins) return { text: `${u.wins} victoria${u.wins > 1 ? 's' : ''}`, ratio: Math.min(1, this.state.wins / u.wins) };
     const c = this.challenge(u.challenge);
@@ -212,14 +220,37 @@ export class Progress {
       if (entryFee >= 10) s.bigWins++;
     } else s.streak = 0;
     if (tiebreakWon) s.tiebreakWins++;
+    const drop = this.#rollDrop(won ? DROP_CHANCE.win : DROP_CHANCE.loss);
     this.#sync();
     this.#save();
     return {
       xp,
+      drop,
       levelBefore,
       level: this.level,
       newSkins: SKINS.filter((sk) => !before.includes(sk.id) && this.isUnlocked(sk)),
     };
+  }
+
+  /** Exclusiva al azar entre las que aún no tiene (null si no toca o ya las tiene todas). */
+  #rollDrop(chance) {
+    const drops = (this.state.drops ??= []);
+    const left = DROP_SKINS.filter((sk) => !drops.includes(sk.id));
+    if (!left.length || this.rng() >= chance) return null;
+    const skin = left[Math.min(left.length - 1, Math.floor(this.rng() * left.length))];
+    drops.push(skin.id);
+    return skin;
+  }
+
+  /** Cofre del anuncio recompensado: una exclusiva con DROP_CHANCE.chest, si no, XP extra. */
+  openChest() {
+    const levelBefore = this.level.level;
+    const skin = this.#rollDrop(DROP_CHANCE.chest);
+    const xp = skin ? 0 : CHEST_XP;
+    this.state.xp += xp;
+    this.#sync();
+    this.#save();
+    return { skin, xp, levelBefore, level: this.level };
   }
 
   #persistLocal() {

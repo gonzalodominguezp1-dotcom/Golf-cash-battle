@@ -3361,3 +3361,16 @@ body.sk-noscroll { overflow: hidden; }
 @media (pointer: coarse) {
   .is-portal .play-screen *, .is-portal .overlay, .is-portal .overlay * { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
 }
+
+/* Cofre del anuncio recompensado (solo portal) */
+.chest-btn { display: flex; align-items: center; gap: 12px; width: 100%; margin: 10px 0 0; padding: 10px 14px; border-radius: 16px; text-align: left; color: #fff; background: linear-gradient(135deg, rgba(255, 210, 63, 0.18), rgba(178, 107, 255, 0.18)); box-shadow: 0 0 0 1px rgba(255, 210, 63, 0.4) inset, 0 6px 18px rgba(0, 0, 0, 0.25); transition: transform 0.15s var(--ease-out), opacity 0.2s; }
+.chest-btn:not(:disabled):active { transform: scale(0.98); }
+.chest-btn:disabled { opacity: 0.65; cursor: default; }
+.chest-btn:not(:disabled) .chest-ico { animation: chest-wiggle 2.4s ease-in-out infinite; }
+.chest-ico { font-size: 28px; line-height: 1; }
+.chest-txt { display: grid; gap: 2px; }
+.chest-txt b { font-family: var(--display, inherit); font-size: 15px; font-weight: 800; color: var(--yellow); }
+.chest-txt small { font-size: 12px; opacity: 0.85; }
+@keyframes chest-wiggle { 0%, 80%, 100% { transform: rotate(0); } 85% { transform: rotate(-12deg); } 90% { transform: rotate(10deg); } 95% { transform: rotate(-6deg); } }
+.drop-note { color: #e9d6ff; background: rgba(178, 107, 255, 0.16); box-shadow: 0 0 0 1px rgba(178, 107, 255, 0.45) inset; }
+.drop-note i { background: #c99bff; box-shadow: 0 0 8px #c99bff; }

@@ -8,7 +8,7 @@ import { COURSES, TIEBREAK_COURSE } from './game/courses.js';
 import { Bot } from './game/bots.js';
 import { segmentsOf } from './game/physics.js';
 import { enterFinale, isMuted, leaveFinale, setMuted, sfx, unlockAudio } from './game/audio.js';
-import { Progress } from './progress/Progress.js';
+import { DROP_CHANCE, Progress } from './progress/Progress.js';
 import { AVATAR_ICONS, AvatarStore, checkAvatarFile, fromWire, iconById, imageToAvatar, toWire } from './progress/avatar.js';
 import { FRAMES, frameById, framesUnlocked, frameStyle } from './progress/prestige.js';
 import { CHALLENGES, TIERS as SKIN_TIERS, SKINS } from './progress/skins.js';
@@ -23,7 +23,7 @@ import { addedMessage, cleanFriendName, friendMessage } from './account/friendRu
 import { newPartyMatch, partyErrorText, partyMessage, readyLabel } from './match/partyRules.js';
 import { LiveRoom } from './match/LiveRoom.js';
 import { buildRoster, humanLeaders, liveStandings, seededRng } from './match/liveRules.js';
-import { IS_PORTAL, gameplayStart, gameplayStop, initPortal, loadingStart, loadingStop, midgameAd } from './portal.js';
+import { IS_PORTAL, gameplayStart, gameplayStop, initPortal, loadingStart, loadingStop, midgameAd, rewardedAd } from './portal.js';
 import { BRAND, installI18n } from './i18n.js';
 import { maybeFpsMeter } from './fpsMeter.js';
 import { startTutorial, tutorialPending } from './tutorial.js';
@@ -267,6 +267,7 @@ async function showLobby() {
           <button class="chip-btn" data-go="skins">Personalizar skin</button>
         </div>
       </section>
+      ${IS_PORTAL ? '<button type="button" class="chest-btn"></button>' : ''}
       ${backend.mode === 'local' && !IS_PORTAL ? `<p class="offline">Modo sin conexión: el saldo se guarda solo en este ${DEVICE}</p>` : ''}
       ${backend.account?.profile?.paid_block ? `<button class="notice account-hint" data-go="account">${{ account_required: 'Confirma tu email para jugar mesas con entrada →', kyc_required: 'Verifica tu edad e identidad para jugar mesas con entrada →', account_review: 'Tu cuenta está en revisión: de momento solo Práctica', underage: 'Mesas con entrada solo para mayores de 18' }[backend.account.profile.paid_block]}</button>` : ''}
       ${backend.parties ? '<section class="party-box"></section>' : ''}
@@ -314,7 +315,43 @@ async function showLobby() {
   }
   await shell(view);
   if (backend.parties) partyPanel(view.querySelector('.party-box'), list, balance);
+  const chest = view.querySelector('.chest-btn');
+  if (chest) chestButton(chest);
   claimRewards();
+}
+
+// ---------- cofre (solo portal): anuncio recompensado a cambio de una tirada de bola exclusiva ----------
+const CHEST_KEY = 'gb.chest.at';
+const CHEST_COOLDOWN = 15 * 60 * 1000;
+const chestReadyAt = () => {
+  try { return Number(localStorage.getItem(CHEST_KEY)) + CHEST_COOLDOWN || 0; } catch { return 0; }
+};
+
+function chestButton(btn) {
+  let timer = 0;
+  const paint = (note) => {
+    const left = chestReadyAt() - Date.now();
+    btn.disabled = left > 0;
+    btn.innerHTML = `<span class="chest-ico">🎁</span><span class="chest-txt"><b>${left > 0 ? 'Cofre abierto' : 'Cofre gratis'}</b><small>${note ?? (left > 0 ? `Próximo cofre en ${Math.ceil(left / 60000)} min` : `Ver anuncio · ${Math.round(DROP_CHANCE.chest * 100)}% de bola exclusiva`)}</small></span>`;
+    clearTimeout(timer);
+    if (left > 0 && btn.isConnected) timer = setTimeout(() => paint(), Math.min(left, 30000));
+  };
+  paint();
+  btn.addEventListener('click', async () => {
+    if (btn.disabled) return;
+    btn.disabled = true;
+    const r = await rewardedAd();
+    if (r !== 'ok') {
+      btn.disabled = false;
+      return paint(r === 'adblock' ? 'Desactiva el bloqueador de anuncios para abrirlo' : 'Ahora no hay anuncios, prueba en un rato');
+    }
+    try { localStorage.setItem(CHEST_KEY, String(Date.now())); } catch { }
+    const res = progress.openChest();
+    if (res.skin) {
+      paint(`¡Premio! ${res.skin.name}`);
+      claimRewards();
+    } else paint(`+${res.xp} XP · esta vez no hubo bola`);
+  });
 }
 
 // ---------- grupos ----------
@@ -1927,6 +1964,7 @@ function showEndOverlay({ won, position, total, prize, ranking, legal, holes, ga
           <span class="bar"><i style="--to:${(gained.level.into / gained.level.need) * 100}%"></i></span>
         </div>
         ${prestigeNote(gained)}
+        ${gained.drop ? `<p class="reward-note drop-note"><i></i>✦ ¡Premio raro! Te ha tocado ${gained.drop.name}</p>` : ''}
         ${pending ? `<p class="reward-note"><i></i>${pending === 1 ? 'Tienes 1 recompensa por reclamar' : `Tienes ${pending} recompensas por reclamar`}</p>` : ''}
         ${statsGrid(holes)}
         ${standingsTable(ranking, true)}
