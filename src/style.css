@@ -3358,9 +3358,8 @@ body.sk-noscroll { overflow: hidden; }
 .play-screen:has(.hole-timer:not([hidden])) .toasts { top: calc(env(safe-area-inset-top) + 186px); }
 /* portal en móvil: sin desenfoque detrás de los botones del juego. Cada elemento con
    backdrop-filter sobre el 3D obliga a la GPU a desenfocar ese trozo en cada fotograma */
-@media (pointer: coarse) {
-  .is-portal .play-screen *, .is-portal .overlay, .is-portal .overlay * { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
-}
+/* sin desenfoque de fondo sobre el juego 3D (rendimiento), en móvil y en ordenador */
+.play-screen *, .overlay, .overlay * { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
 
 /* Cofre del anuncio recompensado (solo portal) */
 .chest-btn { display: flex; align-items: center; gap: 12px; width: 100%; margin: 10px 0 0; padding: 10px 14px; border-radius: 16px; text-align: left; color: #fff; background: linear-gradient(135deg, rgba(255, 210, 63, 0.18), rgba(178, 107, 255, 0.18)); box-shadow: 0 0 0 1px rgba(255, 210, 63, 0.4) inset, 0 6px 18px rgba(0, 0, 0, 0.25); transition: transform 0.15s var(--ease-out), opacity 0.2s; }
