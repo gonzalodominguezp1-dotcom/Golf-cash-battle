@@ -16,6 +16,8 @@ export const CALM = Object.freeze({ count: 0.35, speed: 0.4 });
 
 const FAMILIES = ['portal', 'impact', 'skin'];
 const TOP_KEYS = ['id', 'name', 'family', 'duration', 'loop', 'maxParticles', 'emitters', 'rings', 'lights', 'flashes'];
+/** Direcciones de skinFx.js; el runtime las resuelve (el esquema solo las valida y las emite). */
+const DIRS = ['fwd', 'back', 'normal', 'up', 'in'];
 const EMITTER_KEYS = ['cell', 'n', 'rate', 't0', 't1', 'speed', 'spread', 'size', 'life', 'col', 'grav', 'drag', 'grow', 'spin', 'up', 'dir', 'att'];
 const RING_KEYS = ['t', 'radius', 'life', 'col', 'orient'];
 const LIGHT_KEYS = ['t', 'radius', 'life', 'col', 'k'];
@@ -26,7 +28,7 @@ const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 /** Presupuesto de partículas de un efecto en una calidad: nunca por encima del tope. */
 export function budget(effect, quality) {
-  return Math.min(effect.maxParticles?.[quality] ?? 0, PLAYER_CAP[quality]);
+  return Math.min(effect.maxParticles?.[quality] ?? 0, PLAYER_CAP[quality] ?? 0);
 }
 
 /** Partículas que pide un emisor, antes de aplicar el presupuesto. */
@@ -37,15 +39,44 @@ function wanted(em) {
 /** Cuántas partículas emite cada emisor en una calidad. Sin azar: sirve para validar y para emitir. */
 function counts(effect, quality, reduced = false, strength = 1) {
   const k = (reduced ? CALM.count : 1) * Math.min(1, Math.max(0, strength));
-  const want = effect.emitters.map((em) => Math.round(wanted(em) * k));
+  // un emisor que pedía algo nunca baja a 0 solo por redondeo: lo distintivo no desaparece
+  const want = effect.emitters.map((em) => (wanted(em) > 0 && k > 0 ? Math.max(1, Math.round(wanted(em) * k)) : 0));
   const total = want.reduce((a, b) => a + b, 0), cap = budget(effect, quality);
-  return total <= cap ? want : want.map((n) => Math.floor((n * cap) / total));
+  return total <= cap ? want : fitToCap(want, total, cap);
 }
 
-/** Máximo de destellos de pantalla completa en cualquier ventana de 1 s. Con reducción de movimiento, 0. */
+/** Reparte `cap` entre emisores en proporción a lo pedido, con al menos 1 para cada uno si cabe (mayor resto). */
+function fitToCap(want, total, cap) {
+  const idx = want.map((_, i) => i).filter((i) => want[i] > 0);
+  const byWeight = [...idx].sort((x, y) => want[y] - want[x] || x - y);
+  const out = want.map(() => 0);
+  if (cap < idx.length) {
+    byWeight.slice(0, cap).forEach((i) => (out[i] = 1));
+    return out;
+  }
+  const ideal = want.map((n) => (n * cap) / total);
+  for (const i of idx) out[i] = Math.max(1, Math.floor(ideal[i]));
+  let sum = out.reduce((x, y) => x + y, 0);
+  while (sum > cap) { const i = byWeight.find((j) => out[j] > 1); out[i]--; sum--; }
+  while (sum < cap) {
+    const i = [...idx].filter((j) => out[j] < want[j]).sort((x, y) => ideal[y] - out[y] - (ideal[x] - out[x]) || x - y)[0];
+    if (i === undefined) break;
+    out[i]++; sum++;
+  }
+  return out;
+}
+
+/**
+ * Máximo de destellos de pantalla completa en cualquier ventana de 1 s. Con reducción de movimiento, 0.
+ * En un bucle se cuentan también las repeticiones, porque el efecto vuelve a empezar.
+ */
 export function flashRate(effect, reduced = false) {
   if (reduced) return 0;
-  const f = [...(effect.flashes ?? [])].sort((a, b) => a - b);
+  const base = effect.flashes ?? [];
+  const reps = effect.loop && effect.duration > 0 ? Math.ceil(2 / effect.duration) + 1 : 1;
+  const f = [];
+  for (let r = 0; r < reps; r++) for (const t of base) f.push(t + r * (effect.duration ?? 0));
+  f.sort((a, b) => a - b);
   let max = 0;
   for (let i = 0; i < f.length; i++) {
     let c = 0;
@@ -79,10 +110,14 @@ export function validate(effect) {
   }
   if (!Array.isArray(effect.emitters) || !effect.emitters.length) errors.push('emitters: debe haber al menos un emisor');
   else effect.emitters.forEach((em, i) => checkEmitter(effect, em, `emitters[${i}]`, errors));
-  (effect.rings ?? []).forEach((r, i) => checkTimed(effect, r, RING_KEYS, `rings[${i}]`, errors, r?.orient !== undefined && !['floor', 'wall'].includes(r.orient) ? 'orient: debe ser floor o wall' : null));
-  (effect.lights ?? []).forEach((l, i) => checkTimed(effect, l, LIGHT_KEYS, `lights[${i}]`, errors));
+  for (const [key, keys] of [['rings', RING_KEYS], ['lights', LIGHT_KEYS]]) {
+    const list = effect[key];
+    if (list === undefined) continue;
+    if (!Array.isArray(list)) { errors.push(`${key}: debe ser una lista`); continue; }
+    list.forEach((item, i) => checkTimed(effect, item, keys, `${key}[${i}]`, errors, key === 'rings' && item?.orient !== undefined && !['floor', 'wall'].includes(item.orient) ? 'orient: debe ser floor o wall' : null));
+  }
   if (effect.flashes !== undefined) {
-    if (!Array.isArray(effect.flashes) || !effect.flashes.every((t) => isNum(t) && t >= 0)) errors.push('flashes: debe ser una lista de tiempos en segundos');
+    if (!Array.isArray(effect.flashes) || !effect.flashes.every((t) => isNum(t) && t >= 0 && t < effect.duration)) errors.push('flashes: debe ser una lista de tiempos en segundos dentro de la duración');
     else if (flashRate(effect) > MAX_FLASHES_PER_SECOND) errors.push(`flashes: más de ${MAX_FLASHES_PER_SECOND} destellos en 1 s`);
   }
   if (!errors.length) {
@@ -102,6 +137,7 @@ function checkEmitter(effect, em, where, errors) {
   if (!isNum(em.life) || em.life <= 0) errors.push(`${where}.life: debe ser mayor que 0`);
   if (!isNum(em.speed) || em.speed < 0) errors.push(`${where}.speed: debe ser 0 o más`);
   if (!isNum(em.spread) || em.spread < 0 || em.spread > 1) errors.push(`${where}.spread: debe estar entre 0 y 1`);
+  if (em.dir !== undefined && !DIRS.includes(em.dir)) errors.push(`${where}.dir: debe ser ${DIRS.join(', ')}`);
   const burst = em.n !== undefined, cont = em.rate !== undefined;
   if (burst === cont) return void errors.push(`${where}: debe tener n (ráfaga) o rate (continuo), no ambos ni ninguno`);
   const t0 = em.t0 ?? 0;
@@ -147,6 +183,8 @@ export function rng(seed) {
  * strength va de 0 a 1 y escala la cantidad; reduced aplica CALM.
  */
 export function emissions(effect, seed, quality, reduced = false, strength = 1) {
+  if (!QUALITIES.includes(quality)) throw new RangeError(`calidad desconocida «${quality}»`);
+  if (!Number.isFinite(strength) || !Number.isFinite(seed)) throw new RangeError('seed y strength deben ser números finitos');
   const rand = rng(seed), out = [], n = counts(effect, quality, reduced, strength);
   const speedK = reduced ? CALM.speed : 1;
   effect.emitters.forEach((em, i) => {
@@ -158,7 +196,7 @@ export function emissions(effect, seed, quality, reduced = false, strength = 1) 
         cell: em.cell, col: em.col, size: em.size, life: em.life,
         speed: em.speed * (0.7 + 0.6 * rand()) * speedK,
         dx: sin * Math.cos(phi), dy: cos, dz: sin * Math.sin(phi),
-        grav: em.grav ?? 0, drag: em.drag ?? 1, grow: em.grow ?? 0, spin: em.spin ?? 0, up: em.up ?? 0, att: em.att ?? 0,
+        dir: em.dir ?? 'back', grav: em.grav ?? 0, drag: em.drag ?? 1.5, grow: em.grow ?? 0, spin: em.spin ?? 0, up: em.up ?? 0, att: em.att ?? 0,
       });
     }
   });

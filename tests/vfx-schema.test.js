@@ -92,3 +92,54 @@ test('strength escala la cantidad sin pasar del presupuesto', () => {
   assert.ok(half < full && half > 0);
   assert.ok(emissions(burst(), 1, 'high', false, 5).length <= budget(burst(), 'high'));
 });
+
+test('validate nunca lanza: rings, lights o flashes mal formados devuelven errores', () => {
+  for (const bad of [{ rings: {} }, { rings: 5 }, { lights: 'x' }, { flashes: 'x' }, { rings: [null] }, { rings: [{ t: 0, life: 0.1, orient: 'techo' }] }]) {
+    const r = validate(burst(bad));
+    assert.equal(r.ok, false, JSON.stringify(bad));
+    assert.ok(Array.isArray(r.errors) && r.errors.length);
+  }
+});
+
+test('AC7: los destellos de un bucle corto cuentan sus repeticiones y deben caer dentro de la duración', () => {
+  const lp = loop({ duration: 0.8, emitters: [{ ...loop().emitters[0], t1: 0.8, rate: 20 }], flashes: [0, 0.2, 0.4] });
+  assert.equal(flashRate(lp), 4); // 0, .2, .4, .8 dentro de la misma ventana de 1 s
+  assert.equal(validate(lp).ok, false);
+  assert.equal(validate(burst({ flashes: [5] })).ok, false);
+  assert.equal(flashRate(burst({ flashes: [0, 1] }), false), 1); // justo a 1,0 s: ventanas distintas
+});
+
+test('AC13: un emisor pequeño no desaparece en low ni con reducción de movimiento', () => {
+  const two = burst({ emitters: [burst().emitters[0], { ...burst().emitters[0], n: 2, cell: 'ember' }] });
+  const by = (list) => list.reduce((m, e) => ((m[e.cell] = (m[e.cell] ?? 0) + 1), m), {});
+  const low = by(emissions(two, 1, 'low', false));
+  assert.ok(low.spark >= 1 && low.ember >= 1);
+  assert.equal(emissions(two, 1, 'low', false).length, budget(two, 'low'));
+  assert.equal(emissions(burst({ emitters: [{ ...burst().emitters[0], n: 1 }] }), 1, 'high', true).length, 1);
+});
+
+test('dir se valida y se emite, y el drag por defecto es el de skinFx', () => {
+  assert.equal(validate(burst({ emitters: [{ ...burst().emitters[0], dir: 'arriba' }] })).ok, false);
+  const e = emissions(burst({ emitters: [{ ...burst().emitters[0], dir: 'in' }] }), 1, 'high', false);
+  assert.ok(e.every((x) => x.dir === 'in'));
+  assert.equal(emissions(burst(), 1, 'high', false)[0].dir, 'back');
+  assert.equal(emissions(burst(), 1, 'high', false)[0].drag, 1.5);
+});
+
+test('strength se acota a 0..1 y las entradas inválidas fallan en voz alta', () => {
+  assert.deepEqual(emissions(burst(), 1, 'high', false, 5), emissions(burst(), 1, 'high', false, 1));
+  assert.equal(emissions(burst(), 1, 'high', false, -1).length, 0);
+  assert.throws(() => emissions(burst(), 1, 'high', false, NaN), RangeError);
+  assert.throws(() => emissions(burst(), NaN, 'high', false), RangeError);
+  assert.throws(() => emissions(burst(), 1, 'ultra', false), RangeError);
+  assert.equal(budget(burst(), 'ultra'), 0);
+});
+
+test('AC3: los emisores continuos de una vez terminan exactamente en t1 + life', () => {
+  const fx = burst({ duration: 1, emitters: [{ cell: 'soft', rate: 10, t0: 0.2, t1: 0.6, speed: 1, spread: 1, size: 0.1, life: 0.4, col: 'glow' }] });
+  assert.equal(validate(fx).ok, true);
+  const e = emissions(fx, 1, 'high', false);
+  assert.equal(e.length, 4);
+  assert.ok(Math.abs(Math.max(...e.map((x) => x.t + x.life)) - 0.9) < 1e-9); // 0,2 + 3 pasos de 0,1 + 0,4
+  assert.equal(validate({ ...fx, duration: 0.8 }).ok, false);
+});
