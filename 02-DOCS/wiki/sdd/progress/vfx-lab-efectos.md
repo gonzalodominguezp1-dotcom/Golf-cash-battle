@@ -79,4 +79,7 @@ El bloqueo 2 (rama) queda resuelto: el compañero, `la-chaqueta-bionica`. Ningú
 
 | id | tipo | tarea | decisión | estado |
 |----|------|-------|----------|--------|
-| 9 | blocking | T003 | ¿Se acepta el arreglo de `flashRate` (forma cerrada, commit `72abc22`) sin una cuarta revisión independiente, dejando que la revisión de cierre de toda la rama lo cubra? Recomendación: sí, porque la causa de la clase de defecto desaparece y está probada con mutantes. Opciones: aceptar / pedir revisión humana del diff `43e515e..72abc22` en `schema.js`. | pendiente |
+| 9 | blocking | T003 | ¿Se acepta el arreglo de `flashRate` (forma cerrada, commit `72abc22`) sin una cuarta revisión independiente, dejando que la revisión de cierre de toda la rama lo cubra? Recomendación: sí, porque la causa de la clase de defecto desaparece y está probada con mutantes. Opciones: aceptar / pedir revisión humana del diff `43e515e..72abc22` en `schema.js`. | cerrada por una persona: aceptado sin cuarta revisión (2026-11-06) |
+
+## T003 — 2026-11-06 (cierre)
+- status: complete. La persona aceptó el arreglo de `flashRate` (`72abc22`) sin cuarta revisión; la revisión de cierre de toda la rama (etapa 5) lo volverá a leer.
