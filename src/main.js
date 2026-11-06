@@ -945,7 +945,10 @@ async function showAccount(note = '', tab = 'profile') {
   emailBox.append(changePw);
 
   const kycBox = view.querySelector('.kyc-box');
-  if (!confirmed) {
+  // TEMPORAL: verificación de identidad desactivada (ver migración 20261106120000)
+  if (true) {
+    kycBox.innerHTML = '<p class="sub">La verificación de identidad está desactivada temporalmente.</p>';
+  } else if (!confirmed) {
     kycBox.innerHTML = '<p class="sub">Primero confirma tu email.</p>';
   } else if (kyc === 'verified') {
     kycBox.innerHTML = `<p class="field-ok">Identidad verificada${p.adult ? ' · mayor de 18' : ''}</p>`;
