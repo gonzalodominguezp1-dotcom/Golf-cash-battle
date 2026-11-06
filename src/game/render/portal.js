@@ -195,6 +195,7 @@ export function buildPortal(scene, [x, z], r, color, y, time, seed = 0) {
     },
     /** Apertura de 0 (cerrado) a 1 (estable, como siempre). Ver vfx/portalState.js. */
     setOpen(k) {
+      if (!Number.isFinite(k)) return; // un valor roto no debe escalar el portal por NaN
       open = Math.min(1, Math.max(0, k));
       g.visible = open > 0.001;
       g.scale.set(open, 1, open);

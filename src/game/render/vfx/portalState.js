@@ -15,7 +15,10 @@ const easeIn = (u) => u * u;
  * @param opts.exitTime  Segundos de cierre completo (1 → 0).
  * @param opts.onState   Se llama con 'enter' | 'stable' | 'exit' | 'closed' en cada cambio de estado.
  */
-export function portalState(portal, { enterTime = 0.6, exitTime = 0.5, onState } = {}) {
+export function portalState(portal, opts = {}) {
+  // un tiempo roto (NaN, negativo, texto) cae al valor por defecto: no debe dejar el portal atascado en NaN
+  const time = (v, d) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : d);
+  const enterTime = time(opts.enterTime, 0.6), exitTime = time(opts.exitTime, 0.5), onState = opts.onState;
   let state = 'stable', open = 1;
   let from = 1, to = 1, dur = 1, t = 0;
 

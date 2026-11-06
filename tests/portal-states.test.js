@@ -21,7 +21,7 @@ test('T006: un portal nace abierto y estable, como los de hoy', () => {
   assert.equal(st.open, 1);
   run(st, 2);
   assert.equal(st.state, 'stable');
-  assert.ok(portal.calls.every((k) => k === 1));
+  assert.deepEqual(portal.calls, []); // un portal estable no toca nada
 });
 
 test('T006: exit cierra el portal de forma monótona en su tiempo y acaba cerrado', () => {
@@ -122,4 +122,56 @@ test('T006: buildPortal mantiene su firma y expone setOpen sin cambiar el portal
   portal.setOpen(1);
   assert.equal(portal.group.visible, true);
   assert.equal(portal.group.scale.x, 1);
+});
+
+test('T006: desde la mitad solo se tarda lo que falta, no el tiempo entero', () => {
+  const { st } = make(); // exitTime 0,5; enterTime 0,6
+  st.exit(); run(st, 0.2);
+  assert.ok(Math.abs(st.open - 0.84) < 1e-6); // 1 - 0,4²
+  st.enter();
+  run(st, 0.08);
+  assert.equal(st.state, 'enter');
+  run(st, 0.04); // 0,6 × (1 − 0,84) = 0,096 s en total
+  assert.equal(st.state, 'stable');
+});
+
+test('T006: tiempos de 0 completan en el primer update y un tiempo roto cae al valor por defecto', () => {
+  const z = make({ enterTime: 0, exitTime: 0 });
+  z.st.exit(); z.st.update(1 / 60);
+  assert.equal(z.st.state, 'closed');
+  z.st.enter(); z.st.update(1 / 60);
+  assert.equal(z.st.state, 'stable');
+  for (const bad of [NaN, -1, Infinity, 'x', null]) {
+    const { st, portal } = make({ exitTime: bad });
+    st.exit(); run(st, 1);
+    assert.equal(st.state, 'closed', String(bad));
+    assert.ok(portal.calls.every(Number.isFinite), String(bad));
+  }
+});
+
+test('T006: interrumpir justo al empezar vuelve a estable sin saltos, y un onState que lanza deja el estado coherente', () => {
+  const { st } = make();
+  st.exit(); st.enter();
+  st.update(1 / 60);
+  assert.equal(st.state, 'stable');
+  assert.equal(st.open, 1);
+  const boom = make({ onState: () => { throw new Error('fallo del oyente'); } });
+  assert.throws(() => boom.st.exit(), /oyente/);
+  assert.equal(boom.st.state, 'exit');
+  assert.equal(boom.st.open, 1);
+});
+
+test('T006: buildPortal deja la luz como siempre sin setOpen, la atenúa con setOpen e ignora valores rotos', () => {
+  const scene = new THREE.Scene();
+  const portal = buildPortal(scene, [0, 0], 1, 0xb46cff, 0, { value: 0 }, 1);
+  const light = portal.group.children.find((c) => c.isPointLight);
+  const base = 1.4 + Math.sin(1 * 3.1 + 1 * 5) * 0.18 + Math.sin(1 * 7.3 + 1) * 0.08; // t = 1, seed = 1
+  portal.update(1);
+  assert.ok(Math.abs(light.intensity - base) < 1e-9, `${light.intensity} frente a ${base}`);
+  portal.setOpen(0.5);
+  portal.update(1);
+  assert.ok(Math.abs(light.intensity - base * 0.5) < 1e-9);
+  portal.setOpen(NaN); portal.setOpen(undefined);
+  assert.equal(portal.group.scale.x, 0.5);
+  assert.equal(portal.group.visible, true);
 });
