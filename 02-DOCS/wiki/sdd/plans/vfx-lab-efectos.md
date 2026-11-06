@@ -214,7 +214,7 @@ Riesgo: `rsc risk` sobre las rutas previstas da **tier 1** (un revisor) a todos 
 
 **T007 — Interfaces**
 - Consumes: `validate(effect)`, `budget(effect, quality)`, `flashRate(effect)` (T003) y `VfxPlayer` (T004).
-- Produces: `window.__lab.selfcheck() -> { ok: boolean, steps: string[] }` y la exportación de un efecto como módulo `.js` con la forma `Effect`.
+- Produces: `await window.__lab.selfcheck() -> { ok: boolean, steps: { name, ok, detail }[] }` (asíncrono: comprueba también la carga por piezas del juego) y la exportación de un efecto como módulo `.js` con la forma `Effect`.
 
 **T010 — Interfaces**
 - Consumes: la forma de emisor `P(cell, n, speed, spread, size, life, col, extra)` de `skinFx.js`.

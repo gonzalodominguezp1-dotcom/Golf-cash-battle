@@ -105,3 +105,14 @@ El bloqueo 2 (rama) queda resuelto: el compañero, `la-chaqueta-bionica`. Ningú
 
 ## T004 — nota
 - La ronda 2 formal de T004 no se ha hecho; el runtime se releyó entero en las dos rondas de T005 (que dio pass). Queda cubierto por la revisión de cierre de toda la rama (etapa 5).
+
+## T007 — 2026-11-06
+- status: complete (banco, fuera del repo; sin tier, sin revisión por tier)
+- red: 10 de 10 pruebas de `golfito-vfx-lab/test/library.test.js` fallaban con el stub; green: 10/10 (`node --test test/`)
+- done-check: `await window.__lab.selfcheck()` devuelve `ok: true` con 21 pasos: crear, duplicar, editar con errores por nombre, exportación bloqueada con un efecto inválido y con uno que excede el presupuesto (AC9), borrar con aviso y con `force` (AC8), reproducir cada efecto en low/medium/high dentro del tope y terminando vacío o en bucle, pieza del juego ausente (AC15), una sola copia de `three`. Consola sin errores. `grep -c "engine.js" src/main.js` da 0 y se retiraron `engine.js` y los seis efectos de prueba.
+- verificado en el navegador: editar la duración a 0 desde el formulario pone el semáforo en rojo, lista los errores y deshabilita «Exportar»; devolverla a 1 lo vuelve a habilitar. Hallazgo propio: las listas de emisores, anillos y luces salían como `[object HTMLDivElement]` (append no aplana arrays); corregido.
+- files (fuera del repo): `golfito-vfx-lab/src/{main,library,export,palettes,starter,gameBridge}.js`, `index.html`, `vite.config.js`, `test/library.test.js`
+- decisión: `selfcheck` es asíncrono porque comprueba la carga por piezas con `loadGame`.
+
+## Reparto del trabajo restante (a petición de la persona)
+- Subagentes: Sonnet para contenido y pruebas (T008/T009 packs, T015 entidad Skin), Haiku para comprobaciones mecánicas (T013), Opus solo para UI, funcionalidad y complejidad (T016 editor de skins, T010/T011 integración en el juego).
