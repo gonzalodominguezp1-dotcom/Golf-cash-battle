@@ -157,7 +157,7 @@ Riesgo: `rsc risk` sobre las rutas previstas da **tier 1** (un revisor) a todos 
 
 | ID | [P] | Task | Done-check | Depends-on | Trace | Risk |
 | --- | --- | --- | --- | --- | --- | --- |
-| T001 |  | Hacer que el banco importe `AdditiveParticles` y `Shockwaves` del juego por ruta, con una sola copia de `three` | La página del banco carga sin errores de consola y `window.__lab.singleThree === true` | — | AC1, AC12 | — |
+| T001 |  | Hacer que el banco importe `AdditiveParticles` y `Shockwaves` del juego por ruta, con una sola copia de `three` | La página del banco carga sin errores de consola, `window.__lab.singleThree === true` y `grep -c "engine.js" src/main.js` del banco da 0 | — | AC1, AC12 | — |
 | T002 |  | Escribir las pruebas del esquema de efecto (validar, presupuesto, emisiones con semilla, tasa de destellos, bucle, una vez, reducción de movimiento) | `node --test tests/vfx-schema.test.js` falla: no existe `vfx/schema.js` | — | AC2, AC3, AC4, AC5, AC6, AC7 | 1 |
 | T003 |  | Implementar `src/game/render/vfx/schema.js` (puro, sin Three.js) | `node --test tests/vfx-schema.test.js` en verde; `grep -c "from 'three'" src/game/render/vfx/schema.js` da 0 | T002 | AC2, AC3, AC4, AC5, AC6, AC7 | 1 |
 | T004 |  | Implementar `VfxPlayer` en `vfx/runtime.js` con pool de partículas compartido y `update` sin asignaciones; prueba antes | `node --test tests/vfx-runtime.test.js` en verde (límite duro, `dispose`, sin asignaciones en `update`) | T003 | AC3, AC5, AC11 | 1 |
@@ -170,7 +170,10 @@ Riesgo: `rsc risk` sobre las rutas previstas da **tier 1** (un revisor) a todos 
 | T011 |  | Conectar `VfxPlayer` a los eventos pared, bumper, hoyo y portal de `GolfGame.js`, respetando calidad, gobernador y reducción de movimiento | `pnpm test` y `pnpm run build` en verde; en el navegador cada evento reproduce el efecto y su lista de emisiones coincide con el golden | T009, T010 | AC11, AC6 | 1 |
 | T012 |  | Medir FPS de los efectos en móvil de gama media o emulador y anotarlo (P7.5). **Parte humana** | La descripción del PR recoge dispositivo, FPS y tiempo de carga; cola de decisiones, entrada 8 | T011 | AC5, AC11 | — |
 | T013 |  | Comprobar que el banco no está en el repo ni en su build | `git ls-files \| grep -c golfito-vfx-lab` da 0 y `git status --short` no lista el banco | T011 | AC12 | — |
-| T014 |  | Cierre: todos los done-checks y la verificación del proyecto | Cada fila marcada; `pnpm test`, `pnpm run build`, `pnpm audit --prod` y `bash scripts/verify.sh` terminan con código 0 | T001–T013 | todos | — |
+| T014 |  | Cierre automático: todos los done-checks y la verificación del proyecto | Cada fila marcada; `pnpm test`, `pnpm run build`, `pnpm audit --prod` y `bash scripts/verify.sh` terminan con código 0 | T001–T011, T013, T015–T017 | todos | — |
+| T015 |  | Añadir al esquema la entidad Skin (apariencia y efectos asignados) con su validación y pruebas antes | `node --test tests/vfx-schema.test.js` incluye `validateSkin` y pasa; una skin con efecto inexistente falla | T003 | AC16 | 1 |
+| T016 | [P] | Añadir al editor del banco el CRUD de skins con vista previa y aviso al borrar un efecto en uso | `window.__lab.selfcheck()` crea, duplica, edita y borra una skin y avisa si se borra un efecto que usa; `pnpm build` del banco pasa | T007, T015 | AC16, AC8 | — |
+| T017 |  | Cubrir los casos límite: `low` conserva anillo, destello y 30 % de `high`; pool lleno descarta emisiones nuevas; errores de parámetro y pieza ausente se listan | `node --test tests/vfx-schema.test.js tests/vfx-runtime.test.js` incluye los tres casos y pasa; `selfcheck()` cubre el error del banco | T004, T007 | AC13, AC14, AC15 | 1 |
 
 **T004 — Interfaces**
 - Consumes: `emissions(effect, seed, quality, reduced) -> Emission[]`, `budget(effect, quality) -> number` (de T003); `AdditiveParticles(scene, atlas, max)` de `effects.js`.
@@ -192,3 +195,31 @@ Riesgo: `rsc risk` sobre las rutas previstas da **tier 1** (un revisor) a todos 
 | Files / areas | ~14 entre `src/game/render/vfx/`, `tests/`, `portal.js`, `skinFx.js`, `GolfGame.js` | render y pruebas, sin base de datos ni física |
 | Risk | máximo tier 1; 0 tareas de tier 2 | un revisor por tarea; no hace falta aprobación humana por `rsc risk` |
 | Suggested delivery | autochain: 3 PR encadenados | supera `line_budget` 400; PR1 schema + pruebas, PR2 runtime + packs, PR3 portal e integración |
+
+## Ajustes tras `analyze` (ronda 1)
+<!-- IDs estables: T015–T017 son nuevas; T012 sigue siendo humana y bloquea `ship`, no el cierre automático T014 -->
+
+- **F1 — Skin como entidad.** `Skin = { id, name, palette: { base, accent, secondary, glow }, finish, pattern, effects: { trail, aura, hit, roll, wall, sink } }`, donde cada campo de `effects` es el id de un `Effect` o vacío. Se valida con `validateSkin(skin, library)`. Se exporta como datos en `vfx/packs/`, sin dar de alta la skin en `skins.js` (sin tier, desbloqueo ni precio).
+- **F2 — Topes.** `VfxPlayer` tiene tope propio por calidad (`low` 24, `medium` 60, `high` 120), aparte del de `SkinFX`. El efecto de mundo sustituye al soplo genérico de `Particles` en pared, bumper y hoyo, y se suma al efecto de la skin.
+- **F5 — Cierre.** T014 ya no espera a T012. T012 queda en la cola de decisiones (entrada 8) y bloquea `ship` hasta que alguien mida en móvil.
+- **F7 — Fuerza del golpe.** `VfxPlayer.play(effect, { pos, normal?, seed, strength? })`, con `strength` de 0 a 1 que escala cantidad y tamaño sin superar el presupuesto.
+
+**T005 — Interfaces**
+- Consumes: `VfxPlayer.play(effect, { pos, normal?, seed, strength? })` (T004).
+- Produces: anillo con orientación `'floor' | 'wall'`, que usa `normal` para colocarse sobre la pared.
+
+**T006 — Interfaces**
+- Consumes: `buildPortal(scene, [x, z], r, color, y, time, seed = 0)` de `portal.js`; el runtime de T004.
+- Produces: `portalState(portal) -> { enter(), stable(), exit() }`. `buildPortal` no cambia su firma.
+
+**T007 — Interfaces**
+- Consumes: `validate(effect)`, `budget(effect, quality)`, `flashRate(effect)` (T003) y `VfxPlayer` (T004).
+- Produces: `window.__lab.selfcheck() -> { ok: boolean, steps: string[] }` y la exportación de un efecto como módulo `.js` con la forma `Effect`.
+
+**T010 — Interfaces**
+- Consumes: la forma de emisor `P(cell, n, speed, spread, size, life, col, extra)` de `skinFx.js`.
+- Produces: presets seleccionables por nombre, sin tocar `SIG` ni `SKINS` existentes.
+
+**T015 — Interfaces**
+- Consumes: `validate(effect)` (T003).
+- Produces: `validateSkin(skin, library) -> { ok: true } | { ok: false, errors: string[] }`.
