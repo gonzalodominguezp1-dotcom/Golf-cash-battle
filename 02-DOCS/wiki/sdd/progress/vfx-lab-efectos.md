@@ -37,3 +37,27 @@ Preguntas registradas como suposición en la spec, y para revisión posterior:
 | 8 | review-after | Medir presupuesto en móvil real o emulado de gama media (no lo puede hacer el agente). | pendiente |
 
 El bloqueo 2 (rama) queda resuelto: el compañero, `la-chaqueta-bionica`. Ningún punto es `blocking`.
+
+## Implement (autopilot)
+
+## T001 — 2026-11-06
+- status: complete (banco, fuera del repo; sin tier)
+- done-check: `window.__lab.singleThree === true`, `window.__lab.schema.validate` carga desde la ruta del juego, consola sin errores (comprobado en el navegador)
+- files (fuera del repo): `golfito-vfx-lab/vite.config.js`, `src/gameBridge.js`, `src/main.js`
+- decision: el done-check pasó a no exigir retirar `engine.js`; esa comprobación vive en T007
+
+## T002/T003 — 2026-11-06
+- status: implemented, en revisión (ronda 3 de 3, fix `43e515e`)
+- red: `node --test tests/vfx-schema.test.js` falló por aserción con el módulo en stub; green: 10/10 al implementar
+- commits: `29ef9cd` (feat), `06a09b5` (fix ronda 1), `43e515e` (fix ronda 2)
+- risk: tier 1 (`rsc risk --base`), un revisor de contexto limpio por ronda
+- review: ronda 1 → 10 hallazgos, todos corregidos (L1–L10); ronda 2 → 2 hallazgos (1 bloqueante: validador colgado con bucle minúsculo; 1 should-fix: presupuesto fraccionario), corregidos (L11–L12); ronda 3 en curso
+- controls: tests ✅ (219/219) build ✅ audit ✅ traceability ✅ (AC2–AC7, AC13)
+- mutantes comprobados: quitar el tope de `strength` y romper el bucle del runtime hacen fallar las pruebas
+
+## T004 — 2026-11-06
+- status: implemented, en revisión (ronda 1 de 3, commit `6cd2527`)
+- red: 11 de 12 fallaban por aserción con el stub; green: 12/12
+- risk: tier 1
+- controls: tests ✅ (219/219) build ✅ audit ✅ traceability ✅ (AC3, AC5, AC11, AC14)
+- pendiente conocido: la prueba de «`update` no asigna memoria» no existe como prueba automática (no hay forma fiable en `node --test` sin `--expose-gc`); la garantía es estructural (casillas fijas y paquete de emisiones precalculado en `play`)
