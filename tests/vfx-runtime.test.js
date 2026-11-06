@@ -359,3 +359,15 @@ test('T005: dispose libera la geometría y los materiales de los anillos y el po
   assert.equal(mats, player.rings.length);
   assert.equal(scene.children.length, 0);
 });
+
+test('T005: strength escala el radio de los anillos (0 = la mitad, 1 = completo)', () => {
+  const radius = (strength) => {
+    const { player } = make();
+    player.play(ringFx(), { pos: { x: 0, y: 0, z: 0 }, seed: 1, palette: PALETTE, strength });
+    player.update(0);
+    return visibleRings(player)[0].radius;
+  };
+  assert.equal(radius(1), 2);
+  assert.equal(radius(0), 1);
+  assert.ok(radius(0.5) > radius(0) && radius(0.5) < radius(1));
+});
