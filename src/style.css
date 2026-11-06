@@ -141,6 +141,44 @@ button > .gi:last-child:not(:first-child) { margin-left: 0.35em; }
     .tabbar button { padding: 8px 6px !important; }
   }
 }
+/* iconos más grandes en escritorio (≥900px), en línea con móvil */
+@media (min-width: 900px) {
+  .gi { width: 1.5em; height: 1.5em; }
+  .desktop-nav button .gi { width: 2.15em; height: 2.15em; margin: -4px 0 !important; }
+  .topbar-sound-btn .gi { width: 1.75em; height: 1.75em; margin: -3px 0.3em -3px 0 !important; }
+  .balance .coin { width: 1.6em; height: 1.6em; vertical-align: -0.4em; }
+  .balance .plus { width: 30px; height: 30px; }
+  .hud .pill .gi { width: 1.5em; height: 1.5em; }
+  .sk-fchip i .gi { width: 1.4em; height: 1.4em; vertical-align: -0.35em; }
+  .sk-card .sk-ico { width: 30px; height: 30px; }
+  .sk-card .sk-ico .gi { width: 22px; height: 22px; }
+  .sk-card .sk-lock { padding: 5px; }
+  .preview-play-icon .gi { width: 28px !important; height: 28px !important; }
+  .rank-pos .gi { width: 34px !important; height: 34px !important; }
+}
+/* escritorio estrecho: la barra no cabía; fuera atajos de teclado y textos secundarios */
+@media (min-width: 900px) and (max-width: 1365px) {
+  .desktop-nav kbd { display: none !important; }
+}
+@media (min-width: 900px) and (max-width: 1199px) {
+  .topbar { gap: 12px !important; padding-left: 20px !important; padding-right: 20px !important; }
+  .topbar-left { gap: 12px !important; }
+  .topbar-right { gap: 8px !important; }
+  .topbar .level-text { display: none !important; }
+  .desktop-nav { gap: 2px; }
+  .desktop-nav button { padding: 8px 7px; font-size: 12px; }
+  .topbar-sound-btn { font-size: 0 !important; padding: 7px 9px !important; }
+  .topbar-sound-btn .gi { width: 24px; height: 24px; margin: 0 !important; }
+  .desktop-brand-btn .brand-logo { height: 58px !important; max-width: 70px !important; }
+  .balance { padding: 5px 5px 5px 10px; gap: 4px; }
+}
+@media (min-width: 900px) and (max-width: 1023px) {
+  .topbar { padding-left: 10px !important; padding-right: 10px !important; gap: 6px !important; }
+  .topbar-left { gap: 8px !important; }
+  .topbar-right { gap: 6px !important; }
+  .desktop-nav button { padding: 7px 5px; font-size: 11px; letter-spacing: 0.02em; }
+  .desktop-nav button .gi { width: 1.9em; height: 1.9em; }
+}
 .primary .gi, .secondary .gi, .play .gi, .ghost .gi, .pill .gi { margin: 0 !important; vertical-align: 0; }
 button:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.6); }
 h1, h2, h3, .score-title { font-family: var(--display); font-weight: 800; letter-spacing: -0.02em; }
