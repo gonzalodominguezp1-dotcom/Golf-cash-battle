@@ -89,10 +89,37 @@ button > .gi:last-child:not(:first-child) { margin-left: 0.35em; }
 .desktop-nav button { white-space: nowrap; }
 .desktop-nav button .gi { margin: 0; vertical-align: 0; width: 1.5em; height: 1.5em; }
 .topbar-sound-btn .gi { width: 1.2em; height: 1.2em; }
-@media (max-width: 520px) {
-  .balance { gap: 4px; padding: 5px 5px 5px 8px; }
-  .balance .plus { width: 22px; height: 22px; }
-  .topbar-sound-btn { padding: 6px 8px !important; }
+/* barra superior móvil: nivel + saldo a la izquierda, logo centrado, ajustes y pantalla completa a la derecha */
+.m-stats, .icon-btn { display: none; }
+@media (max-width: 899px) {
+  .topbar .level, .topbar .balance, .topbar .topbar-sound-btn { display: none !important; }
+  .m-stats {
+    display: flex; align-items: center; gap: 2px; padding: 3px 12px 3px 3px; border-radius: 999px;
+    background: linear-gradient(180deg, rgba(32, 22, 54, 0.9) 0%, rgba(18, 12, 32, 0.95) 100%);
+    box-shadow: 0 0 0 1px rgba(255, 210, 63, 0.35) inset, 0 4px 16px rgba(0, 0, 0, 0.4);
+    min-width: 0;
+  }
+  .m-stat { background: none; border: 0; padding: 0; cursor: pointer; display: flex; align-items: center; }
+  .m-level .level-ring { width: 34px; height: 34px; }
+  .m-level .level-ring b { width: 27px; height: 27px; font-size: 14px; }
+  .m-coins {
+    color: #ffe680; font-family: var(--display); font-weight: 800; font-size: 15px; font-variant-numeric: tabular-nums;
+    padding-left: 8px; margin-left: 4px; border-left: 1px solid rgba(255, 210, 63, 0.25); white-space: nowrap;
+  }
+  .icon-btn {
+    display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border-radius: 12px; cursor: pointer;
+    background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .icon-btn:active { transform: scale(0.94); }
+  .icon-btn .gi { width: 26px; height: 26px; margin: 0 !important; vertical-align: 0; }
+  .topbar-right { gap: 6px; }
+  .topbar-left { grid-column: 1; }
+  .topbar-right { grid-column: 3; }
+  .topbar-center { position: absolute; left: 50%; top: calc(env(safe-area-inset-top) + 8px); bottom: 8px; transform: translateX(-50%); }
+}
+@media (max-width: 360px) {
+  .icon-btn { width: 36px; height: 36px; }
+  .m-coins { font-size: 14px; }
 }
 .primary .gi, .secondary .gi, .play .gi, .ghost .gi, .pill .gi { margin: 0 !important; vertical-align: 0; }
 button:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.6); }

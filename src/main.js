@@ -108,6 +108,12 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
           <button class="brand-btn desktop-brand-btn" data-go="lobby" aria-label="Golf Cash Battle">
             <img src="/logo-header.png" alt="Golf Cash Battle" class="brand-logo" />
           </button>
+          <div class="m-stats">
+            <button class="m-stat m-level" data-go="skins" style="--p:${(into / need) * 100}%" title="Nivel ${level}" aria-label="Nivel ${level}">
+              <span class="level-ring"><b>${level}</b></span>
+            </button>
+            <button class="m-stat m-coins" data-go="wallet" title="Tu saldo" aria-label="Saldo">${coin(balance)}</button>
+          </div>
           <button class="level" data-go="skins" style="--p:${(into / need) * 100}%" title="Nivel ${level} · ${(into / need * 100).toFixed(0)}%">
             <span class="level-ring"><b>${level}</b></span>
             <span class="level-text"><small>Nivel</small><span class="xpbar"><i></i></span></span>
@@ -128,6 +134,8 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
         <div class="topbar-right">
           <button class="balance" data-go="wallet" title="Tu saldo: abre el wallet de tu cuenta">${coin(balance)}<span class="plus">${icon('plus')}</span></button>
           <button class="pill mute topbar-sound-btn" aria-label="Sonido" title="Silenciar / Activar sonido (M)">${soundLabel()}</button>
+          <button class="icon-btn m-settings" aria-label="Ajustes" title="Ajustes">${icon('gear')}</button>
+          ${document.fullscreenEnabled ? `<button class="icon-btn m-fullscreen" aria-label="Pantalla completa" title="Pantalla completa">${icon('fullscreen')}</button>` : ''}
         </div>
       </header>`),
     );
@@ -139,6 +147,8 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
         try { localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0'); } catch { }
       });
     }
+    app.querySelector('.m-settings')?.addEventListener('click', openMenuSettings);
+    app.querySelector('.m-fullscreen')?.addEventListener('click', toggleFullscreen);
   }
   app.append(content);
   if (!hideHeader && nav) {
@@ -203,6 +213,60 @@ window.addEventListener('keydown', (e) => {
     try { localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0'); } catch { }
   }
 });
+
+function toggleFullscreen() {
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => { });
+  else document.documentElement.requestFullscreen().catch(() => { });
+}
+
+/** Ajustes fuera de la partida: sonido y calidad gráfica. */
+function openMenuSettings() {
+  if (document.querySelector('.menu-settings-overlay')) return;
+  const overlay = h(`
+    <div class="overlay in-game-settings-overlay menu-settings-overlay">
+      <div class="in-game-settings-modal">
+        <div class="settings-modal-header">
+          <div class="settings-title"><h3>Ajustes</h3></div>
+          <button class="close-settings-btn" aria-label="Cerrar ajustes">${icon('close')}Cerrar</button>
+        </div>
+        <div class="settings-modal-body">
+          <div class="settings-row">
+            <div class="settings-label"><strong>Sonido</strong><small>Efectos ambientales y de golpe</small></div>
+            <button class="settings-btn toggle-sound-btn"></button>
+          </div>
+          <div class="settings-row">
+            <div class="settings-label"><strong>Calidad gráfica</strong><small>Baja si el móvil va lento o se calienta</small></div>
+            <div class="quality-picker">
+              ${QUALITY_LEVELS.map((q) => `<button class="settings-btn quality-btn ${q === getQuality() ? 'on' : ''}" data-q="${q}">${QUALITY_NAMES[q]}</button>`).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`);
+  const soundBtn = overlay.querySelector('.toggle-sound-btn');
+  const paintSound = () => {
+    soundBtn.classList.toggle('muted', isMuted());
+    soundBtn.innerHTML = `${icon(isMuted() ? 'mute' : 'sound')}<span class="btn-text">${isMuted() ? 'Silenciado' : 'Activado'}</span>`;
+  };
+  paintSound();
+  soundBtn.addEventListener('click', () => {
+    setMuted(!isMuted());
+    paintSound();
+    const topMute = document.querySelector('.topbar-sound-btn');
+    if (topMute) topMute.innerHTML = soundLabel();
+    try { localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0'); } catch { }
+  });
+  overlay.querySelectorAll('.quality-btn').forEach((btn) => btn.addEventListener('click', () => {
+    setQuality(btn.dataset.q);
+    overlay.querySelectorAll('.quality-btn').forEach((b) => b.classList.toggle('on', b === btn));
+  }));
+  const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', onKey);
+  overlay.querySelector('.close-settings-btn').addEventListener('click', close);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  document.body.append(overlay);
+}
 
 function go(to) {
   if (to === 'wallet') return showAccount('', 'wallet');
@@ -2744,6 +2808,8 @@ if (skinLab) {
     wallet.subscribe((n) => {
       const el = app.querySelector('.balance');
       if (el) el.innerHTML = `${coin(n)}<span class="plus">${icon('plus')}</span>`;
+      const m = app.querySelector('.m-coins');
+      if (m) m.innerHTML = coin(n);
     });
     showLobby();
   });
