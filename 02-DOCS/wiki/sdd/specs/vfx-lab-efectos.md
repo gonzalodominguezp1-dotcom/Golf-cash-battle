@@ -6,12 +6,12 @@ tags: [sdd, spec, vfx, skins, portales]
 timestamp: 2026-11-06T18:00:00Z
 topic: sdd
 slug: vfx-lab-efectos
-status: draft (approved in autopilot, not item by item)
+status: clarified (approved in autopilot, not item by item)
 ---
 
 # Spec — Banco de VFX y efectos de portales, choques y skins
 
-> Slug: `vfx-lab-efectos` · Status: draft, aprobada en autopilot (no punto por punto) · Created: 2026-11-06
+> Slug: `vfx-lab-efectos` · Status: clarified, aprobada en autopilot (no punto por punto) · Created: 2026-11-06
 > Inherits: [constitution](../constitution.md)
 > Origen: análisis de `patch-gg/pixelfx` (MIT) y primer banco de pruebas en `C:\Users\DEV\Desktop\golfito-vfx-lab`, fuera del repo.
 
@@ -120,7 +120,8 @@ con su duración, su presupuesto y sus criterios de abajo.
 - Given un efecto en bucle, When completa una vuelta, Then el primer y el último fotograma coinciden (sin salto).
 - Given un efecto de una sola vez, When llega a su duración, Then no queda ninguna partícula viva ni nada visible.
 - Given un efecto, When lo reproduzco con la misma semilla en el banco y en el juego, Then la secuencia de partículas
-  coincide.
+  coincide. Los efectos de choque y portal incluidos en esta tanda aceptan una semilla; sin semilla se comportan como
+  hoy.
 - Given cualquier efecto en calidad `high`, `medium` y `low`, When se mide, Then ninguna calidad supera su presupuesto
   de partículas declarado y el coste por paso queda registrado.
 - Given reducción de movimiento activa, When se reproduce cualquier efecto, Then queda quieto o atenuado como una skin
@@ -130,18 +131,28 @@ con su duración, su presupuesto y sus criterios de abajo.
   skin que lo usa, el banco avisa antes de borrarlo.
 - Given un efecto que supera su presupuesto, When intento exportarlo, Then se bloquea con el motivo.
 - Given la primera tanda, When la reviso, Then hay al menos un portal con entrada, estable y salida, al menos tres
-  choques distintos (pared, bola contra bola, hoyo) y al menos un efecto distintivo por cada tier de skin que se toque.
+  choques distintos (pared, bumper, hoyo) y al menos un efecto distintivo por cada tier de skin que se toque.
 - Given un efecto aprobado, When el juego lo dispara, Then se ve igual que en el banco y `pnpm test` y
   `pnpm run build` pasan.
 - Given el repositorio del juego, When reviso su árbol de archivos, Then el banco no está dentro.
 
 ## Points to clarify
-- **pregunta abierta** — ¿cuántos efectos mínimos tiene la primera tanda y cuáles skins concretas se tocan?
-  El criterio actual pide un mínimo por familia, no una lista cerrada.
-- **pregunta abierta** — ¿cómo viaja un efecto aprobado del banco (fuera del repo) al juego? Hace falta una forma de
-  entrega que el equipo pueda revisar en un PR, sin importar el banco entero.
-- **pregunta abierta** — ¿quién de los dos desarrolladores va a integrar, y en qué rama? `CLAUDE.md` exige trabajar en
-  la rama de cada uno y todavía no se ha dicho quién es la persona que lo pide.
+- **suposición tomada** — la primera tanda es: un portal (entrada, estable y salida), tres choques (pared, bumper,
+  hoyo) y tres efectos distintivos de skin, uno por cada tier épico, legendario y mítico. *Base:* cubre el
+  mínimo por familia del criterio de aceptación y los tres tiers donde hoy hay menos diferencia visible. *Riesgo:* si
+  se quieren más efectos, el ciclo crece. Origen: pregunta abierta de `specify`, resuelta en autopilot.
+- **suposición tomada** — un efecto aprobado llega al juego como archivos nuevos dentro de `src/`, revisables en un
+  PR, sin traer el banco ni sus herramientas. *Base:* K3.4 (los módulos entran en su carpeta) y la decisión de que el
+  banco no entra al repo. *Riesgo:* si el equipo prefiere cargar efectos desde fuera del build, cambia el formato de
+  entrega. Origen: pregunta abierta de `specify`, resuelta en autopilot.
+- **suposición tomada** — los tres efectos de skin se entregan como ajustes disponibles y no se asignan a una skin
+  existente hasta que alguien lo apruebe. *Base:* el criterio de que las skins existentes no cambian sin pedirlo.
+  *Riesgo:* el jugador no ve el efecto nuevo hasta esa aprobación.
+- **suposición tomada** — la semilla solo es exigible a los efectos de esta tanda. *Base:* `effects.js` usa
+  `Math.random()` hoy y `skinFx.js` ya tiene un generador propio con semilla; reescribir todo lo existente queda fuera.
+  *Riesgo:* dos reproducciones de un efecto antiguo siguen sin coincidir.
+- **suposición tomada** — la persona que integra es el compañero, en la rama `la-chaqueta-bionica`. *Base:* lo
+  confirmó en el chat. *Riesgo:* ninguno.
 - **suposición tomada** — el banco funciona en el ordenador, no en móvil. *Base:* es una herramienta de autoría.
   *Riesgo:* si se quiere probar en un teléfono, hay que servirlo en la red local.
 - **suposición tomada** — "crear, borrar y editar skins" se limita a la apariencia y los efectos de la skin, no a su
@@ -151,8 +162,25 @@ con su duración, su presupuesto y sus criterios de abajo.
   *Riesgo:* ninguno conocido.
 - **decisión diferida** — VFX de ambiente del mapa y su integración con los temas del campo.
 - **decisión diferida** — probar el banco en red local desde un móvil real.
+- **decisión diferida** — choque bola contra bola. *Base:* `physics.js` no tiene colisión entre bolas, solo con paredes, bumpers y obstáculos, y cambiarlo exige `sync:functions` y redespliegue (Q2.2). Se reabre si la física lo incorpora.
 - **área no formulable** — cómo se reparte el presupuesto de partículas cuando coinciden varios efectos grandes a la
   vez en una partida de 8 jugadores. Se sospecha una regla de prioridad y todavía no se sabe plantear la pregunta.
+
+## Clarifications
+- 2026-11-06 — ¿Cuántos efectos tiene la primera tanda y qué skins se tocan? → 1 portal, 3 choques y 3 efectos de skin
+  (épico, legendario, mítico), sin asignarlos a skins existentes todavía. *Por qué:* mínimo por familia, sin tocar el
+  aspecto de lo que ya hay.
+- 2026-11-06 — ¿Cómo llega un efecto al juego? → como archivos revisables en un PR, sin el banco. *Por qué:* el banco
+  no entra al repo.
+- 2026-11-06 — ¿Quién integra y en qué rama? → el compañero, en `la-chaqueta-bionica`. *Por qué:* lo dijo en el chat.
+- 2026-11-06 — Hallazgo: `effects.js` usa `Math.random()`, así que la paridad por semilla no se cumple para efectos
+  antiguos. → la semilla se exige solo a los efectos nuevos y deben aceptar una. *Por qué:* es lo único alcanzable sin
+  reescribir el sistema actual.
+- 2026-11-06 — Hallazgo del plan: el juego no tiene colisión bola contra bola, así que ese choque no tendría disparador. → se sustituye por el golpe en bumper (sí existe) en la primera tanda y el choque entre bolas pasa a decisión diferida. *Por qué:* un efecto sin disparador no puede cumplir «el juego lo dispara».
+
+Resultado por punto de `specify`: tanda inicial, entrega al juego y rama → resueltas como suposición; banco solo en
+ordenador, alcance de edición de skins y estilo 3D → validadas, siguen en pie; ambiente del mapa y móvil real →
+diferidas, intactas; reparto de presupuesto entre efectos simultáneos → sigue sin formularse.
 
 ## Revisions
 - 2026-11-06 — Primera versión, escrita en autopilot tras las respuestas del equipo: importar las clases reales con
