@@ -279,6 +279,8 @@ function go(to) {
 
 // cartas holográficas: se inclinan y el brillo sigue al dedo
 function bindHolo(root) {
+  // en móvil/táctil no hay inclinación ni brillo que siga al dedo: cada pointermove forzaba layout + estilos
+  if (typeof matchMedia === 'function' && matchMedia('(max-width: 899px), (pointer: coarse)').matches) return;
   root.querySelectorAll('.holo').forEach((card) => {
     const move = (e) => {
       const r = card.getBoundingClientRect();

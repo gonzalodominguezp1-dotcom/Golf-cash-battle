@@ -3369,3 +3369,79 @@ body.sk-noscroll { overflow: hidden; }
    redibujar y desenfocar la escena entera en cada fotograma. En el juego y sus ventanas se quita:
    los paneles ya son casi opacos, así que apenas se nota y sube mucho los FPS (sobre todo en móvil). */
 .play-screen *, .overlay, .overlay * { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+
+/* ==========================================================================
+   RENDIMIENTO MÓVIL (menús, torneos, mapas, skins)
+   Objetivo: scroll y toques a 60 fps. En móvil se quitan los efectos que obligan a la GPU
+   a repintar o recomponer capas en cada fotograma: desenfoques de fondo, animaciones
+   infinitas (foil, destello, purpurina, aura, halo), modos de mezcla, inclinación 3D de las
+   cartas, sombras animadas y los efectos de pulsado/hover. El aspecto estático se mantiene.
+   ========================================================================== */
+@media (max-width: 899px), (pointer: coarse) {
+  /* 1. Sin desenfoque de fondo (lo más caro en GPUs móviles); los paneles ya son casi opacos */
+  *, *::before, *::after {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  .topbar, .tabbar { background: rgba(9, 5, 21, 0.98); }
+  .tier, .course-card, .hero, .ghost { background-color: rgba(18, 25, 36, 0.97); }
+
+  /* 2. Sin animaciones de entrada ni cascadas: la pantalla aparece al instante */
+  .screen, .screen > *, .tiers .tier, .courses-grid .course-card, .txs li {
+    animation: none !important;
+  }
+
+  /* 3. Sin animaciones infinitas en las cartas de torneo / hero / botones */
+  .tier, .tier::before, .tier::after,
+  .hero::before, .hero-ball-aura, .hero-shadow, .ball-img.spin, .ball-img.float,
+  .holo .shine, .holo:not(.active) .shine,
+  .primary::after, .play::after,
+  .pulse-dot, .reward-note i,
+  .pf-halo, .pf-ring, .pf-wing {
+    animation: none !important;
+  }
+  /* los destellos y la purpurina son capas con mix-blend-mode: fuera */
+  .tier::before, .tier::after, .hero::before, .primary::after, .play::after { display: none !important; }
+  .tier .shine, .holo .shine { display: none !important; mix-blend-mode: normal !important; }
+
+  /* 4. Sin inclinación 3D de las cartas (crea una capa compuesta por carta) */
+  .holo, .holo.active { transform: none !important; transition: none !important; }
+
+  /* 5. Sin efectos hover/pulsado ni transiciones "all": nada que animar al tocar */
+  .tier, .course-card, .wallet-card, .passport-card,
+  .course-card-preview-wrap, .course-preview-img, .course-preview-glow,
+  .play-course-btn, .primary, .secondary, .ghost, .play, .chip-btn, .icon-btn,
+  .tabbar button, .sk-card, .sk-thumb, .row > * {
+    transition: none !important;
+  }
+  .tier:hover, .course-card:hover, .wallet-card:hover, .passport-card:hover,
+  .course-card:hover .course-preview-img, .play-course-btn:hover,
+  .primary:hover, .secondary:hover, .ghost:hover, .play:hover {
+    transform: none !important;
+    filter: none !important;
+  }
+  .primary:active:not(:disabled), .secondary:active:not(:disabled), .ghost:active:not(:disabled),
+  .play:active:not(:disabled), .icon-btn:active, .tabbar button:active {
+    transform: none !important;
+  }
+  .primary:active:not(:disabled), .secondary:active:not(:disabled), .ghost:active:not(:disabled), .play:active:not(:disabled) {
+    opacity: 0.85;
+  }
+  .course-card-preview-wrap { cursor: default; }
+
+  /* 6. Sombras más baratas (las difuminadas y grandes se repintan al hacer scroll) */
+  .tier, .course-card { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important; }
+  .course-card-preview-wrap { box-shadow: none; }
+  .preview-badge { box-shadow: none; }
+  .primary, .secondary { box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3); }
+  .play-course-btn { box-shadow: none; }
+  .course-preview-img { filter: none; }
+  .hero-shadow { filter: none; }
+
+  /* 7. Las tarjetas fuera de pantalla no se pintan ni se maquetan */
+  .course-card, .tiers .tier {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 360px;
+  }
+  .course-card, .tier { contain: layout paint; }
+}
