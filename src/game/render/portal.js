@@ -186,10 +186,18 @@ export function buildPortal(scene, [x, z], r, color, y, time, seed = 0) {
   g.add(well, plasma, ring, haze, light);
   g.position.set(x, y, z);
   scene.add(g);
+  let open = 1;
   return {
+    group: g,
     update(t) {
       // la luz del portal parpadea suavemente al ritmo del plasma
-      light.intensity = 1.4 + Math.sin(t * 3.1 + seed * 5) * 0.18 + Math.sin(t * 7.3 + seed) * 0.08;
+      light.intensity = (1.4 + Math.sin(t * 3.1 + seed * 5) * 0.18 + Math.sin(t * 7.3 + seed) * 0.08) * open;
+    },
+    /** Apertura de 0 (cerrado) a 1 (estable, como siempre). Ver vfx/portalState.js. */
+    setOpen(k) {
+      open = Math.min(1, Math.max(0, k));
+      g.visible = open > 0.001;
+      g.scale.set(open, 1, open);
     },
   };
 }
