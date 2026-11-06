@@ -23,6 +23,7 @@ import { addedMessage, cleanFriendName, friendMessage } from './account/friendRu
 import { newPartyMatch, partyErrorText, partyMessage, readyLabel } from './match/partyRules.js';
 import { LiveRoom } from './match/LiveRoom.js';
 import { buildRoster, humanLeaders, liveStandings, seededRng } from './match/liveRules.js';
+import { avatarIcon, icon, iconUrl, tierIcon } from './ui/icons.js';
 import { QUALITY_LEVELS, QUALITY_NAMES, getQuality, setQuality } from './game/render/quality.js';
 
 let backend, wallet, matches;
@@ -53,9 +54,13 @@ document.addEventListener('click', (e) => {
   sfx.tap();
 });
 const app = document.getElementById('app');
+// iconos que se pintan desde CSS (authScreen.css)
+document.documentElement.style.setProperty('--gi-check', `url("${iconUrl('check')}")`);
+document.documentElement.style.setProperty('--gi-dot', `url("${iconUrl('dot', { tone: 'gray' })}")`);
 
 const fmt = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
-const coin = (n) => `<span class="coin"></span>${fmt(n)}`;
+const coin = (n) => `${icon('coin', { cls: 'coin' })}${fmt(n)}`;
+const soundLabel = () => `${icon(isMuted() ? 'mute' : 'sound')}${isMuted() ? 'Mudo' : 'Sonido'}`;
 const h = (html) => {
   const t = document.createElement('template');
   t.innerHTML = html.trim();
@@ -73,7 +78,7 @@ let accountTab = 'profile';
 /** Cara del avatar: imagen propia, icono elegido o la inicial del nombre. */
 const avatarFace = (av, initial) =>
   av?.image ? `<img src="${av.image}" alt="">`
-    : av?.icon ? `<span class="pf-glyph">${iconById(av.icon).glyph}</span>`
+    : av?.icon ? `<span class="pf-glyph">${avatarIcon(iconById(av.icon).id)}</span>`
       : `<b class="pf-initial">${esc(String(initial || '?')[0])}</b>`;
 
 /** Avatar con marco de prestigio. size: xs | sm | lg. */
@@ -113,16 +118,16 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
             <img src="/logo-header.png" alt="Golf Cash Battle" class="brand-logo" />
           </button>
           <nav class="desktop-nav">
-            <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}">Jugar <kbd>1</kbd></button>
-            <button data-go="freeplay" class="${screen === 'freeplay' ? 'on' : ''}">Juego Libre <kbd>2</kbd></button>
-            <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}">Skins <kbd>3</kbd></button>
-            <button data-go="ranking" class="${screen === 'ranking' ? 'on' : ''}">Ranking <kbd>4</kbd></button>
-            <button data-go="account" class="${screen === 'account' ? 'on' : ''}">Cuenta <kbd>5</kbd></button>
+            <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}">${icon('flag')}Jugar <kbd>1</kbd></button>
+            <button data-go="freeplay" class="${screen === 'freeplay' ? 'on' : ''}">${icon('tee')}Juego Libre <kbd>2</kbd></button>
+            <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}">${icon('skins')}Skins <kbd>3</kbd></button>
+            <button data-go="ranking" class="${screen === 'ranking' ? 'on' : ''}">${icon('trophy')}Ranking <kbd>4</kbd></button>
+            <button data-go="account" class="${screen === 'account' ? 'on' : ''}">${icon('user')}Cuenta <kbd>5</kbd></button>
           </nav>
         </div>
         <div class="topbar-right">
-          <button class="balance" data-go="wallet" title="Tu saldo: abre el wallet de tu cuenta">${coin(balance)}<span class="plus">+</span></button>
-          <button class="pill mute topbar-sound-btn" aria-label="Sonido" title="Silenciar / Activar sonido (M)">${isMuted() ? 'Mudo' : 'Sonido'}</button>
+          <button class="balance" data-go="wallet" title="Tu saldo: abre el wallet de tu cuenta">${coin(balance)}<span class="plus">${icon('plus')}</span></button>
+          <button class="pill mute topbar-sound-btn" aria-label="Sonido" title="Silenciar / Activar sonido (M)">${soundLabel()}</button>
         </div>
       </header>`),
     );
@@ -130,7 +135,7 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
     if (topMute) {
       topMute.addEventListener('click', () => {
         setMuted(!isMuted());
-        topMute.textContent = isMuted() ? 'Mudo' : 'Sonido';
+        topMute.innerHTML = soundLabel();
         try { localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0'); } catch { }
       });
     }
@@ -140,11 +145,11 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
     app.append(
       h(`
       <nav class="tabbar">
-        <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}">Jugar</button>
-        <button data-go="freeplay" class="${screen === 'freeplay' ? 'on' : ''}">Libre</button>
-        <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}">Skins</button>
-        <button data-go="ranking" class="${screen === 'ranking' ? 'on' : ''}">Ranking</button>
-        <button data-go="account" class="${screen === 'account' ? 'on' : ''}">Cuenta</button>
+        <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}">${icon('flag')}Jugar</button>
+        <button data-go="freeplay" class="${screen === 'freeplay' ? 'on' : ''}">${icon('tee')}Libre</button>
+        <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}">${icon('skins')}Skins</button>
+        <button data-go="ranking" class="${screen === 'ranking' ? 'on' : ''}">${icon('trophy')}Ranking</button>
+        <button data-go="account" class="${screen === 'account' ? 'on' : ''}">${icon('user')}Cuenta</button>
       </nav>`),
     );
   }
@@ -194,7 +199,7 @@ window.addEventListener('keydown', (e) => {
   else if (e.code === 'KeyM') {
     setMuted(!isMuted());
     const topMute = document.querySelector('.topbar-sound-btn');
-    if (topMute) topMute.textContent = isMuted() ? 'Mudo' : 'Sonido';
+    if (topMute) topMute.innerHTML = soundLabel();
     try { localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0'); } catch { }
   }
 });
@@ -257,7 +262,7 @@ async function showLobby() {
         </div>
       </section>
       ${backend.mode === 'local' ? `<p class="offline">Modo sin conexión: el saldo se guarda solo en este ${DEVICE}</p>` : ''}
-      ${backend.account?.profile?.paid_block ? `<button class="notice account-hint" data-go="account">${{ account_required: 'Crea tu cuenta con email para jugar mesas con entrada →', kyc_required: 'Verifica tu edad e identidad para jugar mesas con entrada →', account_review: 'Tu cuenta está en revisión: de momento solo Práctica', underage: 'Mesas con entrada solo para mayores de 18' }[backend.account.profile.paid_block]}</button>` : ''}
+      ${backend.account?.profile?.paid_block ? `<button class="notice account-hint" data-go="account">${{ account_required: 'Crea tu cuenta con email para jugar mesas con entrada', kyc_required: 'Verifica tu edad e identidad para jugar mesas con entrada', account_review: 'Tu cuenta está en revisión: de momento solo Práctica', underage: 'Mesas con entrada solo para mayores de 18' }[backend.account.profile.paid_block]} ${icon('next')}</button>` : ''}
       ${backend.parties ? '<section class="party-box"></section>' : ''}
       <div class="section-head">
         <div class="section-title-row">
@@ -400,7 +405,7 @@ async function partyPanel(box, tierList, balance) {
     paintTiers(p);
     const inviteRows = invites.map((i) => `<li class="friend">
         <span class="friend-name"><b>${esc(i.from)}</b><small>te invita a su grupo</small></span>
-        <span class="friend-actions"><button class="chip-btn" data-join="${esc(i.party)}">Unirme</button><button class="chip-btn" data-no="${esc(i.party)}">No</button></span>
+        <span class="friend-actions"><button class="chip-btn" data-join="${esc(i.party)}">${icon('check')}Unirme</button><button class="chip-btn" data-no="${esc(i.party)}">${icon('close')}No</button></span>
       </li>`).join('');
     const inParty = new Set([...(p?.members ?? []).map((m) => m.name.toLowerCase()), ...(p?.invited ?? []).map((n) => n.toLowerCase())]);
     const room = p ? p.size - p.members.length - p.invited.length : 3;
@@ -409,18 +414,18 @@ async function partyPanel(box, tierList, balance) {
       ? `<ul class="friend-list">${candidates.map((f) => `<li class="friend">
           ${avatarHtml({ size: 'sm', frame: frameById(f.frame), av: fromWire(f.avatar), initial: f.name })}
           <span class="friend-name"><b>${esc(f.name)}</b><small>Nv. ${esc(f.level)}</small></span>
-          <button class="chip-btn" data-invite="${esc(f.name)}">Invitar</button>
+          <button class="chip-btn" data-invite="${esc(f.name)}">${icon('user-plus')}Invitar</button>
         </li>`).join('')}</ul>`
       : '';
     const tier = p?.tier_id ? TIERS.find((t) => t.id === p.tier_id) : null;
     let body;
     if (!hasName) {
-      body = `<p class="sub">Ponte un nombre de usuario y añade amigos para buscar partida juntos.</p><button class="chip-btn" data-go="account">Ir a la cuenta</button>`;
+      body = `<p class="sub">Ponte un nombre de usuario y añade amigos para buscar partida juntos.</p><button class="chip-btn" data-go="account">${icon('user')}Ir a la cuenta</button>`;
     } else if (!p) {
       body = `
         ${inviteRows ? `<ul class="friend-list">${inviteRows}</ul>` : ''}
         <p class="sub">Invita a tus amigos y entraréis juntos en el mismo torneo.</p>
-        ${friends === null ? '<p class="sub">Cargando amigos…</p>' : friendRows || '<p class="sub">Aún no tienes amigos. Añádelos en tu cuenta.</p><button class="chip-btn" data-go="account">Añadir amigos</button>'}`;
+        ${friends === null ? '<p class="sub">Cargando amigos…</p>' : friendRows || `<p class="sub">Aún no tienes amigos. Añádelos en tu cuenta.</p><button class="chip-btn" data-go="account">${icon('user-plus')}Añadir amigos</button>`}`;
     } else {
       const members = p.members.map((m) => `<li class="party-member ${m.ready ? 'ready' : ''}">
           <span class="avatar">${esc(m.name[0] ?? '?')}</span>
@@ -433,7 +438,7 @@ async function partyPanel(box, tierList, balance) {
         <ul class="party-members">${members}${invited}</ul>
         <p class="sub">${tier ? `Mesa: <b>${tier.name}</b> · entrada ${coin(tier.entryFee)} cada uno` : p.leader ? 'Elige abajo la mesa del torneo.' : 'El líder está eligiendo la mesa.'}</p>
         ${p.last_error ? `<p class="party-err">${esc(partyErrorText(p.last_error))}</p>` : ''}
-        ${tier ? `<button class="primary party-ready" ${alone && !me?.ready ? 'disabled' : ''}>${alone ? 'Espera a que entre un amigo' : readyLabel(p)}</button>` : ''}
+        ${tier ? `<button class="primary party-ready" ${alone && !me?.ready ? 'disabled' : ''}>${alone ? 'Espera a que entre un amigo' : icon('check') + readyLabel(p)}</button>` : ''}
         <p class="legal">Al pulsar «${p.leader ? 'Buscar partida' : 'Estoy listo'}» aceptas pagar tu entrada. Cuando estéis todos listos entráis juntos en el mismo torneo; cada uno juega su ronda y gana quien menos golpes haga.</p>
         ${inviteRows ? `<ul class="friend-list">${inviteRows}</ul>` : ''}
         ${friendRows ? `<h3 class="friends-sub">Invitar a más amigos</h3>${friendRows}` : ''}`;
@@ -442,7 +447,7 @@ async function partyPanel(box, tierList, balance) {
       <div class="party-card">
         <div class="section-head party-head">
           <h2>${p ? `Tu grupo · ${p.members.length}/${p.size}` : 'Juega con amigos'}</h2>
-          ${p ? '<button class="chip-btn party-leave">Salir del grupo</button>' : ''}
+          ${p ? `<button class="chip-btn party-leave">${icon('logout')}Salir del grupo</button>` : ''}
         </div>
         ${msg ? `<p class="party-msg" role="status">${esc(msg)}</p>` : ''}
         ${body}
@@ -487,8 +492,6 @@ async function partyPanel(box, tierList, balance) {
 
 // ---------- skins ----------
 
-const LOCK_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10.5" rx="2.5" fill="currentColor"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
-
 const tierOrder = (s) => SKIN_TIERS[s.tier]?.order ?? 0;
 const FILTER_TIERS = Object.keys(SKIN_TIERS).reverse();
 
@@ -512,7 +515,7 @@ async function showSkins() {
       <div class="sk-filters" role="toolbar" aria-label="Filtros de skins">
         <div class="sk-filter-row">
           <button type="button" class="sk-fchip on" data-tier="all">Todas</button>
-          ${FILTER_TIERS.map((id) => `<button type="button" class="sk-fchip rarity-${id}" data-tier="${id}"><i>${SKIN_TIERS[id].icon}</i>${SKIN_TIERS[id].name}</button>`).join('')}
+          ${FILTER_TIERS.map((id) => `<button type="button" class="sk-fchip rarity-${id}" data-tier="${id}"><i>${tierIcon(id)}</i>${SKIN_TIERS[id].name}</button>`).join('')}
         </div>
         <div class="sk-filter-row">
           <button type="button" class="sk-fchip sk-fowned" aria-pressed="false">Solo desbloqueadas</button>
@@ -553,12 +556,12 @@ async function showSkins() {
       <button type="button" class="sk-card rarity-${skin.tier} ${open ? '' : 'locked'}" data-skin-id="${skin.id}" style="--sk-a:${skin.palette.base};--sk-b:${skin.palette.accent}">
         <div class="shine"></div>
         <div class="sk-scene">
-          <span class="sk-ico" title="${tier.name}">${tier.icon}</span>
+          <span class="sk-ico" title="${tier.name}">${tierIcon(skin.tier)}</span>
           <span class="sk-eq">Equipada</span>
           <img class="sk-thumb" src="${(open && thumbCached(skin, inst)) || ballPreview(skin, 152)}" width="76" height="76" alt="" draggable="false">
-          ${open ? '' : `<span class="sk-lock">${LOCK_SVG}</span>`}
+          ${open ? '' : `<span class="sk-lock">${icon('lock')}</span>`}
           ${open && inst?.counter?.enabled ? '<span class="sk-chip">Marcador</span>' : ''}
-          ${rare ? '<span class="sk-chip sk-chip-rare">✦ Patrón raro</span>' : ''}
+          ${rare ? `<span class="sk-chip sk-chip-rare">${icon('sparkle')} Patrón raro</span>` : ''}
         </div>
         <div class="sk-strip">
           <b>${skin.name}</b>
@@ -622,13 +625,13 @@ async function showSkins() {
     const overlay = h(`
       <div class="sk-view rarity-${skin.tier}" role="dialog" aria-modal="true" aria-label="Inspeccionar ${skin.name}">
         <div class="sk-view-bar">
-          <button type="button" class="sk-view-back" aria-label="Cerrar inspección">‹ Skins</button>
-          <span class="sk-view-title">${tier.icon} ${skin.name}</span>
+          <button type="button" class="sk-view-back" aria-label="Cerrar inspección">${icon('back')}Skins</button>
+          <span class="sk-view-title">${tierIcon(skin.tier)} ${skin.name}</span>
         </div>
         <div class="sk-view-stage">
           <div class="sk-view-canvas"><img class="sk-view-poster" src="${thumbCached(skin, progress.instance(skin.id)) ?? ballPreview(skin, 288)}" alt="" draggable="false"></div>
           <div class="sk-view-lock" hidden>
-            <span class="sk-lock sk-lock-big">${LOCK_SVG}</span>
+            <span class="sk-lock sk-lock-big">${icon('lock')}</span>
             <div class="sk-view-req"><small></small><span class="bar"><i></i></span></div>
           </div>
         </div>
@@ -645,7 +648,7 @@ async function showSkins() {
       const open = req.ratio >= 1;
       const isEq = progress.skin.id === skin.id;
       equipBtn.disabled = isEq || !open;
-      equipBtn.textContent = isEq ? '✓ Equipada' : open ? 'Equipar' : 'Bloqueada';
+      equipBtn.innerHTML = isEq ? `${icon('check')}Equipada` : open ? 'Equipar' : 'Bloqueada';
       lockBox.hidden = open;
       lockBox.querySelector('small').textContent = req.text;
       lockBox.querySelector('.bar i').style.width = `${req.ratio * 100}%`;
@@ -720,7 +723,7 @@ function showBlocked(code) {
       <div class="card">
         <h2>${code === 'account_review' || code === 'underage' ? 'Mesa no disponible' : 'Un paso más'}</h2>
         <p class="sub">${BLOCK_TEXT[code] ?? BLOCK_TEXT.account_required}</p>
-        ${code === 'account_required' || code === 'kyc_required' ? '<button class="primary go">Ir a mi cuenta</button>' : ''}
+        ${code === 'account_required' || code === 'kyc_required' ? `<button class="primary go">${icon('user')}Ir a mi cuenta</button>` : ''}
         <button class="ghost back">Volver</button>
       </div>
     </div>`);
@@ -767,7 +770,7 @@ async function showRanking() {
   const row = (r) => {
     const f = frameById(r.frame);
     return `<li class="rank-row ${r.me ? 'me' : ''} ${r.pos <= 3 ? `podium p${r.pos}` : ''}">
-      <b class="rank-pos">${r.pos}</b>
+      <b class="rank-pos">${r.pos <= 3 ? icon('medal', { tone: ['gold', 'silver', 'bronze'][r.pos - 1], arg: r.pos, label: `Puesto ${r.pos}` }) : r.pos}</b>
       ${avatarHtml({ size: 'sm', frame: f, av: r.me ? avatar.get() : null, initial: (r.name ?? '?')[0] })}
       <span class="rank-name">${esc(r.name)}<small>Nv. ${r.level}${f ? ` · ${esc(f.name)}` : ''}</small></span>
       <span class="rank-wins"><b>${r.wins}</b><small>victoria${r.wins === 1 ? '' : 's'}</small></span>
@@ -798,8 +801,8 @@ async function showRanking() {
 
 const accountTabs = (balance) => `
   <div class="rank-tabs acc-tabs">
-    <button data-acc="profile">Perfil</button>
-    <button data-acc="wallet">Wallet <small>${coin(balance)}</small></button>
+    <button data-acc="profile">${icon('user')}Perfil</button>
+    <button data-acc="wallet">${icon('wallet')}Wallet <small>${coin(balance)}</small></button>
   </div>`;
 
 /** Muestra una sola pestaña de la cuenta (Perfil o Wallet) sin volver a pintar. */
@@ -852,7 +855,7 @@ async function showAccount(note = '', tab = 'profile') {
               <span class="kyc-mini-pill ${kyc === 'verified' ? 'verified' : ''}">${KYC_TEXT[kyc]}</span>
             </div>
             <strong class="passport-name">${esc(name)}</strong>
-            <div class="chip-row"><button class="chip-btn rename">Cambiar nombre</button><button class="chip-btn edit-avatar">Cambiar avatar</button></div>
+            <div class="chip-row"><button class="chip-btn rename">${icon('pencil')}Cambiar nombre</button><button class="chip-btn edit-avatar">${icon('upload')}Cambiar avatar</button></div>
           </div>
         </div>
 
@@ -890,7 +893,7 @@ async function showAccount(note = '', tab = 'profile') {
           ${FRAMES.map((f) => {
             const open = lvl.level >= f.level;
             return `<button class="frame-opt ${open ? '' : 'locked'} ${prestige.frame?.id === f.id ? 'on' : ''}" data-frame="${f.id}" ${open ? '' : 'disabled'} style="${frameStyle(f)}" title="${open ? f.name : `Nivel ${f.level}`}">
-              ${avatarHtml({ size: 'xs', frame: f, av: avatar.get(), initial: name })}<b>${f.name}</b><small>${open ? 'Nv. ' + f.level : '🔒 Nv. ' + f.level}</small>
+              ${avatarHtml({ size: 'xs', frame: f, av: avatar.get(), initial: name })}<b>${f.name}</b><small>${open ? 'Nv. ' + f.level : icon('lock') + ' Nv. ' + f.level}</small>
             </button>`;
           }).join('')}
         </div>
@@ -923,7 +926,7 @@ async function showAccount(note = '', tab = 'profile') {
       </div>
 
       <p class="legal">Para jugar mesas con entrada hace falta cuenta con email, ser mayor de 18 años y verificar tu identidad (una cuenta por persona). La práctica es libre.</p>
-      <button class="ghost logout">Cerrar sesión</button>
+      <button class="ghost logout">${icon('logout')}Cerrar sesión</button>
       </div>
       <div data-pane="wallet" class="acc-pane wallet-pane">${walletPane(balance, txs)}</div>
     </main>`);
@@ -956,7 +959,7 @@ async function showAccount(note = '', tab = 'profile') {
     kycBox.innerHTML = `
       ${kyc === 'rejected' ? `<p class="sub">${KYC_REASON[p.kyc_reason] ?? KYC_REASON.provider_declined}</p>` : ''}
       ${kyc === 'pending' ? '<p class="sub">Estamos esperando el resultado. Si no terminaste, vuelve a empezar.</p>' : ''}
-      <button class="primary kyc-start">${kyc === 'none' ? 'Verificar identidad' : 'Volver a verificar'}</button>
+      <button class="primary kyc-start">${icon('shield')}${kyc === 'none' ? 'Verificar identidad' : 'Volver a verificar'}</button>
       <p class="legal">Necesitarás tu DNI o pasaporte y la cámara del móvil. Los datos los comprueba un proveedor externo; aquí solo guardamos tu fecha de nacimiento.</p>`;
     kycBox.querySelector('.kyc-start').addEventListener('click', async (e) => {
       e.target.disabled = true;
@@ -989,7 +992,7 @@ async function friendsPanel(box, badge, hasName) {
       return `<li class="friend">
         ${avatarHtml({ size: 'sm', frame, av: fromWire(f.avatar), initial: f.name })}
         <span class="friend-name"><b>${esc(f.name)}</b><small>Nv. ${esc(f.level)}</small></span>
-        <button class="chip-btn" data-remove="${esc(f.name)}">Quitar</button>
+        <button class="chip-btn" data-remove="${esc(f.name)}">${icon('trash')}Quitar</button>
       </li>`;
     };
     const asks = (list, buttons) => list.map((r) => `<li class="friend">
@@ -997,12 +1000,12 @@ async function friendsPanel(box, badge, hasName) {
       </li>`).join('');
     box.innerHTML = `
       <form class="friend-add form">
-        <div class="row"><input name="name" maxlength="17" placeholder="Nombre de usuario" autocomplete="off" autocapitalize="off" spellcheck="false" ${hasName ? '' : 'disabled'}><button class="primary" ${hasName ? '' : 'disabled'}>Añadir</button></div>
+        <div class="row"><input name="name" maxlength="17" placeholder="Nombre de usuario" autocomplete="off" autocapitalize="off" spellcheck="false" ${hasName ? '' : 'disabled'}><button class="primary" ${hasName ? '' : 'disabled'}>${icon('plus')}Añadir</button></div>
         <p class="friend-msg ${isErr ? 'err' : 'ok'}" role="status">${esc(msg || (hasName ? '' : 'Ponte primero un nombre de usuario para añadir amigos.'))}</p>
       </form>
-      ${data.incoming.length ? `<h3 class="friends-sub">Peticiones recibidas</h3><ul class="friend-list">${asks(data.incoming, (n) => `<span class="friend-actions"><button class="chip-btn" data-accept="${n}">Aceptar</button><button class="chip-btn" data-decline="${n}">Rechazar</button></span>`)}</ul>` : ''}
+      ${data.incoming.length ? `<h3 class="friends-sub">Peticiones recibidas</h3><ul class="friend-list">${asks(data.incoming, (n) => `<span class="friend-actions"><button class="chip-btn" data-accept="${n}">${icon('check')}Aceptar</button><button class="chip-btn" data-decline="${n}">${icon('close')}Rechazar</button></span>`)}</ul>` : ''}
       ${data.friends.length ? `<ul class="friend-list">${data.friends.map(row).join('')}</ul>` : '<p class="sub">Aún no tienes amigos. Añade a alguien por su nombre de usuario.</p>'}
-      ${data.outgoing.length ? `<h3 class="friends-sub">Peticiones enviadas</h3><ul class="friend-list">${asks(data.outgoing, (n) => `<button class="chip-btn" data-remove="${n}">Cancelar</button>`)}</ul>` : ''}`;
+      ${data.outgoing.length ? `<h3 class="friends-sub">Peticiones enviadas</h3><ul class="friend-list">${asks(data.outgoing, (n) => `<button class="chip-btn" data-remove="${n}">${icon('close')}Cancelar</button>`)}</ul>` : ''}`;
     const run = (name, job, ok) => async () => {
       try {
         await job(name);
@@ -1078,14 +1081,14 @@ function avatarEditor(done) {
       <div class="card avatar-editor">
         <h2>Tu avatar</h2>
         <div class="ae-preview"></div>
-        <div class="ae-icons">${AVATAR_ICONS.map((i) => `<button data-icon="${i.id}" title="${i.name}" aria-label="${i.name}">${i.glyph}</button>`).join('')}</div>
+        <div class="ae-icons">${AVATAR_ICONS.map((i) => `<button data-icon="${i.id}" title="${i.name}" aria-label="${i.name}">${avatarIcon(i.id)}</button>`).join('')}</div>
         <div class="row">
-          <button class="secondary ae-upload">Subir imagen</button>
-          <button class="secondary ae-clear">Quitar</button>
+          <button class="secondary ae-upload">${icon('upload')}Subir imagen</button>
+          <button class="secondary ae-clear">${icon('trash')}Quitar</button>
         </div>
         <input type="file" class="ae-file" accept="image/png,image/jpeg,image/webp" hidden>
         <p class="ae-msg legal">PNG, JPG o WebP, máximo 2,5 MB. Se recorta en cuadrado y solo se guarda en este dispositivo.</p>
-        <button class="primary ae-done">Listo</button>
+        <button class="primary ae-done">${icon('check')}Listo</button>
       </div>
     </div>`);
   const msg = overlay.querySelector('.ae-msg');
@@ -1200,17 +1203,17 @@ function walletPane(balance, txs) {
         <div class="deposit-section">
           <h3>Recarga Rápida de Créditos Demo</h3>
           <div class="row deposit-row">
-            <button class="primary deposit-btn" data-add="50"><span>+50</span> Créditos</button>
-            <button class="primary deposit-btn" data-add="200"><span>+200</span> Créditos</button>
+            <button class="primary deposit-btn" data-add="50">${icon('coins')}<span>+50</span> Créditos</button>
+            <button class="primary deposit-btn" data-add="200">${icon('coins')}<span>+200</span> Créditos</button>
           </div>
         </div>
         ${wallet.depositCrypto
       ? `<div class="crypto-section">
           <h3>Depositar en Cripto <small class="tag">pruebas</small></h3>
           <div class="row">
-            <button class="secondary" data-crypto="10">10 USD</button>
-            <button class="secondary" data-crypto="25">25 USD</button>
-            <button class="secondary" data-crypto="50">50 USD</button>
+            <button class="secondary" data-crypto="10">${icon('coins')}10 USD</button>
+            <button class="secondary" data-crypto="25">${icon('coins')}25 USD</button>
+            <button class="secondary" data-crypto="50">${icon('coins')}50 USD</button>
           </div>
           <p class="legal">Pago con NOWPayments (USDT, BTC, ETH…). Modo de pruebas: no se cobra dinero real.</p>
         </div>`
@@ -1292,10 +1295,10 @@ async function startMatch(tier, rematchOf = null) {
   const view = h(`
     <main class="screen matchmaking tier--${tier.id}">
       <div class="radar"><span></span><span></span><span></span>${ball(progress.skin, 64)}</div>
-      <h1>Buscando rivales…</h1>
+      <h1>${icon('hourglass')} Buscando rivales…</h1>
       <p class="sub">${tier.entryFee ? `${tier.name} · bote ${coin(potFor(tier))}` : 'Práctica contra rivales simulados'}</p>
       <div class="seats"></div>
-      <button class="ghost cancel">Cancelar y recuperar entrada</button>
+      <button class="ghost cancel">${icon('close')}Cancelar y recuperar entrada</button>
     </main>`);
   const seats = view.querySelector('.seats');
   for (let i = 0; i < PLAYERS_PER_MATCH; i++) seats.append(h(`<div class="seat"><span>…</span></div>`));
@@ -1339,13 +1342,13 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         ${tiebreak ? '' : '<div class="pill strokes">Golpes <b>0</b></div>'}
         <div class="pill dist">— m</div>
         ${freePlay ? `
-        <button class="pill restart-btn hud-freeplay-btn" aria-label="Reiniciar hoyo" title="Reiniciar hoyo al tee (R)">Reiniciar <kbd class="kbd-hint">R</kbd></button>
-        <button class="pill map-select-btn hud-freeplay-btn" aria-label="Elegir otro mapa" title="Elegir otro mapa">Mapas</button>
+        <button class="pill restart-btn hud-freeplay-btn" aria-label="Reiniciar hoyo" title="Reiniciar hoyo al tee (R)">${icon('restart')}Reiniciar <kbd class="kbd-hint">R</kbd></button>
+        <button class="pill map-select-btn hud-freeplay-btn" aria-label="Elegir otro mapa" title="Elegir otro mapa">${icon('map')}Mapas</button>
         ` : ''}
-        <button class="pill mute mobile-only" aria-label="Sonido">${isMuted() ? 'Mudo' : 'Sonido'}</button>
-        <button class="pill fullscreen mobile-only" aria-label="Pantalla completa" title="Pantalla completa (F11)">Pantalla</button>
-        <button class="pill settings-btn-hud mobile-only" aria-label="Ajustes" title="Ajustes (Esc)">Ajustes</button>
-        <button class="pill desktop-esc-hint" aria-label="Ajustes">Ajustes <kbd class="kbd-hint">Esc</kbd></button>
+        <button class="pill mute mobile-only" aria-label="Sonido">${soundLabel()}</button>
+        <button class="pill fullscreen mobile-only" aria-label="Pantalla completa" title="Pantalla completa (F11)">${icon('fullscreen')}Pantalla</button>
+        <button class="pill settings-btn-hud mobile-only" aria-label="Ajustes" title="Ajustes (Esc)">${icon('gear')}Ajustes</button>
+        <button class="pill desktop-esc-hint" aria-label="Ajustes">${icon('gear')}Ajustes <kbd class="kbd-hint">Esc</kbd></button>
       </div>
       <div class="rivals ${freePlay ? 'rivals-hidden' : ''}">${freePlay ? '' : players
       .map((p) => `<div class="chip ${p.id === 'me' ? 'me' : ''} ${live && p.isBot ? 'bot' : ''}" data-id="${p.id}" style="--c:${p.color}"><i>${p.name[0]}</i><b>${tiebreak ? '·' : 0}</b></div>`)
@@ -1373,7 +1376,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         ${freePlay ? '<span><kbd>R</kbd> Reiniciar hoyo</span>' : ''}
       </div>
       <div class="power"><div class="fill"></div></div>
-      <button class="map-btn" aria-label="Ver el hoyo completo">Ver mapa <kbd class="kbd-hint">Espacio</kbd></button>
+      <button class="map-btn" aria-label="Ver el hoyo completo">${icon('eye')}Ver mapa <kbd class="kbd-hint">Espacio</kbd></button>
     </main>`);
   const gameClass = loadGolfGame();
   Promise.all([gameClass, shell(view, { hideHeader: true })]).then(([GolfGame]) => {
@@ -1422,7 +1425,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
               <div class="settings-title">
                 <h3>Ajustes de Partida</h3>
               </div>
-              <button class="close-settings-btn" aria-label="Cerrar ajustes">Cerrar</button>
+              <button class="close-settings-btn" aria-label="Cerrar ajustes">${icon('close')}Cerrar</button>
             </div>
 
             <div class="settings-modal-body">
@@ -1432,7 +1435,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
                   <small>Efectos ambientales y de golpe</small>
                 </div>
                 <button class="settings-btn toggle-sound-btn ${isMuted() ? 'muted' : ''}">
-                  <span class="btn-text">${isMuted() ? 'Silenciado' : 'Activado'}</span>
+                  ${icon(isMuted() ? 'mute' : 'sound')}<span class="btn-text">${isMuted() ? 'Silenciado' : 'Activado'}</span>
                 </button>
               </div>
 
@@ -1442,7 +1445,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
                   <small>Modo inmersivo de pantalla completa</small>
                 </div>
                 <button class="settings-btn toggle-fs-btn">
-                  <span class="btn-text">${document.fullscreenElement ? 'Ventana' : 'Pantalla Completa'}</span>
+                  ${icon('fullscreen')}<span class="btn-text">${document.fullscreenElement ? 'Ventana' : 'Pantalla Completa'}</span>
                 </button>
               </div>
 
@@ -1462,7 +1465,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
                   <small>Ver todo el terreno en 3D</small>
                 </div>
                 <button class="settings-btn toggle-overview-btn">
-                  <span class="btn-text">${game.overview ? 'Volver a la bola' : 'Ver todo el terreno'}</span>
+                  ${icon('eye')}<span class="btn-text">${game.overview ? 'Volver a la bola' : 'Ver todo el terreno'}</span>
                 </button>
               </div>
 
@@ -1479,9 +1482,9 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
             </div>
 
             <div class="settings-modal-footer">
-              <button class="primary resume-btn">Reanudar partida</button>
-              ${freePlay ? '<button class="secondary restart-settings-btn">Reiniciar Hoyo</button><button class="secondary map-settings-btn">Cambiar de Mapa</button>' : ''}
-              <button class="danger quit-btn">Salir al Lobby</button>
+              <button class="primary resume-btn">${icon('play')}Reanudar partida</button>
+              ${freePlay ? `<button class="secondary restart-settings-btn">${icon('restart')}Reiniciar Hoyo</button><button class="secondary map-settings-btn">${icon('map')}Cambiar de Mapa</button>` : ''}
+              <button class="danger quit-btn">${icon('logout')}Salir al Lobby</button>
             </div>
           </div>
         </div>
@@ -1504,8 +1507,9 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         setMuted(!isMuted());
         const muted = isMuted();
         soundBtn.classList.toggle('muted', muted);
+        soundBtn.querySelector('.gi')?.replaceWith(h(icon(muted ? 'mute' : 'sound')));
         soundBtn.querySelector('.btn-text').textContent = muted ? 'Silenciado' : 'Activado';
-        muteBtn.textContent = muted ? 'Mudo' : 'Sonido';
+        muteBtn.innerHTML = soundLabel();
         try { localStorage.setItem(MUTE_KEY, muted ? '1' : '0'); } catch { }
       });
 
@@ -1574,7 +1578,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       onOverviewChange: (isOverview) => {
         view.querySelector('.overview-banner')?.classList.toggle('show', isOverview);
         if (mapBtn) {
-          mapBtn.innerHTML = isOverview ? 'Volver a la bola <kbd class="kbd-hint">Espacio</kbd>' : 'Ver mapa <kbd class="kbd-hint">Espacio</kbd>';
+          mapBtn.innerHTML = `${icon('eye')}${isOverview ? 'Volver a la bola' : 'Ver mapa'} <kbd class="kbd-hint">Espacio</kbd>`;
           mapBtn.classList.toggle('on', isOverview);
         }
       },
@@ -1593,7 +1597,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
           return;
         }
         setChip(p.id, st.strokes, st.sunk);
-        if (st.sunk) toast(`${p.name} ha embocado en ${st.strokes}`, p.color);
+        if (st.sunk) toast(`${esc(p.name)} ha embocado en ${st.strokes}`, p.color);
       },
       onStroke: (n) => {
         if (n > 0) onShots?.(game.shots);
@@ -1627,10 +1631,10 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         setTimeout(() => finish(maxStrokesOf(course)), 1600);
       },
       onLip: () => toast('¡Uy! Demasiado fuerte para entrar', '#ffffff'),
-      onLava: () => toast('🔥 ¡A la lava! Vuelves al sitio del golpe', '#ff8a3a'),
-      onWater: () => toast('💦 ¡Al agua! Vuelves al sitio del golpe', '#7fdcff'),
-      onOut: () => toast('🌴 ¡Fuera del campo! Vuelves al sitio del golpe', '#b8f07a'),
-      onFall: () => toast('🕳️ ¡Al agujero! Vuelves al sitio del golpe', '#ffc400'),
+      onLava: () => toast(`${icon('fire')} ¡A la lava! Vuelves al sitio del golpe`, '#ff8a3a'),
+      onWater: () => toast(`${icon('drop')} ¡Al agua! Vuelves al sitio del golpe`, '#7fdcff'),
+      onOut: () => toast(`${icon('palm')} ¡Fuera del campo! Vuelves al sitio del golpe`, '#b8f07a'),
+      onFall: () => toast(`${icon('pit')} ¡Al agujero! Vuelves al sitio del golpe`, '#ffc400'),
       onRest: (n) => {
         showDistance();
         if (tiebreak) {
@@ -1679,7 +1683,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
     const muteBtn = view.querySelector('.mute');
     muteBtn.addEventListener('click', () => {
       setMuted(!isMuted());
-      muteBtn.textContent = isMuted() ? 'Mudo' : 'Sonido';
+      muteBtn.innerHTML = soundLabel();
       try {
         localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0');
       } catch { }
@@ -1694,7 +1698,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         }
       });
       document.addEventListener('fullscreenchange', () => {
-        fsBtn.textContent = document.fullscreenElement ? 'Ventana' : 'Pantalla';
+        fsBtn.innerHTML = `${icon('fullscreen')}${document.fullscreenElement ? 'Ventana' : 'Pantalla'}`;
       });
     }
     view.querySelector('.settings-btn-hud')?.addEventListener('click', openSettingsMenu);
@@ -1749,7 +1753,7 @@ function standingsTable(players, highlightPayout) {
   return `<ol class="standings">${players
     .map(
       (p, i) => `<li class="${p.id === 'me' ? 'me' : ''} ${(p.position ?? i + 1) === 1 ? 'first' : ''}" style="--c:${p.color}">
-        <span class="pos">${p.position ?? i + 1}</span>
+        <span class="pos">${(p.position ?? i + 1) === 1 ? icon('trophy') : p.position ?? i + 1}</span>
         <span class="name"><i></i>${p.name}</span>
         <span class="scores">${p.scores ? p.scores.join(' · ') : p.finished ? 'Terminado' : `Jugando · ${p.holesPlayed} hoyo${p.holesPlayed === 1 ? '' : 's'}`}${p.tiebreak !== undefined ? ` · ${p.tiebreak.toFixed(2)}m` : ''}</span>
         <b>${p.total ?? '—'}</b>
@@ -1772,7 +1776,7 @@ function showHoleResult(match, index, course, strokes, standings, dq = false) {
       <div class="card ${good ? 'good' : ''}">
         ${holeHeader(strokes, course.par, dq)}
         ${standingsTable(standings)}
-        <button class="primary next">${last ? 'Ver resultado' : 'Siguiente hoyo'}</button>
+        <button class="primary next">${last ? 'Ver resultado' : 'Siguiente hoyo'}${icon('next')}</button>
       </div>
     </div>`);
   overlay.querySelector('.next').addEventListener('click', () => (last ? afterLastHole(match) : playHole(match, index + 1)));
@@ -1798,7 +1802,7 @@ function afterLastHole(match) {
         <div class="vs">${tied.map((p) => `<span class="avatar" style="--c:${p.color}">${p.name[0]}</span>`).join('<em>VS</em>')}</div>
         <h2 class="score-title">¡Empate a ${tied[0].total}!</h2>
         <p class="sub">${tied.map((p) => p.name).join(', ')} van al desempate. Hoyo sin agujero: un solo tiro y gana quien deje la bola más cerca de la diana.</p>
-        <button class="primary next">${meTied ? 'Jugar desempate' : 'Ver desempate'}</button>
+        <button class="primary next">${meTied ? 'Jugar desempate' : 'Ver desempate'}${icon('next')}</button>
       </div>
     </div>`);
   overlay.querySelector('.next').addEventListener('click', () => (meTied ? playTiebreak(match, tied) : simulateTiebreak(match, tied)));
@@ -1842,7 +1846,7 @@ function showTiebreakResult(match, tied, distances) {
         <ol class="standings">${rows
       .map((p, i) => `<li class="${p.id === 'me' ? 'me' : ''} ${i === 0 ? 'first' : ''}" style="--c:${p.color}"><span class="pos">${i + 1}</span><span class="name"><i></i>${p.name}</span><span></span><b>${distances[p.id].toFixed(2)} m</b></li>`)
       .join('')}</ol>
-        <button class="primary next">Ver resultado</button>
+        <button class="primary next">Ver resultado${icon('next')}</button>
       </div>
     </div>`);
   overlay.querySelector('.next').addEventListener('click', () => showResults(match, distances));
@@ -1911,8 +1915,8 @@ function showEndOverlay({ won, position, total, prize, ranking, legal, holes, ga
         ${standingsTable(ranking, true)}
         ${legal ? `<p class="legal">${legal}</p>` : ''}
         <div class="row">
-          <button class="primary again">Revancha</button>
-          <button class="ghost next">${pending ? 'Reclamar y salir' : 'Salir'}</button>
+          <button class="primary again">${icon('restart')}Revancha</button>
+          <button class="ghost next">${pending ? `${icon('coins')}Reclamar y salir` : `${icon('back')}Salir`}</button>
         </div>
       </div>
     </div>`);
@@ -2024,12 +2028,12 @@ function showLiveRoom(live) {
   const view = h(`
     <main class="screen matchmaking live-room tier--${tier.id}">
       <div class="radar"><span></span><span></span><span></span>${ball(progress.skin, 64)}</div>
-      <h1>${tier.name} · en vivo</h1>
+      <h1>${icon('hourglass')} ${tier.name} · en vivo</h1>
       <p class="sub count"></p>
       <div class="seats"></div>
       ${match.rematchOf ? '<p class="legal">Revancha: quienes pidan revancha como tú entrarán juntos en esta sala.</p>' : ''}
       <p class="legal">Empezáis todos a la vez y verás las bolas de los demás en directo. Los huecos libres los ocupan bots: juegan contigo, pero nunca cuentan para el premio (el bote es solo de los jugadores reales). Si no entra nadie más, juegas contra bots y se te devuelve la entrada.</p>
-      <button class="ghost cancel">Salir y recuperar entrada</button>
+      <button class="ghost cancel">${icon('close')}Salir y recuperar entrada</button>
     </main>`);
   const seats = view.querySelector('.seats');
   let launching = false;
@@ -2226,7 +2230,7 @@ async function finishLiveHole(live, index, course, result) {
         ${holeHeader(result.strokes, course.par, result.timedOut)}
         ${standingsTable(standings)}
         <p class="legal">Los bots no cuentan para el premio.</p>
-        <button class="primary next">${last ? 'Ver resultado' : 'Siguiente hoyo'} <span class="secs">${LIVE_NEXT_S}</span></button>
+        <button class="primary next">${last ? 'Ver resultado' : 'Siguiente hoyo'}${icon('next')} <span class="secs">${LIVE_NEXT_S}</span></button>
       </div>
     </div>`);
   let left = LIVE_NEXT_S;
@@ -2270,7 +2274,7 @@ function liveTiebreak(live, tied) {
         <div class="vs">${tied.map((p) => `<span class="avatar" style="--c:${p.color}">${esc((p.id === 'me' ? 'Tú' : p.name)[0])}</span>`).join('<em>VS</em>')}</div>
         <h2 class="score-title">¡Empate a ${tied[0].total}!</h2>
         <p class="sub">${names.join(', ')} vais al desempate. Hoyo sin agujero: un solo tiro y gana quien deje la bola más cerca de la diana.</p>
-        <button class="primary next">Jugar desempate</button>
+        <button class="primary next">Jugar desempate${icon('next')}</button>
       </div>
     </div>`);
   const play = () => {
@@ -2406,15 +2410,15 @@ async function showLiveResults(live) {
   const view = h(`
     <main class="screen results ${won ? 'won' : ''}">
       ${won ? '<div class="rays"></div>' : ''}
-      <div class="trophy">${open ? 'En espera' : won ? 'Victoria' : cancelled ? 'Devuelto' : `Puesto #${me.position}`}</div>
+      <div class="trophy">${open ? icon('hourglass') : won ? icon('trophy') : ''}${open ? 'En espera' : won ? 'Victoria' : cancelled ? 'Devuelto' : `Puesto #${me.position}`}</div>
       <h1 class="score-title">${title}</h1>
       <p class="sub">${sub}</p>
       ${standingsTable(rows, !open)}
       ${match.status === 'settled' ? `<p class="legal">Bote ${fmt(match.pot)} · comisión ${fmt(match.commission)} · premio ${fmt(match.prize)} · los bots no cuentan</p>` : ''}
       ${open ? '<p class="legal">Si alguien se ha desconectado, en menos de un minuto se le da por terminado. Si sales, el premio te llega igual al saldo.</p>' : ''}
       <div class="row">
-        ${open ? '' : '<button class="primary again">Revancha</button>'}
-        <button class="${open ? 'primary' : 'ghost'}" data-go="lobby">Lobby</button>
+        ${open ? '' : `<button class="primary again">${icon('restart')}Revancha</button>`}
+        <button class="${open ? 'primary' : 'ghost'}" data-go="lobby">${icon('back')}Lobby</button>
       </div>
     </main>`);
   view.querySelector('.again')?.addEventListener('click', () => startMatch(tier, match.id));
@@ -2436,7 +2440,7 @@ function retryMsg(text, retry) {
       <div class="card">
         <h2>Sin conexión</h2>
         <p class="sub">${text}</p>
-        <button class="primary">Reintentar</button>
+        <button class="primary">${icon('restart')}Reintentar</button>
       </div>
     </div>`);
   overlay.querySelector('button').addEventListener('click', () => {
@@ -2455,7 +2459,7 @@ function alertMsg(text) {
       <div class="card">
         <h2>Ups</h2>
         <p class="sub">${text}</p>
-        <button class="primary">Volver al lobby</button>
+        <button class="primary">${icon('back')}Volver al lobby</button>
       </div>
     </div>`);
   overlay.querySelector('button').addEventListener('click', () => showLobby());
@@ -2526,7 +2530,7 @@ export async function showFreePlayCourseSelect() {
       <div class="courses-grid"></div>
 
       <div class="freeplay-footer-actions">
-        <button class="ghost back-to-lobby" data-go="lobby">← Volver al Menú Principal</button>
+        <button class="ghost back-to-lobby" data-go="lobby">${icon('back')}Volver al Menú Principal</button>
       </div>
     </main>
   `);
@@ -2554,7 +2558,7 @@ export async function showFreePlayCourseSelect() {
               ${feats[0] ? `<span class="preview-badge feat-badge">${feats[0]}</span>` : ''}
             </div>
             <div class="course-preview-action-overlay">
-              <span class="preview-play-icon"></span>
+              <span class="preview-play-icon">${icon('play')}</span>
               <span class="preview-play-text">Entrenar Hoyo ${idx + 1}</span>
             </div>
           </div>
@@ -2564,7 +2568,7 @@ export async function showFreePlayCourseSelect() {
           ${course.tip ? `<p class="course-tip">${course.tip}</p>` : ''}
           ${feats.length ? `<div class="course-feats">${feats.map((f) => `<span class="feat-tag">${f}</span>`).join('')}</div>` : ''}
         </div>
-        <button class="primary play-course-btn">Jugar Hoyo ${idx + 1}</button>
+        <button class="primary play-course-btn">${icon('play')}Jugar Hoyo ${idx + 1}</button>
       </div>
     `);
     const launchPlay = () => playFreePlay(idx);
@@ -2593,7 +2597,7 @@ export async function showFreePlayCourseSelect() {
             <span class="preview-badge feat-badge">Diana</span>
           </div>
           <div class="course-preview-action-overlay">
-            <span class="preview-play-icon"></span>
+            <span class="preview-play-icon">${icon('play')}</span>
             <span class="preview-play-text">Entrenar Desempate</span>
           </div>
         </div>
@@ -2606,7 +2610,7 @@ export async function showFreePlayCourseSelect() {
           <span class="feat-tag">Muerte súbita</span>
         </div>
       </div>
-      <button class="primary play-course-btn">Jugar Desempate</button>
+      <button class="primary play-course-btn">${icon('play')}Jugar Desempate</button>
     </div>
   `);
   const launchTbPlay = () => playFreePlay('tiebreak');
@@ -2679,10 +2683,10 @@ export function showFreePlayHoleResult(courseIndex, course, strokes) {
         </div>
 
         <div class="freeplay-actions">
-          <button class="primary retry-btn">Repetir este hoyo</button>
-          ${nextIndex != null ? `<button class="primary next-btn">Siguiente hoyo (${nextIndex + 1})</button>` : ''}
-          <button class="secondary select-map-btn">Elegir otro mapa</button>
-          <button class="ghost to-lobby-btn">Lobby principal</button>
+          <button class="primary retry-btn">${icon('restart')}Repetir este hoyo</button>
+          ${nextIndex != null ? `<button class="primary next-btn">Siguiente hoyo (${nextIndex + 1})${icon('next')}</button>` : ''}
+          <button class="secondary select-map-btn">${icon('map')}Elegir otro mapa</button>
+          <button class="ghost to-lobby-btn">${icon('back')}Lobby principal</button>
         </div>
       </div>
     </div>
@@ -2739,7 +2743,7 @@ if (skinLab) {
     }
     wallet.subscribe((n) => {
       const el = app.querySelector('.balance');
-      if (el) el.innerHTML = `${coin(n)}<span class="plus">+</span>`;
+      if (el) el.innerHTML = `${coin(n)}<span class="plus">${icon('plus')}</span>`;
     });
     showLobby();
   });

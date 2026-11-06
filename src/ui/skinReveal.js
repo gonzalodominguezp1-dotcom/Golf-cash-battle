@@ -1,5 +1,6 @@
 import './skinReveal.css';
 import { sfx } from '../game/audio.js';
+import { icon, tierIcon } from './icons.js';
 import { ballPreview } from '../game/render/ballPaint.js';
 import { TIERS } from '../progress/skins.js';
 import { rarePatternOf } from '../progress/inventory.js';
@@ -254,14 +255,14 @@ export function showSkinReveal(skins, { progress = null } = {}) {
         <div class="sr-stage">
           ${list.length > 1 ? `<span class="sr-count">${i + 1} / ${list.length}</span>` : ''}
           <p class="sr-kicker">${tier.order >= 3 ? `¡${esc(tier.name)}!` : tier.order >= 2 ? '¡Skin rara!' : '¡Skin desbloqueada!'}</p>
-          <div class="sr-seal"><span class="sr-seal-ico">${tier.icon}</span>${esc(tier.name)}</div>
+          <div class="sr-seal"><span class="sr-seal-ico">${tierIcon(k)}</span>${esc(tier.name)}</div>
           <div class="sr-ball">
             <img src="${ballPreview(skin, 288)}" width="384" height="384" alt="" draggable="false">
             <span class="sr-scan"></span>
           </div>
           <div class="sr-info">
             <h2 class="sr-name">${esc(skin.name)}</h2>
-            ${inst ? `<p class="sr-meta"><span>Patrón #${String(inst.seed).padStart(3, '0')}</span>${rare ? '<span class="sr-rare">✦ Patrón raro</span>' : ''}${inst.counter?.enabled ? '<span class="sr-rare">Marcador</span>' : ''}</p>` : ''}
+            ${inst ? `<p class="sr-meta"><span>Patrón #${String(inst.seed).padStart(3, '0')}</span>${rare ? `<span class="sr-rare">${icon('sparkle')} Patrón raro</span>` : ''}${inst.counter?.enabled ? '<span class="sr-rare">Marcador</span>' : ''}</p>` : ''}
             <div class="sr-actions">
               ${progress ? '<button type="button" class="primary sr-equip">Equipar</button>' : ''}
               <button type="button" class="ghost sr-next">${last ? 'Continuar' : 'Siguiente'}</button>
@@ -281,7 +282,7 @@ export function showSkinReveal(skins, { progress = null } = {}) {
         if (!equipBtn) return;
         const isEq = progress.skin.id === skin.id;
         equipBtn.disabled = isEq;
-        equipBtn.textContent = isEq ? '✓ Equipada' : 'Equipar';
+        equipBtn.innerHTML = isEq ? `${icon('check')}Equipada` : 'Equipar';
       };
       syncEquip();
       equipBtn?.addEventListener('click', () => {

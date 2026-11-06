@@ -16,9 +16,9 @@
 }
 .auth-eye:hover { color: #fff; background: rgba(255, 255, 255, 0.06); }
 .auth-checks { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; padding: 0; list-style: none; font-size: 12px; color: var(--muted); }
-.auth-checks li::before { content: '○ '; }
+.auth-checks li::before { content: ''; display: inline-block; width: 1em; height: 1em; margin-right: 4px; vertical-align: -0.15em; background: var(--gi-dot) center/contain no-repeat; }
 .auth-checks li.ok { color: var(--pos); }
-.auth-checks li.ok::before { content: '✓ '; }
+.auth-checks li.ok::before { background-image: var(--gi-check); }
 .auth-error { min-height: 1.2em; margin: 0; font-size: 13px; font-weight: 700; color: var(--neg); line-height: 1.4; }
 .auth-error.ok { color: var(--pos); }
 .auth-error:empty { min-height: 0; }

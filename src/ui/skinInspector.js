@@ -6,6 +6,7 @@ import { BALL_R } from '../game/physics.js';
 import { QUALITY_LEVELS, QUALITY_NAMES, getQuality } from '../game/render/quality.js';
 import { SKINS, TIERS } from '../progress/skins.js';
 import { rarePatternOf } from '../progress/inventory.js';
+import { tierIcon } from './icons.js';
 
 // Inspector 360° de skins v2 (P8).
 //   createSkinInspector(container, { skin, instance, mode: 'panel'|'fullscreen', quality? })
@@ -559,7 +560,8 @@ export function createSkinInspector(container, opts = {}) {
     body.replaceChildren();
 
     const head = el('div', 'sk-head');
-    const chip = el('span', 'sk-tier', `${tier.icon} ${tier.name}`);
+    const chip = el('span', 'sk-tier');
+    chip.innerHTML = `${tierIcon(skin.tier ?? skin.rarity)} ${tier.name}`;
     head.append(chip);
     if (skin.collection && skin.collection !== 'clasica') head.append(el('span', 'sk-coll', skin.collection));
     body.append(head, el('h3', 'sk-name', skin.name));
