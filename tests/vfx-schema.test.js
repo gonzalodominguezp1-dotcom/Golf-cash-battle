@@ -306,3 +306,21 @@ test('validateSkin: sin biblioteca (undefined) también cuenta como vacía', () 
   assert.equal(r.ok, false);
   assert.ok(r.errors.some((e) => e.includes('effects.aura')));
 });
+
+test('T015: validateSkin acota su trabajo con una biblioteca en forma de lista enorme', () => {
+  const skin = { id: 's', name: 'S', palette: { base: '#111', accent: '#ff0', secondary: '#0ff', glow: '#fff' }, effects: { aura: 'zz', trail: 'yy', hit: 'xx' } };
+  const t0 = Date.now();
+  for (const lib of [new Array(2e8), new Array(4e9)]) {
+    const r = validateSkin(skin, lib);
+    assert.equal(r.ok, false);
+    assert.ok(r.errors.some((e) => e.includes('effects.aura') && e.includes('no existe')));
+  }
+  assert.ok(Date.now() - t0 < 500, `tardó ${Date.now() - t0} ms`);
+});
+
+test('T015: un campo de catálogo heredado por el prototipo también se rechaza', () => {
+  const skin = Object.assign(Object.create({ tier: 'epic', price: 9 }), { id: 's', name: 'S', palette: { base: '#111', accent: '#ff0', secondary: '#0ff', glow: '#fff' }, effects: {} });
+  const r = validateSkin(skin, {});
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some((e) => e.startsWith('tier:')) && r.errors.some((e) => e.startsWith('price:')));
+});

@@ -229,12 +229,17 @@ const PALETTE_KEYS = ['base', 'accent', 'secondary', 'glow'];
 const HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 /** Tope de mensajes por grupo: una entrada con 1e5 claves no debe devolver 1e5 errores ni tardar. */
 const MAX_KEY_ERRORS = 20;
+/** Entradas de una biblioteca en forma de lista que se recorren: una lista de 4e9 huecos no debe colgar la validación. */
+const MAX_LIBRARY_SCAN = 100000;
 
 /** Busca un efecto por id en cualquier forma de biblioteca; lo que no entienda cuenta como vacío. Nunca lanza. */
 function lookupEffect(library, id) {
   try {
     if (library instanceof Map) return library.get(id);
-    if (Array.isArray(library)) return library.find((e) => isObj(e) && e.id === id);
+    if (Array.isArray(library)) {
+      for (let i = 0, n = Math.min(library.length, MAX_LIBRARY_SCAN); i < n; i++) if (isObj(library[i]) && library[i].id === id) return library[i];
+      return undefined;
+    }
     if (!library || typeof library !== 'object') return undefined;
     if (typeof library.get === 'function') return library.get(id);
     // solo claves propias: «constructor» o «toString» no son efectos
@@ -248,7 +253,8 @@ function lookupEffect(library, id) {
 function checkSkinKeys(obj, allowed, where, errors, rejected = []) {
   let shown = 0, extra = 0;
   for (const k in obj) {
-    if (!Object.hasOwn(obj, k) || allowed.includes(k)) continue;
+    // los campos de catálogo se rechazan aunque vengan heredados del prototipo; el resto solo si son propios
+    if (allowed.includes(k) || (!Object.hasOwn(obj, k) && !rejected.includes(k))) continue;
     if (shown >= MAX_KEY_ERRORS) { extra++; continue; }
     shown++;
     errors.push(rejected.includes(k)
