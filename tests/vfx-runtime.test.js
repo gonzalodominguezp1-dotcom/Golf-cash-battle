@@ -135,7 +135,7 @@ test('un efecto inválido no se reproduce, devuelve null y no lanza', () => {
 
 test('dispose quita la malla de la escena', () => {
   const { scene, player } = make();
-  assert.equal(scene.children.length, 1);
+  assert.ok(scene.children.length >= 1);
   player.dispose();
   assert.equal(scene.children.length, 0);
 });
@@ -203,4 +203,92 @@ test('dir in va hacia dentro (−normal) y fwd a lo largo de la superficie', () 
   };
   assert.ok(run1('in').every((v) => v.z < -0.5));
   assert.ok(run1('fwd').every((v) => Math.abs(v.z) < 0.2 && Math.hypot(v.x, v.y) > 0.5));
+});
+
+const Z = new THREE.Vector3(0, 0, 1);
+const ringFx = (over = {}) => burst({ rings: [{ t: 0, radius: 2, life: 0.5, col: 'accent', orient: 'wall' }], ...over });
+const visibleRings = (player) => player.rings.filter((r) => r.m.visible);
+const facing = (mesh) => Z.clone().applyQuaternion(mesh.quaternion);
+
+test('T005: un anillo wall se orienta con la normal de la pared y nace en el punto de impacto', () => {
+  const { player } = make();
+  player.play(ringFx(), { pos: { x: 1, y: 0.6, z: 0 }, normal: { x: 0, y: 0, z: 1 }, seed: 1, palette: PALETTE });
+  player.update(0);
+  const [r] = visibleRings(player);
+  assert.ok(r, 'no hay anillo visible');
+  const f = facing(r.m);
+  assert.ok(Math.abs(f.z - 1) < 1e-6 && Math.abs(f.x) < 1e-6 && Math.abs(f.y) < 1e-6, JSON.stringify(f));
+  assert.ok(Math.abs(r.m.position.x - 1) < 1e-6 && Math.abs(r.m.position.y - 0.6) < 0.1);
+});
+
+test('T005: un anillo floor queda plano en el suelo aunque la normal sea una pared', () => {
+  const { player } = make();
+  const fx = ringFx({ rings: [{ t: 0, radius: 2, life: 0.5, col: 'accent', orient: 'floor' }] });
+  player.play(fx, { pos: { x: 0, y: 0.6, z: 0 }, normal: { x: 0, y: 0, z: 1 }, seed: 1, palette: PALETTE });
+  player.update(0);
+  const f = facing(visibleRings(player)[0].m);
+  assert.ok(Math.abs(f.y - 1) < 1e-6 && Math.abs(f.z) < 1e-6, JSON.stringify(f));
+});
+
+test('T005: el anillo se expande y se apaga, y desaparece al acabar su vida', () => {
+  const { player } = make();
+  player.play(ringFx(), { pos: { x: 0, y: 0, z: 0 }, seed: 1, palette: PALETTE });
+  player.update(0);
+  const r = visibleRings(player)[0];
+  const s0 = r.m.scale.x, o0 = r.m.material.opacity;
+  run(player, 0.25);
+  assert.ok(r.m.scale.x > s0 && r.m.scale.x <= 2 + 1e-6, `escala ${r.m.scale.x}`);
+  assert.ok(r.m.material.opacity < o0);
+  run(player, 0.5);
+  assert.equal(r.m.visible, false);
+  assert.equal(visibleRings(player).length, 0);
+});
+
+test('T005: hay un máximo de anillos y los de más se descartan sin romper nada', () => {
+  const { player } = make();
+  const many = ringFx({ rings: Array.from({ length: 12 }, () => ({ t: 0, radius: 2, life: 0.5, col: 'accent', orient: 'floor' })) });
+  player.play(many, { pos: { x: 0, y: 0, z: 0 }, seed: 1, palette: PALETTE });
+  player.update(0);
+  assert.ok(visibleRings(player).length >= 1 && visibleRings(player).length <= player.rings.length);
+  assert.equal(visibleRings(player).length, player.rings.length);
+  // uno más con otro radio: se descarta, y todos los anillos acaban y se apagan a su hora (ninguno queda congelado)
+  player.play(ringFx({ rings: [{ t: 0, radius: 9, life: 0.5, col: 'accent', orient: 'floor' }] }), { pos: { x: 0, y: 0, z: 0 }, seed: 2, palette: PALETTE });
+  player.update(0);
+  assert.ok(player.rings.every((r) => r.radius !== 9));
+  run(player, 0.7);
+  assert.equal(visibleRings(player).length, 0);
+});
+
+test('T005: con reducción de movimiento el anillo sale atenuado', () => {
+  const a = make(), b = make();
+  a.player.play(ringFx(), { pos: { x: 0, y: 0, z: 0 }, seed: 1, palette: PALETTE, reduced: false });
+  b.player.play(ringFx(), { pos: { x: 0, y: 0, z: 0 }, seed: 1, palette: PALETTE, reduced: true });
+  a.player.update(0.01); b.player.update(0.01);
+  assert.ok(visibleRings(b.player)[0].m.material.opacity < visibleRings(a.player)[0].m.material.opacity * 0.6);
+});
+
+test('T005: un anillo retrasado (t > 0) nace en su momento y no antes', () => {
+  const { player } = make();
+  player.play(ringFx({ rings: [{ t: 0.3, radius: 2, life: 0.4, col: 'accent', orient: 'floor' }] }), { pos: { x: 0, y: 0, z: 0 }, seed: 1, palette: PALETTE });
+  run(player, 0.2);
+  assert.equal(visibleRings(player).length, 0);
+  run(player, 0.2);
+  assert.equal(visibleRings(player).length, 1);
+});
+
+test('T005: una luz del efecto se dibuja como un destello suave de su radio y su vida', () => {
+  const { player } = make();
+  const fx = burst({ emitters: [{ ...burst().emitters[0], n: 1 }], lights: [{ t: 0, radius: 1.4, life: 0.3, col: 'glow' }] });
+  player.play(fx, { pos: { x: 0, y: 0, z: 0 }, seed: 1, palette: PALETTE });
+  player.update(0);
+  assert.equal(player.live, 2); // la chispa y el destello
+  const soft = Array.from({ length: player.live }, (_, i) => i).filter((i) => player.pool.cell[i] === CELLS.soft);
+  assert.equal(soft.length, 1);
+  assert.ok(Math.abs(player.pool.size[soft[0]] - 1.4) < 1e-6);
+});
+
+test('T005: dispose retira también los anillos de la escena', () => {
+  const { scene, player } = make();
+  player.dispose();
+  assert.equal(scene.children.length, 0);
 });
