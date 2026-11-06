@@ -135,6 +135,10 @@ con su duración, su presupuesto y sus criterios de abajo.
 - Given un efecto aprobado, When el juego lo dispara, Then se ve igual que en el banco y `pnpm test` y
   `pnpm run build` pasan.
 - Given el repositorio del juego, When reviso su árbol de archivos, Then el banco no está dentro.
+- Given un efecto en calidad `low`, When se reproduce, Then conserva su anillo y su destello y emite al menos el 30 % de las partículas de `high`.
+- Given el límite de partículas alcanzado, When llegan emisiones nuevas, Then se descartan las nuevas y no desaparece ninguna partícula viva antes de acabar su vida.
+- Given un efecto con un parámetro inválido, When intento reproducirlo o exportarlo, Then el banco lista los errores por nombre y sigue funcionando; y Given que falta una pieza del juego, Then el banco dice cuál falta y sigue con el resto.
+- Given el banco abierto, When creo, duplico, edito o borro una skin (apariencia y efectos asignados, nunca precio, rareza ni desbloqueo), Then se refleja en la lista, su vista previa usa los efectos asignados y un efecto en uso por ella no se puede borrar sin aviso.
 
 ## Points to clarify
 - **suposición tomada** — la primera tanda es: un portal (entrada, estable y salida), tres choques (pared, bumper,
@@ -160,6 +164,8 @@ con su duración, su presupuesto y sus criterios de abajo.
   *Riesgo:* si se esperaba editar también el catálogo del juego, el alcance crece.
 - **suposición tomada** — el estilo es 3D actual, con libertad creativa de videojuego. *Base:* respuesta del equipo.
   *Riesgo:* ninguno conocido.
+- **suposición tomada** — el efecto de mundo (pared, bumper, hoyo) sustituye al soplo genérico de `Particles` y se suma al efecto propio de la skin; el nuevo `VfxPlayer` tiene su propio tope por calidad (`low` 24, `medium` 60, `high` 120) además del de `SkinFX`. *Base:* evita doblar el mismo evento y acota el peor caso a 300 + 120 partículas en `high`. *Riesgo:* si la medición en móvil no lo aguanta, se bajan los topes. Origen: análisis, hallazgo F2.
+- **suposición tomada** — las skins creadas en el banco se exportan como datos propios (apariencia y efectos asignados) y no entran al catálogo del juego: sin tier, desbloqueo ni precio. *Base:* el alcance excluye rareza y desbloqueo. *Riesgo:* si se quiere publicarlas, hace falta otro ciclo que las dé de alta. Origen: análisis, hallazgo F1.
 - **decisión diferida** — VFX de ambiente del mapa y su integración con los temas del campo.
 - **decisión diferida** — probar el banco en red local desde un móvil real.
 - **decisión diferida** — choque bola contra bola. *Base:* `physics.js` no tiene colisión entre bolas, solo con paredes, bumpers y obstáculos, y cambiarlo exige `sync:functions` y redespliegue (Q2.2). Se reabre si la física lo incorpora.
@@ -177,6 +183,7 @@ con su duración, su presupuesto y sus criterios de abajo.
   antiguos. → la semilla se exige solo a los efectos nuevos y deben aceptar una. *Por qué:* es lo único alcanzable sin
   reescribir el sistema actual.
 - 2026-11-06 — Hallazgo del plan: el juego no tiene colisión bola contra bola, así que ese choque no tendría disparador. → se sustituye por el golpe en bumper (sí existe) en la primera tanda y el choque entre bolas pasa a decisión diferida. *Por qué:* un efecto sin disparador no puede cumplir «el juego lo dispara».
+- 2026-11-06 — Análisis, ronda 1 (F1–F7). Se añaden criterios para calidad `low`, tope de partículas, errores y skins; se fijan los topes del `VfxPlayer` y que las skins creadas no entran al catálogo. *Por qué:* el análisis encontró que lo pedido sobre skins no tenía entidad ni tarea y que los casos límite no eran verificables.
 
 Resultado por punto de `specify`: tanda inicial, entrega al juego y rama → resueltas como suposición; banco solo en
 ordenador, alcance de edición de skins y estilo 3D → validadas, siguen en pie; ambiente del mapa y móvil real →
