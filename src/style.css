@@ -88,11 +88,10 @@ button > .gi:first-child:not(:last-child) { margin-right: 0.35em; }
 button > .gi:last-child:not(:first-child) { margin-left: 0.35em; }
 .desktop-nav button { white-space: nowrap; }
 .desktop-nav button .gi { margin: 0; vertical-align: 0; width: 1.5em; height: 1.5em; }
-.topbar-sound-btn .gi { width: 1.2em; height: 1.2em; }
 /* barra superior móvil: nivel + saldo a la izquierda, logo centrado, ajustes y pantalla completa a la derecha */
 .m-stats, .icon-btn { display: none; }
 @media (max-width: 899px) {
-  .topbar .level, .topbar .balance, .topbar .topbar-sound-btn { display: none !important; }
+  .topbar .level, .topbar .balance { display: none !important; }
   .m-stats {
     display: flex; align-items: center; gap: 2px; padding: 3px 12px 3px 3px; border-radius: 999px;
     background: linear-gradient(180deg, rgba(32, 22, 54, 0.9) 0%, rgba(18, 12, 32, 0.95) 100%);
@@ -145,7 +144,15 @@ button > .gi:last-child:not(:first-child) { margin-left: 0.35em; }
 @media (min-width: 900px) {
   .gi { width: 1.5em; height: 1.5em; }
   .desktop-nav button .gi { width: 2.15em; height: 2.15em; margin: -4px 0 !important; }
-  .topbar-sound-btn .gi { width: 1.75em; height: 1.75em; margin: -3px 0.3em -3px 0 !important; }
+  /* ajustes: solo el icono arriba a la derecha, como en móvil */
+  .icon-btn.m-settings {
+    display: grid; place-items: center; width: 46px; height: 46px; padding: 0; border-radius: 14px; cursor: pointer;
+    background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: transform 0.2s var(--ease-out), background 0.2s ease;
+  }
+  .icon-btn.m-settings:hover { background: rgba(255, 255, 255, 0.12); }
+  .icon-btn.m-settings .gi { width: 32px; height: 32px; margin: 0 !important; vertical-align: 0; transition: transform 0.35s var(--ease-out); }
+  .icon-btn.m-settings:hover .gi { transform: rotate(45deg); }
   .balance .coin { width: 1.6em; height: 1.6em; vertical-align: -0.4em; }
   .balance .plus { width: 30px; height: 30px; }
   .hud .pill .gi { width: 1.5em; height: 1.5em; }
@@ -167,8 +174,6 @@ button > .gi:last-child:not(:first-child) { margin-left: 0.35em; }
   .topbar .level-text { display: none !important; }
   .desktop-nav { gap: 2px; }
   .desktop-nav button { padding: 8px 7px; font-size: 12px; }
-  .topbar-sound-btn { font-size: 0 !important; padding: 7px 9px !important; }
-  .topbar-sound-btn .gi { width: 24px; height: 24px; margin: 0 !important; }
   .desktop-brand-btn .brand-logo { height: 58px !important; max-width: 70px !important; }
   .balance { padding: 5px 5px 5px 10px; gap: 4px; }
 }
@@ -413,7 +418,6 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 .balance .plus .gi { width: 100%; height: 100%; margin: 0; vertical-align: 0; }
 .coin { width: 1.15em; height: 1.15em; margin-right: 4px; vertical-align: -0.22em; }
 
-.topbar-sound-btn { font-size: 15px; padding: 6px 10px; cursor: pointer; }
 /* engranaje de la barra del móvil: encendido mientras se está en Ajustes */
 .icon-btn.m-settings.on { box-shadow: 0 0 0 2px rgba(255, 210, 63, 0.6), 0 0 14px rgba(255, 210, 63, 0.35); }
 
@@ -3484,19 +3488,4 @@ body.sk-noscroll { overflow: hidden; }
     contain-intrinsic-size: auto 360px;
   }
   .course-card, .tier { contain: layout paint; }
-}
-
-/* Barra de escritorio con seis secciones (Ajustes incluida): en pantallas medianas se compacta
-   para no salirse por la derecha. Al final del archivo para ganar al bloque general de escritorio. */
-@media (min-width: 900px) and (max-width: 1439px) {
-  .desktop-nav button { padding: 8px 11px; }
-  .desktop-nav kbd { display: none; }
-}
-@media (min-width: 900px) and (max-width: 1199px) {
-  .topbar { gap: 10px; padding-left: 16px; padding-right: 16px; }
-  .topbar-left { gap: 10px; }
-  .topbar-left .level-text { display: none; }
-  .desktop-nav { gap: 2px; padding: 4px; }
-  .desktop-nav .gi { display: none; }
-  .desktop-nav button { padding: 8px 9px; font-size: 12px; }
 }

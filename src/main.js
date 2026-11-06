@@ -136,18 +136,15 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
             <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}">${icon('skins')}Skins <kbd>3</kbd></button>
             <button data-go="ranking" class="${screen === 'ranking' ? 'on' : ''}">${icon('trophy')}Ranking <kbd>4</kbd></button>
             <button data-go="account" class="${screen === 'account' ? 'on' : ''}">${icon('user')}Cuenta <kbd>5</kbd></button>
-            <button data-go="settings" class="${screen === 'settings' ? 'on' : ''}">${icon('gear')}Ajustes <kbd>6</kbd></button>
           </nav>
         </div>
         <div class="topbar-right">
           <button class="balance" data-go="wallet" title="Tu saldo: abre el wallet de tu cuenta">${coin(balance)}<span class="plus">${icon('plus')}</span></button>
-          <button class="pill mute topbar-sound-btn" aria-label="Sonido" title="Silenciar / Activar sonido (M)">${soundLabel()}</button>
-          <button class="icon-btn m-settings ${screen === 'settings' ? 'on' : ''}" data-go="settings" aria-label="Ajustes" title="Ajustes">${icon('gear')}</button>
+          <button class="icon-btn m-settings ${screen === 'settings' ? 'on' : ''}" data-go="settings" aria-label="Ajustes" title="Ajustes (6)">${icon('gear')}</button>
           ${document.fullscreenEnabled ? `<button class="icon-btn m-fullscreen" aria-label="Pantalla completa" title="Pantalla completa">${icon('fullscreen')}</button>` : ''}
         </div>
       </header>`),
     );
-    app.querySelector('.topbar-sound-btn')?.addEventListener('click', toggleMute);
     app.querySelector('.m-fullscreen')?.addEventListener('click', toggleFullscreen);
   }
   app.append(content);
