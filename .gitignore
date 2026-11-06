@@ -62,3 +62,6 @@ ideas_skins/
 
 # estado local de la CLI de Supabase (enlace al proyecto, cache de versión)
 supabase/.temp/
+
+# rsc local state (hooks, seals, logs) and managed skill links — machine-local
+.claude/skills/asdd
