@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PLAYER_CAP, budget, emissions, flashRate, validate } from '../src/game/render/vfx/schema.js';
+import { PLAYER_CAP, SKIN_SLOTS, SKIN_REJECTED_FIELDS, budget, emissions, flashRate, validate, validateSkin } from '../src/game/render/vfx/schema.js';
 
 const burst = (over = {}) => ({
   id: 'spark-pop', name: 'Chispazo', family: 'impact', duration: 1, loop: false,
@@ -184,4 +184,125 @@ test('flashRate en bucle: periodos enteros más resto, también en los límites 
   assert.equal(flashRate(lp(0.5, [0])), 2); // 0 y 0,5 caben en una ventana de 1 s; el 1,0 no
   assert.equal(flashRate(lp(0.8, [0, 0.2, 0.4])), 4);
   assert.equal(flashRate(lp(2, [0, 0.9])), 2);
+});
+
+// ---- T015 / AC16: skins creadas en el banco (apariencia + efectos asignados, nada de catálogo) ----
+const fxLib = () => new Map([
+  ['aura', loop()], ['trail', loop({ id: 'trail' })], ['roll', loop({ id: 'roll' })],
+  ['hit', burst({ id: 'hit' })], ['wall', burst({ id: 'wall' })], ['sink', burst({ id: 'sink' })],
+]);
+const skin = (over = {}) => ({
+  id: 'neon', name: 'Neón',
+  palette: { base: '#112233', accent: '#fa0', secondary: '#334455', glow: '#FFEE00' },
+  finish: 'matte', pattern: 'stripes',
+  effects: { trail: 'trail', aura: 'aura', hit: 'hit', roll: 'roll', wall: 'wall', sink: 'sink' },
+  ...over,
+});
+const mustFail = (s, field, lib = fxLib()) => {
+  const r = validateSkin(s, lib);
+  assert.equal(r.ok, false, `debía fallar por ${field}`);
+  assert.ok(r.errors.every((e) => typeof e === 'string'));
+  assert.ok(r.errors.some((e) => e.includes(field)), `falta ${field} en ${r.errors}`);
+  return r;
+};
+
+test('validateSkin: una skin completa y una mínima válidas pasan', () => {
+  assert.deepEqual(validateSkin(skin(), fxLib()), { ok: true });
+  assert.deepEqual(validateSkin({ id: 'a', name: 'A', palette: skin().palette, effects: {} }, fxLib()), { ok: true });
+  assert.deepEqual([...SKIN_SLOTS].sort(), ['aura', 'hit', 'roll', 'sink', 'trail', 'wall']);
+});
+
+test('validateSkin: campos desconocidos y de catálogo (tier, unlock, price…) se rechazan con su motivo', () => {
+  mustFail(skin({ sorpresa: 1 }), 'sorpresa');
+  assert.deepEqual([...SKIN_REJECTED_FIELDS].sort(), ['cost', 'price', 'rarity', 'shop', 'tier', 'unlock']);
+  for (const f of SKIN_REJECTED_FIELDS) {
+    const r = mustFail(skin({ [f]: 1 }), f);
+    assert.ok(r.errors.some((e) => e.includes(f) && e.includes('no forma parte de una skin creada en el banco')), r.errors.join('|'));
+  }
+});
+
+test('validateSkin: id y name no vacíos; paleta completa con colores #hex', () => {
+  mustFail(skin({ id: '' }), 'id');
+  mustFail(skin({ id: 5 }), 'id');
+  mustFail(skin({ name: '  ' }), 'name');
+  mustFail(skin({ palette: undefined }), 'palette');
+  mustFail(skin({ palette: { ...skin().palette, glow: undefined } }), 'palette.glow');
+  mustFail(skin({ palette: { ...skin().palette, base: 'rojo' } }), 'palette.base');
+  mustFail(skin({ palette: { ...skin().palette, accent: '#12' } }), 'palette.accent');
+  mustFail(skin({ palette: { ...skin().palette, secondary: '#12345g' } }), 'palette.secondary');
+  mustFail(skin({ palette: { ...skin().palette, extra: '#fff' } }), 'palette.extra');
+  mustFail(skin({ finish: 3 }), 'finish');
+  mustFail(skin({ pattern: {} }), 'pattern');
+});
+
+test('validateSkin: effects solo admite los seis slots y ids que existan en la biblioteca', () => {
+  mustFail(skin({ effects: 'x' }), 'effects');
+  mustFail(skin({ effects: { magia: 'aura' } }), 'effects.magia');
+  mustFail(skin({ effects: { aura: 7 } }), 'effects.aura');
+  const r = mustFail(skin({ effects: { aura: 'no-existe' } }), 'effects.aura');
+  assert.ok(r.errors.some((e) => e.includes('no-existe')));
+});
+
+test('validateSkin: aura, trail y roll piden un bucle; hit, wall y sink piden una vez, en ambos sentidos', () => {
+  const lib = new Map([['l', loop({ id: 'l' })], ['o', burst({ id: 'o' })]]);
+  for (const s of ['aura', 'trail', 'roll']) {
+    assert.equal(validateSkin(skin({ effects: { [s]: 'l' } }), lib).ok, true, s);
+    mustFail(skin({ effects: { [s]: 'o' } }), `effects.${s}`, lib);
+  }
+  for (const s of ['hit', 'wall', 'sink']) {
+    assert.equal(validateSkin(skin({ effects: { [s]: 'o' } }), lib).ok, true, s);
+    mustFail(skin({ effects: { [s]: 'l' } }), `effects.${s}`, lib);
+  }
+});
+
+test('validateSkin: un efecto referenciado que no pasa validate() se reporta', () => {
+  const lib = new Map([['aura', loop({ duration: 0 })]]);
+  const r = mustFail(skin({ effects: { aura: 'aura' } }), 'aura', lib);
+  assert.ok(r.errors.some((e) => e.includes('el efecto «aura» del slot «aura» no es válido')), r.errors.join('|'));
+});
+
+test('validateSkin: la biblioteca puede ser Map, lista, objeto u objeto con get()', () => {
+  const a = loop({ id: 'a' }), s = skin({ effects: { aura: 'a' } });
+  for (const lib of [new Map([['a', a]]), [a], { a }, { get: (id) => (id === 'a' ? a : undefined) }]) {
+    assert.equal(validateSkin(s, lib).ok, true);
+    mustFail(skin({ effects: { aura: 'b' } }), 'effects.aura', lib);
+  }
+  const proto = mustFail(skin({ effects: { aura: '__proto__' } }), 'effects.aura', {}); // no se lee la cadena de prototipos
+  assert.ok(proto.errors.some((e) => e.includes('no existe')), proto.errors.join('|'));
+  mustFail(s, 'effects.aura', { get() { throw new Error('boom'); } });
+});
+
+test('validateSkin: una biblioteca basura cuenta como vacía y nunca lanza', () => {
+  for (const lib of [null, 5, 'x', true, () => {}]) {
+    mustFail(skin({ effects: { aura: 'aura' } }), 'effects.aura', lib);
+    assert.equal(validateSkin(skin({ effects: {} }), lib).ok, true);
+  }
+});
+
+test('validateSkin: entradas basura (null, 5, [], texto, circulares, getters que lanzan) no lanzan', () => {
+  const circ = skin(); circ.self = circ; circ.effects.loop = circ;
+  const boom = skin(); Object.defineProperty(boom, 'name', { get() { throw new Error('boom'); }, enumerable: true });
+  for (const bad of [null, undefined, 5, [], 'x', true, circ, boom, Object.create(null)]) {
+    const r = validateSkin(bad, fxLib());
+    assert.equal(r.ok, false);
+    assert.ok(Array.isArray(r.errors) && r.errors.length);
+  }
+});
+
+test('validateSkin acota su trabajo con un effects enorme y los errores llevan el campo', () => {
+  const effects = {};
+  for (let i = 0; i < 1e5; i++) effects[`k${i}`] = 'aura';
+  const t0 = Date.now();
+  const r = mustFail(skin({ effects }), 'effects');
+  assert.ok(Date.now() - t0 < 500, `tardó ${Date.now() - t0} ms`);
+  assert.ok(r.errors.length < 100);
+  for (const e of validateSkin({ tier: 1, id: '', palette: 3, effects: { aura: 'zz' } }, fxLib()).errors) {
+    assert.ok(/^(id|name|palette|tier|effects(\.\w+)?|skin)\b/.test(e), `sin campo: ${e}`);
+  }
+});
+
+test('validateSkin: sin biblioteca (undefined) también cuenta como vacía', () => {
+  const r = validateSkin(skin({ effects: { aura: 'aura' } }));
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some((e) => e.includes('effects.aura')));
 });

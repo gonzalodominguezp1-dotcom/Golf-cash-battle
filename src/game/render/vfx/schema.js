@@ -216,3 +216,80 @@ export function emissions(effect, seed, quality, reduced = false, strength = 1) 
   });
   return out;
 }
+
+// ---- Skin creada en el banco: solo apariencia y efectos asignados (AC16) ----
+
+/** Slot -> si pide un efecto en bucle (true) o de una vez (false). Cada slot tiene una regla binaria comprobable. */
+const SLOT_LOOP = Object.freeze({ trail: true, aura: true, roll: true, hit: false, wall: false, sink: false });
+export const SKIN_SLOTS = Object.freeze(Object.keys(SLOT_LOOP));
+/** Campos de catálogo: el banco no fija precio, rareza ni desbloqueo; eso es decisión de producto, no de arte. */
+export const SKIN_REJECTED_FIELDS = Object.freeze(['tier', 'rarity', 'unlock', 'price', 'cost', 'shop']);
+const SKIN_KEYS = ['id', 'name', 'palette', 'finish', 'pattern', 'effects'];
+const PALETTE_KEYS = ['base', 'accent', 'secondary', 'glow'];
+const HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+/** Tope de mensajes por grupo: una entrada con 1e5 claves no debe devolver 1e5 errores ni tardar. */
+const MAX_KEY_ERRORS = 20;
+
+/** Busca un efecto por id en cualquier forma de biblioteca; lo que no entienda cuenta como vacío. Nunca lanza. */
+function lookupEffect(library, id) {
+  try {
+    if (library instanceof Map) return library.get(id);
+    if (Array.isArray(library)) return library.find((e) => isObj(e) && e.id === id);
+    if (!library || typeof library !== 'object') return undefined;
+    if (typeof library.get === 'function') return library.get(id);
+    // solo claves propias: «constructor» o «toString» no son efectos
+    return Object.hasOwn(library, id) ? library[id] : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Claves no permitidas, con tope de mensajes. Recorre las claves una sola vez. */
+function checkSkinKeys(obj, allowed, where, errors, rejected = []) {
+  let shown = 0, extra = 0;
+  for (const k in obj) {
+    if (!Object.hasOwn(obj, k) || allowed.includes(k)) continue;
+    if (shown >= MAX_KEY_ERRORS) { extra++; continue; }
+    shown++;
+    errors.push(rejected.includes(k)
+      ? `${where === 'skin' ? k : `${where}.${k}`}: no forma parte de una skin creada en el banco (el banco edita solo apariencia y efectos)`
+      : `${where}.${k}: campo desconocido`);
+  }
+  if (extra) errors.push(`${where}: ${extra} campos desconocidos más`);
+}
+
+/** Valida una skin contra una biblioteca de efectos. { ok: true } o { ok: false, errors }, con el campo en cada mensaje. Nunca lanza. */
+export function validateSkin(skin, library) {
+  const errors = [];
+  try {
+    if (!isObj(skin)) return { ok: false, errors: ['skin: debe ser un objeto'] };
+    checkSkinKeys(skin, SKIN_KEYS, 'skin', errors, SKIN_REJECTED_FIELDS);
+    for (const f of ['id', 'name']) if (typeof skin[f] !== 'string' || !skin[f].trim()) errors.push(`${f}: debe ser un texto no vacío`);
+    for (const f of ['finish', 'pattern']) if (skin[f] !== undefined && typeof skin[f] !== 'string') errors.push(`${f}: debe ser un texto`);
+    const pal = skin.palette;
+    if (!isObj(pal)) errors.push('palette: debe indicar base, accent, secondary y glow');
+    else {
+      checkSkinKeys(pal, PALETTE_KEYS, 'palette', errors);
+      for (const k of PALETTE_KEYS) if (typeof pal[k] !== 'string' || !HEX.test(pal[k])) errors.push(`palette.${k}: debe ser un color #rgb o #rrggbb`);
+    }
+    const fx = skin.effects;
+    if (!isObj(fx)) errors.push('effects: debe ser un objeto con los slots ' + SKIN_SLOTS.join(', '));
+    else {
+      checkSkinKeys(fx, SKIN_SLOTS, 'effects', errors);
+      for (const slot of SKIN_SLOTS) {
+        const id = fx[slot];
+        if (id === undefined) continue;
+        if (typeof id !== 'string' || !id) { errors.push(`effects.${slot}: debe ser el id de un efecto`); continue; }
+        const effect = lookupEffect(library, id);
+        if (!isObj(effect)) { errors.push(`effects.${slot}: el efecto «${id}» no existe en la biblioteca`); continue; }
+        if (!validate(effect).ok) { errors.push(`effects.${slot}: el efecto «${id}» del slot «${slot}» no es válido`); continue; }
+        if (SLOT_LOOP[slot] && effect.loop !== true) errors.push(`effects.${slot}: el slot «${slot}» pide un efecto en bucle y «${id}» es de una vez`);
+        else if (!SLOT_LOOP[slot] && effect.loop !== false) errors.push(`effects.${slot}: el slot «${slot}» pide un efecto de una vez y «${id}» es un bucle`);
+      }
+    }
+  } catch (e) {
+    // getters hostiles o entradas raras: se informa, no se propaga
+    errors.push(`skin: no se pudo leer (${e?.message ?? 'error'})`);
+  }
+  return errors.length ? { ok: false, errors } : { ok: true };
+}
