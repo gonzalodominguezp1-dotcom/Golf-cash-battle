@@ -28,7 +28,7 @@ const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 /** Presupuesto de partículas de un efecto en una calidad: nunca por encima del tope. */
 export function budget(effect, quality) {
-  return Math.min(effect.maxParticles?.[quality] ?? 0, PLAYER_CAP[quality] ?? 0);
+  return Math.floor(Math.min(effect.maxParticles?.[quality] ?? 0, PLAYER_CAP[quality] ?? 0));
 }
 
 /** Partículas que pide un emisor, antes de aplicar el presupuesto. */
@@ -73,6 +73,8 @@ function fitToCap(want, total, cap) {
 export function flashRate(effect, reduced = false) {
   if (reduced) return 0;
   const base = effect.flashes ?? [];
+  // un bucle tan corto que repite más de 1000 destellos por segundo ya incumple: se responde sin expandirlo
+  if (effect.loop && effect.duration > 0 && base.length / effect.duration > 1000) return Infinity;
   const reps = effect.loop && effect.duration > 0 ? Math.ceil(2 / effect.duration) + 1 : 1;
   const f = [];
   for (let r = 0; r < reps; r++) for (const t of base) f.push(t + r * (effect.duration ?? 0));
@@ -104,7 +106,7 @@ export function validate(effect) {
   if (!isObj(mp)) errors.push('maxParticles: debe indicar low, medium y high');
   else {
     for (const q of QUALITIES) {
-      if (!isNum(mp[q]) || mp[q] < 1) errors.push(`maxParticles.${q}: debe ser un número de 1 o más`);
+      if (!Number.isInteger(mp[q]) || mp[q] < 1) errors.push(`maxParticles.${q}: debe ser un entero de 1 o más`);
       else if (mp[q] > PLAYER_CAP[q]) errors.push(`maxParticles.${q}: ${mp[q]} supera el tope de ${PLAYER_CAP[q]}`);
     }
   }

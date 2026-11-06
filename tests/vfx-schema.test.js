@@ -143,3 +143,23 @@ test('AC3: los emisores continuos de una vez terminan exactamente en t1 + life',
   assert.ok(Math.abs(Math.max(...e.map((x) => x.t + x.life)) - 0.9) < 1e-9); // 0,2 + 3 pasos de 0,1 + 0,4
   assert.equal(validate({ ...fx, duration: 0.8 }).ok, false);
 });
+
+test('validate responde rápido y sin colgarse con un bucle de duración minúscula', () => {
+  const t0 = Date.now();
+  for (const d of [1e-4, 1e-6, 1e-9]) {
+    const r = validate(loop({ duration: d, emitters: [{ ...loop().emitters[0], t1: d, rate: 1 / d }], flashes: [0] }));
+    assert.equal(r.ok, false);
+    assert.ok(r.errors.some((e) => e.includes('flashes')));
+  }
+  assert.ok(Date.now() - t0 < 500, `tardó ${Date.now() - t0} ms`);
+  assert.equal(flashRate(loop({ duration: 1e-9, flashes: [0] })), Infinity);
+});
+
+test('maxParticles debe ser entero y el presupuesto nunca es fraccionario', () => {
+  const frac = burst({ maxParticles: { low: 10.5, medium: 30, high: 60 }, emitters: [burst().emitters[0], { ...burst().emitters[0], n: 30, cell: 'ember' }] });
+  const r = validate(frac);
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some((e) => e.includes('maxParticles.low') && e.includes('entero')));
+  assert.equal(budget(frac, 'low'), 10);
+  assert.ok(emissions(frac, 1, 'low').length <= budget(frac, 'low'));
+});
