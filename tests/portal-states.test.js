@@ -175,3 +175,26 @@ test('T006: buildPortal deja la luz como siempre sin setOpen, la atenúa con set
   assert.equal(portal.group.scale.x, 0.5);
   assert.equal(portal.group.visible, true);
 });
+
+test('T006: un tiempo negativo o roto cae al valor por defecto (no cierra al instante), en entrada y en salida', () => {
+  for (const bad of [-1, NaN, 'x']) {
+    const { st } = make({ enterTime: bad, exitTime: bad });
+    st.exit(); run(st, 0.4);
+    assert.equal(st.state, 'exit', `exit con ${bad}`); // por defecto 0,5 s
+    run(st, 0.2);
+    assert.equal(st.state, 'closed');
+    st.enter(); run(st, 0.5);
+    assert.equal(st.state, 'enter', `enter con ${bad}`); // por defecto 0,6 s
+    run(st, 0.2);
+    assert.equal(st.state, 'stable');
+  }
+});
+
+test('T006: opciones nulas o ausentes usan los valores por defecto', () => {
+  for (const o of [null, undefined]) {
+    const st = portalState({ setOpen() {} }, o);
+    assert.equal(st.state, 'stable');
+    st.exit(); run(st, 0.3);
+    assert.equal(st.state, 'exit');
+  }
+});
