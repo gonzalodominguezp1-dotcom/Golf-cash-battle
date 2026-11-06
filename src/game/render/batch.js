@@ -5,9 +5,12 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
  * Junta en una sola malla por material todo lo que cuelga de `root` y no se
  * mueve (árboles, rocas, flores, postes...). Cada malla suelta es una llamada
  * de dibujo más; juntas, el móvil dibuja el decorado de una vez.
+ * Con `center`, los grupos grandes (más de `split` triángulos) se parten en
+ * cuatro cuadrantes alrededor del hoyo: la cámara solo dibuja los que ve y la
+ * sombra solo los que caen en su caja.
  * Devuelve las mallas nuevas (ya añadidas a `parent`).
  */
-export function bakeStatic(root, parent) {
+export function bakeStatic(root, parent, { center = null, split = 20000 } = {}) {
   root.updateMatrixWorld(true);
   const buckets = new Map();
   root.traverse((o) => {
@@ -31,19 +34,33 @@ export function bakeStatic(root, parent) {
     g.setAttribute('sway', new THREE.BufferAttribute(sway, 1));
     g.applyMatrix4(o.matrixWorld);
     const key = mat.uuid + (o.castShadow ? 's' : '') + (o.receiveShadow ? 'r' : '');
-    if (!buckets.has(key)) buckets.set(key, { mat, cast: o.castShadow, receive: o.receiveShadow, geos: [] });
-    buckets.get(key).geos.push(g);
+    if (!buckets.has(key)) buckets.set(key, { mat, cast: o.castShadow, receive: o.receiveShadow, geos: [], at: [], tris: 0 });
+    const b = buckets.get(key);
+    b.geos.push(g);
+    // sitio de la pieza (de su árbol entero si es parte de uno), para partir por cuadrantes
+    const e = (tree ?? o).matrixWorld.elements;
+    b.at.push([e[12], e[14]]);
+    b.tris += g.attributes.position.count / 3;
   });
   const out = [];
   for (const b of buckets.values()) {
-    const merged = mergeGeometries(b.geos, false);
+    const groups = [b.geos];
+    if (center && b.tris > split) {
+      const quad = [[], [], [], []];
+      b.geos.forEach((g, i) => quad[(b.at[i][0] > center.x ? 1 : 0) + (b.at[i][1] > center.z ? 2 : 0)].push(g));
+      groups.splice(0, 1, ...quad.filter((q) => q.length));
+    }
+    for (const geos of groups) {
+      const merged = mergeGeometries(geos, false);
+      if (!merged) continue;
+      merged.computeBoundingSphere();
+      const m = new THREE.Mesh(merged, b.mat);
+      m.castShadow = b.cast;
+      m.receiveShadow = b.receive;
+      parent.add(m);
+      out.push(m);
+    }
     b.geos.forEach((g) => g.dispose());
-    if (!merged) continue;
-    const m = new THREE.Mesh(merged, b.mat);
-    m.castShadow = b.cast;
-    m.receiveShadow = b.receive;
-    parent.add(m);
-    out.push(m);
   }
   // lo que no se ha juntado (marcado keep: luces, halos, piezas animadas) se queda
   const kept = [];

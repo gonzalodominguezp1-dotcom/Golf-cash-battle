@@ -8,7 +8,7 @@ const SIZE = 256;
 
 export const AVATAR_ICONS = [
   { id: 'golf', glyph: '⛳', name: 'Bandera' },
-  { id: 'ball', glyph: '🏌️', name: 'Golfista' },
+  { id: 'ball', glyph: '🏌️', name: 'Palos de golf' },
   { id: 'crown', glyph: '👑', name: 'Corona' },
   { id: 'fire', glyph: '🔥', name: 'Fuego' },
   { id: 'bolt', glyph: '⚡', name: 'Rayo' },

@@ -81,6 +81,67 @@ body::before {
   overflow-anchor: none;
 }
 button { font: inherit; cursor: pointer; border: 0; color: inherit; }
+
+/* iconos del set (src/ui/icons.js) */
+.gi { display: inline-block; width: 1.25em; height: 1.25em; vertical-align: -0.3em; flex-shrink: 0; overflow: visible; }
+button > .gi:first-child:not(:last-child) { margin-right: 0.35em; }
+button > .gi:last-child:not(:first-child) { margin-left: 0.35em; }
+.desktop-nav button { white-space: nowrap; }
+.desktop-nav button .gi { margin: 0; vertical-align: 0; width: 1.5em; height: 1.5em; }
+.topbar-sound-btn .gi { width: 1.2em; height: 1.2em; }
+/* barra superior móvil: nivel + saldo a la izquierda, logo centrado, ajustes y pantalla completa a la derecha */
+.m-stats, .icon-btn { display: none; }
+@media (max-width: 899px) {
+  .topbar .level, .topbar .balance, .topbar .topbar-sound-btn { display: none !important; }
+  .m-stats {
+    display: flex; align-items: center; gap: 2px; padding: 3px 12px 3px 3px; border-radius: 999px;
+    background: linear-gradient(180deg, rgba(32, 22, 54, 0.9) 0%, rgba(18, 12, 32, 0.95) 100%);
+    box-shadow: 0 0 0 1px rgba(255, 210, 63, 0.35) inset, 0 4px 16px rgba(0, 0, 0, 0.4);
+    min-width: 0;
+  }
+  .m-stat { background: none; border: 0; padding: 0; cursor: pointer; display: flex; align-items: center; }
+  .m-level .level-ring { width: 34px; height: 34px; }
+  .m-level .level-ring b { width: 27px; height: 27px; font-size: 14px; }
+  .m-coins {
+    color: #ffe680; font-family: var(--display); font-weight: 800; font-size: 15px; font-variant-numeric: tabular-nums;
+    padding-left: 8px; margin-left: 4px; border-left: 1px solid rgba(255, 210, 63, 0.25); white-space: nowrap;
+  }
+  .icon-btn {
+    display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border-radius: 12px; cursor: pointer;
+    background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .icon-btn:active { transform: scale(0.94); }
+  .icon-btn .gi { width: 26px; height: 26px; margin: 0 !important; vertical-align: 0; }
+  .topbar-right { gap: 6px; }
+  .topbar-left { grid-column: 1; }
+  .topbar-right { grid-column: 3; }
+  .topbar-center { position: absolute; left: 50%; top: calc(env(safe-area-inset-top) + 8px); bottom: 8px; transform: translateX(-50%); }
+}
+@media (max-width: 360px) {
+  .m-coins { font-size: 14px; }
+}
+/* iconos más grandes en móvil (≤899px). Escritorio no cambia.
+   Se usa !important solo donde una regla existente de más especificidad o posterior
+   en el archivo (.tabbar button .gi, .preview-play-icon .gi) ganaría. */
+@media (max-width: 899px) {
+  .gi { width: 1.5em; height: 1.5em; }
+  .tabbar button .gi { width: 30px !important; height: 30px !important; }
+  .icon-btn { width: 44px; height: 44px; }
+  .icon-btn .gi { width: 32px; height: 32px; }
+  .m-coins .gi { width: 1.35em; height: 1.35em; }
+  .hud .pill .gi { width: 1.5em; height: 1.5em; }
+  .sk-card .sk-ico { width: 30px; height: 30px; }
+  .sk-card .sk-ico .gi { width: 22px; height: 22px; }
+  .sk-card .sk-lock { padding: 5px; }
+  .preview-play-icon .gi { width: 28px !important; height: 28px !important; }
+  @media (max-width: 360px) {
+    .icon-btn { width: 40px; height: 40px; }
+    .icon-btn .gi { width: 28px; height: 28px; }
+    /* la barra de pestañas (30px de icono) pasaba del borde en 320px: menos relleno lateral */
+    .tabbar button { padding: 8px 6px !important; }
+  }
+}
+.primary .gi, .secondary .gi, .play .gi, .ghost .gi, .pill .gi { margin: 0 !important; vertical-align: 0; }
 button:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.6); }
 h1, h2, h3, .score-title { font-family: var(--display); font-weight: 800; letter-spacing: -0.02em; }
 
@@ -188,7 +249,7 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 }
 .desktop-nav button {
   position: relative;
-  display: flex; align-items: center; gap: 7px; background: none; padding: 8px 18px;
+  display: flex; align-items: center; gap: 5px; background: none; padding: 8px 10px;
   border-radius: 999px; font-family: var(--display); font-size: 13px; font-weight: 800;
   text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted);
   transition: all 0.24s cubic-bezier(0.16, 1, 0.3, 1);
@@ -302,22 +363,17 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   transform: translateY(1px) scale(0.98);
 }
 .balance .plus {
-  width: 24px; height: 24px; border-radius: 50%;
-  background: linear-gradient(180deg, #ffd23f, #c99700);
-  color: #1a0f00;
-  display: grid; place-items: center; font-size: 16px; font-weight: 900; line-height: 1;
-  box-shadow: 0 0 10px rgba(255, 210, 63, 0.5);
+  width: 26px; height: 26px;
+  display: grid; place-items: center; line-height: 1;
+  filter: drop-shadow(0 0 6px rgba(255, 210, 63, 0.45));
   transition: transform 0.28s var(--ease-out), filter 0.2s ease;
 }
 .balance:hover .plus {
   transform: rotate(90deg) scale(1.12);
   filter: brightness(1.15);
 }
-.coin {
-  display: inline-block; width: 1em; height: 1em; margin-right: 4px; vertical-align: -0.12em; border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #fff7c2, #ffcc00 45%, #c98a00 75%);
-  box-shadow: 0 0 0 1.5px #a86f00 inset;
-}
+.balance .plus .gi { width: 100%; height: 100%; margin: 0; vertical-align: 0; }
+.coin { width: 1.15em; height: 1.15em; margin-right: 4px; vertical-align: -0.22em; }
 
 .topbar-sound-btn { font-size: 15px; padding: 6px 10px; cursor: pointer; }
 
@@ -333,7 +389,9 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   color: var(--muted); transition: all 0.24s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
   overflow: hidden;
+  flex-direction: column; gap: 2px; min-width: 56px;
 }
+.tabbar button .gi { width: 22px; height: 22px; margin: 0; vertical-align: 0; }
 .tabbar button::after {
   content: '';
   position: absolute;
@@ -775,6 +833,7 @@ body.sk-noscroll { overflow: hidden; }
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 .sk-fchip i { font-style: normal; color: var(--edge, var(--text)); }
+.sk-fchip i .gi { width: 1.15em; height: 1.15em; vertical-align: -0.25em; }
 .sk-fchip:hover { border-color: var(--edge, #fff); }
 .sk-fchip.on { background: #f1f5f9; color: #0b0f15; border-color: #fff; }
 .sk-fchip[class*='rarity-'].on { background: var(--foil); color: var(--ink); border-color: var(--edge); box-shadow: 0 0 12px var(--glow); }
@@ -828,6 +887,7 @@ body.sk-noscroll { overflow: hidden; }
   border-radius: 50%; background: rgba(8, 10, 16, 0.78); color: var(--edge); font-size: 13px; border: 1px solid var(--edge);
   box-shadow: 0 0 8px var(--glow);
 }
+.sk-ico .gi { width: 17px; height: 17px; vertical-align: 0; }
 .sk-eq {
   display: none; position: absolute; top: 6px; right: 6px; z-index: 4; padding: 3px 8px; border-radius: 999px;
   background: var(--yellow, #ffd23f); color: #1b1300; font: 900 10px/1.2 var(--body); letter-spacing: 0.06em; text-transform: uppercase;
@@ -859,7 +919,7 @@ body.sk-noscroll { overflow: hidden; }
   width: 34px; height: 34px; padding: 8px; box-sizing: border-box; display: grid; place-items: center;
   border-radius: 50%; background: rgba(8, 10, 16, 0.82); color: #fff; border: 1px solid var(--edge); box-shadow: 0 0 12px var(--glow);
 }
-.sk-lock svg { width: 100%; height: 100%; display: block; }
+.sk-lock svg { width: 100%; height: 100%; display: block; margin: 0; }
 
 /* inspección a pantalla completa */
 .sk-view {
@@ -1627,6 +1687,7 @@ body.sk-noscroll { overflow: hidden; }
 .standings li.first { background: linear-gradient(90deg, rgba(255, 210, 63, 0.35), rgba(255, 210, 63, 0.08)); }
 .standings li.me { box-shadow: 0 0 0 2px var(--yellow) inset; font-weight: 800; }
 .standings .pos { font-family: var(--display); color: var(--muted); }
+.standings .pos .gi { width: 1.3em; height: 1.3em; vertical-align: -0.35em; }
 .standings li.first .pos { color: var(--yellow); }
 .standings .name { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .standings .name i { width: 10px; height: 10px; border-radius: 50%; background: var(--c); flex: none; box-shadow: 0 0 6px var(--c); }
@@ -1684,10 +1745,43 @@ body.sk-noscroll { overflow: hidden; }
   }
 }
 
-/* torneos */
-.my-tournaments .section-head { margin-top: 18px; }
-.my-tournaments .txs li.tap { cursor: pointer; }
-.my-tournaments .txs li > span { font-weight: 800; font-size: 13px; text-align: right; }
+/* partidas en vivo */
+.seat .bot-tag,
+.chip.bot::after {
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.7);
+}
+.seat .bot-tag { margin-left: auto; }
+.seat.bot { opacity: 0.85; }
+.chip.bot::after { content: 'BOT'; font-size: 8px; padding: 1px 4px; }
+.chip.bot { opacity: 0.8; }
+.live-wait {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  transform: translateX(-50%);
+  z-index: 6;
+  max-width: calc(100% - 32px);
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: rgba(10, 14, 22, 0.78);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+  color: #fff;
+  text-align: center;
+  pointer-events: none;
+  display: grid;
+  gap: 2px;
+}
+.live-wait b { font-size: 14px; }
+.live-wait small { font-size: 12px; opacity: 0.75; }
 
 /* ---------- cuenta ---------- */
 
@@ -2840,6 +2934,7 @@ body.sk-noscroll { overflow: hidden; }
   opacity: 1;
 }
 
+.preview-play-icon .gi { width: 22px; height: 22px; margin: 0 0 0 2px; vertical-align: 0; }
 .preview-play-icon {
   width: 42px;
   height: 42px;
@@ -3083,6 +3178,7 @@ body.sk-noscroll { overflow: hidden; }
 .rank-row.podium.p2 .rank-pos { color: #d3dbe6; }
 .rank-row.podium.p3 .rank-pos { color: #cd7f32; }
 .rank-pos { width: 28px; text-align: center; font-family: var(--display); font-size: 18px; }
+.rank-pos .gi { width: 28px; height: 28px; vertical-align: middle; }
 .rank-avatar { width: 38px; height: 38px; font-size: 16px; text-transform: uppercase; flex: none; margin: 0 6px; }
 .rank-name { flex: 1; min-width: 0; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rank-name small, .rank-wins small { display: block; color: var(--muted); font-size: 11px; font-weight: 700; }
@@ -3139,12 +3235,11 @@ body.sk-noscroll { overflow: hidden; }
     width: 34px;
     padding: 0 !important;
   }
-  .hud .pill.settings-btn-hud::before { content: '\2699\FE0E'; font-size: 18px; line-height: 1; }
+  .hud .pill.settings-btn-hud .gi, .hud .pill.restart-btn .gi { width: 20px; height: 20px; }
   .hud .pill { padding: 6px 9px; }
   /* juego libre: sin "Modo Libre" ni el nombre del hoyo (sale en la intro); Reiniciar queda como icono */
   .is-freeplay .hud .pill.freeplay-pill, .is-freeplay .hud .pill.freeplay-pill + .pill { display: none; }
   .hud .pill.restart-btn { font-size: 0 !important; width: 34px; padding: 0 !important; }
-  .hud .pill.restart-btn::before { content: '\21BB'; font-size: 18px; line-height: 1; }
 }
 
 /* ---------- avatar con marco de prestigio (estilo Wild Rift) ---------- */
@@ -3155,7 +3250,8 @@ body.sk-noscroll { overflow: hidden; }
 .pf-face { position: relative; z-index: 1; width: 100%; height: 100%; border-radius: 50%; overflow: hidden; display: grid; place-items: center; background: radial-gradient(circle at 35% 30%, #fff, #ffd700 55%, #996515 100%); color: #120924; box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.55), inset 0 0 calc(var(--s) * 0.2) rgba(0, 0, 0, 0.5); }
 .pf-face img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .pf-initial { font-family: var(--display); font-size: calc(var(--s) * 0.44); text-transform: uppercase; }
-.pf-glyph { font-size: calc(var(--s) * 0.52); line-height: 1; }
+.pf-glyph { font-size: calc(var(--s) * 0.52); line-height: 1; display: grid; place-items: center; }
+.pf-glyph .gi { width: 1.25em; height: 1.25em; vertical-align: 0; }
 .pf-face:has(.pf-glyph) { background: radial-gradient(circle at 50% 35%, #3b2a66, #120924 75%); }
 
 /* aro metálico con facetas */
@@ -3231,7 +3327,7 @@ body.sk-noscroll { overflow: hidden; }
 .avatar-editor { text-align: center; }
 .ae-preview { display: grid; place-items: center; padding: 14px 0 10px; }
 .ae-icons { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin: 6px 0 12px; }
-.ae-icons button { aspect-ratio: 1; border-radius: 12px; font-size: 22px; background: rgba(255, 255, 255, 0.05); border: 1.5px solid var(--line); cursor: pointer; }
+.ae-icons button { aspect-ratio: 1; border-radius: 12px; font-size: 24px; display: grid; place-items: center; padding: 0; background: rgba(255, 255, 255, 0.05); border: 1.5px solid var(--line); cursor: pointer; }
 .ae-icons button.on { border-color: #ffd700; background: rgba(255, 215, 0, 0.12); }
 .ae-msg.err { color: #ff7a7a; }
 
@@ -3248,3 +3344,104 @@ body.sk-noscroll { overflow: hidden; }
 .friend-msg { margin: 0; min-height: 1.2em; font-size: 13px; }
 .friend-msg.err { color: #ff6b8a; }
 .friend-msg.ok { color: var(--muted); }
+
+/* ---------- grupos ---------- */
+.party-box:empty { display: none; }
+.party-card { display: grid; gap: 10px; margin: 0 0 18px; padding: 14px; border-radius: 18px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); }
+.party-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0; }
+.party-head h2 { margin: 0; font-size: 17px; }
+.party-card .sub, .party-card .legal { margin: 0; }
+.party-members { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.party-member { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 14px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); min-width: 0; }
+.party-member > span:last-child { display: grid; min-width: 0; }
+.party-member b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.party-member small { color: var(--muted); font-weight: 700; }
+.party-member .avatar { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; font-weight: 800; text-transform: uppercase; background: rgba(255, 255, 255, 0.1); }
+.party-member.ready { border-color: rgba(16, 185, 129, 0.6); box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.25) inset; }
+.party-member.ready small { color: #34d399; }
+.party-member.invited { opacity: 0.6; border-style: dashed; }
+.party-err { margin: 0; color: #ff8a8a; font-size: 13px; font-weight: 700; }
+.party-msg { margin: 0; color: var(--muted); font-size: 13px; }
+.party-ready { width: 100%; }
+.tier .play.party-pick { outline: 2px solid rgba(16, 185, 129, 0.8); outline-offset: 2px; }
+
+/* Rendimiento: el desenfoque de fondo (backdrop-filter) sobre el lienzo 3D obliga a la gráfica a
+   redibujar y desenfocar la escena entera en cada fotograma. En el juego y sus ventanas se quita:
+   los paneles ya son casi opacos, así que apenas se nota y sube mucho los FPS (sobre todo en móvil). */
+.play-screen *, .overlay, .overlay * { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+
+/* ==========================================================================
+   RENDIMIENTO MÓVIL (menús, torneos, mapas, skins)
+   Objetivo: scroll y toques a 60 fps. En móvil se quitan los efectos que obligan a la GPU
+   a repintar o recomponer capas en cada fotograma: desenfoques de fondo, animaciones
+   infinitas (foil, destello, purpurina, aura, halo), modos de mezcla, inclinación 3D de las
+   cartas, sombras animadas y los efectos de pulsado/hover. El aspecto estático se mantiene.
+   ========================================================================== */
+@media (max-width: 899px), (pointer: coarse) {
+  /* 1. Sin desenfoque de fondo (lo más caro en GPUs móviles); los paneles ya son casi opacos */
+  *, *::before, *::after {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  .topbar, .tabbar { background: rgba(9, 5, 21, 0.98); }
+  .tier, .course-card, .hero, .ghost { background-color: rgba(18, 25, 36, 0.97); }
+
+  /* 2. Sin animaciones de entrada ni cascadas: la pantalla aparece al instante */
+  .screen, .screen > *, .tiers .tier, .courses-grid .course-card, .txs li {
+    animation: none !important;
+  }
+
+  /* 3. Sin animaciones infinitas en las cartas de torneo / hero / botones */
+  .tier, .tier::before, .tier::after,
+  .hero::before, .hero-ball-aura, .hero-shadow, .ball-img.spin, .ball-img.float,
+  .holo .shine, .holo:not(.active) .shine,
+  .primary::after, .play::after,
+  .pulse-dot, .reward-note i,
+  .pf-halo, .pf-ring, .pf-wing {
+    animation: none !important;
+  }
+  /* los destellos y la purpurina son capas con mix-blend-mode: fuera */
+  .tier::before, .tier::after, .hero::before, .primary::after, .play::after { display: none !important; }
+  .tier .shine, .holo .shine { display: none !important; mix-blend-mode: normal !important; }
+
+  /* 4. Sin inclinación 3D de las cartas (crea una capa compuesta por carta) */
+  .holo, .holo.active { transform: none !important; transition: none !important; }
+
+  /* 5. Sin efectos hover/pulsado ni transiciones "all": nada que animar al tocar */
+  .tier, .course-card, .wallet-card, .passport-card,
+  .course-card-preview-wrap, .course-preview-img, .course-preview-glow,
+  .play-course-btn, .primary, .secondary, .ghost, .play, .chip-btn, .icon-btn,
+  .tabbar button, .sk-card, .sk-thumb, .row > * {
+    transition: none !important;
+  }
+  .tier:hover, .course-card:hover, .wallet-card:hover, .passport-card:hover,
+  .course-card:hover .course-preview-img, .play-course-btn:hover,
+  .primary:hover, .secondary:hover, .ghost:hover, .play:hover {
+    transform: none !important;
+    filter: none !important;
+  }
+  .primary:active:not(:disabled), .secondary:active:not(:disabled), .ghost:active:not(:disabled),
+  .play:active:not(:disabled), .icon-btn:active, .tabbar button:active {
+    transform: none !important;
+  }
+  .primary:active:not(:disabled), .secondary:active:not(:disabled), .ghost:active:not(:disabled), .play:active:not(:disabled) {
+    opacity: 0.85;
+  }
+  .course-card-preview-wrap { cursor: default; }
+
+  /* 6. Sombras más baratas (las difuminadas y grandes se repintan al hacer scroll) */
+  .tier, .course-card { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important; }
+  .course-card-preview-wrap { box-shadow: none; }
+  .preview-badge { box-shadow: none; }
+  .primary, .secondary { box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3); }
+  .play-course-btn { box-shadow: none; }
+  .course-preview-img { filter: none; }
+  .hero-shadow { filter: none; }
+
+  /* 7. Las tarjetas fuera de pantalla no se pintan ni se maquetan */
+  .course-card, .tiers .tier {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 360px;
+  }
+  .course-card, .tier { contain: layout paint; }
+}

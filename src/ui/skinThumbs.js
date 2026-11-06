@@ -1,5 +1,4 @@
 import { ballPreview } from '../game/render/ballPaint.js';
-import { getQuality } from '../game/render/quality.js';
 import { skinById } from '../progress/skins.js';
 
 // Miniaturas estáticas de skins (tarjetas, lobby, desafíos, resultados y reveal), como las vistas
@@ -14,9 +13,9 @@ import { skinById } from '../progress/skins.js';
 // IndexedDB. Al vaciarse la cola se libera el renderer y su contexto WebGL. Desde la segunda visita no se
 // renderiza nada ni se carga three.js. Opción `hi: true` (solo el reveal): HI_SIZE px en vez de SIZE.
 
-const VERSION = 2; // súbelo si cambian materiales, shaders o luces de las miniaturas
+const VERSION = 3; // súbelo si cambian materiales, shaders o luces de las miniaturas
 const SIZE = 144;
-const HI_SIZE = 384;
+const HI_SIZE = 512;
 const DB_NAME = 'gcb-skin-thumbs';
 const STORE = 'thumbs';
 const PREFIX = `v${VERSION}|`;
@@ -28,10 +27,8 @@ let pumping = false;
 let failed = false;
 let renderMod = null;
 
-const thumbQuality = () => {
-  const q = getQuality();
-  return q === 'high' ? 'medium' : q;
-};
+// Las miniaturas siempre se renderizan en calidad máxima.
+const thumbQuality = () => 'high';
 
 // Firma de los datos de la skin: si cambian colores, patrón o acabado, la clave cambia sola.
 const sigs = new Map();

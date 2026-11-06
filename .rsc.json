@@ -5,6 +5,7 @@
   ],
   "skills": [
     "analyze",
+    "asdd",
     "automation-strategy",
     "clarify",
     "connect-tool",
@@ -23,7 +24,6 @@
     "parallel",
     "plan",
     "review",
-    "sdd",
     "sdd-init",
     "ship",
     "simplify-code",
@@ -45,7 +45,7 @@
     "refuter-tests"
   ],
   "ownSkills": [],
-  "catalogVersion": "3.7.5",
+  "catalogVersion": "4.0.5",
   "tier": null,
   "optOuts": [
     "trunk-guard"

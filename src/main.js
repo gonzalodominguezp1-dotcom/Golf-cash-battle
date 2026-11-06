@@ -20,6 +20,10 @@ import { getCourseDistance, staticCoursePreview } from './game/render/coursePrev
 import { mountAuth } from './ui/authScreen.js';
 import { validatePassword, authMessage } from './account/authRules.js';
 import { addedMessage, cleanFriendName, friendMessage } from './account/friendRules.js';
+import { newPartyMatch, partyErrorText, partyMessage, readyLabel } from './match/partyRules.js';
+import { LiveRoom } from './match/LiveRoom.js';
+import { buildRoster, humanLeaders, liveStandings, seededRng } from './match/liveRules.js';
+import { avatarIcon, icon, iconUrl, tierIcon } from './ui/icons.js';
 import { QUALITY_LEVELS, QUALITY_NAMES, getQuality, setQuality } from './game/render/quality.js';
 
 let backend, wallet, matches;
@@ -50,9 +54,13 @@ document.addEventListener('click', (e) => {
   sfx.tap();
 });
 const app = document.getElementById('app');
+// iconos que se pintan desde CSS (authScreen.css)
+document.documentElement.style.setProperty('--gi-check', `url("${iconUrl('check')}")`);
+document.documentElement.style.setProperty('--gi-dot', `url("${iconUrl('dot', { tone: 'gray' })}")`);
 
 const fmt = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
-const coin = (n) => `<span class="coin"></span>${fmt(n)}`;
+const coin = (n) => `${icon('coin', { cls: 'coin' })}${fmt(n)}`;
+const soundLabel = () => `${icon(isMuted() ? 'mute' : 'sound')}${isMuted() ? 'Mudo' : 'Sonido'}`;
 const h = (html) => {
   const t = document.createElement('template');
   t.innerHTML = html.trim();
@@ -70,7 +78,7 @@ let accountTab = 'profile';
 /** Cara del avatar: imagen propia, icono elegido o la inicial del nombre. */
 const avatarFace = (av, initial) =>
   av?.image ? `<img src="${av.image}" alt="">`
-    : av?.icon ? `<span class="pf-glyph">${iconById(av.icon).glyph}</span>`
+    : av?.icon ? `<span class="pf-glyph">${avatarIcon(iconById(av.icon).id)}</span>`
       : `<b class="pf-initial">${esc(String(initial || '?')[0])}</b>`;
 
 /** Avatar con marco de prestigio. size: xs | sm | lg. */
@@ -100,6 +108,12 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
           <button class="brand-btn desktop-brand-btn" data-go="lobby" aria-label="Golf Cash Battle">
             <img src="/logo-header.png" alt="Golf Cash Battle" class="brand-logo" />
           </button>
+          <div class="m-stats">
+            <button class="m-stat m-level" data-go="skins" style="--p:${(into / need) * 100}%" title="Nivel ${level}" aria-label="Nivel ${level}">
+              <span class="level-ring"><b>${level}</b></span>
+            </button>
+            <button class="m-stat m-coins" data-go="wallet" title="Tu saldo" aria-label="Saldo">${coin(balance)}</button>
+          </div>
           <button class="level" data-go="skins" style="--p:${(into / need) * 100}%" title="Nivel ${level} · ${(into / need * 100).toFixed(0)}%">
             <span class="level-ring"><b>${level}</b></span>
             <span class="level-text"><small>Nivel</small><span class="xpbar"><i></i></span></span>
@@ -110,16 +124,18 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
             <img src="/logo-header.png" alt="Golf Cash Battle" class="brand-logo" />
           </button>
           <nav class="desktop-nav">
-            <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}">Jugar <kbd>1</kbd></button>
-            <button data-go="freeplay" class="${screen === 'freeplay' ? 'on' : ''}">Juego Libre <kbd>2</kbd></button>
-            <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}">Skins <kbd>3</kbd></button>
-            <button data-go="ranking" class="${screen === 'ranking' ? 'on' : ''}">Ranking <kbd>4</kbd></button>
-            <button data-go="account" class="${screen === 'account' ? 'on' : ''}">Cuenta <kbd>5</kbd></button>
+            <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}">${icon('flag')}Jugar <kbd>1</kbd></button>
+            <button data-go="freeplay" class="${screen === 'freeplay' ? 'on' : ''}">${icon('tee')}Juego Libre <kbd>2</kbd></button>
+            <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}">${icon('skins')}Skins <kbd>3</kbd></button>
+            <button data-go="ranking" class="${screen === 'ranking' ? 'on' : ''}">${icon('trophy')}Ranking <kbd>4</kbd></button>
+            <button data-go="account" class="${screen === 'account' ? 'on' : ''}">${icon('user')}Cuenta <kbd>5</kbd></button>
           </nav>
         </div>
         <div class="topbar-right">
-          <button class="balance" data-go="wallet" title="Tu saldo: abre el wallet de tu cuenta">${coin(balance)}<span class="plus">+</span></button>
-          <button class="pill mute topbar-sound-btn" aria-label="Sonido" title="Silenciar / Activar sonido (M)">${isMuted() ? 'Mudo' : 'Sonido'}</button>
+          <button class="balance" data-go="wallet" title="Tu saldo: abre el wallet de tu cuenta">${coin(balance)}<span class="plus">${icon('plus')}</span></button>
+          <button class="pill mute topbar-sound-btn" aria-label="Sonido" title="Silenciar / Activar sonido (M)">${soundLabel()}</button>
+          <button class="icon-btn m-settings" aria-label="Ajustes" title="Ajustes">${icon('gear')}</button>
+          ${document.fullscreenEnabled ? `<button class="icon-btn m-fullscreen" aria-label="Pantalla completa" title="Pantalla completa">${icon('fullscreen')}</button>` : ''}
         </div>
       </header>`),
     );
@@ -127,21 +143,23 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
     if (topMute) {
       topMute.addEventListener('click', () => {
         setMuted(!isMuted());
-        topMute.textContent = isMuted() ? 'Mudo' : 'Sonido';
+        topMute.innerHTML = soundLabel();
         try { localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0'); } catch { }
       });
     }
+    app.querySelector('.m-settings')?.addEventListener('click', openMenuSettings);
+    app.querySelector('.m-fullscreen')?.addEventListener('click', toggleFullscreen);
   }
   app.append(content);
   if (!hideHeader && nav) {
     app.append(
       h(`
       <nav class="tabbar">
-        <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}">Jugar</button>
-        <button data-go="freeplay" class="${screen === 'freeplay' ? 'on' : ''}">Libre</button>
-        <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}">Skins</button>
-        <button data-go="ranking" class="${screen === 'ranking' ? 'on' : ''}">Ranking</button>
-        <button data-go="account" class="${screen === 'account' ? 'on' : ''}">Cuenta</button>
+        <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}">${icon('flag')}Jugar</button>
+        <button data-go="freeplay" class="${screen === 'freeplay' ? 'on' : ''}">${icon('tee')}Libre</button>
+        <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}">${icon('skins')}Skins</button>
+        <button data-go="ranking" class="${screen === 'ranking' ? 'on' : ''}">${icon('trophy')}Ranking</button>
+        <button data-go="account" class="${screen === 'account' ? 'on' : ''}">${icon('user')}Cuenta</button>
       </nav>`),
     );
   }
@@ -191,10 +209,64 @@ window.addEventListener('keydown', (e) => {
   else if (e.code === 'KeyM') {
     setMuted(!isMuted());
     const topMute = document.querySelector('.topbar-sound-btn');
-    if (topMute) topMute.textContent = isMuted() ? 'Mudo' : 'Sonido';
+    if (topMute) topMute.innerHTML = soundLabel();
     try { localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0'); } catch { }
   }
 });
+
+function toggleFullscreen() {
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => { });
+  else document.documentElement.requestFullscreen().catch(() => { });
+}
+
+/** Ajustes fuera de la partida: sonido y calidad gráfica. */
+function openMenuSettings() {
+  if (document.querySelector('.menu-settings-overlay')) return;
+  const overlay = h(`
+    <div class="overlay in-game-settings-overlay menu-settings-overlay">
+      <div class="in-game-settings-modal">
+        <div class="settings-modal-header">
+          <div class="settings-title"><h3>Ajustes</h3></div>
+          <button class="close-settings-btn" aria-label="Cerrar ajustes">${icon('close')}Cerrar</button>
+        </div>
+        <div class="settings-modal-body">
+          <div class="settings-row">
+            <div class="settings-label"><strong>Sonido</strong><small>Efectos ambientales y de golpe</small></div>
+            <button class="settings-btn toggle-sound-btn"></button>
+          </div>
+          <div class="settings-row">
+            <div class="settings-label"><strong>Calidad gráfica</strong><small>Baja si el móvil va lento o se calienta</small></div>
+            <div class="quality-picker">
+              ${QUALITY_LEVELS.map((q) => `<button class="settings-btn quality-btn ${q === getQuality() ? 'on' : ''}" data-q="${q}">${QUALITY_NAMES[q]}</button>`).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`);
+  const soundBtn = overlay.querySelector('.toggle-sound-btn');
+  const paintSound = () => {
+    soundBtn.classList.toggle('muted', isMuted());
+    soundBtn.innerHTML = `${icon(isMuted() ? 'mute' : 'sound')}<span class="btn-text">${isMuted() ? 'Silenciado' : 'Activado'}</span>`;
+  };
+  paintSound();
+  soundBtn.addEventListener('click', () => {
+    setMuted(!isMuted());
+    paintSound();
+    const topMute = document.querySelector('.topbar-sound-btn');
+    if (topMute) topMute.innerHTML = soundLabel();
+    try { localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0'); } catch { }
+  });
+  overlay.querySelectorAll('.quality-btn').forEach((btn) => btn.addEventListener('click', () => {
+    setQuality(btn.dataset.q);
+    overlay.querySelectorAll('.quality-btn').forEach((b) => b.classList.toggle('on', b === btn));
+  }));
+  const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', onKey);
+  overlay.querySelector('.close-settings-btn').addEventListener('click', close);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  document.body.append(overlay);
+}
 
 function go(to) {
   if (to === 'wallet') return showAccount('', 'wallet');
@@ -207,6 +279,8 @@ function go(to) {
 
 // cartas holográficas: se inclinan y el brillo sigue al dedo
 function bindHolo(root) {
+  // en móvil/táctil no hay inclinación ni brillo que siga al dedo: cada pointermove forzaba layout + estilos
+  if (typeof matchMedia === 'function' && matchMedia('(max-width: 899px), (pointer: coarse)').matches) return;
   root.querySelectorAll('.holo').forEach((card) => {
     const move = (e) => {
       const r = card.getBoundingClientRect();
@@ -232,6 +306,7 @@ function bindHolo(root) {
 
 async function showLobby() {
   leaveFinale();
+  stopLive();
   screen = 'lobby';
   const balance = await wallet.getBalance();
   const skin = progress.skin;
@@ -253,8 +328,8 @@ async function showLobby() {
         </div>
       </section>
       ${backend.mode === 'local' ? `<p class="offline">Modo sin conexión: el saldo se guarda solo en este ${DEVICE}</p>` : ''}
-      ${backend.account?.profile?.paid_block ? `<button class="notice account-hint" data-go="account">${{ account_required: 'Confirma tu email para jugar mesas con entrada →', kyc_required: 'Verifica tu edad e identidad para jugar mesas con entrada →', account_review: 'Tu cuenta está en revisión: de momento solo Práctica', underage: 'Mesas con entrada solo para mayores de 18' }[backend.account.profile.paid_block]}</button>` : ''}
-      <div class="my-tournaments"></div>
+      ${backend.account?.profile?.paid_block ? `<button class="notice account-hint" data-go="account">${{ account_required: 'Crea tu cuenta con email para jugar mesas con entrada', kyc_required: 'Verifica tu edad e identidad para jugar mesas con entrada', account_review: 'Tu cuenta está en revisión: de momento solo Práctica', underage: 'Mesas con entrada solo para mayores de 18' }[backend.account.profile.paid_block]} ${icon('next')}</button>` : ''}
+      ${backend.parties ? '<section class="party-box"></section>' : ''}
       <div class="section-head">
         <div class="section-title-row">
           <h1>Mesas de Torneo</h1>
@@ -267,7 +342,7 @@ async function showLobby() {
         </div>
       </div>
       <div class="tiers"></div>
-      <p class="legal">Créditos de demostración sin valor real. ${backend.tournaments ? 'Las mesas de pago son torneos contra jugadores reales: cada uno juega los mismos hoyos a su ritmo y el servidor repite cada golpe para validarlo. La práctica es contra rivales simulados. ' : ''}El resultado depende solo de la habilidad: mismo campo para todos y sin elementos aleatorios. En empate, tiro de desempate: gana quien deje la bola más cerca. Comisión de la plataforma: ${Math.round(PLATFORM_COMMISSION * 100)}% del bote.</p>
+      <p class="legal">Créditos de demostración sin valor real. ${backend.tournaments ? 'Las mesas de pago son partidas en vivo contra jugadores reales: todos jugáis los mismos hoyos a la vez y el servidor repite cada golpe para validarlo. Los huecos libres los ocupan bots, que nunca cuentan para el premio. La práctica es contra rivales simulados. ' : ''}El resultado depende solo de la habilidad: mismo campo para todos y sin elementos aleatorios. En empate, tiro de desempate: gana quien deje la bola más cerca. Comisión de la plataforma: ${Math.round(PLATFORM_COMMISSION * 100)}% del bote.</p>
     </main>`);
   const list = view.querySelector('.tiers');
   for (const tier of TIERS) {
@@ -290,17 +365,198 @@ async function showLobby() {
         </div>
         <button class="play" ${enough ? '' : 'disabled'}>${!enough ? 'Saldo insuficiente' : free ? 'Practicar' : 'Jugar Torneo'}</button>
       </div>`);
-    card.querySelector('.play').addEventListener('click', () => startMatch(tier));
+    const play = card.querySelector('.play');
+    play.dataset.tier = tier.id;
+    play.dataset.label = play.textContent;
+    play.addEventListener('click', () => (!free && party.state?.party ? party.pickTier(tier) : startMatch(tier)));
     list.append(card);
   }
   await shell(view);
-  if (backend.tournaments) showMyTournaments(view.querySelector('.my-tournaments'));
+  if (backend.parties) partyPanel(view.querySelector('.party-box'), list, balance);
   claimRewards();
 }
 
-// ---------- skins ----------
+// ---------- grupos ----------
+// Hasta 4 amigos: el líder elige la mesa, cada uno pulsa «Listo» y el servidor
+// los mete juntos en el mismo torneo. Se consulta cada pocos segundos mientras
+// se ve el lobby; cuando aparece un torneo nuevo del grupo, se abre su sala.
 
-const LOCK_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10.5" rx="2.5" fill="currentColor"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
+const PARTY_POLL_MS = 3000;
+const PARTY_SEEN = 'gcb.party.seen';
+const party = { state: null, pickTier: () => { } };
+
+async function partyPanel(box, tierList, balance) {
+  const svc = backend.parties;
+  const hasName = Boolean(backend.account?.profile?.username);
+  let friends = null;
+  let msg = '';
+  let busy = false;
+
+  const seen = () => {
+    try { return localStorage.getItem(PARTY_SEEN); } catch { return null; }
+  };
+  const markSeen = (id) => {
+    try { localStorage.setItem(PARTY_SEEN, id); } catch { }
+  };
+
+  // si el grupo acaba de entrar en un torneo, a su sala (o a seguir jugando)
+  async function openIfNew(state) {
+    const id = newPartyMatch(state?.party, seen());
+    if (!id) return false;
+    markSeen(id);
+    let match;
+    try {
+      match = await backend.tournaments.get(id, TIERS);
+    } catch {
+      return false;
+    }
+    if (match.status !== 'open' || !match.me || match.me.finished) return false;
+    await wallet.getBalance();
+    sfx.tick();
+    enterLive(match);
+    return true;
+  }
+
+  async function apply(job, okMsg = '') {
+    if (busy) return;
+    busy = true;
+    try {
+      const state = await job();
+      msg = okMsg;
+      if (await openIfNew(state)) return;
+      paint(state);
+    } catch (e) {
+      msg = partyMessage(e.code);
+      paint(party.state);
+    } finally {
+      busy = false;
+    }
+  }
+
+  party.pickTier = (tier) =>
+    apply(async () => {
+      if (!party.state.party.leader) {
+        // un miembro solo puede confirmar la mesa que ya eligió el líder
+        if (party.state.party.tier_id !== tier.id) throw Object.assign(new Error(), { code: 'not_leader' });
+        return svc.ready(true);
+      }
+      await svc.setTier(tier.id);
+      return svc.ready(true);
+    });
+
+  // los botones de las mesas dicen qué pasa al pulsarlos estando en grupo
+  function paintTiers(p) {
+    for (const b of tierList.querySelectorAll('.play')) {
+      const tier = TIERS.find((t) => t.id === b.dataset.tier);
+      if (!tier || tier.entryFee === 0 || balance < tier.entryFee) continue;
+      b.classList.toggle('party-pick', Boolean(p) && p.tier_id === tier.id);
+      if (!p) {
+        b.textContent = b.dataset.label;
+        b.disabled = false;
+      } else if (p.leader) {
+        b.textContent = p.tier_id === tier.id ? 'Mesa del grupo' : 'Jugar con el grupo';
+        b.disabled = false;
+      } else {
+        b.textContent = p.tier_id === tier.id ? 'Mesa del grupo · Listo' : 'La elige el líder';
+        b.disabled = p.tier_id !== tier.id;
+      }
+    }
+  }
+
+  function paint(state) {
+    if (!box.isConnected) return;
+    party.state = state;
+    const p = state?.party ?? null;
+    const invites = state?.invites ?? [];
+    paintTiers(p);
+    const inviteRows = invites.map((i) => `<li class="friend">
+        <span class="friend-name"><b>${esc(i.from)}</b><small>te invita a su grupo</small></span>
+        <span class="friend-actions"><button class="chip-btn" data-join="${esc(i.party)}">${icon('check')}Unirme</button><button class="chip-btn" data-no="${esc(i.party)}">${icon('close')}No</button></span>
+      </li>`).join('');
+    const inParty = new Set([...(p?.members ?? []).map((m) => m.name.toLowerCase()), ...(p?.invited ?? []).map((n) => n.toLowerCase())]);
+    const room = p ? p.size - p.members.length - p.invited.length : 3;
+    const candidates = (friends ?? []).filter((f) => !inParty.has(f.name.toLowerCase())).slice(0, 6);
+    const friendRows = room > 0 && candidates.length
+      ? `<ul class="friend-list">${candidates.map((f) => `<li class="friend">
+          ${avatarHtml({ size: 'sm', frame: frameById(f.frame), av: fromWire(f.avatar), initial: f.name })}
+          <span class="friend-name"><b>${esc(f.name)}</b><small>Nv. ${esc(f.level)}</small></span>
+          <button class="chip-btn" data-invite="${esc(f.name)}">${icon('user-plus')}Invitar</button>
+        </li>`).join('')}</ul>`
+      : '';
+    const tier = p?.tier_id ? TIERS.find((t) => t.id === p.tier_id) : null;
+    let body;
+    if (!hasName) {
+      body = `<p class="sub">Ponte un nombre de usuario y añade amigos para buscar partida juntos.</p><button class="chip-btn" data-go="account">${icon('user')}Ir a la cuenta</button>`;
+    } else if (!p) {
+      body = `
+        ${inviteRows ? `<ul class="friend-list">${inviteRows}</ul>` : ''}
+        <p class="sub">Invita a tus amigos y entraréis juntos en el mismo torneo.</p>
+        ${friends === null ? '<p class="sub">Cargando amigos…</p>' : friendRows || `<p class="sub">Aún no tienes amigos. Añádelos en tu cuenta.</p><button class="chip-btn" data-go="account">${icon('user-plus')}Añadir amigos</button>`}`;
+    } else {
+      const members = p.members.map((m) => `<li class="party-member ${m.ready ? 'ready' : ''}">
+          <span class="avatar">${esc(m.name[0] ?? '?')}</span>
+          <span><b>${m.me ? 'Tú' : esc(m.name)}</b><small>${m.leader ? 'Líder · ' : ''}${m.ready ? 'Listo' : 'Esperando'}</small></span>
+        </li>`).join('');
+      const invited = p.invited.map((n) => `<li class="party-member invited"><span class="avatar">${esc(n[0] ?? '?')}</span><span><b>${esc(n)}</b><small>Invitado</small></span></li>`).join('');
+      const me = p.members.find((m) => m.me);
+      const alone = p.members.length < 2;
+      body = `
+        <ul class="party-members">${members}${invited}</ul>
+        <p class="sub">${tier ? `Mesa: <b>${tier.name}</b> · entrada ${coin(tier.entryFee)} cada uno` : p.leader ? 'Elige abajo la mesa del torneo.' : 'El líder está eligiendo la mesa.'}</p>
+        ${p.last_error ? `<p class="party-err">${esc(partyErrorText(p.last_error))}</p>` : ''}
+        ${tier ? `<button class="primary party-ready" ${alone && !me?.ready ? 'disabled' : ''}>${alone ? 'Espera a que entre un amigo' : icon('check') + readyLabel(p)}</button>` : ''}
+        <p class="legal">Al pulsar «${p.leader ? 'Buscar partida' : 'Estoy listo'}» aceptas pagar tu entrada. Cuando estéis todos listos entráis juntos en el mismo torneo; cada uno juega su ronda y gana quien menos golpes haga.</p>
+        ${inviteRows ? `<ul class="friend-list">${inviteRows}</ul>` : ''}
+        ${friendRows ? `<h3 class="friends-sub">Invitar a más amigos</h3>${friendRows}` : ''}`;
+    }
+    box.innerHTML = `
+      <div class="party-card">
+        <div class="section-head party-head">
+          <h2>${p ? `Tu grupo · ${p.members.length}/${p.size}` : 'Juega con amigos'}</h2>
+          ${p ? `<button class="chip-btn party-leave">${icon('logout')}Salir del grupo</button>` : ''}
+        </div>
+        ${msg ? `<p class="party-msg" role="status">${esc(msg)}</p>` : ''}
+        ${body}
+      </div>`;
+    box.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => go(b.dataset.go)));
+    box.querySelectorAll('[data-invite]').forEach((b) => b.addEventListener('click', () => apply(() => svc.invite(b.dataset.invite), `Invitación enviada a ${b.dataset.invite}.`)));
+    box.querySelectorAll('[data-join]').forEach((b) => b.addEventListener('click', () => apply(() => svc.respond(b.dataset.join, true))));
+    box.querySelectorAll('[data-no]').forEach((b) => b.addEventListener('click', () => apply(() => svc.respond(b.dataset.no, false))));
+    box.querySelector('.party-leave')?.addEventListener('click', () => apply(() => svc.leave()));
+    box.querySelector('.party-ready')?.addEventListener('click', () => apply(() => svc.ready(!p.members.find((m) => m.me)?.ready)));
+  }
+
+  if (hasName) {
+    backend.account.friends().then((d) => {
+      friends = d.friends;
+      paint(party.state);
+    }).catch(() => { friends = []; });
+  }
+
+  const poll = async () => {
+    if (!box.isConnected) return;
+    if (!busy) {
+      try {
+        const state = await svc.mine();
+        if (!box.isConnected) return;
+        if (await openIfNew(state)) return;
+        // no repintar si no ha cambiado nada (no se pierde lo que estés tocando)
+        if (JSON.stringify(state) !== JSON.stringify(party.state)) {
+          msg = '';
+          paint(state);
+        }
+      } catch { }
+    }
+    setTimeout(poll, PARTY_POLL_MS);
+  };
+  party.state = null;
+  if (hasName) {
+    paint(null);
+    poll();
+  } else paint(null);
+}
+
+// ---------- skins ----------
 
 const tierOrder = (s) => SKIN_TIERS[s.tier]?.order ?? 0;
 const FILTER_TIERS = Object.keys(SKIN_TIERS).reverse();
@@ -325,7 +581,7 @@ async function showSkins() {
       <div class="sk-filters" role="toolbar" aria-label="Filtros de skins">
         <div class="sk-filter-row">
           <button type="button" class="sk-fchip on" data-tier="all">Todas</button>
-          ${FILTER_TIERS.map((id) => `<button type="button" class="sk-fchip rarity-${id}" data-tier="${id}"><i>${SKIN_TIERS[id].icon}</i>${SKIN_TIERS[id].name}</button>`).join('')}
+          ${FILTER_TIERS.map((id) => `<button type="button" class="sk-fchip rarity-${id}" data-tier="${id}"><i>${tierIcon(id)}</i>${SKIN_TIERS[id].name}</button>`).join('')}
         </div>
         <div class="sk-filter-row">
           <button type="button" class="sk-fchip sk-fowned" aria-pressed="false">Solo desbloqueadas</button>
@@ -366,12 +622,12 @@ async function showSkins() {
       <button type="button" class="sk-card rarity-${skin.tier} ${open ? '' : 'locked'}" data-skin-id="${skin.id}" style="--sk-a:${skin.palette.base};--sk-b:${skin.palette.accent}">
         <div class="shine"></div>
         <div class="sk-scene">
-          <span class="sk-ico" title="${tier.name}">${tier.icon}</span>
+          <span class="sk-ico" title="${tier.name}">${tierIcon(skin.tier)}</span>
           <span class="sk-eq">Equipada</span>
           <img class="sk-thumb" src="${(open && thumbCached(skin, inst)) || ballPreview(skin, 152)}" width="76" height="76" alt="" draggable="false">
-          ${open ? '' : `<span class="sk-lock">${LOCK_SVG}</span>`}
+          ${open ? '' : `<span class="sk-lock">${icon('lock')}</span>`}
           ${open && inst?.counter?.enabled ? '<span class="sk-chip">Marcador</span>' : ''}
-          ${rare ? '<span class="sk-chip sk-chip-rare">✦ Patrón raro</span>' : ''}
+          ${rare ? `<span class="sk-chip sk-chip-rare">${icon('sparkle')} Patrón raro</span>` : ''}
         </div>
         <div class="sk-strip">
           <b>${skin.name}</b>
@@ -435,13 +691,13 @@ async function showSkins() {
     const overlay = h(`
       <div class="sk-view rarity-${skin.tier}" role="dialog" aria-modal="true" aria-label="Inspeccionar ${skin.name}">
         <div class="sk-view-bar">
-          <button type="button" class="sk-view-back" aria-label="Cerrar inspección">‹ Skins</button>
-          <span class="sk-view-title">${tier.icon} ${skin.name}</span>
+          <button type="button" class="sk-view-back" aria-label="Cerrar inspección">${icon('back')}Skins</button>
+          <span class="sk-view-title">${tierIcon(skin.tier)} ${skin.name}</span>
         </div>
         <div class="sk-view-stage">
           <div class="sk-view-canvas"><img class="sk-view-poster" src="${thumbCached(skin, progress.instance(skin.id)) ?? ballPreview(skin, 288)}" alt="" draggable="false"></div>
           <div class="sk-view-lock" hidden>
-            <span class="sk-lock sk-lock-big">${LOCK_SVG}</span>
+            <span class="sk-lock sk-lock-big">${icon('lock')}</span>
             <div class="sk-view-req"><small></small><span class="bar"><i></i></span></div>
           </div>
         </div>
@@ -458,7 +714,7 @@ async function showSkins() {
       const open = req.ratio >= 1;
       const isEq = progress.skin.id === skin.id;
       equipBtn.disabled = isEq || !open;
-      equipBtn.textContent = isEq ? '✓ Equipada' : open ? 'Equipar' : 'Bloqueada';
+      equipBtn.innerHTML = isEq ? `${icon('check')}Equipada` : open ? 'Equipar' : 'Bloqueada';
       lockBox.hidden = open;
       lockBox.querySelector('small').textContent = req.text;
       lockBox.querySelector('.bar i').style.width = `${req.ratio * 100}%`;
@@ -506,7 +762,7 @@ async function showSkins() {
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 const BLOCK_TEXT = {
-  account_required: 'Para jugar con créditos tienes que confirmar el email de tu cuenta. Revisa tu bandeja de entrada.',
+  account_required: 'Para jugar con créditos necesitas una cuenta con email. Crea tu cuenta para conservar tu saldo, nivel y skins.',
   kyc_required: 'Antes de jugar con créditos tienes que verificar tu edad e identidad. Solo se hace una vez.',
   underage: 'Las mesas con entrada son solo para mayores de 18 años. Puedes seguir jugando en Práctica.',
   account_review: 'Tu cuenta está en revisión por el sistema antitrampas. Mientras tanto puedes jugar en Práctica.',
@@ -533,7 +789,7 @@ function showBlocked(code) {
       <div class="card">
         <h2>${code === 'account_review' || code === 'underage' ? 'Mesa no disponible' : 'Un paso más'}</h2>
         <p class="sub">${BLOCK_TEXT[code] ?? BLOCK_TEXT.account_required}</p>
-        ${code === 'account_required' || code === 'kyc_required' ? '<button class="primary go">Ir a mi cuenta</button>' : ''}
+        ${code === 'account_required' || code === 'kyc_required' ? `<button class="primary go">${icon('user')}Ir a mi cuenta</button>` : ''}
         <button class="ghost back">Volver</button>
       </div>
     </div>`);
@@ -580,7 +836,7 @@ async function showRanking() {
   const row = (r) => {
     const f = frameById(r.frame);
     return `<li class="rank-row ${r.me ? 'me' : ''} ${r.pos <= 3 ? `podium p${r.pos}` : ''}">
-      <b class="rank-pos">${r.pos}</b>
+      <b class="rank-pos">${r.pos <= 3 ? icon('medal', { tone: ['gold', 'silver', 'bronze'][r.pos - 1], arg: r.pos, label: `Puesto ${r.pos}` }) : r.pos}</b>
       ${avatarHtml({ size: 'sm', frame: f, av: r.me ? avatar.get() : null, initial: (r.name ?? '?')[0] })}
       <span class="rank-name">${esc(r.name)}<small>Nv. ${r.level}${f ? ` · ${esc(f.name)}` : ''}</small></span>
       <span class="rank-wins"><b>${r.wins}</b><small>victoria${r.wins === 1 ? '' : 's'}</small></span>
@@ -611,8 +867,8 @@ async function showRanking() {
 
 const accountTabs = (balance) => `
   <div class="rank-tabs acc-tabs">
-    <button data-acc="profile">Perfil</button>
-    <button data-acc="wallet">Wallet <small>${coin(balance)}</small></button>
+    <button data-acc="profile">${icon('user')}Perfil</button>
+    <button data-acc="wallet">${icon('wallet')}Wallet <small>${coin(balance)}</small></button>
   </div>`;
 
 /** Muestra una sola pestaña de la cuenta (Perfil o Wallet) sin volver a pintar. */
@@ -665,7 +921,7 @@ async function showAccount(note = '', tab = 'profile') {
               <span class="kyc-mini-pill ${kyc === 'verified' ? 'verified' : ''}">${KYC_TEXT[kyc]}</span>
             </div>
             <strong class="passport-name">${esc(name)}</strong>
-            <div class="chip-row"><button class="chip-btn rename">Cambiar nombre</button><button class="chip-btn edit-avatar">Cambiar avatar</button></div>
+            <div class="chip-row"><button class="chip-btn rename">${icon('pencil')}Cambiar nombre</button><button class="chip-btn edit-avatar">${icon('upload')}Cambiar avatar</button></div>
           </div>
         </div>
 
@@ -703,7 +959,7 @@ async function showAccount(note = '', tab = 'profile') {
           ${FRAMES.map((f) => {
             const open = lvl.level >= f.level;
             return `<button class="frame-opt ${open ? '' : 'locked'} ${prestige.frame?.id === f.id ? 'on' : ''}" data-frame="${f.id}" ${open ? '' : 'disabled'} style="${frameStyle(f)}" title="${open ? f.name : `Nivel ${f.level}`}">
-              ${avatarHtml({ size: 'xs', frame: f, av: avatar.get(), initial: name })}<b>${f.name}</b><small>${open ? 'Nv. ' + f.level : '🔒 Nv. ' + f.level}</small>
+              ${avatarHtml({ size: 'xs', frame: f, av: avatar.get(), initial: name })}<b>${f.name}</b><small>${open ? 'Nv. ' + f.level : icon('lock') + ' Nv. ' + f.level}</small>
             </button>`;
           }).join('')}
         </div>
@@ -736,7 +992,7 @@ async function showAccount(note = '', tab = 'profile') {
       </div>
 
       <p class="legal">Para jugar mesas con entrada hace falta cuenta con email, ser mayor de 18 años y verificar tu identidad (una cuenta por persona). La práctica es libre.</p>
-      <button class="ghost logout">Cerrar sesión</button>
+      <button class="ghost logout">${icon('logout')}Cerrar sesión</button>
       </div>
       <div data-pane="wallet" class="acc-pane wallet-pane">${walletPane(balance, txs)}</div>
     </main>`);
@@ -758,7 +1014,10 @@ async function showAccount(note = '', tab = 'profile') {
   emailBox.append(changePw);
 
   const kycBox = view.querySelector('.kyc-box');
-  if (!confirmed) {
+  // TEMPORAL: verificación de identidad desactivada (ver migración 20261106120000)
+  if (true) {
+    kycBox.innerHTML = '<p class="sub">La verificación de identidad está desactivada temporalmente.</p>';
+  } else if (!confirmed) {
     kycBox.innerHTML = '<p class="sub">Primero confirma tu email.</p>';
   } else if (kyc === 'verified') {
     kycBox.innerHTML = `<p class="field-ok">Identidad verificada${p.adult ? ' · mayor de 18' : ''}</p>`;
@@ -766,7 +1025,7 @@ async function showAccount(note = '', tab = 'profile') {
     kycBox.innerHTML = `
       ${kyc === 'rejected' ? `<p class="sub">${KYC_REASON[p.kyc_reason] ?? KYC_REASON.provider_declined}</p>` : ''}
       ${kyc === 'pending' ? '<p class="sub">Estamos esperando el resultado. Si no terminaste, vuelve a empezar.</p>' : ''}
-      <button class="primary kyc-start">${kyc === 'none' ? 'Verificar identidad' : 'Volver a verificar'}</button>
+      <button class="primary kyc-start">${icon('shield')}${kyc === 'none' ? 'Verificar identidad' : 'Volver a verificar'}</button>
       <p class="legal">Necesitarás tu DNI o pasaporte y la cámara del móvil. Los datos los comprueba un proveedor externo; aquí solo guardamos tu fecha de nacimiento.</p>`;
     kycBox.querySelector('.kyc-start').addEventListener('click', async (e) => {
       e.target.disabled = true;
@@ -799,7 +1058,7 @@ async function friendsPanel(box, badge, hasName) {
       return `<li class="friend">
         ${avatarHtml({ size: 'sm', frame, av: fromWire(f.avatar), initial: f.name })}
         <span class="friend-name"><b>${esc(f.name)}</b><small>Nv. ${esc(f.level)}</small></span>
-        <button class="chip-btn" data-remove="${esc(f.name)}">Quitar</button>
+        <button class="chip-btn" data-remove="${esc(f.name)}">${icon('trash')}Quitar</button>
       </li>`;
     };
     const asks = (list, buttons) => list.map((r) => `<li class="friend">
@@ -807,12 +1066,12 @@ async function friendsPanel(box, badge, hasName) {
       </li>`).join('');
     box.innerHTML = `
       <form class="friend-add form">
-        <div class="row"><input name="name" maxlength="17" placeholder="Nombre de usuario" autocomplete="off" autocapitalize="off" spellcheck="false" ${hasName ? '' : 'disabled'}><button class="primary" ${hasName ? '' : 'disabled'}>Añadir</button></div>
+        <div class="row"><input name="name" maxlength="17" placeholder="Nombre de usuario" autocomplete="off" autocapitalize="off" spellcheck="false" ${hasName ? '' : 'disabled'}><button class="primary" ${hasName ? '' : 'disabled'}>${icon('plus')}Añadir</button></div>
         <p class="friend-msg ${isErr ? 'err' : 'ok'}" role="status">${esc(msg || (hasName ? '' : 'Ponte primero un nombre de usuario para añadir amigos.'))}</p>
       </form>
-      ${data.incoming.length ? `<h3 class="friends-sub">Peticiones recibidas</h3><ul class="friend-list">${asks(data.incoming, (n) => `<span class="friend-actions"><button class="chip-btn" data-accept="${n}">Aceptar</button><button class="chip-btn" data-decline="${n}">Rechazar</button></span>`)}</ul>` : ''}
+      ${data.incoming.length ? `<h3 class="friends-sub">Peticiones recibidas</h3><ul class="friend-list">${asks(data.incoming, (n) => `<span class="friend-actions"><button class="chip-btn" data-accept="${n}">${icon('check')}Aceptar</button><button class="chip-btn" data-decline="${n}">${icon('close')}Rechazar</button></span>`)}</ul>` : ''}
       ${data.friends.length ? `<ul class="friend-list">${data.friends.map(row).join('')}</ul>` : '<p class="sub">Aún no tienes amigos. Añade a alguien por su nombre de usuario.</p>'}
-      ${data.outgoing.length ? `<h3 class="friends-sub">Peticiones enviadas</h3><ul class="friend-list">${asks(data.outgoing, (n) => `<button class="chip-btn" data-remove="${n}">Cancelar</button>`)}</ul>` : ''}`;
+      ${data.outgoing.length ? `<h3 class="friends-sub">Peticiones enviadas</h3><ul class="friend-list">${asks(data.outgoing, (n) => `<button class="chip-btn" data-remove="${n}">${icon('close')}Cancelar</button>`)}</ul>` : ''}`;
     const run = (name, job, ok) => async () => {
       try {
         await job(name);
@@ -888,14 +1147,14 @@ function avatarEditor(done) {
       <div class="card avatar-editor">
         <h2>Tu avatar</h2>
         <div class="ae-preview"></div>
-        <div class="ae-icons">${AVATAR_ICONS.map((i) => `<button data-icon="${i.id}" title="${i.name}" aria-label="${i.name}">${i.glyph}</button>`).join('')}</div>
+        <div class="ae-icons">${AVATAR_ICONS.map((i) => `<button data-icon="${i.id}" title="${i.name}" aria-label="${i.name}">${avatarIcon(i.id)}</button>`).join('')}</div>
         <div class="row">
-          <button class="secondary ae-upload">Subir imagen</button>
-          <button class="secondary ae-clear">Quitar</button>
+          <button class="secondary ae-upload">${icon('upload')}Subir imagen</button>
+          <button class="secondary ae-clear">${icon('trash')}Quitar</button>
         </div>
         <input type="file" class="ae-file" accept="image/png,image/jpeg,image/webp" hidden>
         <p class="ae-msg legal">PNG, JPG o WebP, máximo 2,5 MB. Se recorta en cuadrado y solo se guarda en este dispositivo.</p>
-        <button class="primary ae-done">Listo</button>
+        <button class="primary ae-done">${icon('check')}Listo</button>
       </div>
     </div>`);
   const msg = overlay.querySelector('.ae-msg');
@@ -1010,17 +1269,17 @@ function walletPane(balance, txs) {
         <div class="deposit-section">
           <h3>Recarga Rápida de Créditos Demo</h3>
           <div class="row deposit-row">
-            <button class="primary deposit-btn" data-add="50"><span>+50</span> Créditos</button>
-            <button class="primary deposit-btn" data-add="200"><span>+200</span> Créditos</button>
+            <button class="primary deposit-btn" data-add="50">${icon('coins')}<span>+50</span> Créditos</button>
+            <button class="primary deposit-btn" data-add="200">${icon('coins')}<span>+200</span> Créditos</button>
           </div>
         </div>
         ${wallet.depositCrypto
       ? `<div class="crypto-section">
           <h3>Depositar en Cripto <small class="tag">pruebas</small></h3>
           <div class="row">
-            <button class="secondary" data-crypto="10">10 USD</button>
-            <button class="secondary" data-crypto="25">25 USD</button>
-            <button class="secondary" data-crypto="50">50 USD</button>
+            <button class="secondary" data-crypto="10">${icon('coins')}10 USD</button>
+            <button class="secondary" data-crypto="25">${icon('coins')}25 USD</button>
+            <button class="secondary" data-crypto="50">${icon('coins')}50 USD</button>
           </div>
           <p class="legal">Pago con NOWPayments (USDT, BTC, ETH…). Modo de pruebas: no se cobra dinero real.</p>
         </div>`
@@ -1102,10 +1361,10 @@ async function startMatch(tier, rematchOf = null) {
   const view = h(`
     <main class="screen matchmaking tier--${tier.id}">
       <div class="radar"><span></span><span></span><span></span>${ball(progress.skin, 64)}</div>
-      <h1>Buscando rivales…</h1>
+      <h1>${icon('hourglass')} Buscando rivales…</h1>
       <p class="sub">${tier.entryFee ? `${tier.name} · bote ${coin(potFor(tier))}` : 'Práctica contra rivales simulados'}</p>
       <div class="seats"></div>
-      <button class="ghost cancel">Cancelar y recuperar entrada</button>
+      <button class="ghost cancel">${icon('close')}Cancelar y recuperar entrada</button>
     </main>`);
   const seats = view.querySelector('.seats');
   for (let i = 0; i < PLAYERS_PER_MATCH; i++) seats.append(h(`<div class="seat"><span>…</span></div>`));
@@ -1136,7 +1395,7 @@ async function startMatch(tier, rematchOf = null) {
  * Pantalla de juego. mode 'hole' es un hoyo normal; 'tiebreak' es el hoyo
  * sin agujero del desempate (un tiro, gana el más cercano).
  */
-function playScreen(match, { course, title, subtitle, players, onDone, firstSunkTick = null, timeLimit = HOLE_TIME_LIMIT, freePlay = false, onRestartHole = null, onSelectMap = null }) {
+function playScreen(match, { course, title, subtitle, players, onDone, firstSunkTick = null, timeLimit = HOLE_TIME_LIMIT, freePlay = false, onRestartHole = null, onSelectMap = null, rivals = null, live = false, onGame = null, onShots = null }) {
   const tiebreak = !!course.noCup;
   const view = h(`
     <main class="play-screen ${tiebreak ? 'is-tiebreak' : ''} ${freePlay ? 'is-freeplay' : ''}">
@@ -1149,16 +1408,16 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         ${tiebreak ? '' : '<div class="pill strokes">Golpes <b>0</b></div>'}
         <div class="pill dist">— m</div>
         ${freePlay ? `
-        <button class="pill restart-btn hud-freeplay-btn" aria-label="Reiniciar hoyo" title="Reiniciar hoyo al tee (R)">Reiniciar <kbd class="kbd-hint">R</kbd></button>
-        <button class="pill map-select-btn hud-freeplay-btn" aria-label="Elegir otro mapa" title="Elegir otro mapa">Mapas</button>
+        <button class="pill restart-btn hud-freeplay-btn" aria-label="Reiniciar hoyo" title="Reiniciar hoyo al tee (R)">${icon('restart')}Reiniciar <kbd class="kbd-hint">R</kbd></button>
+        <button class="pill map-select-btn hud-freeplay-btn" aria-label="Elegir otro mapa" title="Elegir otro mapa">${icon('map')}Mapas</button>
         ` : ''}
-        <button class="pill mute mobile-only" aria-label="Sonido">${isMuted() ? 'Mudo' : 'Sonido'}</button>
-        <button class="pill fullscreen mobile-only" aria-label="Pantalla completa" title="Pantalla completa (F11)">Pantalla</button>
-        <button class="pill settings-btn-hud mobile-only" aria-label="Ajustes" title="Ajustes (Esc)">Ajustes</button>
-        <button class="pill desktop-esc-hint" aria-label="Ajustes">Ajustes <kbd class="kbd-hint">Esc</kbd></button>
+        <button class="pill mute mobile-only" aria-label="Sonido">${soundLabel()}</button>
+        <button class="pill fullscreen mobile-only" aria-label="Pantalla completa" title="Pantalla completa (F11)">${icon('fullscreen')}Pantalla</button>
+        <button class="pill settings-btn-hud mobile-only" aria-label="Ajustes" title="Ajustes (Esc)">${icon('gear')}Ajustes</button>
+        <button class="pill desktop-esc-hint" aria-label="Ajustes">${icon('gear')}Ajustes <kbd class="kbd-hint">Esc</kbd></button>
       </div>
       <div class="rivals ${freePlay ? 'rivals-hidden' : ''}">${freePlay ? '' : players
-      .map((p) => `<div class="chip ${p.id === 'me' ? 'me' : ''}" data-id="${p.id}" style="--c:${p.color}"><i>${p.name[0]}</i><b>${tiebreak ? '·' : 0}</b></div>`)
+      .map((p) => `<div class="chip ${p.id === 'me' ? 'me' : ''} ${live && p.isBot ? 'bot' : ''}" data-id="${p.id}" style="--c:${p.color}"><i>${p.name[0]}</i><b>${tiebreak ? '·' : 0}</b></div>`)
       .join('')}</div>
       <div class="toasts"></div>
       <div class="intro-banner">
@@ -1183,7 +1442,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         ${freePlay ? '<span><kbd>R</kbd> Reiniciar hoyo</span>' : ''}
       </div>
       <div class="power"><div class="fill"></div></div>
-      <button class="map-btn" aria-label="Ver el hoyo completo">Ver mapa <kbd class="kbd-hint">Espacio</kbd></button>
+      <button class="map-btn" aria-label="Ver el hoyo completo">${icon('eye')}Ver mapa <kbd class="kbd-hint">Espacio</kbd></button>
     </main>`);
   const gameClass = loadGolfGame();
   Promise.all([gameClass, shell(view, { hideHeader: true })]).then(([GolfGame]) => {
@@ -1232,7 +1491,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
               <div class="settings-title">
                 <h3>Ajustes de Partida</h3>
               </div>
-              <button class="close-settings-btn" aria-label="Cerrar ajustes">Cerrar</button>
+              <button class="close-settings-btn" aria-label="Cerrar ajustes">${icon('close')}Cerrar</button>
             </div>
 
             <div class="settings-modal-body">
@@ -1242,7 +1501,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
                   <small>Efectos ambientales y de golpe</small>
                 </div>
                 <button class="settings-btn toggle-sound-btn ${isMuted() ? 'muted' : ''}">
-                  <span class="btn-text">${isMuted() ? 'Silenciado' : 'Activado'}</span>
+                  ${icon(isMuted() ? 'mute' : 'sound')}<span class="btn-text">${isMuted() ? 'Silenciado' : 'Activado'}</span>
                 </button>
               </div>
 
@@ -1252,7 +1511,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
                   <small>Modo inmersivo de pantalla completa</small>
                 </div>
                 <button class="settings-btn toggle-fs-btn">
-                  <span class="btn-text">${document.fullscreenElement ? 'Ventana' : 'Pantalla Completa'}</span>
+                  ${icon('fullscreen')}<span class="btn-text">${document.fullscreenElement ? 'Ventana' : 'Pantalla Completa'}</span>
                 </button>
               </div>
 
@@ -1272,7 +1531,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
                   <small>Ver todo el terreno en 3D</small>
                 </div>
                 <button class="settings-btn toggle-overview-btn">
-                  <span class="btn-text">${game.overview ? 'Volver a la bola' : 'Ver todo el terreno'}</span>
+                  ${icon('eye')}<span class="btn-text">${game.overview ? 'Volver a la bola' : 'Ver todo el terreno'}</span>
                 </button>
               </div>
 
@@ -1289,9 +1548,9 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
             </div>
 
             <div class="settings-modal-footer">
-              <button class="primary resume-btn">Reanudar partida</button>
-              ${freePlay ? '<button class="secondary restart-settings-btn">Reiniciar Hoyo</button><button class="secondary map-settings-btn">Cambiar de Mapa</button>' : ''}
-              <button class="danger quit-btn">Salir al Lobby</button>
+              <button class="primary resume-btn">${icon('play')}Reanudar partida</button>
+              ${freePlay ? `<button class="secondary restart-settings-btn">${icon('restart')}Reiniciar Hoyo</button><button class="secondary map-settings-btn">${icon('map')}Cambiar de Mapa</button>` : ''}
+              <button class="danger quit-btn">${icon('logout')}Salir al Lobby</button>
             </div>
           </div>
         </div>
@@ -1314,8 +1573,9 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         setMuted(!isMuted());
         const muted = isMuted();
         soundBtn.classList.toggle('muted', muted);
+        soundBtn.querySelector('.gi')?.replaceWith(h(icon(muted ? 'mute' : 'sound')));
         soundBtn.querySelector('.btn-text').textContent = muted ? 'Silenciado' : 'Activado';
-        muteBtn.textContent = muted ? 'Mudo' : 'Sonido';
+        muteBtn.innerHTML = soundLabel();
         try { localStorage.setItem(MUTE_KEY, muted ? '1' : '0'); } catch { }
       });
 
@@ -1384,7 +1644,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       onOverviewChange: (isOverview) => {
         view.querySelector('.overview-banner')?.classList.toggle('show', isOverview);
         if (mapBtn) {
-          mapBtn.innerHTML = isOverview ? 'Volver a la bola <kbd class="kbd-hint">Espacio</kbd>' : 'Ver mapa <kbd class="kbd-hint">Espacio</kbd>';
+          mapBtn.innerHTML = `${icon('eye')}${isOverview ? 'Volver a la bola' : 'Ver mapa'} <kbd class="kbd-hint">Espacio</kbd>`;
           mapBtn.classList.toggle('on', isOverview);
         }
       },
@@ -1403,9 +1663,10 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
           return;
         }
         setChip(p.id, st.strokes, st.sunk);
-        if (st.sunk) toast(`${p.name} ha embocado en ${st.strokes}`, p.color);
+        if (st.sunk) toast(`${esc(p.name)} ha embocado en ${st.strokes}`, p.color);
       },
       onStroke: (n) => {
+        if (n > 0) onShots?.(game.shots);
         if (!tiebreak) setChip('me', n, false);
         if (strokesEl) strokesEl.textContent = n;
         hint.classList.add('gone');
@@ -1436,10 +1697,10 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         setTimeout(() => finish(maxStrokesOf(course)), 1600);
       },
       onLip: () => toast('¡Uy! Demasiado fuerte para entrar', '#ffffff'),
-      onLava: () => toast('🔥 ¡A la lava! Vuelves al sitio del golpe', '#ff8a3a'),
-      onWater: () => toast('💦 ¡Al agua! Vuelves al sitio del golpe', '#7fdcff'),
-      onOut: () => toast('🌴 ¡Fuera del campo! Vuelves al sitio del golpe', '#b8f07a'),
-      onFall: () => toast('🕳️ ¡Al agujero! Vuelves al sitio del golpe', '#ffc400'),
+      onLava: () => toast(`${icon('fire')} ¡A la lava! Vuelves al sitio del golpe`, '#ff8a3a'),
+      onWater: () => toast(`${icon('drop')} ¡Al agua! Vuelves al sitio del golpe`, '#7fdcff'),
+      onOut: () => toast(`${icon('palm')} ¡Fuera del campo! Vuelves al sitio del golpe`, '#b8f07a'),
+      onFall: () => toast(`${icon('pit')} ¡Al agujero! Vuelves al sitio del golpe`, '#ffc400'),
       onRest: (n) => {
         showDistance();
         if (tiebreak) {
@@ -1448,7 +1709,8 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         } else if (!freePlay && n >= maxStrokesOf(course)) finish(n);
       },
     });
-    game.load(course, { bots: freePlay ? [] : players.filter((p) => p.isBot), skin: progress.skin, instance: progress.instance(progress.skin.id), firstSunkTick, timeLimit: freePlay ? null : timeLimit });
+    game.load(course, { bots: freePlay ? [] : rivals ?? players.filter((p) => p.isBot), skin: progress.skin, instance: progress.instance(progress.skin.id), firstSunkTick, timeLimit: freePlay ? null : timeLimit, live });
+    onGame?.(game, { toast, view });
     showDistance();
     if (freePlay) {
       view.querySelector('.restart-btn')?.addEventListener('click', (e) => {
@@ -1487,7 +1749,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
     const muteBtn = view.querySelector('.mute');
     muteBtn.addEventListener('click', () => {
       setMuted(!isMuted());
-      muteBtn.textContent = isMuted() ? 'Mudo' : 'Sonido';
+      muteBtn.innerHTML = soundLabel();
       try {
         localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0');
       } catch { }
@@ -1502,7 +1764,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         }
       });
       document.addEventListener('fullscreenchange', () => {
-        fsBtn.textContent = document.fullscreenElement ? 'Ventana' : 'Pantalla';
+        fsBtn.innerHTML = `${icon('fullscreen')}${document.fullscreenElement ? 'Ventana' : 'Pantalla'}`;
       });
     }
     view.querySelector('.settings-btn-hud')?.addEventListener('click', openSettingsMenu);
@@ -1557,7 +1819,7 @@ function standingsTable(players, highlightPayout) {
   return `<ol class="standings">${players
     .map(
       (p, i) => `<li class="${p.id === 'me' ? 'me' : ''} ${(p.position ?? i + 1) === 1 ? 'first' : ''}" style="--c:${p.color}">
-        <span class="pos">${p.position ?? i + 1}</span>
+        <span class="pos">${(p.position ?? i + 1) === 1 ? icon('trophy') : p.position ?? i + 1}</span>
         <span class="name"><i></i>${p.name}</span>
         <span class="scores">${p.scores ? p.scores.join(' · ') : p.finished ? 'Terminado' : `Jugando · ${p.holesPlayed} hoyo${p.holesPlayed === 1 ? '' : 's'}`}${p.tiebreak !== undefined ? ` · ${p.tiebreak.toFixed(2)}m` : ''}</span>
         <b>${p.total ?? '—'}</b>
@@ -1580,7 +1842,7 @@ function showHoleResult(match, index, course, strokes, standings, dq = false) {
       <div class="card ${good ? 'good' : ''}">
         ${holeHeader(strokes, course.par, dq)}
         ${standingsTable(standings)}
-        <button class="primary next">${last ? 'Ver resultado' : 'Siguiente hoyo'}</button>
+        <button class="primary next">${last ? 'Ver resultado' : 'Siguiente hoyo'}${icon('next')}</button>
       </div>
     </div>`);
   overlay.querySelector('.next').addEventListener('click', () => (last ? afterLastHole(match) : playHole(match, index + 1)));
@@ -1606,7 +1868,7 @@ function afterLastHole(match) {
         <div class="vs">${tied.map((p) => `<span class="avatar" style="--c:${p.color}">${p.name[0]}</span>`).join('<em>VS</em>')}</div>
         <h2 class="score-title">¡Empate a ${tied[0].total}!</h2>
         <p class="sub">${tied.map((p) => p.name).join(', ')} van al desempate. Hoyo sin agujero: un solo tiro y gana quien deje la bola más cerca de la diana.</p>
-        <button class="primary next">${meTied ? 'Jugar desempate' : 'Ver desempate'}</button>
+        <button class="primary next">${meTied ? 'Jugar desempate' : 'Ver desempate'}${icon('next')}</button>
       </div>
     </div>`);
   overlay.querySelector('.next').addEventListener('click', () => (meTied ? playTiebreak(match, tied) : simulateTiebreak(match, tied)));
@@ -1650,7 +1912,7 @@ function showTiebreakResult(match, tied, distances) {
         <ol class="standings">${rows
       .map((p, i) => `<li class="${p.id === 'me' ? 'me' : ''} ${i === 0 ? 'first' : ''}" style="--c:${p.color}"><span class="pos">${i + 1}</span><span class="name"><i></i>${p.name}</span><span></span><b>${distances[p.id].toFixed(2)} m</b></li>`)
       .join('')}</ol>
-        <button class="primary next">Ver resultado</button>
+        <button class="primary next">Ver resultado${icon('next')}</button>
       </div>
     </div>`);
   overlay.querySelector('.next').addEventListener('click', () => showResults(match, distances));
@@ -1719,8 +1981,8 @@ function showEndOverlay({ won, position, total, prize, ranking, legal, holes, ga
         ${standingsTable(ranking, true)}
         ${legal ? `<p class="legal">${legal}</p>` : ''}
         <div class="row">
-          <button class="primary again">Revancha</button>
-          <button class="ghost next">${pending ? 'Reclamar y salir' : 'Salir'}</button>
+          <button class="primary again">${icon('restart')}Revancha</button>
+          <button class="ghost next">${pending ? `${icon('coins')}Reclamar y salir` : `${icon('back')}Salir`}</button>
         </div>
       </div>
     </div>`);
@@ -1750,14 +2012,38 @@ function statsGrid(holes) {
   </div>`;
 }
 
-// ---------- torneos contra jugadores reales ----------
+// ---------- partidas en vivo contra jugadores reales ----------
 //
-// Asíncronos: cada jugador juega los mismos hoyos cuando quiere y el bote se
-// reparte cuando han terminado todos. Los golpes los cuenta el servidor.
+// Al entrar en una mesa de pago se espera unos segundos en la sala a que entre
+// más gente y la partida arranca a la vez para todos. Los huecos libres los
+// ocupan bots (los mismos en todos los móviles) que nunca cuentan para el
+// premio. Las bolas de los demás se ven en directo: llegan sus tiros por el
+// canal en tiempo real y se repiten con la misma física. Los golpes que
+// cuentan los sigue calculando el servidor.
 
-const POLL_MS = 5000;
+const LIVE_BEAT_MS = 4000; // latido: estado de la partida (y "sigo conectado")
+const LIVE_NEXT_S = 6; // pausa entre hoyos
+const LIVE_GRACE_TICKS = 120 * 6; // margen tras acabarse el contador del hoyo
+const LIVE_HOLE_CAP_MS = 150000; // como mucho se espera esto a los demás en un hoyo
+
+let currentLive = null;
+
+function stopLive() {
+  const live = currentLive;
+  if (!live) return;
+  currentLive = null;
+  live.stopped = true;
+  clearTimeout(live.beat);
+  clearInterval(live.timer);
+  live.room?.close();
+  // salir a mitad de partida cuenta como abandono (lo que falte, con el máximo)
+  if (!live.finished) backend.tournaments.leave(live.match).catch(() => { });
+}
+
+const liveNow = (match) => Date.now() + (match.clockOffset ?? 0);
 
 async function startTournament(tier, rematchOf = null) {
+  stopLive();
   let match;
   try {
     // revancha: el servidor junta en la misma sala a quienes la piden; si ya no vale, mesa normal
@@ -1771,88 +2057,171 @@ async function startTournament(tier, rematchOf = null) {
       backend.account?.load().catch(() => { });
       return showBlocked(e.code);
     }
-    return alertMsg('No se ha podido entrar en el torneo. Prueba otra vez.');
+    return alertMsg('No se ha podido entrar en la partida. Prueba otra vez.');
   }
-  if (match.resumed && match.me.holesPlayed > 0) return continueRound(match);
-  showTournamentLobby(match);
+  enterLive(match);
 }
 
-function continueRound(match) {
-  const i = match.me.holesPlayed;
-  if (i < match.holes) playOnlineHole(match, i);
-  else offerTiebreak(match);
+/** Entra en una partida: a la sala si aún no ha empezado, o al hoyo por el que vas. */
+function enterLive(match) {
+  stopLive();
+  const live = { match, botScores: [], finished: false, hole: -1 };
+  currentLive = live;
+  const beat = async () => {
+    if (live.stopped) return;
+    try {
+      await backend.tournaments.status(match);
+    } catch { }
+    if (live.stopped) return;
+    live.onStatus?.();
+    live.beat = setTimeout(beat, live.fast ? 1500 : LIVE_BEAT_MS);
+  };
+  live.beat = setTimeout(beat, 1500);
+  if (match.me.finished) return showLiveResults(live);
+  if (match.me.started || !match.startsAt || liveNow(match) >= match.startsAt) return beginLive(live);
+  showLiveRoom(live);
 }
 
-const minutesLeft = (date) => Math.max(0, Math.ceil((date - Date.now()) / 60000));
+function seatHtml(p) {
+  if (!p) return '<span>…</span>';
+  return `<span class="avatar">${esc(p.name[0])}</span><span>${esc(p.name)}</span>${p.isBot ? '<em class="bot-tag">BOT</em>' : ''}`;
+}
 
-function showTournamentLobby(match) {
+function showLiveRoom(live) {
+  const { match } = live;
   const { tier } = match;
+  live.fast = true;
   const view = h(`
-    <main class="screen matchmaking tier--${tier.id}">
+    <main class="screen matchmaking live-room tier--${tier.id}">
       <div class="radar"><span></span><span></span><span></span>${ball(progress.skin, 64)}</div>
-      <h1>Torneo ${tier.name}</h1>
+      <h1>${icon('hourglass')} ${tier.name} · en vivo</h1>
       <p class="sub count"></p>
       <div class="seats"></div>
       ${match.rematchOf ? '<p class="legal">Revancha: quienes pidan revancha como tú entrarán juntos en esta sala.</p>' : ''}
-      <p class="legal">Todos jugáis los mismos ${match.holes} hoyos, cada uno a su ritmo. Cuando terminéis todos (o se cierre la inscripción) gana quien menos golpes haga y se reparte el bote. El servidor repite cada golpe para que nadie pueda hacer trampas.</p>
-      <button class="primary start">Empezar a jugar</button>
-      <button class="ghost cancel">Salir y recuperar entrada</button>
+      <p class="legal">Empezáis todos a la vez y verás las bolas de los demás en directo. Los huecos libres los ocupan bots: juegan contigo, pero nunca cuentan para el premio (el bote es solo de los jugadores reales). Si no entra nadie más, juegas contra bots y se te devuelve la entrada.</p>
+      <button class="ghost cancel">${icon('close')}Salir y recuperar entrada</button>
     </main>`);
   const seats = view.querySelector('.seats');
+  let launching = false;
   const render = () => {
     const n = match.players.length;
-    view.querySelector('.count').innerHTML = `${n}/${match.seats} jugadores · bote ${coin(tier.entryFee * n)} · cierra en ${minutesLeft(match.closesAt)} min`;
+    const secs = match.startsAt ? Math.max(0, Math.ceil((match.startsAt - liveNow(match)) / 1000)) : 0;
+    view.querySelector('.count').innerHTML = launching
+      ? 'Rellenando los huecos con bots…'
+      : `${n}/${match.seats} jugadores · empieza en <b>${secs} s</b> · bote ${coin(tier.entryFee * n)}`;
+    if (launching) return;
     seats.innerHTML = '';
     for (let i = 0; i < match.seats; i++) {
-      const p = match.players.find((q) => q.seat === i) ?? match.players[i];
-      const s = h(`<div class="seat"><span>…</span></div>`);
+      const p = match.players.find((q) => q.seat === i);
+      const s = h(`<div class="seat">${seatHtml(p && { name: p.id === 'me' ? 'Tú' : p.name })}</div>`);
       if (p) {
         s.classList.add('filled', ...(p.id === 'me' ? ['me'] : []));
         s.style.setProperty('--c', p.color);
-        s.innerHTML = `<span class="avatar">${p.name[0]}</span><span>${p.id === 'me' ? 'Tú' : p.name}</span>`;
       }
       seats.append(s);
     }
   };
-  render();
-  const poll = async () => {
-    if (!view.isConnected) return;
-    const before = match.players.length;
+  let count = match.players.length;
+  live.onStatus = () => {
+    if (!view.isConnected || launching) return;
+    if (match.players.length > count) sfx.tick();
+    count = match.players.length;
+    render();
+  };
+  const launch = async () => {
+    launching = true;
+    clearInterval(live.timer);
+    view.querySelector('.cancel').disabled = true;
     try {
       await backend.tournaments.status(match);
-      if (match.players.length > before) sfx.tick();
-      if (view.isConnected) render();
     } catch { }
-    setTimeout(poll, POLL_MS);
-  };
-  setTimeout(poll, POLL_MS);
-  view.querySelector('.start').addEventListener('click', async (e) => {
-    e.target.disabled = true;
+    if (live.stopped) return;
+    live.roster = buildRoster(match);
+    render();
+    for (const r of live.roster) {
+      if (!r.isBot) continue;
+      const s = seats.children[r.seat];
+      if (!s) continue;
+      await wait(140);
+      s.classList.add('filled', 'bot');
+      s.style.setProperty('--c', r.color);
+      s.innerHTML = seatHtml(r);
+      sfx.tick();
+    }
     try {
       await backend.tournaments.start(match);
     } catch {
-      return alertMsg('No se ha podido empezar. Prueba otra vez.');
+      if (live.stopped) return;
+      return retryMsg('No se ha podido empezar la partida.', launch);
     }
-    playOnlineHole(match, 0);
-  });
+    await wait(500);
+    if (!live.stopped) beginLive(live);
+  };
+  live.timer = setInterval(() => {
+    if (!view.isConnected) return clearInterval(live.timer);
+    render();
+    if (!launching && match.startsAt && liveNow(match) >= match.startsAt) launch();
+  }, 250);
   view.querySelector('.cancel').addEventListener('click', async (e) => {
     e.target.disabled = true;
+    clearInterval(live.timer);
+    live.finished = true;
     await backend.tournaments.leave(match).catch(() => { });
     showLobby();
   });
+  render();
   shell(view, { nav: false });
 }
 
-function playOnlineHole(match, index) {
+async function beginLive(live) {
+  const { match } = live;
+  live.fast = false;
+  live.onStatus = null;
+  // volviendo a una partida que ya arrancó sin haber pulsado nada
+  if (!match.me.started) await backend.tournaments.start(match).catch(() => { });
+  if (live.stopped) return;
+  live.roster ??= buildRoster(match);
+  const others = live.roster.filter((r) => !r.isBot && r.id !== 'me').map((r) => r.seat);
+  live.room ??= new LiveRoom(backend.db, match.id, match.me.seat, others);
+  live.room.onDone = (_seat, hole, final) => {
+    if (hole === live.hole && final.sunk) live.game?.noteRemoteSunk(final.sunkTick);
+    live.check?.();
+  };
+  const i = match.me.holesPlayed;
+  if (i < match.holes) playLiveHole(live, i);
+  else liveAfterRound(live);
+}
+
+function playLiveHole(live, index) {
+  const { match } = live;
+  app.querySelector('.overlay')?.remove();
   const course = COURSES[match.courses[index]];
+  live.hole = index;
+  live.game = null;
+  live.check = null;
+  const me = live.roster.find((r) => r.id === 'me');
+  const rivals = live.roster
+    .filter((r) => r.id !== 'me')
+    .map((r) => (r.isBot ? { ...r, rng: seededRng(`${match.id}:${index}:${r.seat}`) } : { ...r, remote: live.room.feed(r.seat, index) }));
   playScreen(match, {
     course,
     title: `Hoyo ${index + 1}/${match.holes}`,
-    subtitle: `Torneo ${match.tier.name} · hoyo ${index + 1}`,
-    players: [match.me],
-    firstSunkTick: match.firstTicks?.[index] ?? null,
+    subtitle: `${match.tier.name} · en vivo`,
+    players: [me, ...rivals],
+    rivals,
+    live: true,
     timeLimit: match.timeLimit,
-    onDone: (g) => submitOnline(match, index, g, (r) => showOnlineHoleResult(match, index, course, r.strokes, r.timedOut)),
+    onGame: (g, ui) => {
+      live.game = g;
+      live.ui = ui;
+      // si alguien ya embocó antes de que cargara este hoyo, su contador ya corre
+      for (const r of rivals) if (r.remote?.final?.sunk) g.noteRemoteSunk(r.remote.final.sunkTick);
+    },
+    onShots: (shots) => live.room.sendShots(index, shots),
+    onDone: (g, strokes) => {
+      live.room.sendDone(index, { shots: g.shots, strokes, sunk: g.sunk, sunkTick: g.sunkTick, dq: g.timedOut });
+      submitOnline(match, index, g, (r) => waitLiveHole(live, index, course, r));
+    },
   });
 }
 
@@ -1861,65 +2230,158 @@ async function submitOnline(match, hole, g, then) {
   try {
     then(await backend.tournaments.submitHole(match, hole, shots, aim, endTick));
   } catch (e) {
+    if (currentLive?.match !== match) return;
     if (e.code === 'invalid_shots') return alertMsg('El servidor no ha podido validar los golpes de este hoyo.');
-    if (['time_up', 'match_closed', 'wrong_hole'].includes(e.code)) return showOnlineResults(match);
+    if (['time_up', 'match_closed', 'wrong_hole', 'match_not_found'].includes(e.code)) return showLiveResults(currentLive);
     retryMsg(`Se ha perdido la conexión con el servidor. Tus golpes siguen guardados en este ${DEVICE}.`, () => submitOnline(match, hole, { shots, aim, endTick }, then));
   }
 }
 
-function showOnlineHoleResult(match, index, course, strokes, dq = false) {
-  const last = index + 1 >= match.holes;
-  const done = match.players.filter((p) => p.finished && p.id !== 'me').length;
-  const overlay = h(`
-    <div class="overlay">
-      <div class="card ${!dq && strokes <= course.par ? 'good' : ''}">
-        ${holeHeader(strokes, course.par, dq)}
-        <p class="sub">Tu ronda: <b>${match.me.scores.join(' · ')}</b> · total <b>${match.me.total}</b></p>
-        <p class="legal">${match.players.length} jugadores en el torneo${done ? ` · ${done} ya han terminado` : ''}. Verás sus golpes cuando acabes.</p>
-        <button class="primary next">${last ? 'Tiro de desempate' : 'Siguiente hoyo'}</button>
-      </div>
-    </div>`);
-  overlay.querySelector('.next').addEventListener('click', () => (last ? offerTiebreak(match) : playOnlineHole(match, index + 1)));
-  app.append(overlay);
+/**
+ * Ya has terminado el hoyo: sigues viendo cómo juegan los demás hasta que
+ * acaben todos los jugadores reales, se acabe el contador o pase demasiado
+ * tiempo (quien se desconecta no bloquea a nadie).
+ */
+function waitLiveHole(live, index, course, result) {
+  if (live.stopped || live.hole !== index) return;
+  const { match } = live;
+  const g = live.game;
+  const since = Date.now();
+  const panel = h('<div class="live-wait"><b>Esperando a los demás…</b><small></small></div>');
+  live.ui?.view?.append(panel);
+  const pending = () =>
+    live.roster.filter((r) => {
+      if (r.isBot || r.id === 'me') return false;
+      const p = match.players.find((q) => q.id === r.id);
+      if (!p || p.finished || !p.online || p.holesPlayed > index) return false;
+      return !live.room.feed(r.seat, index).final;
+    });
+  let closed = false;
+  const check = () => {
+    if (closed || live.stopped || live.hole !== index) return;
+    const left = pending();
+    const secs = g?.deadlineTick != null ? Math.max(0, Math.ceil((g.deadlineTick - g.tick) / 120)) : null;
+    const timeUp = g?.deadlineTick != null && g.tick > g.deadlineTick + LIVE_GRACE_TICKS;
+    if (left.length && !timeUp && Date.now() - since < LIVE_HOLE_CAP_MS) {
+      panel.querySelector('b').textContent = `Esperando a ${left.map((r) => r.name).join(', ')}`;
+      panel.querySelector('small').textContent = secs != null ? (secs > 0 ? `${secs} s para que acabe el hoyo` : 'Se acabó el tiempo') : 'Mira cómo juegan en directo';
+      return;
+    }
+    closed = true;
+    clearInterval(iv);
+    panel.remove();
+    finishLiveHole(live, index, course, result);
+  };
+  live.check = check;
+  live.onStatus = check;
+  const iv = setInterval(check, 500);
+  check();
 }
 
-// en asíncrono no se sabe aún si habrá empate: todos tiran una vez y solo
-// cuenta para desempatar en cabeza
-function offerTiebreak(match) {
+async function finishLiveHole(live, index, course, result) {
+  const { match } = live;
+  live.check = null;
+  live.onStatus = null;
+  live.botScores[index] = live.game ? live.game.finishBots() : {};
+  try {
+    await backend.tournaments.status(match);
+  } catch { }
+  if (live.stopped || live.hole !== index) return;
+  if (match.status !== 'open') return showLiveResults(live);
+  const last = index + 1 >= match.holes;
+  const standings = liveStandings(match, live.roster, live.botScores);
+  const overlay = h(`
+    <div class="overlay">
+      <div class="card ${!result.timedOut && result.strokes <= course.par ? 'good' : ''}">
+        ${holeHeader(result.strokes, course.par, result.timedOut)}
+        ${standingsTable(standings)}
+        <p class="legal">Los bots no cuentan para el premio.</p>
+        <button class="primary next">${last ? 'Ver resultado' : 'Siguiente hoyo'}${icon('next')} <span class="secs">${LIVE_NEXT_S}</span></button>
+      </div>
+    </div>`);
+  let left = LIVE_NEXT_S;
+  const go = () => {
+    clearInterval(live.timer);
+    if (live.stopped || live.hole !== index || !overlay.isConnected) return;
+    if (last) liveAfterRound(live);
+    else playLiveHole(live, index + 1);
+  };
+  overlay.querySelector('.next').addEventListener('click', go);
   app.querySelector('.overlay')?.remove();
+  app.append(overlay);
+  clearInterval(live.timer);
+  live.timer = setInterval(() => {
+    left--;
+    const el = overlay.querySelector('.secs');
+    if (el) el.textContent = left;
+    if (left <= 0) go();
+  }, 1000);
+}
+
+/** Tras el último hoyo: desempate si empatas en cabeza con otro jugador real; si no, has terminado. */
+async function liveAfterRound(live) {
+  const { match } = live;
+  app.querySelector('.overlay')?.remove();
+  const tied = humanLeaders(match.players, match.holes);
+  if (tied.length >= 2 && tied.some((p) => p.id === 'me')) return liveTiebreak(live, tied);
+  live.finished = true;
+  try {
+    await backend.tournaments.finish(match);
+  } catch { }
+  showLiveResults(live);
+}
+
+function liveTiebreak(live, tied) {
+  const { match } = live;
+  const names = tied.map((p) => (p.id === 'me' ? 'Tú' : esc(p.name)));
   const overlay = h(`
     <div class="overlay">
       <div class="card tiebreak-card">
-        <h2 class="score-title">Tiro de desempate</h2>
-        <p class="sub">Un solo tiro en un hoyo sin agujero: deja la bola lo más cerca posible de la diana. Solo cuenta si empatas en cabeza.</p>
-        <button class="primary next">Tirar</button>
-        <button class="ghost skip">Saltar</button>
+        <div class="vs">${tied.map((p) => `<span class="avatar" style="--c:${p.color}">${esc((p.id === 'me' ? 'Tú' : p.name)[0])}</span>`).join('<em>VS</em>')}</div>
+        <h2 class="score-title">¡Empate a ${tied[0].total}!</h2>
+        <p class="sub">${names.join(', ')} vais al desempate. Hoyo sin agujero: un solo tiro y gana quien deje la bola más cerca de la diana.</p>
+        <button class="primary next">Jugar desempate${icon('next')}</button>
       </div>
     </div>`);
-  overlay.querySelector('.next').addEventListener('click', () => playOnlineTiebreak(match));
-  overlay.querySelector('.skip').addEventListener('click', async (e) => {
-    e.target.disabled = true;
-    await backend.tournaments.leave(match).catch(() => { });
-    showOnlineResults(match);
-  });
+  const play = () => {
+    clearTimeout(auto);
+    if (live.stopped || !overlay.isConnected) return;
+    const hole = match.holes;
+    live.hole = hole;
+    const me = live.roster.find((r) => r.id === 'me');
+    const rivals = tied
+      .filter((p) => p.id !== 'me')
+      .map((p) => live.roster.find((r) => r.id === p.id))
+      .filter(Boolean)
+      .map((r) => ({ ...r, remote: live.room.feed(r.seat, hole) }));
+    playScreen(match, {
+      course: TIEBREAK_COURSE,
+      title: 'Desempate',
+      subtitle: 'Un tiro',
+      players: [me, ...rivals],
+      rivals,
+      live: true,
+      onGame: (g, ui) => {
+        live.game = g;
+        live.ui = ui;
+      },
+      onShots: (shots) => live.room.sendShots(hole, shots),
+      onDone: (g, _strokes, banner) => {
+        live.room.sendDone(hole, { shots: g.shots, strokes: 1, sunk: false, dq: false });
+        submitOnline(match, hole, g, (r) => {
+          live.finished = true;
+          banner(`${r.distance.toFixed(2)} m`);
+          setTimeout(() => showLiveResults(live), 1800);
+        });
+      },
+    });
+  };
+  const auto = setTimeout(play, 5000);
+  overlay.querySelector('.next').addEventListener('click', play);
   app.append(overlay);
 }
 
-function playOnlineTiebreak(match) {
-  playScreen(match, {
-    course: TIEBREAK_COURSE,
-    title: 'Desempate',
-    subtitle: 'Un tiro',
-    players: [match.me],
-    onDone: (g, _strokes, banner) =>
-      submitOnline(match, match.holes, g, (r) => {
-        banner(`${r.distance.toFixed(2)} m`);
-        setTimeout(() => showOnlineResults(match), 1400);
-      }),
-  });
-}
-
-function recordOnce(match) {
+function recordOnce(match, rows) {
   const KEY = 'gcb.tournaments.recorded';
   let seen = [];
   try {
@@ -1930,49 +2392,82 @@ function recordOnce(match) {
     localStorage.setItem(KEY, JSON.stringify([match.id, ...seen].slice(0, 50)));
   } catch { }
   const me = match.me;
-  const won = me.position === 1 || me.payout > 0;
+  // solo bots (se devolvió la entrada): cuenta como una partida de práctica
+  const cancelled = match.status === 'cancelled';
+  const mine = rows.find((r) => r.id === 'me');
+  const position = cancelled ? mine?.position ?? 1 : me.position ?? match.players.length;
+  const won = cancelled ? position === 1 : me.position === 1 || me.payout > 0;
   const leaders = match.players.filter((p) => p.total === me.total).length;
   return progress.recordMatch({
-    position: me.position ?? match.players.length,
+    position,
     won,
-    entryFee: match.tier.entryFee,
+    entryFee: cancelled ? 0 : match.tier.entryFee,
     holes: me.scores.map((strokes, i) => ({ strokes, par: COURSES[match.courses[i]].par })),
-    tiebreakWon: won && leaders > 1,
+    tiebreakWon: !cancelled && won && leaders > 1,
   });
 }
 
-async function showOnlineResults(match) {
+/** Clasificación final: jugadores reales por su puesto y, aparte, los bots (sin puesto ni premio). */
+function liveRanking(live) {
+  const { match } = live;
+  const all = liveStandings(match, live.roster ?? buildRoster(match), live.botScores);
+  const humans = all
+    .filter((r) => !r.isBot)
+    .sort((a, b) => (a.position ?? 99) - (b.position ?? 99) || a.total - b.total)
+    .map((r) => ({ ...r, position: match.status === 'settled' ? match.players.find((p) => p.id === r.id)?.position : r.position }));
+  const bots = all.filter((r) => r.isBot).map((r) => ({ ...r, position: '–' }));
+  return { all, humans, rows: [...humans, ...bots] };
+}
+
+async function showLiveResults(live) {
+  if (!live || live.stopped) return showLobby();
+  const { match } = live;
+  live.finished = true;
+  live.check = null;
+  live.onStatus = null;
+  clearInterval(live.timer);
   app.querySelector('.overlay')?.remove();
   try {
-    await backend.tournaments.status(match);
+    // si llegas aquí sin haber cerrado tu ronda en el servidor (p. ej. te rechazó un
+    // hoyo), ciérrala: si no, tu latido la tendría abierta y nadie cobraría hasta que salieras
+    if (match.status === 'open' && !match.me.finished) await backend.tournaments.finish(match);
+    else await backend.tournaments.status(match);
   } catch { }
+  if (live.stopped) return;
   screen = 'lobby';
   const { me, tier } = match;
   const open = match.status === 'open';
   const cancelled = match.status === 'cancelled';
-  const won = !open && (me.position === 1 || me.payout > 0);
-  const waiting = match.players.filter((p) => !p.finished).length;
-  const gained = match.status === 'settled' ? recordOnce(match) : null;
-  const ranking = [...match.players].sort((a, b) => (a.position ?? 99) - (b.position ?? 99) || (a.total ?? 999) - (b.total ?? 999));
-  if (gained) {
-    return showEndOverlay({
-      onRematch: () => startMatch(tier, match.id),
-      won,
-      position: me.position,
-      total: match.players.length,
-      prize: won ? `Premio ${coin(me.payout)}` : `Bote ${coin(match.pot)} para el ganador`,
-      ranking,
-      legal: `Bote ${fmt(match.pot)} · comisión ${fmt(match.commission)} · premio ${fmt(match.prize)}`,
-      holes: me.scores.map((strokes, i) => ({ strokes, par: COURSES[match.courses[i]].par })),
-      gained,
-    });
+  const { all, rows } = liveRanking(live);
+  if (!open) {
+    const gained = recordOnce(match, all);
+    if (gained) {
+      const mine = all.find((r) => r.id === 'me');
+      const won = cancelled ? mine?.position === 1 : me.position === 1 || me.payout > 0;
+      showEndOverlay({
+        onRematch: () => startMatch(tier, match.id),
+        won,
+        position: cancelled ? mine?.position ?? 1 : me.position,
+        total: cancelled ? all.length : match.players.length,
+        prize: cancelled ? 'Solo jugaron bots: te hemos devuelto la entrada' : won ? `Premio ${coin(me.payout)}` : `Bote ${coin(match.pot)} para el ganador`,
+        ranking: rows,
+        legal: cancelled ? 'Los bots no cuentan para el premio.' : `Bote ${fmt(match.pot)} · comisión ${fmt(match.commission)} · premio ${fmt(match.prize)} · los bots no cuentan`,
+        holes: me.scores.map((strokes, i) => ({ strokes, par: COURSES[match.courses[i]].par })),
+        gained,
+      });
+      stopLive();
+      if (won && !cancelled) sfx.coins();
+      return;
+    }
   }
+  const won = !open && !cancelled && (me.position === 1 || me.payout > 0);
+  const waiting = match.players.filter((p) => !p.finished && p.online);
   let title, sub;
   if (open) {
     title = 'Esperando a los demás';
-    sub = waiting ? `Faltan ${waiting} jugador${waiting === 1 ? '' : 'es'} por terminar · la inscripción cierra en ${minutesLeft(match.closesAt)} min` : 'Cerrando el torneo…';
+    sub = waiting.length ? `Están terminando: ${waiting.map((p) => esc(p.name)).join(', ')}` : 'Cerrando la partida…';
   } else if (cancelled) {
-    title = 'No hubo rivales';
+    title = 'Solo jugaron bots';
     sub = 'Te hemos devuelto la entrada';
   } else {
     title = won ? '¡Has ganado!' : `Posición ${me.position} de ${match.players.length}`;
@@ -1981,68 +2476,27 @@ async function showOnlineResults(match) {
   const view = h(`
     <main class="screen results ${won ? 'won' : ''}">
       ${won ? '<div class="rays"></div>' : ''}
-      <div class="trophy">${open ? 'En espera' : won ? 'Victoria' : cancelled ? 'Cancelado' : `Puesto #${me.position}`}</div>
+      <div class="trophy">${open ? icon('hourglass') : won ? icon('trophy') : ''}${open ? 'En espera' : won ? 'Victoria' : cancelled ? 'Devuelto' : `Puesto #${me.position}`}</div>
       <h1 class="score-title">${title}</h1>
       <p class="sub">${sub}</p>
-      ${gained
-      ? `<div class="xp-card">
-        <div class="xp-head"><b>+${gained.xp} XP</b><span>${gained.level.level > gained.levelBefore ? `¡Nivel ${gained.level.level}!` : `Nivel ${gained.level.level}`}</span></div>
-        <span class="bar"><i style="--to:${(gained.level.into / gained.level.need) * 100}%"></i></span>
-      </div>
-        ${prestigeNote(gained)}`
-      : ''
-    }
-      ${standingsTable(ranking, !open)}
-      ${match.status === 'settled' ? `<p class="legal">Bote ${fmt(match.pot)} · comisión ${fmt(match.commission)} · premio ${fmt(match.prize)}</p>` : ''}
-      ${open ? '<p class="legal">Puedes salir: el resultado y el premio aparecerán en el lobby, en «Tus torneos».</p>' : ''}
+      ${standingsTable(rows, !open)}
+      ${match.status === 'settled' ? `<p class="legal">Bote ${fmt(match.pot)} · comisión ${fmt(match.commission)} · premio ${fmt(match.prize)} · los bots no cuentan</p>` : ''}
+      ${open ? '<p class="legal">Si alguien se ha desconectado, en menos de un minuto se le da por terminado. Si sales, el premio te llega igual al saldo.</p>' : ''}
       <div class="row">
-        <button class="primary again">${open ? 'Jugar otro' : 'Revancha'}</button>
-        <button class="ghost" data-go="lobby">Lobby</button>
+        ${open ? '' : `<button class="primary again">${icon('restart')}Revancha</button>`}
+        <button class="${open ? 'primary' : 'ghost'}" data-go="lobby">${icon('back')}Lobby</button>
       </div>
     </main>`);
-  view.querySelector('.again').addEventListener('click', () => startMatch(tier));
+  view.querySelector('.again')?.addEventListener('click', () => startMatch(tier, match.id));
+  const key = `${match.status}:${waiting.length}`;
   await shell(view, { nav: false });
-  if (won && gained) sfx.coins();
-  if (open) {
-    const key = `${match.status}:${waiting}`;
-    const poll = async () => {
-      if (!view.isConnected) return;
-      try {
-        await backend.tournaments.status(match);
-      } catch { }
-      if (!view.isConnected) return;
-      if (`${match.status}:${match.players.filter((p) => !p.finished).length}` !== key) showOnlineResults(match);
-      else setTimeout(poll, POLL_MS);
-    };
-    setTimeout(poll, POLL_MS);
-  }
-}
-
-async function showMyTournaments(box) {
-  let list;
-  try {
-    list = await backend.tournaments.mine(TIERS);
-  } catch {
-    return;
-  }
-  if (!list.length || !box.isConnected) return;
-  const label = (m) => {
-    if (m.status === 'cancelled') return 'Sin rivales · entrada devuelta';
-    if (m.status === 'settled') return m.me.payout > 0 ? `Ganaste ${coin(m.me.payout)}` : `Posición ${m.me.position} de ${m.players.length}`;
-    if (!m.me.finished) return `Sin terminar · ${m.me.holesPlayed}/${m.holes} hoyos`;
-    return `Esperando · ${m.players.filter((p) => p.finished).length}/${m.players.length} han terminado`;
+  if (!open) return stopLive();
+  live.fast = true;
+  live.onStatus = () => {
+    if (!view.isConnected) return;
+    const now = `${match.status}:${match.players.filter((p) => !p.finished && p.online).length}`;
+    if (now !== key) showLiveResults(live);
   };
-  box.append(h(`<div class="section-head"><h2>Tus torneos</h2></div>`));
-  const ul = h('<ul class="txs"></ul>');
-  for (const m of list.slice(0, 5)) {
-    const li = h(`<li class="tap"><div><b>${m.tier?.name ?? m.id}</b><small>${m.players.length} jugadores · bote ${fmt(m.tier ? m.tier.entryFee * m.players.length : m.pot)}</small></div><span>${label(m)}</span></li>`);
-    li.addEventListener('click', () => {
-      if (m.status === 'open' && !m.me.finished) return m.me.holesPlayed > 0 ? continueRound(m) : showTournamentLobby(m);
-      showOnlineResults(m);
-    });
-    ul.append(li);
-  }
-  box.append(ul);
 }
 
 function retryMsg(text, retry) {
@@ -2052,7 +2506,7 @@ function retryMsg(text, retry) {
       <div class="card">
         <h2>Sin conexión</h2>
         <p class="sub">${text}</p>
-        <button class="primary">Reintentar</button>
+        <button class="primary">${icon('restart')}Reintentar</button>
       </div>
     </div>`);
   overlay.querySelector('button').addEventListener('click', () => {
@@ -2071,7 +2525,7 @@ function alertMsg(text) {
       <div class="card">
         <h2>Ups</h2>
         <p class="sub">${text}</p>
-        <button class="primary">Volver al lobby</button>
+        <button class="primary">${icon('back')}Volver al lobby</button>
       </div>
     </div>`);
   overlay.querySelector('button').addEventListener('click', () => showLobby());
@@ -2142,7 +2596,7 @@ export async function showFreePlayCourseSelect() {
       <div class="courses-grid"></div>
 
       <div class="freeplay-footer-actions">
-        <button class="ghost back-to-lobby" data-go="lobby">← Volver al Menú Principal</button>
+        <button class="ghost back-to-lobby" data-go="lobby">${icon('back')}Volver al Menú Principal</button>
       </div>
     </main>
   `);
@@ -2170,7 +2624,7 @@ export async function showFreePlayCourseSelect() {
               ${feats[0] ? `<span class="preview-badge feat-badge">${feats[0]}</span>` : ''}
             </div>
             <div class="course-preview-action-overlay">
-              <span class="preview-play-icon"></span>
+              <span class="preview-play-icon">${icon('play')}</span>
               <span class="preview-play-text">Entrenar Hoyo ${idx + 1}</span>
             </div>
           </div>
@@ -2180,7 +2634,7 @@ export async function showFreePlayCourseSelect() {
           ${course.tip ? `<p class="course-tip">${course.tip}</p>` : ''}
           ${feats.length ? `<div class="course-feats">${feats.map((f) => `<span class="feat-tag">${f}</span>`).join('')}</div>` : ''}
         </div>
-        <button class="primary play-course-btn">Jugar Hoyo ${idx + 1}</button>
+        <button class="primary play-course-btn">${icon('play')}Jugar Hoyo ${idx + 1}</button>
       </div>
     `);
     const launchPlay = () => playFreePlay(idx);
@@ -2209,7 +2663,7 @@ export async function showFreePlayCourseSelect() {
             <span class="preview-badge feat-badge">Diana</span>
           </div>
           <div class="course-preview-action-overlay">
-            <span class="preview-play-icon"></span>
+            <span class="preview-play-icon">${icon('play')}</span>
             <span class="preview-play-text">Entrenar Desempate</span>
           </div>
         </div>
@@ -2222,7 +2676,7 @@ export async function showFreePlayCourseSelect() {
           <span class="feat-tag">Muerte súbita</span>
         </div>
       </div>
-      <button class="primary play-course-btn">Jugar Desempate</button>
+      <button class="primary play-course-btn">${icon('play')}Jugar Desempate</button>
     </div>
   `);
   const launchTbPlay = () => playFreePlay('tiebreak');
@@ -2295,10 +2749,10 @@ export function showFreePlayHoleResult(courseIndex, course, strokes) {
         </div>
 
         <div class="freeplay-actions">
-          <button class="primary retry-btn">Repetir este hoyo</button>
-          ${nextIndex != null ? `<button class="primary next-btn">Siguiente hoyo (${nextIndex + 1})</button>` : ''}
-          <button class="secondary select-map-btn">Elegir otro mapa</button>
-          <button class="ghost to-lobby-btn">Lobby principal</button>
+          <button class="primary retry-btn">${icon('restart')}Repetir este hoyo</button>
+          ${nextIndex != null ? `<button class="primary next-btn">Siguiente hoyo (${nextIndex + 1})${icon('next')}</button>` : ''}
+          <button class="secondary select-map-btn">${icon('map')}Elegir otro mapa</button>
+          <button class="ghost to-lobby-btn">${icon('back')}Lobby principal</button>
         </div>
       </div>
     </div>
@@ -2355,7 +2809,9 @@ if (skinLab) {
     }
     wallet.subscribe((n) => {
       const el = app.querySelector('.balance');
-      if (el) el.innerHTML = `${coin(n)}<span class="plus">+</span>`;
+      if (el) el.innerHTML = `${coin(n)}<span class="plus">${icon('plus')}</span>`;
+      const m = app.querySelector('.m-coins');
+      if (m) m.innerHTML = coin(n);
     });
     showLobby();
   });

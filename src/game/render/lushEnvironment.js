@@ -52,25 +52,31 @@ const barkMat = shaded(0x8a5a33, { roughness: 0.95 });
 const rockMat = shaded(0xffffff, { roughness: 0.9 });
 
 /** Copa: varias esferas lisas fundidas, con sombra por debajo y luz por arriba. */
-function canopy(rng, r, y) {
+// detalle 0/1/2 (quality().lod; de lejos un punto menos)
+const ICO = [1, 2, 3];
+const ROCK_ICO = [2, 3, 4];
+const PINE_SEG = [10, 16, 28];
+const TRUNK_SEG = [7, 10, 14];
+
+function canopy(rng, r, y, detail = 2) {
   const parts = [];
   const n = 5 + Math.floor(rng() * 3);
   for (let i = 0; i < n; i++) {
     const a = (i / n) * Math.PI * 2 + rng() * 0.6;
     const rr = r * (0.55 + rng() * 0.25);
-    const g = smoothBlob(new THREE.IcosahedronGeometry(rr, 3), rng, 0.08, 3);
+    const g = smoothBlob(new THREE.IcosahedronGeometry(rr, ICO[detail]), rng, 0.08, 3);
     g.translate(Math.cos(a) * r * 0.55, y + (rng() - 0.3) * r * 0.45, Math.sin(a) * r * 0.55);
     parts.push(g);
   }
-  const top = smoothBlob(new THREE.IcosahedronGeometry(r * 0.8, 3), rng, 0.08, 3);
+  const top = smoothBlob(new THREE.IcosahedronGeometry(r * 0.8, ICO[detail]), rng, 0.08, 3);
   top.translate(0, y + r * 0.5, 0);
   parts.push(top);
   return shadeByHeight(mergeGeometries(parts), 0x6b6b6b, 0xffffff, y - r * 0.6, y + r * 1.1);
 }
 
 /** Tronco cónico con raíces que se abren al suelo. */
-function trunk(h, r) {
-  const g = new THREE.CylinderGeometry(r * 0.6, r, h, 14, 4);
+function trunk(h, r, detail = 2) {
+  const g = new THREE.CylinderGeometry(r * 0.6, r, h, TRUNK_SEG[detail], 4);
   const p = g.attributes.position;
   for (let i = 0; i < p.count; i++) {
     const y = p.getY(i);
@@ -85,17 +91,17 @@ function trunk(h, r) {
 }
 
 /** Árbol de copa redonda o abeto liso, según kind. */
-export function makeLushTree(kind, rng, x, y, z, leaves) {
+export function makeLushTree(kind, rng, x, y, z, leaves, detail = 2) {
   const g = new THREE.Group();
   const s = 0.8 + rng() * 0.8;
   const leaf = leaves[Math.floor(rng() * leaves.length)];
   if (kind === 'pine') {
-    g.add(new THREE.Mesh(trunk(0.9, 0.16), barkMat));
+    g.add(new THREE.Mesh(trunk(0.9, 0.16, detail), barkMat));
     // pisos de ramas lisos, que caen un poco en el borde
     const tiers = [];
     for (let i = 0; i < 4; i++) {
       const r = 1.05 - i * 0.22, h = 1 - i * 0.05;
-      const c = new THREE.CylinderGeometry(r * 0.03, r, h, 28, 3);
+      const c = new THREE.CylinderGeometry(r * 0.03, r, h, PINE_SEG[detail], 3);
       const p = c.attributes.position;
       for (let k = 0; k < p.count; k++) {
         const yy = p.getY(k);
@@ -107,8 +113,8 @@ export function makeLushTree(kind, rng, x, y, z, leaves) {
     }
     g.add(new THREE.Mesh(shadeByHeight(mergeGeometries(tiers), 0x707070, 0xffffff, 0.5, 2.8), leaf));
   } else {
-    g.add(new THREE.Mesh(trunk(1.15, 0.17), barkMat));
-    g.add(new THREE.Mesh(canopy(rng, 0.85 + rng() * 0.25, 1.75), leaf));
+    g.add(new THREE.Mesh(trunk(1.15, 0.17, detail), barkMat));
+    g.add(new THREE.Mesh(canopy(rng, 0.85 + rng() * 0.25, 1.75, detail), leaf));
   }
   g.position.set(x, y - 0.05, z);
   g.scale.setScalar(s);
@@ -118,13 +124,13 @@ export function makeLushTree(kind, rng, x, y, z, leaves) {
 }
 
 /** Arbusto redondo bajo, de las mismas hojas que los árboles. */
-export function makeLushBush(rng, x, y, z, leaves) {
+export function makeLushBush(rng, x, y, z, leaves, detail = 2) {
   const leaf = leaves[Math.floor(rng() * leaves.length)];
   const parts = [];
   const n = 3 + Math.floor(rng() * 3);
   for (let i = 0; i < n; i++) {
     const r = 0.28 + rng() * 0.22;
-    const b = smoothBlob(new THREE.IcosahedronGeometry(r, 3), rng, 0.08, 4);
+    const b = smoothBlob(new THREE.IcosahedronGeometry(r, ICO[detail]), rng, 0.08, 4);
     b.scale(1, 0.8, 1);
     b.translate((rng() - 0.5) * 0.7, r * 0.6, (rng() - 0.5) * 0.7);
     parts.push(b);
@@ -137,8 +143,8 @@ export function makeLushBush(rng, x, y, z, leaves) {
 }
 
 /** Roca pulida: gris con musgo verde por arriba. */
-export function makeLushRock(rng, x, y, z, moss) {
-  const g = smoothBlob(new THREE.IcosahedronGeometry(1, 4), rng, 0.16, 1.6);
+export function makeLushRock(rng, x, y, z, moss, detail = 2) {
+  const g = smoothBlob(new THREE.IcosahedronGeometry(1, ROCK_ICO[detail]), rng, 0.16, 1.6);
   const sx = 0.3 + rng() * 0.6;
   g.scale(sx * (1 + rng() * 0.4), sx * (0.55 + rng() * 0.3), sx);
   const p = g.attributes.position, col = new Float32Array(p.count * 3);
@@ -187,12 +193,12 @@ export function makeGrassClump(rng, x, y, z, mat) {
 }
 
 /** Nubes de algodón lisas: varias bolas fundidas, más gordas en el centro. */
-export function makeLushCloud(rng, mat) {
+export function makeLushCloud(rng, mat, detail = 4) {
   const n = 4 + Math.floor(rng() * 4), parts = [];
   for (let k = 0; k < n; k++) {
     const mid = 1 - Math.abs(k - (n - 1) / 2) / n;
     const r = (2.2 + rng() * 1.6) * (0.7 + mid * 0.6);
-    const g = smoothBlob(new THREE.IcosahedronGeometry(r, 4), rng, 0.05, 1.2);
+    const g = smoothBlob(new THREE.IcosahedronGeometry(r, detail), rng, 0.05, 1.2);
     g.scale(1, 0.7, 0.85);
     g.translate(k * 2.6 - n * 1.3, mid * 1.4, (rng() - 0.5) * 2);
     parts.push(g);

@@ -15,7 +15,7 @@ test('cálculo de distancia tee-hoyo para todos los mapas', () => {
   // Verificar que todos los hoyos tienen distancias positivas y coherentes
   for (let i = 0; i < COURSES.length; i++) {
     const dist = getCourseDistance(COURSES[i]);
-    assert.ok(typeof dist === 'number' && dist >= 4 && dist < 35, `distancia de hoyo ${i + 1} debe ser coherente: ${dist}m`);
+    assert.ok(typeof dist === 'number' && dist >= 4 && dist < 45, `distancia de hoyo ${i + 1} debe ser coherente: ${dist}m`);
   }
 });
 

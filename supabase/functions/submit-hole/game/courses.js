@@ -38,9 +38,12 @@ function ramp({ x, z, w = 1.7, d = 1.6, dir = [0, -1], h = 0.32, lift = 0.42, ma
 // tubo de lava que cae dentro, a una cámara en U con lava en medio. Al caer la
 // bola queda entre dos rampas: la de delante salta el río del brazo izquierdo
 // (el camino largo, por abajo) y la de la derecha cruza la U de un salto (atajo).
+// El hoyo está al fondo a la derecha: por abajo se llega rodeando la curva de la
+// U; por el atajo hay que bajar el brazo derecho saltando (o esquivando) su río.
+// Jugando perfecto, los tres caminos (rampa, puente de roca y atajo) salen en 3.
 const VOLCANO_RAMP_A = ramp({ x: -3.4, z: 4.2 });
 const VOLCANO_SHORTCUT = ramp({ x: -2.15, z: 6.2, w: 1.6, d: 1.7, dir: [1, 0] });
-const VOLCANO_RAMP_B = ramp({ x: 3.4, z: -4.6, dir: [0, 1] });
+const VOLCANO_RAMP_B = ramp({ x: 3.4, z: -1.4 });
 
 // El Abismo: dos agujeros de pared a pared; cada uno se salta desde su rampa
 const ABYSS_RAMP_A = ramp({ x: -1.3, z: 7.2, w: 1.4 });
@@ -67,13 +70,14 @@ const MILL_CYBER = windmill({ x: 2.2, z: -5.0, w: 1.0, depth: 1.4, left: 0.4, ri
 // - saltar la escuadra de la calzada con la rampa: cae junto a la charca del
 //   sendero, solo bien medido se libra del agua. La rampa frena (maxV): ni a
 //   tope pasa del puente, así que no ahorra más de un golpe.
-// Jugando perfecto: 6 golpes por la U, 5 por el sendero y 5 saltando
+// Jugando perfecto: 4 golpes por arriba, 5 por el sendero y 4 saltando
 // (scripts/route-planner.mjs).
-// Al final, el rincón del hoyo se entra por un hueco de abajo.
+// El hoyo está al fondo a la derecha, al final del templo: la U llega por
+// arriba y el sendero, tras el puente, sube por la bajada derecha.
 // water: es como la lava (vuelves al sitio del golpe), pero se ve agua. Nada
 // toca el contorno: el agua se recorta en el césped y tiene que quedar dentro.
 const JUNGLE_JUMP_W1 = ramp({ x: -10.4, z: 7.95, w: 1.6, d: 1.5 });
-const JUNGLE_JUMP_W2 = ramp({ x: 10.4, z: -2.95, w: 1.6, d: 1.5, dir: [0, 1] });
+const JUNGLE_JUMP_W2 = ramp({ x: 10.4, z: -0.25, w: 1.6, d: 1.5 });
 const JUNGLE_CORNER_L = ramp({ x: -9.6, z: 0.6, w: 1.5, d: 1.5, dir: [1, 0], maxV: 7.5 });
 const waterBox = (x0, x1, z0, z1, flow) => ({ poly: [[x0, z0], [x1, z0], [x1, z1], [x0, z1]], flow, water: true });
 
@@ -278,7 +282,7 @@ export const COURSES = [
     par: 5,
     theme: 'caldera',
     tee: [-3.4, 26],
-    cup: [4.2, 2],
+    cup: [4.8, -10.2],
     // la cámara de magma en U (dentro del volcán)
     outline: [[-5.4, 10], [5.4, 10], [6.4, 9], [6.4, -11], [5.4, -12], [-5.4, -12], [-6.4, -11], [-6.4, 9]],
     // el sendero de fuera, en la ladera, 4 m por encima del suelo de la cámara
@@ -287,7 +291,7 @@ export const COURSES = [
     bumpers: [
       { x: -2.6, z: 23.2, r: 0.32 },
       { x: -4.4, z: -6.4, r: 0.4 },
-      { x: 4.6, z: -9.2, r: 0.38 },
+      { x: 3.3, z: -9.2, r: 0.38 },
       { x: 5.6, z: 6.4, r: 0.36 },
     ],
     sand: [],
@@ -315,7 +319,7 @@ export const COURSES = [
       { poly: [[1.6, 4.6], [2.4, 4.8], [2.9, 4.2], [2.7, 3.4], [2, 3.2], [1.5, 3.7]], flow: [0, -1] },
     ],
     // los rivales cogen el atajo
-    waypoints: [[-3.4, 17.2], [3.6, 6.2]],
+    waypoints: [[-3.4, 17.2], [3.6, 6.2], [5.75, -1.2], [5.75, -5]],
   },
   {
     name: 'El Molino del Prado',
@@ -393,18 +397,16 @@ export const COURSES = [
   },
   {
     name: 'El Templo de la Selva',
-    tip: 'Tres caminos: la U entera, el sendero del puente o saltar la escuadra de la calzada. Llega suave: si vas fuerte la bola rebota en el borde del hoyo',
-    par: 12,
+    tip: 'El hoyo está al fondo a la derecha. Tres caminos: por arriba cruzando el templo, por el sendero y el puente, o saltando la escuadra de la calzada. Llega suave: si vas fuerte la bola rebota en el borde del hoyo',
+    par: 10,
     maxStrokes: 20,
     theme: 'jungle',
-    // hoyo con borde: la bola cae en la boca y, si va fuerte, choca con el canto y se sale
-    realCup: true,
     tee: [-10, 12.6],
-    cup: [10.9, 12.3],
+    cup: [10.6, -11.2],
     // la U: calzada izquierda (x -12..-8), templo arriba (z -14..-10) y bajada
     // derecha (x 8..12) hasta el rincón del hoyo; el sendero (x -8..-4.6) y el
     // puente (z 2..4.5) rodean la laguna, encerrada por muros
-    outline: [[-12, 14], [-12, -14], [12, -14], [12, 14], [8, 14], [8, 4.5], [-8, 4.5], [-8, 14]],
+    outline: [[-12, 14], [-12, -14], [12, -14], [12, 4.5], [-8, 4.5], [-8, 14]],
     walls: [
       // la laguna del centro
       [[-8, -4], [-8, -10]], [[-8, -10], [8, -10]], [[8, -10], [8, 2]], [[8, 2], [-4.6, 2]],
@@ -415,9 +417,6 @@ export const COURSES = [
       // primera, la segunda frena la bola)
       [[-4.6, 4.5], [-4.6, 3.1]],
       [[-1.6, 4.5], [-1.6, 3.1]],
-      // el rincón del hoyo: se entra por abajo, por el hueco junto al muro de fuera
-      [[9.6, 11.2], [12, 11.2]],
-      [[9.6, 11.2], [9.6, 12.6]],
       // el templo de arriba: una isla parte la galería en dos caminos
       [[-4.5, -12], [4.5, -12]],
       // escuadras en diagonal en las esquinas de arriba
@@ -428,7 +427,6 @@ export const COURSES = [
       [[-8, -6.5], [-10.4, -6.5]],
       [[0, -14], [0, -12.9]],
       [[8, -6], [9.6, -6]],
-      [[8, 6.6], [10, 6.6]],
       ...JUNGLE_JUMP_W1.walls,
       ...JUNGLE_JUMP_W2.walls,
       ...JUNGLE_CORNER_L.walls,
@@ -442,7 +440,6 @@ export const COURSES = [
     sand: [
       { x: -6.3, z: -2.9, w: 2.4, d: 1.4 },
       { x: -0.8, z: -11, w: 1.4, d: 1.2 },
-      { x: 8.8, z: 9.6, w: 1.2, d: 1.2 },
     ],
     spinners: [{ x: -6.3, z: 0.9, len: 2.4, speed: 1.3 }],
     movers: [
@@ -463,8 +460,7 @@ export const COURSES = [
     ],
     waypoints: [
       [-11, 10], [-10.4, 9.6], [-10.4, 5.2], [-8.45, 2.6], [-8.45, -1.6], [-11.3, -6],
-      [-11.2, -7.8], [-10, -11.5], [-5, -11.5], [5, -11.5], [10, -11.5], [11, -9], [10.4, -6.6], [10.4, 0.4],
-      [11, 5.5], [11, 8], [8.8, 10.4], [8.9, 13.5],
+      [-11.2, -7.8], [-10, -11.5], [-5, -11.5], [5, -11.5],
     ],
   },
   {

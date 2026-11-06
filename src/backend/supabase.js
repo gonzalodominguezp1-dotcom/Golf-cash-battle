@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { SupabaseWallet } from '../wallet/SupabaseWallet.js';
 import { SupabaseMatchService } from '../match/SupabaseMatchService.js';
 import { TournamentService } from '../match/TournamentService.js';
+import { PartyService } from '../match/PartyService.js';
 import { AccountService } from '../account/AccountService.js';
 import { AuthService } from '../account/AuthService.js';
 
@@ -45,6 +46,7 @@ export async function connectSupabase() {
     account,
     matches: new SupabaseMatchService(db, wallet),
     tournaments: new TournamentService(db, wallet),
+    parties: new PartyService(db),
   };
 }
 
