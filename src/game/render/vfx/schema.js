@@ -66,26 +66,37 @@ function fitToCap(want, total, cap) {
   return out;
 }
 
+/** Máximo de elementos de `times` (ordenada) que caben en una ventana semiabierta [t, t + len). Dos punteros: O(n). */
+function windowMax(times, len) {
+  let max = 0, j = 0;
+  for (let i = 0; i < times.length; i++) {
+    if (j < i) j = i;
+    while (j < times.length && times[j] < times[i] + len) j++;
+    max = Math.max(max, j - i);
+  }
+  return max;
+}
+
 /**
  * Máximo de destellos de pantalla completa en cualquier ventana de 1 s. Con reducción de movimiento, 0.
- * En un bucle se cuentan también las repeticiones, porque el efecto vuelve a empezar.
+ * En un bucle el efecto vuelve a empezar, así que se cuentan las repeticiones, pero en forma cerrada:
+ * una ventana de 1 s abarca q periodos enteros (q × destellos) más un resto menor que un periodo.
+ * El coste depende solo del número de destellos, nunca de lo corta que sea la duración.
  */
 export function flashRate(effect, reduced = false) {
   if (reduced) return 0;
-  const base = effect.flashes ?? [];
-  // un bucle tan corto que repite más de 1000 destellos por segundo ya incumple: se responde sin expandirlo
-  if (effect.loop && effect.duration > 0 && base.length / effect.duration > 1000) return Infinity;
-  const reps = effect.loop && effect.duration > 0 ? Math.ceil(2 / effect.duration) + 1 : 1;
-  const f = [];
-  for (let r = 0; r < reps; r++) for (const t of base) f.push(t + r * (effect.duration ?? 0));
-  f.sort((a, b) => a - b);
-  let max = 0;
+  const f = [...(effect.flashes ?? [])].sort((x, y) => x - y);
+  if (!f.length) return 0;
+  const W = 1 - EPS, D = effect.duration;
+  if (!effect.loop || !(D > 0) || !Number.isFinite(D)) return windowMax(f, W);
+  const q = Math.floor(W / D), r = W - q * D, g = f.concat(f.map((t) => t + D));
+  let best = 0, j = 0;
   for (let i = 0; i < f.length; i++) {
-    let c = 0;
-    for (let j = i; j < f.length && f[j] < f[i] + 1 - EPS; j++) c++;
-    max = Math.max(max, c);
+    if (j < i) j = i;
+    while (j < g.length && g[j] < g[i] + r) j++;
+    best = Math.max(best, j - i);
   }
-  return max;
+  return q * f.length + best;
 }
 
 function checkKeys(obj, allowed, where, errors) {

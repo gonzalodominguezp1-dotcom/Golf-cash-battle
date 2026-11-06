@@ -13,6 +13,10 @@ export const MAX_ACTIVE = 8;
 // Campos por emisión en el paquete: t, cell, vx, vy, vz, size, life, r, g, b, grav, drag, grow, spin, att
 const STRIDE = 15;
 const SURFACE_LIFT = 0.05;
+/** Vueltas de un bucle que se procesan en un solo update; si dt es mayor (pestaña oculta), se salta el resto. */
+const MAX_WRAPS = 4;
+const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
+const finite3 = (v) => v && Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z);
 
 const WHITE = new THREE.Color('#ffffff');
 const UP = new THREE.Vector3(0, 1, 0);
@@ -76,14 +80,18 @@ export class VfxPlayer {
     const slot = this.slots.find((s) => !s.active);
     if (!slot) return null;
 
-    const n = normal ? new THREE.Vector3(normal.x, normal.y, normal.z).normalize() : UP.clone();
+    if (!finite3(pos)) { this.lastErrors = ['pos: debe tener x, y y z finitos']; return null; }
+    const n = finite3(normal) && Math.hypot(normal.x, normal.y, normal.z) > 1e-6 ? new THREE.Vector3(normal.x, normal.y, normal.z).normalize() : UP.clone();
     const frames = { back: frame(n), normal: frame(n), up: frame(UP), in: frame(n.clone().negate()), fwd: frame(frame(n).t) };
     const list = emissions(effect, seed, this.quality, reduced, strength).sort((a, b) => a.t - b.t);
     const data = new Float32Array(list.length * STRIDE);
     const colors = new Map();
     const colorOf = (token) => {
       let c = colors.get(token);
-      if (!c) colors.set(token, (c = token === 'white' ? WHITE : new THREE.Color(palette[token] ?? token)));
+      if (!c) {
+        const css = palette[token] ?? token;
+        colors.set(token, (c = HEX.test(css) ? new THREE.Color(css) : WHITE));
+      }
       return c;
     };
     list.forEach((e, i) => {
@@ -106,19 +114,24 @@ export class VfxPlayer {
   }
 
   update(dt) {
-    const pool = this.pool;
-    for (const s of this.slots) {
+    if (!Number.isFinite(dt) || dt < 0) return; // un dt roto no debe envenenar las casillas ni el pool
+    const pool = this.pool, slots = this.slots;
+    for (let k = 0; k < slots.length; k++) {
+      const s = slots[k];
       if (!s.active) continue;
       s.t += dt;
       const d = s.data;
-      while (s.ptr < s.count && d[s.ptr * STRIDE] <= s.t) {
-        const o = s.ptr++ * STRIDE;
-        // si el pool está lleno, emit devuelve false y esta emisión se descarta: nunca se corta una viva
-        pool.emit(d[o + 1], s.ox, s.oy, s.oz, d[o + 2], d[o + 3], d[o + 4], d[o + 5], d[o + 6], d[o + 7], d[o + 8], d[o + 9], d[o + 10], d[o + 11], d[o + 12], d[o + 13], d[o + 14]);
+      for (let wraps = 0; ; wraps++) {
+        while (s.ptr < s.count && d[s.ptr * STRIDE] <= s.t) {
+          const o = s.ptr++ * STRIDE;
+          // si el pool está lleno, emit devuelve false y esta emisión se descarta: nunca se corta una viva
+          pool.emit(d[o + 1], s.ox, s.oy, s.oz, d[o + 2], d[o + 3], d[o + 4], d[o + 5], d[o + 6], d[o + 7], d[o + 8], d[o + 9], d[o + 10], d[o + 11], d[o + 12], d[o + 13], d[o + 14]);
+        }
+        if (!s.loop) { if (s.t >= s.duration) s.active = false; break; }
+        if (s.t < s.duration) break;
+        s.t -= s.duration; s.ptr = 0;
+        if (wraps >= MAX_WRAPS) { s.t %= s.duration; break; }
       }
-      if (s.loop) {
-        if (s.t >= s.duration) { s.t -= s.duration; s.ptr = 0; }
-      } else if (s.t >= s.duration) s.active = false;
     }
     pool.update(dt);
   }

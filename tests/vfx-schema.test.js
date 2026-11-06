@@ -152,7 +152,7 @@ test('validate responde rápido y sin colgarse con un bucle de duración minúsc
     assert.ok(r.errors.some((e) => e.includes('flashes')));
   }
   assert.ok(Date.now() - t0 < 500, `tardó ${Date.now() - t0} ms`);
-  assert.equal(flashRate(loop({ duration: 1e-9, flashes: [0] })), Infinity);
+  assert.ok(flashRate(loop({ duration: 1e-9, flashes: [0] })) > 1e8); // enorme y finito, calculado sin recorrerlo
 });
 
 test('maxParticles debe ser entero y el presupuesto nunca es fraccionario', () => {
@@ -162,4 +162,26 @@ test('maxParticles debe ser entero y el presupuesto nunca es fraccionario', () =
   assert.ok(r.errors.some((e) => e.includes('maxParticles.low') && e.includes('entero')));
   assert.equal(budget(frac, 'low'), 10);
   assert.ok(emissions(frac, 1, 'low').length <= budget(frac, 'low'));
+});
+
+test('validate acota su trabajo con cualquier entrada: sin destellos, muchísimos destellos y duraciones extremas', () => {
+  const t0 = Date.now();
+  for (const d of [1e-9, 1e-12, 1e-300]) {
+    const sin = loop({ duration: d, emitters: [{ ...loop().emitters[0], t1: d, rate: 1 / d }], flashes: [] });
+    assert.equal(flashRate(sin), 0);
+    assert.ok(validate(sin).errors?.every((e) => !e.includes('flashes')) ?? true);
+  }
+  const muchos = burst({ duration: 1000, emitters: [{ ...burst().emitters[0], t0: 0 }], flashes: new Array(100000).fill(0) });
+  assert.equal(validate(muchos).ok, false);
+  assert.ok(validate(muchos).errors.some((e) => e.includes('flashes')));
+  assert.equal(flashRate(muchos), 100000);
+  assert.ok(Date.now() - t0 < 1000, `tardó ${Date.now() - t0} ms`);
+});
+
+test('flashRate en bucle: periodos enteros más resto, también en los límites exactos', () => {
+  const lp = (duration, flashes) => loop({ duration, emitters: [{ ...loop().emitters[0], t1: duration, rate: 10 / duration }], flashes });
+  assert.equal(flashRate(lp(1, [0, 0.4, 0.8])), 3);
+  assert.equal(flashRate(lp(0.5, [0])), 2); // 0 y 0,5 caben en una ventana de 1 s; el 1,0 no
+  assert.equal(flashRate(lp(0.8, [0, 0.2, 0.4])), 4);
+  assert.equal(flashRate(lp(2, [0, 0.9])), 2);
 });
