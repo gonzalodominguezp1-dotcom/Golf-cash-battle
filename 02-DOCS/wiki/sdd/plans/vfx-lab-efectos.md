@@ -173,7 +173,7 @@ Riesgo: `rsc risk` sobre las rutas previstas da **tier 1** (un revisor) a todos 
 | T014 |  | Cierre automático: todos los done-checks y la verificación del proyecto | Cada fila marcada; `pnpm test`, `pnpm run build`, `pnpm audit --prod` y `bash scripts/verify.sh` terminan con código 0 | T001–T011, T013, T015–T017 | todos | — |
 | T015 |  | Añadir al esquema la entidad Skin (apariencia y efectos asignados) con su validación y pruebas antes | `node --test tests/vfx-schema.test.js` incluye `validateSkin` y pasa; una skin con efecto inexistente falla | T003 | AC16 | 1 |
 | T016 | [P] | Añadir al editor del banco el CRUD de skins con vista previa y aviso al borrar un efecto en uso | `window.__lab.selfcheck()` crea, duplica, edita y borra una skin y avisa si se borra un efecto que usa; `pnpm build` del banco pasa | T007, T015 | AC16, AC8 | — |
-| T017 |  | Cubrir los casos límite: `low` conserva anillo, destello y 30 % de `high`; pool lleno descarta emisiones nuevas; errores de parámetro y pieza ausente se listan | `node --test tests/vfx-schema.test.js tests/vfx-runtime.test.js` incluye los tres casos y pasa; `selfcheck()` cubre el error del banco | T004, T007 | AC13, AC14, AC15 | 1 |
+| T017 |  | Cubrir los casos límite: `low` conserva anillo, destello y 30 % de `high`; pool lleno descarta emisiones nuevas; errores de parámetro y pieza ausente se listan | `node --test tests/vfx-schema.test.js tests/vfx-runtime.test.js` incluye los tres casos y pasa; `selfcheck()` cubre el error del banco | T004, T007, T016 | AC13, AC14, AC15 | 1 |
 
 **T004 — Interfaces**
 - Consumes: `emissions(effect, seed, quality, reduced) -> Emission[]`, `budget(effect, quality) -> number` (de T003); `AdditiveParticles(scene, atlas, max)` de `effects.js`.
