@@ -212,13 +212,14 @@ const facing = (mesh) => Z.clone().applyQuaternion(mesh.quaternion);
 
 test('T005: un anillo wall se orienta con la normal de la pared y nace en el punto de impacto', () => {
   const { player } = make();
-  player.play(ringFx(), { pos: { x: 1, y: 0.6, z: 0 }, normal: { x: 0, y: 0, z: 1 }, seed: 1, palette: PALETTE });
+  const n = new THREE.Vector3(0.6, 0, 0.8);
+  player.play(ringFx(), { pos: { x: 1, y: 0.6, z: 0 }, normal: { x: n.x, y: n.y, z: n.z }, seed: 1, palette: PALETTE });
   player.update(0);
   const [r] = visibleRings(player);
   assert.ok(r, 'no hay anillo visible');
   const f = facing(r.m);
-  assert.ok(Math.abs(f.z - 1) < 1e-6 && Math.abs(f.x) < 1e-6 && Math.abs(f.y) < 1e-6, JSON.stringify(f));
-  assert.ok(Math.abs(r.m.position.x - 1) < 1e-6 && Math.abs(r.m.position.y - 0.6) < 0.1);
+  assert.ok(f.distanceTo(n) < 1e-6, JSON.stringify(f));
+  assert.ok(Math.abs(r.m.position.x - 1) < 0.1 && Math.abs(r.m.position.y - 0.6) < 0.1);
 });
 
 test('T005: un anillo floor queda plano en el suelo aunque la normal sea una pared', () => {
@@ -276,19 +277,85 @@ test('T005: un anillo retrasado (t > 0) nace en su momento y no antes', () => {
   assert.equal(visibleRings(player).length, 1);
 });
 
-test('T005: una luz del efecto se dibuja como un destello suave de su radio y su vida', () => {
+const lightFx = (light = {}, over = {}) => burst({ emitters: [{ ...burst().emitters[0], n: 1 }], lights: [{ t: 0, radius: 1.4, life: 0.3, col: 'glow', ...light }], ...over });
+const lightAt = (player, i = 0) => ({ size: player.lightPool.size[i], cell: player.lightPool.cell[i], r: player.lightPool.rgb[i * 3], g: player.lightPool.rgb[i * 3 + 1], decay: player.lightPool.decay[i] });
+
+test('T005: una luz es un destello suave de su radio, su vida y su color, en su propio pool', () => {
   const { player } = make();
-  const fx = burst({ emitters: [{ ...burst().emitters[0], n: 1 }], lights: [{ t: 0, radius: 1.4, life: 0.3, col: 'glow' }] });
-  player.play(fx, { pos: { x: 0, y: 0, z: 0 }, seed: 1, palette: PALETTE });
+  player.play(lightFx({ col: '#ff0000' }), { pos: { x: 0, y: 0, z: 0 }, seed: 1, palette: PALETTE });
   player.update(0);
-  assert.equal(player.live, 2); // la chispa y el destello
-  const soft = Array.from({ length: player.live }, (_, i) => i).filter((i) => player.pool.cell[i] === CELLS.soft);
-  assert.equal(soft.length, 1);
-  assert.ok(Math.abs(player.pool.size[soft[0]] - 1.4) < 1e-6);
+  assert.equal(player.live, 1);        // solo la chispa
+  assert.equal(player.liveLights, 1);  // y el destello, aparte
+  const l = lightAt(player);
+  assert.equal(l.cell, CELLS.soft);
+  assert.ok(Math.abs(l.size - 1.4) < 1e-6);
+  assert.ok(Math.abs(l.decay - 1 / 0.3) < 1e-6);
+  assert.ok(l.r > 0.9 && l.g < 0.1);
+});
+
+test('T005/AC13: el destello nunca se pierde aunque el pool de partículas esté lleno', () => {
+  const { player } = make('low');
+  for (let i = 0; i < 6; i++) player.play(burst(), { pos: { x: 0, y: 0, z: 0 }, seed: i, palette: PALETTE });
+  player.update(0);
+  assert.equal(player.live, PLAYER_CAP.low);
+  player.play(lightFx(), { pos: { x: 0, y: 0, z: 0 }, seed: 9, palette: PALETTE });
+  player.update(0);
+  assert.equal(player.liveLights, 1);
+});
+
+test('T005: con reducción de movimiento el destello encoge, k lo atenúa y strength lo escala', () => {
+  const size = (opts, light) => {
+    const { player } = make();
+    player.play(lightFx(light), { pos: { x: 0, y: 0, z: 0 }, seed: 1, palette: PALETTE, ...opts });
+    player.update(0);
+    return lightAt(player);
+  };
+  assert.ok(size({ reduced: true }).size < size({ reduced: false }).size * 0.5);
+  assert.ok(size({}, { k: 0.25 }).r < size({}, { k: 1 }).r * 0.5);
+  assert.ok(size({ strength: 0.2 }).size < size({ strength: 1 }).size);
+  assert.ok(size({ strength: 0 }).size > 0);
+});
+
+test('T005: un destello retrasado nace en su momento, y un bucle repite anillos y destellos en cada vuelta', () => {
+  const { player } = make();
+  player.play(lightFx({ t: 0.3 }), { pos: { x: 0, y: 0, z: 0 }, seed: 1, palette: PALETTE });
+  run(player, 0.2);
+  assert.equal(player.liveLights, 0);
+  run(player, 0.2);
+  assert.equal(player.liveLights, 1);
+  const b = make();
+  const lp = { ...loop(), rings: [{ t: 0.1, radius: 2, life: 0.3, col: 'accent', orient: 'floor' }], lights: [{ t: 0.1, radius: 1, life: 0.2, col: 'glow' }] };
+  b.player.play(lp, { pos: { x: 0, y: 0, z: 0 }, seed: 1, palette: PALETTE });
+  const seen = [];
+  for (let f = 1; f <= 400; f++) { b.player.update(1 / 60); if (f % 120 === 12) seen.push([visibleRings(b.player).length, b.player.liveLights]); } // 2 s = 120 fotogramas
+  assert.deepEqual(seen, [[1, 1], [1, 1], [1, 1], [1, 1]]); // fotogramas 12, 132, 252 y 372: una por vuelta
+});
+
+test('T005: el anillo usa mezcla normal como los Shockwaves del juego', () => {
+  const { player } = make();
+  assert.ok(player.rings.every((r) => r.m.material.blending === THREE.NormalBlending));
+});
+
+test('T005: un k de luz fuera de 0..1 es inválido', () => {
+  const { player } = make();
+  assert.equal(player.play(lightFx({ k: 2 }), { pos: { x: 0, y: 0, z: 0 }, seed: 1, palette: PALETTE }), null);
+  assert.ok(player.lastErrors.some((e) => e.includes('lights[0].k')));
 });
 
 test('T005: dispose retira también los anillos de la escena', () => {
   const { scene, player } = make();
   player.dispose();
+  assert.equal(scene.children.length, 0);
+});
+
+test('T005: dispose libera la geometría y los materiales de los anillos y el pool de luces', () => {
+  const { scene, player } = make();
+  let geo = 0, mats = 0;
+  const g = player.ringGeo.dispose.bind(player.ringGeo);
+  player.ringGeo.dispose = () => { geo++; g(); };
+  for (const r of player.rings) { const d = r.m.material.dispose.bind(r.m.material); r.m.material.dispose = () => { mats++; d(); }; }
+  player.dispose();
+  assert.equal(geo, 1);
+  assert.equal(mats, player.rings.length);
   assert.equal(scene.children.length, 0);
 });

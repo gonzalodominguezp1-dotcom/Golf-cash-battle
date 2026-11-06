@@ -174,6 +174,7 @@ function checkTimed(effect, item, allowed, where, errors, extra) {
   if (!isObj(item)) return void errors.push(`${where}: debe ser un objeto`);
   checkKeys(item, allowed, where, errors);
   if (extra) errors.push(`${where}.${extra}`);
+  if (item.k !== undefined && (!isNum(item.k) || item.k < 0 || item.k > 1)) errors.push(`${where}.k: debe estar entre 0 y 1 (brillo del destello)`);
   if (!isNum(item.t) || item.t < 0) errors.push(`${where}.t: debe ser 0 o más`);
   if (!isNum(item.life) || item.life <= 0) errors.push(`${where}.life: debe ser mayor que 0`);
   else if (!effect.loop && isNum(item.t) && item.t + item.life > effect.duration + EPS) errors.push(`${where}: t + life supera la duración ${effect.duration}`);

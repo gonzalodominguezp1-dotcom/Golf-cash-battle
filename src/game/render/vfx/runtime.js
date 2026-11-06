@@ -11,6 +11,8 @@ import { PLAYER_CAP, emissions, validate } from './schema.js';
 export const MAX_ACTIVE = 8;
 /** Anillos visibles a la vez; los de más se descartan. */
 export const MAX_RINGS = 8;
+/** Destellos de luz a la vez: tienen su propio pool, así que el tope de partículas nunca los pierde. */
+export const MAX_LIGHTS = 4;
 
 // Campos por emisión en el paquete: t, cell, vx, vy, vz, size, life, r, g, b, grav, drag, grow, spin, att
 const STRIDE = 15;
@@ -22,6 +24,8 @@ const finite3 = (v) => v && Number.isFinite(v.x) && Number.isFinite(v.y) && Numb
 
 const RING_R0 = 0.15; // radio con el que nace un anillo, en unidades del radio final
 const RING_CALM = 0.35; // opacidad del anillo con «reducir movimiento»
+const RING_ALPHA = 0.7; // como los Shockwaves del juego: mezcla normal, que se lee también sobre fondos claros
+const LIGHT_CALM = 0.4; // tamaño del destello con «reducir movimiento»
 const Z = new THREE.Vector3(0, 0, 1); // RingGeometry mira a +z
 const WHITE = new THREE.Color('#ffffff');
 const UP = new THREE.Vector3(0, 1, 0);
@@ -42,6 +46,7 @@ class Slot {
     this.loop = false; this.duration = 0;
     this.data = null;
     this.rings = []; this.rptr = 0; this.calm = false;
+    this.lights = []; this.lptr = 0;
     this.ox = 0; this.oy = 0; this.oz = 0;
   }
 }
@@ -58,10 +63,12 @@ export class VfxPlayer {
     this.quality = quality;
     this.pool = new AdditiveParticles(scene, atlas, PLAYER_CAP.high);
     this.pool.setLimit(PLAYER_CAP[quality]);
+    this.lightPool = new AdditiveParticles(scene, atlas, MAX_LIGHTS);
+    this.soft = cells.soft ?? 0;
     this.slots = Array.from({ length: MAX_ACTIVE }, () => new Slot());
     this.ringGeo = new THREE.RingGeometry(0.85, 1, 48);
     this.rings = Array.from({ length: MAX_RINGS }, () => {
-      const m = new THREE.Mesh(this.ringGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+      const m = new THREE.Mesh(this.ringGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
       m.visible = false; m.frustumCulled = false;
       scene.add(m);
       return { m, age: 0, life: 1, radius: 1, k: 1, active: false };
@@ -72,6 +79,11 @@ export class VfxPlayer {
   /** Partículas vivas ahora. */
   get live() {
     return this.pool.n;
+  }
+
+  /** Destellos de luz vivos ahora (aparte de `live`). */
+  get liveLights() {
+    return this.lightPool.n;
   }
 
   setLevel(quality) {
@@ -97,9 +109,6 @@ export class VfxPlayer {
     const n = finite3(normal) && Math.hypot(normal.x, normal.y, normal.z) > 1e-6 ? new THREE.Vector3(normal.x, normal.y, normal.z).normalize() : UP.clone();
     const frames = { back: frame(n), normal: frame(n), up: frame(UP), in: frame(n.clone().negate()), fwd: frame(frame(n).t) };
     const list = emissions(effect, seed, this.quality, reduced, strength).sort((a, b) => a.t - b.t);
-    // una luz del efecto es un destello suave (sprite 'soft') de su radio y su vida, como el de las skins
-    for (const l of effect.lights ?? []) list.push({ t: l.t, cell: 'soft', col: l.col, size: l.radius, life: l.life, speed: 0, dx: 0, dy: 1, dz: 0, up: 0, grav: 0, drag: 1, grow: 0, spin: 0, att: 0 });
-    list.sort((a, b) => a.t - b.t);
     const data = new Float32Array(list.length * STRIDE);
     const colors = new Map();
     const colorOf = (token) => {
@@ -119,8 +128,12 @@ export class VfxPlayer {
     });
 
     // un anillo wall se tumba sobre la superficie (mira a la normal); uno floor queda plano en el suelo
-    slot.rings = (effect.rings ?? []).map((r) => ({ t: r.t, radius: r.radius, life: r.life, c: colorOf(r.col), quat: new THREE.Quaternion().setFromUnitVectors(Z, r.orient === 'wall' ? n : UP) })).sort((a, b) => a.t - b.t);
-    slot.rptr = 0; slot.calm = reduced;
+    // strength escala el tamaño de anillos y destellos (0 = la mitad, 1 = completo); con reducción, el destello encoge
+    const sizeK = 0.5 + 0.5 * Math.min(1, Math.max(0, strength));
+    slot.rings = (effect.rings ?? []).map((r) => ({ t: r.t, radius: r.radius * sizeK, life: r.life, c: colorOf(r.col), quat: new THREE.Quaternion().setFromUnitVectors(Z, r.orient === 'wall' ? n : UP) })).sort((a, b) => a.t - b.t);
+    // una luz es un destello suave (sprite 'soft') en su propio pool; k (0..1, por defecto 1) atenúa su brillo
+    slot.lights = (effect.lights ?? []).map((l) => { const c = colorOf(l.col), k = l.k ?? 1; return { t: l.t, size: l.radius * sizeK * (reduced ? LIGHT_CALM : 1), life: l.life, r: c.r * k, g: c.g * k, b: c.b * k }; }).sort((a, b) => a.t - b.t);
+    slot.rptr = 0; slot.lptr = 0; slot.calm = reduced;
     slot.active = true; slot.gen++;
     slot.t = 0; slot.ptr = 0; slot.count = list.length; slot.data = data;
     slot.loop = effect.loop; slot.duration = effect.duration;
@@ -147,18 +160,24 @@ export class VfxPlayer {
           pool.emit(d[o + 1], s.ox, s.oy, s.oz, d[o + 2], d[o + 3], d[o + 4], d[o + 5], d[o + 6], d[o + 7], d[o + 8], d[o + 9], d[o + 10], d[o + 11], d[o + 12], d[o + 13], d[o + 14]);
         }
         while (s.rptr < s.rings.length && s.rings[s.rptr].t <= s.t) this.#startRing(s, s.rings[s.rptr++]);
+        while (s.lptr < s.lights.length && s.lights[s.lptr].t <= s.t) {
+          const l = s.lights[s.lptr++];
+          this.lightPool.emit(this.soft, s.ox, s.oy, s.oz, 0, 0, 0, l.size, l.life, l.r, l.g, l.b, 0, 1, 0, 0, 0);
+        }
         if (!s.loop) { if (s.t >= s.duration) s.active = false; break; }
         if (s.t < s.duration) break;
-        s.t -= s.duration; s.ptr = 0; s.rptr = 0;
+        s.t -= s.duration; s.ptr = 0; s.rptr = 0; s.lptr = 0;
         if (wraps >= MAX_WRAPS) { s.t %= s.duration; break; }
       }
     }
     this.#animateRings(dt);
     pool.update(dt);
+    this.lightPool.update(dt);
   }
 
   #startRing(s, r) {
-    const slot = this.rings.find((x) => !x.active);
+    let slot = null;
+    for (let i = 0; i < this.rings.length && !slot; i++) if (!this.rings[i].active) slot = this.rings[i];
     if (!slot) return; // sin anillos libres: se descarta el nuevo, nunca se corta uno visible
     slot.active = true; slot.age = 0; slot.life = r.life; slot.radius = r.radius; slot.k = s.calm ? RING_CALM : 1;
     const m = slot.m;
@@ -166,7 +185,7 @@ export class VfxPlayer {
     m.quaternion.copy(r.quat);
     m.material.color.copy(r.c);
     m.scale.setScalar(r.radius * RING_R0);
-    m.material.opacity = slot.k;
+    m.material.opacity = slot.k * RING_ALPHA;
     m.visible = true;
   }
 
@@ -178,7 +197,7 @@ export class VfxPlayer {
       const u = Math.min(1, r.age / r.life);
       if (u >= 1) { r.active = false; r.m.visible = false; continue; }
       r.m.scale.setScalar(r.radius * (RING_R0 + (1 - RING_R0) * (1 - (1 - u) ** 3)));
-      r.m.material.opacity = (1 - u) ** 1.5 * r.k;
+      r.m.material.opacity = (1 - u) ** 1.5 * r.k * RING_ALPHA;
     }
   }
 
@@ -194,5 +213,6 @@ export class VfxPlayer {
     for (const r of this.rings) { r.m.removeFromParent(); r.m.material.dispose(); }
     this.ringGeo.dispose();
     this.pool.dispose();
+    this.lightPool.dispose();
   }
 }
