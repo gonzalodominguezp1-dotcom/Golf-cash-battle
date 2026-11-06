@@ -118,8 +118,28 @@ button > .gi:last-child:not(:first-child) { margin-left: 0.35em; }
   .topbar-center { position: absolute; left: 50%; top: calc(env(safe-area-inset-top) + 8px); bottom: 8px; transform: translateX(-50%); }
 }
 @media (max-width: 360px) {
-  .icon-btn { width: 36px; height: 36px; }
   .m-coins { font-size: 14px; }
+}
+/* iconos más grandes en móvil (≤899px). Escritorio no cambia.
+   Se usa !important solo donde una regla existente de más especificidad o posterior
+   en el archivo (.tabbar button .gi, .preview-play-icon .gi) ganaría. */
+@media (max-width: 899px) {
+  .gi { width: 1.5em; height: 1.5em; }
+  .tabbar button .gi { width: 30px !important; height: 30px !important; }
+  .icon-btn { width: 44px; height: 44px; }
+  .icon-btn .gi { width: 32px; height: 32px; }
+  .m-coins .gi { width: 1.35em; height: 1.35em; }
+  .hud .pill .gi { width: 1.5em; height: 1.5em; }
+  .sk-card .sk-ico { width: 30px; height: 30px; }
+  .sk-card .sk-ico .gi { width: 22px; height: 22px; }
+  .sk-card .sk-lock { padding: 5px; }
+  .preview-play-icon .gi { width: 28px !important; height: 28px !important; }
+  @media (max-width: 360px) {
+    .icon-btn { width: 40px; height: 40px; }
+    .icon-btn .gi { width: 28px; height: 28px; }
+    /* la barra de pestañas (30px de icono) pasaba del borde en 320px: menos relleno lateral */
+    .tabbar button { padding: 8px 6px !important; }
+  }
 }
 .primary .gi, .secondary .gi, .play .gi, .ghost .gi, .pill .gi { margin: 0 !important; vertical-align: 0; }
 button:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.6); }
