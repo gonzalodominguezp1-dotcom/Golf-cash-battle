@@ -6,6 +6,11 @@ let ctx = null;
 let master = null;
 let reverb = null;
 let muted = false;
+let volume = 1; // volumen general 0..1 (ajustes)
+let ambientVolume = 0.6; // volumen del sonido ambiente 0..1 (ajustes)
+const MASTER = 0.9;
+const AMBIENT = 0.2; // ganancia del ambiente con su volumen al 100 %
+const masterGain = () => (muted ? 0 : MASTER * volume);
 const buffers = {};
 let roll = null;
 let ambient = null;
@@ -192,7 +197,7 @@ export function unlockAudio() {
       ctx.resume?.();
       const comp = ctx.createDynamicsCompressor();
       master = ctx.createGain();
-      master.gain.value = muted ? 0 : 0.9;
+      master.gain.value = masterGain();
       master.connect(comp).connect(ctx.destination);
       reverb = ctx.createConvolver();
       reverb.buffer = impulse();
@@ -214,8 +219,20 @@ export function unlockAudio() {
 }
 
 export function setMuted(m) {
-  muted = m;
-  if (master) master.gain.value = m ? 0 : 0.9;
+  muted = !!m;
+  if (master) master.gain.value = masterGain();
+}
+
+/** Volumen general, de 0 a 1. */
+export function setVolume(v) {
+  volume = Math.min(1, Math.max(0, Number(v) || 0));
+  if (master) master.gain.value = masterGain();
+}
+
+/** Volumen del sonido ambiente (pájaros, olas, grillos…), de 0 a 1. */
+export function setAmbientVolume(v) {
+  ambientVolume = Math.min(1, Math.max(0, Number(v) || 0));
+  if (ctx && ambient?.g) ambient.g.gain.setTargetAtTime(AMBIENT * ambientVolume, ctx.currentTime, 0.1);
 }
 
 export function isMuted() {
@@ -896,7 +913,7 @@ export function setAmbient(kind) {
   if (!ctx || !kind || finale) return;
   const g = ctx.createGain();
   g.gain.value = 0;
-  g.gain.setTargetAtTime(0.12, ctx.currentTime, 1);
+  g.gain.setTargetAtTime(AMBIENT * ambientVolume, ctx.currentTime, 1);
   g.connect(master);
   const timers = [];
   const chirp = () => {

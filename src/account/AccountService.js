@@ -51,6 +51,11 @@ export class AccountService {
     return this.#rpc('set_avatar', { p_avatar: wire });
   }
 
+  /** Ajustes del jugador (sonido, calidad, controles; ver settings/settings.js). */
+  setSettings(settings) {
+    return this.#rpc('set_settings', { p_settings: settings });
+  }
+
   /** { friends: [{ name, avatar, level, frame }], incoming: [{ name }], outgoing: [{ name }] } */
   friends() {
     return this.#rpc('my_friends');

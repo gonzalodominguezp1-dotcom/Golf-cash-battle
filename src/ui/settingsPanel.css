@@ -1,0 +1,167 @@
+/* Panel de Ajustes (src/ui/settingsPanel.js).
+   .sp-screen: pantalla del menú. Ordenador: menú lateral. Móvil: barra de secciones abajo.
+   .sp-modal: dentro del menú de pausa, con pestañas arriba. */
+
+.sp { --sp-gold: #ffd23f; --sp-on: #10b981; color: var(--text); }
+
+/* ---------- navegación ---------- */
+.sp-nav button {
+  display: flex; align-items: center; gap: 10px; background: none; border: 0; cursor: pointer;
+  color: var(--muted); font-family: var(--display); font-weight: 800; letter-spacing: 0.02em;
+  transition: background 0.2s, color 0.2s, transform 0.15s, box-shadow 0.2s;
+}
+.sp-nav button:hover { color: #fff; background: rgba(255, 255, 255, 0.06); }
+.sp-nav button:active { transform: scale(0.96); }
+.sp-nav button.on {
+  color: var(--sp-gold); background: rgba(255, 210, 63, 0.14);
+  box-shadow: 0 0 0 1px rgba(255, 210, 63, 0.4) inset, 0 4px 16px rgba(255, 210, 63, 0.15);
+}
+.sp-nav button:focus-visible, .sp button:focus-visible, .sp input:focus-visible { outline: 2px solid var(--sp-gold); outline-offset: 2px; }
+.sp-ico { font-size: 18px; line-height: 1; }
+.sp-nav-title { font-family: var(--display); font-weight: 900; font-size: 22px; color: #fff; padding: 4px 14px 10px; }
+.sp-sync { margin: 14px 6px 0; padding: 10px 12px; border-radius: 12px; font-size: 12px; line-height: 1.45; color: var(--muted); background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); }
+.sp-sync.on { color: #a7f3d0; border-color: rgba(16, 185, 129, 0.35); background: rgba(16, 185, 129, 0.08); }
+
+/* ---------- cuerpo ---------- */
+.sp-body { min-width: 0; }
+.sp-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+.sp-head h2 { margin: 0; font-family: var(--display); font-size: 24px; font-weight: 900; color: #fff; letter-spacing: -0.02em; }
+.sp-head p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+.sp-back {
+  flex: 0 0 auto; min-height: 36px; padding: 0 12px; border-radius: 999px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line-light); color: var(--text-dim); font-weight: 700; font-size: 13px;
+}
+.sp-rows { display: flex; flex-direction: column; gap: 10px; }
+.sp-group { margin: 10px 2px 0; font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.sp-group:first-child { margin-top: 0; }
+.sp-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+  padding: 12px 14px; border-radius: 14px; background: var(--panel-card); border: 1px solid var(--line);
+}
+.sp-label { flex: 1 1 200px; min-width: 0; }
+.sp-label strong { display: block; font-size: 15px; color: #fff; }
+.sp-label small { display: block; margin-top: 2px; font-size: 12px; color: var(--muted); line-height: 1.4; }
+
+/* interruptor */
+.sp-switch {
+  position: relative; flex: 0 0 auto; width: 52px; height: 30px; border-radius: 999px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.14); border: 1px solid rgba(255, 255, 255, 0.18); transition: background 0.2s, border-color 0.2s;
+}
+.sp-switch i {
+  position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4); transition: transform 0.22s var(--ease-out);
+}
+.sp-switch.on { background: var(--sp-on); border-color: rgba(16, 185, 129, 0.9); }
+.sp-switch.on i { transform: translateX(22px); }
+
+/* deslizador */
+.sp-row-slider .sp-label { flex-basis: 180px; }
+.sp-slider { display: flex; align-items: center; gap: 12px; flex: 1 1 220px; max-width: 340px; }
+.sp-slider input[type='range'] {
+  -webkit-appearance: none; appearance: none; flex: 1; height: 6px; border-radius: 999px; cursor: pointer;
+  background: linear-gradient(90deg, var(--sp-gold) var(--p, 50%), rgba(255, 255, 255, 0.16) var(--p, 50%));
+}
+.sp-slider input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 3px solid var(--sp-gold);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+.sp-slider input[type='range']::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 3px solid var(--sp-gold); }
+.sp-slider output { min-width: 52px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 800; color: var(--sp-gold); }
+
+/* selector segmentado */
+.sp-seg { display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--line); }
+.sp-seg button {
+  min-width: 82px; min-height: 36px; padding: 0 14px; border-radius: 9px; border: 0; cursor: pointer;
+  background: none; color: var(--muted); font-weight: 800; font-size: 13px;
+}
+.sp-seg button.on { background: rgba(16, 185, 129, 0.25); color: #a7f3d0; box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.6) inset; }
+
+/* calidad */
+.sp-quality { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.sp-qcard {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; cursor: pointer;
+  padding: 14px; min-height: 96px; border-radius: 14px; background: var(--panel-card); border: 1px solid var(--line); color: var(--text);
+  transition: border-color 0.2s, background 0.2s, transform 0.15s;
+}
+.sp-qcard:hover { border-color: var(--line-light); background: var(--panel-hover); }
+.sp-qcard:active { transform: scale(0.98); }
+.sp-qcard b { font-family: var(--display); font-size: 17px; font-weight: 900; }
+.sp-qcard b em { font-style: normal; font-weight: 700; font-size: 13px; color: var(--muted); }
+.sp-qcard small { color: var(--muted); font-size: 12px; line-height: 1.4; }
+.sp-qcard.on { border-color: rgba(16, 185, 129, 0.8); background: rgba(16, 185, 129, 0.12); box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.5) inset; }
+.sp-qcard.on b { color: #a7f3d0; }
+.sp-note { margin: 4px 2px 0; font-size: 12px; color: var(--muted); }
+
+/* teclas (solo ordenador) */
+.sp-keys { margin-top: 4px; padding: 14px; border-radius: 14px; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--line); }
+.sp-keys-title { font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+.sp-keys-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; font-size: 13px; color: var(--text-dim); }
+.sp-keys kbd {
+  display: inline-block; min-width: 26px; margin-right: 6px; padding: 2px 7px; border-radius: 6px; text-align: center;
+  background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); border-bottom-width: 2px;
+  font: 700 11px/1.5 var(--body); color: #fff;
+}
+
+/* pie */
+.sp-foot { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 16px; }
+.sp-btn {
+  min-height: 38px; padding: 0 16px; border-radius: 10px; cursor: pointer; font-weight: 700; font-size: 13px;
+  background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line-light); color: var(--text-dim);
+}
+.sp-btn:hover { background: rgba(255, 255, 255, 0.16); color: #fff; }
+.sp-saved { font-size: 13px; font-weight: 800; color: #6ee7b7; }
+.sp-saved.flash { animation: sp-saved 1.6s ease forwards; }
+@keyframes sp-saved { 0% { opacity: 0; transform: translateY(4px); } 12%, 75% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+
+/* ---------- pantalla: ordenador con menú lateral ---------- */
+/* la entrada de .screen deja un transform puesto, y con él la barra fija del móvil se iría con el
+   contenido en vez de quedarse pegada abajo: aquí la entrada es solo de opacidad */
+.screen.settings-screen, .screen.settings-screen > * { animation: sp-fade 0.3s ease both; }
+@keyframes sp-fade { from { opacity: 0; } to { opacity: 1; } }
+.settings-screen { padding-bottom: 40px; }
+@media (min-width: 900px) {
+  .sp-screen { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 28px; align-items: start; }
+  .sp-screen .sp-nav {
+    position: sticky; top: 16px; display: flex; flex-direction: column; gap: 4px; padding: 14px 10px;
+    border-radius: 20px; background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow-card);
+  }
+  .sp-screen .sp-nav button { width: 100%; padding: 12px 14px; border-radius: 12px; font-size: 15px; text-align: left; }
+  .sp-screen .sp-back { display: none; }
+}
+
+/* ---------- pantalla: móvil con barra de secciones abajo ---------- */
+@media (max-width: 899px) {
+  .settings-screen { padding-bottom: calc(env(safe-area-inset-bottom) + 104px); }
+  .sp-screen .sp-nav {
+    position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 12px); transform: translateX(-50%) translateZ(0); z-index: 6;
+    display: flex; gap: 4px; padding: 6px; border-radius: 22px; width: min(calc(100% - 24px), 420px);
+    background: #0e131c; isolation: isolate;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--line) inset;
+  }
+  .sp-screen .sp-nav button { flex: 1 1 0; flex-direction: column; gap: 3px; justify-content: center; min-height: 54px; padding: 6px 4px; border-radius: 16px; font-size: 12px; }
+  .sp-screen .sp-nav-title, .sp-screen .sp-nav .sp-sync { display: none; }
+  .sp-quality { grid-template-columns: minmax(0, 1fr); }
+  .sp-keys-grid { grid-template-columns: minmax(0, 1fr); }
+  .sp-slider { max-width: none; }
+  .sp-row-seg .sp-seg { flex: 1 1 100%; }
+  .sp-row-seg .sp-seg button { flex: 1 1 0; }
+}
+.sp-sync-m { margin: 0 0 14px; }
+@media (min-width: 900px) { .sp-sync-m { display: none; } }
+
+/* ---------- menú de pausa: pestañas arriba ---------- */
+.sp-modal .sp-nav { display: flex; gap: 4px; padding: 4px; margin-bottom: 14px; border-radius: 14px; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--line); }
+.sp-modal .sp-nav button { flex: 1 1 0; justify-content: center; min-height: 42px; padding: 0 8px; border-radius: 10px; font-size: 14px; }
+.sp-modal .sp-head { display: none; }
+.sp-modal .sp-row { background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.08); }
+.sp-modal .sp-qcard { min-height: 0; }
+.sp-modal .sp-foot { margin-top: 10px; }
+.sp-modal .sp-nav button { min-width: 0; }
+@media (max-width: 520px) {
+  .sp-modal .sp-nav button { flex-direction: column; gap: 2px; min-height: 52px; padding: 4px 2px; font-size: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sp-switch i, .sp-nav button, .sp-qcard { transition: none; }
+  .sp-saved.flash { animation: none; }
+}

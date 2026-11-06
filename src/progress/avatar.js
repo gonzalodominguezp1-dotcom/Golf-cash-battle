@@ -57,6 +57,7 @@ export class AvatarStore {
   constructor(owner, storage = defaultStorage()) {
     this.key = `gcb.avatar.v1.${owner ?? 'guest'}`;
     this.syncedKey = `${this.key}.synced`;
+    this.pendingKey = `${this.key}.pending`; // '1' = cambio local que la cuenta aún no tiene
     this.storage = storage;
     this.memory = { icon: null, image: null };
     this.onChange = null;
@@ -73,6 +74,11 @@ export class AvatarStore {
         this.storage?.setItem(this.syncedKey, '1');
       } catch {}
     };
+    // un cambio que no llegó a subirse (sin red, error) se reintenta en vez de pisarlo con el del servidor
+    if (this.#pending()) {
+      this.#upload(this.get());
+      return markSynced();
+    }
     const server = fromWire(remote);
     if (server.icon || server.image) {
       this.#store(server);
@@ -104,11 +110,37 @@ export class AvatarStore {
     return v;
   }
 
+  #pending() {
+    try {
+      return this.storage?.getItem(this.pendingKey) === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  #setPending(on) {
+    try {
+      this.storage?.setItem(this.pendingKey, on ? '1' : '0');
+    } catch {}
+  }
+
+  /** Sube a la cuenta; mientras no confirme, queda pendiente para el próximo hydrate. */
+  #upload(v) {
+    if (!this.onChange) return;
+    this.#setPending(true);
+    try {
+      Promise.resolve(this.onChange(v)).then(
+        () => {
+          if (JSON.stringify(this.get()) === JSON.stringify(v)) this.#setPending(false);
+        },
+        () => {},
+      );
+    } catch {}
+  }
+
   #put(v) {
     this.#store(v);
-    try {
-      Promise.resolve(this.onChange?.(v)).catch(() => {});
-    } catch {}
+    this.#upload(v);
     return v;
   }
 
