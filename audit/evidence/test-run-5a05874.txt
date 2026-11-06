@@ -1,0 +1,1072 @@
+TAP version 13
+# Subtest: un jugador normal no queda marcado
+ok 1 - un jugador normal no queda marcado
+  ---
+  duration_ms: 7.305138
+  type: 'test'
+  ...
+# Subtest: un bot que emboca siempre queda marcado
+ok 2 - un bot que emboca siempre queda marcado
+  ---
+  duration_ms: 0.28418
+  type: 'test'
+  ...
+# Subtest: un bot que imita el par pero tira al instante y siempre igual
+ok 3 - un bot que imita el par pero tira al instante y siempre igual
+  ---
+  duration_ms: 0.237555
+  type: 'test'
+  ...
+# Subtest: con pocos hoyos no se juzga a nadie
+ok 4 - con pocos hoyos no se juzga a nadie
+  ---
+  duration_ms: 0.090115
+  type: 'test'
+  ...
+# Subtest: la media de todos los jugadores pesa más que el par
+ok 5 - la media de todos los jugadores pesa más que el par
+  ---
+  duration_ms: 0.25333
+  type: 'test'
+  ...
+# Subtest: el servidor mide cuánto espera cada tiro con la bola parada
+ok 6 - el servidor mide cuánto espera cada tiro con la bola parada
+  ---
+  duration_ms: 53.296087
+  type: 'test'
+  ...
+# Subtest: el desempate no cuenta para la precisión
+ok 7 - el desempate no cuenta para la precisión
+  ---
+  duration_ms: 0.220897
+  type: 'test'
+  ...
+# Subtest: solo se miran los hoyos más recientes
+ok 8 - solo se miran los hoyos más recientes
+  ---
+  duration_ms: 0.309015
+  type: 'test'
+  ...
+# Subtest: la puntuación suma el peso de cada señal
+ok 9 - la puntuación suma el peso de cada señal
+  ---
+  duration_ms: 0.372064
+  type: 'test'
+  ...
+# Subtest: datos del gesto basura no rompen nada
+ok 10 - datos del gesto basura no rompen nada
+  ---
+  duration_ms: 0.402183
+  type: 'test'
+  ...
+# Subtest: email: normaliza y valida
+ok 11 - email: normaliza y valida
+  ---
+  duration_ms: 0.915536
+  type: 'test'
+  ...
+# Subtest: contraseña: mínimo, letra y número
+ok 12 - contraseña: mínimo, letra y número
+  ---
+  duration_ms: 0.581429
+  type: 'test'
+  ...
+# Subtest: contraseña: el límite de 72 se cuenta en bytes, no en caracteres
+ok 13 - contraseña: el límite de 72 se cuenta en bytes, no en caracteres
+  ---
+  duration_ms: 0.186171
+  type: 'test'
+  ...
+# Subtest: passwordChecks marca cada requisito
+ok 14 - passwordChecks marca cada requisito
+  ---
+  duration_ms: 1.884275
+  type: 'test'
+  ...
+# Subtest: errores de Supabase → códigos de la app
+ok 15 - errores de Supabase → códigos de la app
+  ---
+  duration_ms: 0.775525
+  type: 'test'
+  ...
+# Subtest: todos los códigos tienen mensaje y el de credenciales no delata si el email existe
+ok 16 - todos los códigos tienen mensaje y el de credenciales no delata si el email existe
+  ---
+  duration_ms: 0.327643
+  type: 'test'
+  ...
+# Subtest: freno tras fallos seguidos
+ok 17 - freno tras fallos seguidos
+  ---
+  duration_ms: 0.170233
+  type: 'test'
+  ...
+# Subtest: el límite del archivo es 2,5 MB y solo png, jpeg o webp
+ok 18 - el límite del archivo es 2,5 MB y solo png, jpeg o webp
+  ---
+  duration_ms: 0.889596
+  type: 'test'
+  ...
+# Subtest: icono e imagen se excluyen y se guardan por cuenta
+ok 19 - icono e imagen se excluyen y se guardan por cuenta
+  ---
+  duration_ms: 1.019409
+  type: 'test'
+  ...
+# Subtest: rechaza iconos desconocidos y urls que no son imagen
+ok 20 - rechaza iconos desconocidos y urls que no son imagen
+  ---
+  duration_ms: 0.955467
+  type: 'test'
+  ...
+# Subtest: formato de servidor: ida y vuelta, y lo raro se descarta
+ok 21 - formato de servidor: ida y vuelta, y lo raro se descarta
+  ---
+  duration_ms: 0.329923
+  type: 'test'
+  ...
+# Subtest: cada cambio se sube a la cuenta y un fallo de red no rompe el guardado local
+ok 22 - cada cambio se sube a la cuenta y un fallo de red no rompe el guardado local
+  ---
+  duration_ms: 4.463137
+  type: 'test'
+  ...
+# Subtest: al entrar manda el servidor; si no tiene nada, sube el avatar local una sola vez
+ok 23 - al entrar manda el servidor; si no tiene nada, sube el avatar local una sola vez
+  ---
+  duration_ms: 0.615657
+  type: 'test'
+  ...
+# Subtest: si la subida inicial falla, se reintenta en la próxima entrada
+ok 24 - si la subida inicial falla, se reintenta en la próxima entrada
+  ---
+  duration_ms: 1.116374
+  type: 'test'
+  ...
+# node:internal/modules/package_json_reader:314
+#   throw new ERR_MODULE_NOT_FOUND(packageName, fileURLToPath(base), null);
+#         ^
+# Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'three' imported from /home/user/Golf-cash-battle/src/game/render/coursePreview.js
+#     at Object.getPackageJSONURL (node:internal/modules/package_json_reader:314:9)
+#     at packageResolve (node:internal/modules/esm/resolve:772:81)
+#     at moduleResolve (node:internal/modules/esm/resolve:859:18)
+#     at defaultResolve (node:internal/modules/esm/resolve:989:11)
+#     at \#cachedDefaultResolve (node:internal/modules/esm/loader:747:20)
+#     at ModuleLoader.resolve (node:internal/modules/esm/loader:724:38)
+#     at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:320:38)
+#     at ModuleJob._link (node:internal/modules/esm/module_job:182:49) {
+#   code: 'ERR_MODULE_NOT_FOUND'
+# }
+# Node.js v22.23.4
+# Subtest: tests/course-preview.test.js
+not ok 4 - tests/course-preview.test.js
+  ---
+  duration_ms: 62.067744
+  type: 'test'
+  location: '/home/user/Golf-cash-battle/tests/course-preview.test.js:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: los hoyos están bien hechos
+ok 26 - los hoyos están bien hechos
+  ---
+  duration_ms: 1.411797
+  type: 'test'
+  ...
+# Subtest: la bola siempre acaba parada (también en pendientes y portales)
+ok 27 - la bola siempre acaba parada (también en pendientes y portales)
+  ---
+  duration_ms: 1306.956956
+  type: 'test'
+  ...
+# Subtest: los rivales pueden terminar cada hoyo nuevo
+ok 28 - los rivales pueden terminar cada hoyo nuevo
+  ---
+  duration_ms: 18470.07138
+  type: 'test'
+  ...
+# Subtest: el servidor repite bien un golpe que cruza el portal
+ok 29 - el servidor repite bien un golpe que cruza el portal
+  ---
+  duration_ms: 17.225437
+  type: 'test'
+  ...
+# Subtest: looping: flojo vuelve atrás, fuerte lo completa (por el carril de entrada)
+ok 30 - looping: flojo vuelve atrás, fuerte lo completa (por el carril de entrada)
+  ---
+  duration_ms: 3.301923
+  type: 'test'
+  ...
+# Subtest: looping: fuera del carril de entrada la bola choca con la estructura y no entra
+ok 31 - looping: fuera del carril de entrada la bola choca con la estructura y no entra
+  ---
+  duration_ms: 9.873111
+  type: 'test'
+  ...
+# Subtest: molino: las aspas tapan la puerta según el momento del golpe
+ok 32 - molino: las aspas tapan la puerta según el momento del golpe
+  ---
+  duration_ms: 116.010043
+  type: 'test'
+  ...
+# Subtest: tubos: la bola viaja por dentro y sale en la dirección del tubo
+ok 33 - tubos: la bola viaja por dentro y sale en la dirección del tubo
+  ---
+  duration_ms: 0.668938
+  type: 'test'
+  ...
+# Subtest: looping: un solo umbral; si no llega se cae y vuelve despacio por la entrada
+ok 34 - looping: un solo umbral; si no llega se cae y vuelve despacio por la entrada
+  ---
+  duration_ms: 20.489595
+  type: 'test'
+  ...
+# Subtest: looping: si la bola se cae arriba vuelve por la entrada y nunca se queda en el carril
+ok 35 - looping: si la bola se cae arriba vuelve por la entrada y nunca se queda en el carril
+  ---
+  duration_ms: 8.163633
+  type: 'test'
+  ...
+# Subtest: looping: el mismo tiro da siempre el mismo resultado, bit a bit
+ok 36 - looping: el mismo tiro da siempre el mismo resultado, bit a bit
+  ---
+  duration_ms: 1.307253
+  type: 'test'
+  ...
+# Subtest: montículo: la ladera echa la bola hacia fuera y la cima es llana
+ok 37 - montículo: la ladera echa la bola hacia fuera y la cima es llana
+  ---
+  duration_ms: 0.43153
+  type: 'test'
+  ...
+# Subtest: dentro del volcán: la lava devuelve la bola al sitio del golpe
+ok 38 - dentro del volcán: la lava devuelve la bola al sitio del golpe
+  ---
+  duration_ms: 5.63107
+  type: 'test'
+  ...
+# Subtest: dentro del volcán: la rampa hace saltar el río; flojo vuelve rodando
+ok 39 - dentro del volcán: la rampa hace saltar el río; flojo vuelve rodando
+  ---
+  duration_ms: 7.422704
+  type: 'test'
+  ...
+# Subtest: dentro del volcán: la cueva de fuera cae dentro, entre las dos rampas
+ok 40 - dentro del volcán: la cueva de fuera cae dentro, entre las dos rampas
+  ---
+  duration_ms: 6.862961
+  type: 'test'
+  ...
+# Subtest: dentro del volcán: el atajo cruza la U de un salto
+ok 41 - dentro del volcán: el atajo cruza la U de un salto
+  ---
+  duration_ms: 2.279521
+  type: 'test'
+  ...
+# Subtest: dentro del volcán: el servidor repite igual la cueva, los saltos y la lava
+ok 42 - dentro del volcán: el servidor repite igual la cueva, los saltos y la lava
+  ---
+  duration_ms: 81.341878
+  type: 'test'
+  ...
+# Subtest: abismo: los agujeros cruzan la pista de pared a pared y cada uno tiene su rampa
+ok 43 - abismo: los agujeros cruzan la pista de pared a pared y cada uno tiene su rampa
+  ---
+  duration_ms: 0.27644
+  type: 'test'
+  ...
+# Subtest: abismo: sin rampa la bola cae y vuelve al sitio del golpe
+ok 44 - abismo: sin rampa la bola cae y vuelve al sitio del golpe
+  ---
+  duration_ms: 0.594573
+  type: 'test'
+  ...
+# Subtest: abismo: por la rampa, flojo vuelve, a medias cae y bien fuerte salta
+ok 45 - abismo: por la rampa, flojo vuelve, a medias cae y bien fuerte salta
+  ---
+  duration_ms: 2.987066
+  type: 'test'
+  ...
+# Subtest: el hoyo tiene borde: despacio entra, fuerte rebota en el labio, rozando se sale torcida
+ok 46 - el hoyo tiene borde: despacio entra, fuerte rebota en el labio, rozando se sale torcida
+  ---
+  duration_ms: 7.988048
+  type: 'test'
+  ...
+# Subtest: el templo: los saltos de agua; floja no despega, a medias cae y bien salta
+ok 47 - el templo: los saltos de agua; floja no despega, a medias cae y bien salta
+  ---
+  duration_ms: 12.784531
+  type: 'test'
+  ...
+# Subtest: el templo: la rampa de la escuadra salta el muro por encima (sin muros invisibles)
+ok 48 - el templo: la rampa de la escuadra salta el muro por encima (sin muros invisibles)
+  ---
+  duration_ms: 9.733079
+  type: 'test'
+  ...
+# Subtest: fuera del campo: si un salto cae fuera, vuelve al sitio del golpe
+ok 49 - fuera del campo: si un salto cae fuera, vuelve al sitio del golpe
+  ---
+  duration_ms: 0.436638
+  type: 'test'
+  ...
+# Subtest: Cyberpunk2078: es el hoyo 15, con looping de radio 1,2 y tema propio
+ok 50 - Cyberpunk2078: es el hoyo 15, con looping de radio 1,2 y tema propio
+  ---
+  duration_ms: 0.136961
+  type: 'test'
+  ...
+# Subtest: Cyberpunk2078: portal obligatorio, entradas sin portal ≤ 2 % del barrido (boca y salida juntas)
+ok 51 - Cyberpunk2078: portal obligatorio, entradas sin portal ≤ 2 % del barrido (boca y salida juntas)
+  ---
+  duration_ms: 53747.706849
+  type: 'test'
+  ...
+# Subtest: Cyberpunk2078: la ruta A, por el portal, completa el looping con margen (≥ 95 %, velocidad ≥ umbral + 1)
+ok 52 - Cyberpunk2078: la ruta A, por el portal, completa el looping con margen (≥ 95 %, velocidad ≥ umbral + 1)
+  ---
+  duration_ms: 2431.059871
+  type: 'test'
+  ...
+# Subtest: Cyberpunk2078: la ruta B llega a la cup sin tocar el portal ni el looping
+ok 53 - Cyberpunk2078: la ruta B llega a la cup sin tocar el portal ni el looping
+  ---
+  duration_ms: 119.251907
+  type: 'test'
+  ...
+# Subtest: en el hielo la bola resbala mucho más lejos que en la nieve
+ok 54 - en el hielo la bola resbala mucho más lejos que en la nieve
+  ---
+  duration_ms: 1.315916
+  type: 'test'
+  ...
+# Subtest: el hielo no se mezcla con la arena, la salida ni el hoyo
+ok 55 - el hielo no se mezcla con la arena, la salida ni el hoyo
+  ---
+  duration_ms: 0.458282
+  type: 'test'
+  ...
+# node:internal/modules/package_json_reader:314
+#   throw new ERR_MODULE_NOT_FOUND(packageName, fileURLToPath(base), null);
+#         ^
+# Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'three' imported from /home/user/Golf-cash-battle/tests/cyberpunk-rain.test.js
+#     at Object.getPackageJSONURL (node:internal/modules/package_json_reader:314:9)
+#     at packageResolve (node:internal/modules/esm/resolve:772:81)
+#     at moduleResolve (node:internal/modules/esm/resolve:859:18)
+#     at defaultResolve (node:internal/modules/esm/resolve:989:11)
+#     at \#cachedDefaultResolve (node:internal/modules/esm/loader:747:20)
+#     at ModuleLoader.resolve (node:internal/modules/esm/loader:724:38)
+#     at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:320:38)
+#     at ModuleJob._link (node:internal/modules/esm/module_job:182:49) {
+#   code: 'ERR_MODULE_NOT_FOUND'
+# }
+# Node.js v22.23.4
+# Subtest: tests/cyberpunk-rain.test.js
+not ok 6 - tests/cyberpunk-rain.test.js
+  ---
+  duration_ms: 44.003947
+  type: 'test'
+  location: '/home/user/Golf-cash-battle/tests/cyberpunk-rain.test.js:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: jugador de escritorio con ratón nunca es marcado por el sistema antibot
+ok 57 - jugador de escritorio con ratón nunca es marcado por el sistema antibot
+  ---
+  duration_ms: 5.380227
+  type: 'test'
+  ...
+# Subtest: señales del hoyo procesan correctamente la telemetría de ratón
+ok 58 - señales del hoyo procesan correctamente la telemetría de ratón
+  ---
+  duration_ms: 0.273091
+  type: 'test'
+  ...
+# Subtest: tiro de ratón se cuantifica de forma determinista para el servidor
+ok 59 - tiro de ratón se cuantifica de forma determinista para el servidor
+  ---
+  duration_ms: 0.294594
+  type: 'test'
+  ...
+# Subtest: cálculo de límites de campo respeta el radio de la bola en escritorio
+ok 60 - cálculo de límites de campo respeta el radio de la bola en escritorio
+  ---
+  duration_ms: 0.212957
+  type: 'test'
+  ...
+# Subtest: ajuste manual de fuerza por arrastre de ratón permite tirar más flojo o más fuerte
+ok 61 - ajuste manual de fuerza por arrastre de ratón permite tirar más flojo o más fuerte
+  ---
+  duration_ms: 0.168786
+  type: 'test'
+  ...
+# Subtest: ajuste fino de potencia mediante rueda de ratón
+ok 62 - ajuste fino de potencia mediante rueda de ratón
+  ---
+  duration_ms: 0.123216
+  type: 'test'
+  ...
+# Subtest: tecla Espacio conmuta visión completa del mapa 3D y prohíbe el tiro mientras está activa
+ok 63 - tecla Espacio conmuta visión completa del mapa 3D y prohíbe el tiro mientras está activa
+  ---
+  duration_ms: 0.194584
+  type: 'test'
+  ...
+# Subtest: tecla Esc abre el menú de ajustes y libera el puntero
+ok 64 - tecla Esc abre el menú de ajustes y libera el puntero
+  ---
+  duration_ms: 0.089005
+  type: 'test'
+  ...
+# Subtest: cálculo de fuerza y apuntado con pointer lock activo mediante deltas relativos movementX y movementY
+ok 65 - cálculo de fuerza y apuntado con pointer lock activo mediante deltas relativos movementX y movementY
+  ---
+  duration_ms: 0.34489
+  type: 'test'
+  ...
+# Subtest: disparo con clic izquierdo en modo pointer lock funciona por carga en tiempo y por arrastre
+ok 66 - disparo con clic izquierdo en modo pointer lock funciona por carga en tiempo y por arrastre
+  ---
+  duration_ms: 0.382976
+  type: 'test'
+  ...
+# Subtest: elementos que obstaculizan la cámara se vuelven 90% invisibles sin desaparecer en vista normal y vista general (Espacio)
+ok 67 - elementos que obstaculizan la cámara se vuelven 90% invisibles sin desaparecer en vista normal y vista general (Espacio)
+  ---
+  duration_ms: 0.31272
+  type: 'test'
+  ...
+# Subtest: el muro lejano y elementos detrás de la pelota nunca se desenfocan ni transparentan
+ok 68 - el muro lejano y elementos detrás de la pelota nunca se desenfocan ni transparentan
+  ---
+  duration_ms: 0.083542
+  type: 'test'
+  ...
+# Subtest: todas las capas del molino (aspas, torre, marco, ventanas y contornos) se desenfocan simultáneamente al 90% ante obstrucción
+ok 69 - todas las capas del molino (aspas, torre, marco, ventanas y contornos) se desenfocan simultáneamente al 90% ante obstrucción
+  ---
+  duration_ms: 0.202887
+  type: 'test'
+  ...
+# Subtest: múltiples objetos en la trayectoria de la cámara (muro + molino + aspa) se desenfocan a la vez
+ok 70 - múltiples objetos en la trayectoria de la cámara (muro + molino + aspa) se desenfocan a la vez
+  ---
+  duration_ms: 0.09896
+  type: 'test'
+  ...
+# Subtest: repetir los mismos golpes da siempre el mismo resultado
+ok 71 - repetir los mismos golpes da siempre el mismo resultado
+  ---
+  duration_ms: 8088.260483
+  type: 'test'
+  ...
+# Subtest: el juego y la función del servidor calculan lo mismo
+ok 72 - el juego y la función del servidor calculan lo mismo
+  ---
+  duration_ms: 4957.073917
+  type: 'test'
+  ...
+# Subtest: un hoyo no guarda estado entre partidas
+ok 73 - un hoyo no guarda estado entre partidas
+  ---
+  duration_ms: 208.553753
+  type: 'test'
+  ...
+# Subtest: los hoyos están bien definidos
+ok 74 - los hoyos están bien definidos
+  ---
+  duration_ms: 0.57183
+  type: 'test'
+  ...
+# Subtest: el ganador se lleva el bote menos la comisión
+ok 75 - el ganador se lleva el bote menos la comisión
+  ---
+  duration_ms: 1.892302
+  type: 'test'
+  ...
+# Subtest: empate: el premio se divide
+ok 76 - empate: el premio se divide
+  ---
+  duration_ms: 2.056067
+  type: 'test'
+  ...
+# Subtest: el wallet cobra la entrada y paga el premio
+ok 77 - el wallet cobra la entrada y paga el premio
+  ---
+  duration_ms: 3.489327
+  type: 'test'
+  ...
+# Subtest: sin saldo no se puede entrar
+ok 78 - sin saldo no se puede entrar
+  ---
+  duration_ms: 2.206719
+  type: 'test'
+  ...
+# Subtest: desempate: gana quien queda más cerca del objetivo
+ok 79 - desempate: gana quien queda más cerca del objetivo
+  ---
+  duration_ms: 0.233194
+  type: 'test'
+  ...
+# Subtest: desempate en práctica: posición 1 para el más cercano aunque el payout sea 0
+ok 80 - desempate en práctica: posición 1 para el más cercano aunque el payout sea 0
+  ---
+  duration_ms: 0.20598
+  type: 'test'
+  ...
+# Subtest: catálogo completo de 17 hoyos para selector de juego libre
+ok 81 - catálogo completo de 17 hoyos para selector de juego libre
+  ---
+  duration_ms: 0.91479
+  type: 'test'
+  ...
+# Subtest: modo libre: cálculo de límite de tiempo desactivado cuando timeLimit es null o 0
+ok 82 - modo libre: cálculo de límite de tiempo desactivado cuando timeLimit es null o 0
+  ---
+  duration_ms: 0.192593
+  type: 'test'
+  ...
+# Subtest: aislamiento de progreso: el juego libre no consume saldo ni suma victorias o XP
+ok 83 - aislamiento de progreso: el juego libre no consume saldo ni suma victorias o XP
+  ---
+  duration_ms: 6.360879
+  type: 'test'
+  ...
+# Subtest: lógica de reinicio de hoyo (restart): devuelve la bola al tee y limpia golpes
+ok 84 - lógica de reinicio de hoyo (restart): devuelve la bola al tee y limpia golpes
+  ---
+  duration_ms: 0.2883
+  type: 'test'
+  ...
+# Subtest: física en hoyos seleccionados en modo libre funciona determinísticamente
+ok 85 - física en hoyos seleccionados en modo libre funciona determinísticamente
+  ---
+  duration_ms: 35.793507
+  type: 'test'
+  ...
+# Subtest: el nombre de amigo se limpia y solo vale 3-16 letras, números o _
+ok 86 - el nombre de amigo se limpia y solo vale 3-16 letras, números o _
+  ---
+  duration_ms: 0.78846
+  type: 'test'
+  ...
+# Subtest: cada error del servidor tiene un texto y lo desconocido no se filtra
+ok 87 - cada error del servidor tiene un texto y lo desconocido no se filtra
+  ---
+  duration_ms: 0.212722
+  type: 'test'
+  ...
+# Subtest: el aviso distingue petición enviada de amistad directa
+ok 88 - el aviso distingue petición enviada de amistad directa
+  ---
+  duration_ms: 0.18872
+  type: 'test'
+  ...
+# Subtest: sin tiempo y sin embocar: descalificado con el máximo
+ok 89 - sin tiempo y sin embocar: descalificado con el máximo
+  ---
+  duration_ms: 16.203637
+  type: 'test'
+  ...
+# Subtest: se acaba el tiempo sin haber tirado
+ok 90 - se acaba el tiempo sin haber tirado
+  ---
+  duration_ms: 14.072705
+  type: 'test'
+  ...
+# Subtest: no valen tiros después de acabarse el tiempo
+ok 91 - no valen tiros después de acabarse el tiempo
+  ---
+  duration_ms: 0.563424
+  type: 'test'
+  ...
+# Subtest: la bola que entra cuenta el paso en el que entró, y solo si es antes del límite
+ok 92 - la bola que entra cuenta el paso en el que entró, y solo si es antes del límite
+  ---
+  duration_ms: 9905.653023
+  type: 'test'
+  ...
+# Subtest: todos los iconos devuelven un <svg>
+ok 93 - todos los iconos devuelven un <svg>
+  ---
+  duration_ms: 11.1087
+  type: 'test'
+  ...
+# Subtest: cada llamada usa ids de clipPath distintos
+ok 94 - cada llamada usa ids de clipPath distintos
+  ---
+  duration_ms: 3.497028
+  type: 'test'
+  ...
+# Subtest: tierIcon y avatarIcon cubren todas las rarezas y avatares
+ok 95 - tierIcon y avatarIcon cubren todas las rarezas y avatares
+  ---
+  duration_ms: 0.712572
+  type: 'test'
+  ...
+# Subtest: iconUrl es un data URL de svg
+ok 96 - iconUrl es un data URL de svg
+  ---
+  duration_ms: 0.189642
+  type: 'test'
+  ...
+# Subtest: seed es determinista por dueño y skin
+ok 97 - seed es determinista por dueño y skin
+  ---
+  duration_ms: 1.017185
+  type: 'test'
+  ...
+# Subtest: las instancias ya no llevan desgaste (float)
+ok 98 - las instancias ya no llevan desgaste (float)
+  ---
+  duration_ms: 2.402383
+  type: 'test'
+  ...
+# Subtest: un guardado antiguo con float se lee sin romper y conserva seed y contadores
+ok 99 - un guardado antiguo con float se lee sin romper y conserva seed y contadores
+  ---
+  duration_ms: 0.819134
+  type: 'test'
+  ...
+# Subtest: recargar no re-tira: misma instancia; mismo dueño, mismos valores
+ok 100 - recargar no re-tira: misma instancia; mismo dueño, mismos valores
+  ---
+  duration_ms: 2.362147
+  type: 'test'
+  ...
+# Subtest: un estado antiguo sin inventory se migra sin perder nada
+ok 101 - un estado antiguo sin inventory se migra sin perder nada
+  ---
+  duration_ms: 0.509757
+  type: 'test'
+  ...
+# Subtest: contadores suben solo en la skin equipada y con marcador
+ok 102 - contadores suben solo en la skin equipada y con marcador
+  ---
+  duration_ms: 1.176597
+  type: 'test'
+  ...
+# Subtest: attach: el seed del servidor manda sobre el local (su float antiguo se ignora)
+ok 103 - attach: el seed del servidor manda sobre el local (su float antiguo se ignora)
+  ---
+  duration_ms: 0.373414
+  type: 'test'
+  ...
+# Subtest: sinks cuenta solo embocadas reales, no hoyos con el máximo de golpes
+ok 104 - sinks cuenta solo embocadas reales, no hoyos con el máximo de golpes
+  ---
+  duration_ms: 0.545786
+  type: 'test'
+  ...
+# Subtest: la bola remota repite los tiros igual que el servidor
+ok 105 - la bola remota repite los tiros igual que el servidor
+  ---
+  duration_ms: 39.15118
+  type: 'test'
+  ...
+# Subtest: aunque los tiros lleguen de uno en uno y con retraso, el resultado es el mismo
+ok 106 - aunque los tiros lleguen de uno en uno y con retraso, el resultado es el mismo
+  ---
+  duration_ms: 15.931625
+  type: 'test'
+  ...
+# Subtest: sin embocar: termina cuando llega su resultado; descalificado al momento
+ok 107 - sin embocar: termina cuando llega su resultado; descalificado al momento
+  ---
+  duration_ms: 13.209972
+  type: 'test'
+  ...
+# Subtest: los tiros que llegan por la red se filtran
+ok 108 - los tiros que llegan por la red se filtran
+  ---
+  duration_ms: 0.443494
+  type: 'test'
+  ...
+# Subtest: bots de relleno: mismos en todos los móviles y solo en los huecos
+ok 109 - bots de relleno: mismos en todos los móviles y solo en los huecos
+  ---
+  duration_ms: 1.358496
+  type: 'test'
+  ...
+# Subtest: marcador: los bots no cuentan para el empate de cabeza
+ok 110 - marcador: los bots no cuentan para el empate de cabeza
+  ---
+  duration_ms: 0.404885
+  type: 'test'
+  ...
+# node:internal/modules/package_json_reader:314
+#   throw new ERR_MODULE_NOT_FOUND(packageName, fileURLToPath(base), null);
+#         ^
+# Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'three' imported from /home/user/Golf-cash-battle/src/game/render/course.js
+#     at Object.getPackageJSONURL (node:internal/modules/package_json_reader:314:9)
+#     at packageResolve (node:internal/modules/esm/resolve:772:81)
+#     at moduleResolve (node:internal/modules/esm/resolve:859:18)
+#     at defaultResolve (node:internal/modules/esm/resolve:989:11)
+#     at \#cachedDefaultResolve (node:internal/modules/esm/loader:747:20)
+#     at ModuleLoader.resolve (node:internal/modules/esm/loader:724:38)
+#     at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:320:38)
+#     at ModuleJob._link (node:internal/modules/esm/module_job:182:49) {
+#   code: 'ERR_MODULE_NOT_FOUND'
+# }
+# Node.js v22.23.4
+# Subtest: tests/loop-blocks-ball.test.js
+not ok 16 - tests/loop-blocks-ball.test.js
+  ---
+  duration_ms: 48.740986
+  type: 'test'
+  location: '/home/user/Golf-cash-battle/tests/loop-blocks-ball.test.js:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: cada error de grupo del servidor tiene texto y lo desconocido no se filtra
+ok 112 - cada error de grupo del servidor tiene texto y lo desconocido no se filtra
+  ---
+  duration_ms: 0.693565
+  type: 'test'
+  ...
+# Subtest: el motivo de no poder buscar partida nombra a quien falla
+ok 113 - el motivo de no poder buscar partida nombra a quien falla
+  ---
+  duration_ms: 1.339972
+  type: 'test'
+  ...
+# Subtest: solo se abre el torneo del grupo si este dispositivo no lo ha abierto ya
+ok 114 - solo se abre el torneo del grupo si este dispositivo no lo ha abierto ya
+  ---
+  duration_ms: 0.176639
+  type: 'test'
+  ...
+# Subtest: el botón del grupo dice lo que va a pasar
+ok 115 - el botón del grupo dice lo que va a pasar
+  ---
+  duration_ms: 0.19589
+  type: 'test'
+  ...
+# Subtest: un torneo ya no espera a llenar la mesa para cerrarse
+ok 116 - un torneo ya no espera a llenar la mesa para cerrarse
+  ---
+  duration_ms: 0.186032
+  type: 'test'
+  ...
+# Subtest: el matchmaking se serializa por mesa y solo usa torneos vivos
+ok 117 - el matchmaking se serializa por mesa y solo usa torneos vivos
+  ---
+  duration_ms: 0.085571
+  type: 'test'
+  ...
+# Subtest: las funciones de grupo son solo para usuarios con sesión
+ok 118 - las funciones de grupo son solo para usuarios con sesión
+  ---
+  duration_ms: 0.280848
+  type: 'test'
+  ...
+# Subtest: hay seis marcos, en los niveles 25-50-75-100-125-150
+ok 119 - hay seis marcos, en los niveles 25-50-75-100-125-150
+  ---
+  duration_ms: 1.14782
+  type: 'test'
+  ...
+# Subtest: sin marco antes del nivel 25 y uno nuevo en cada tramo
+ok 120 - sin marco antes del nivel 25 y uno nuevo en cada tramo
+  ---
+  duration_ms: 0.215361
+  type: 'test'
+  ...
+# Subtest: el marco elegido se respeta si está alcanzado y si no, vale el más alto
+ok 121 - el marco elegido se respeta si está alcanzado y si no, vale el más alto
+  ---
+  duration_ms: 0.086231
+  type: 'test'
+  ...
+# Subtest: Progress: nivel y marco salen de la XP y se puede elegir
+ok 122 - Progress: nivel y marco salen de la XP y se puede elegir
+  ---
+  duration_ms: 4.217506
+  type: 'test'
+  ...
+# Subtest: el desafío de prestigio desbloquea su bola al llegar al nivel
+ok 123 - el desafío de prestigio desbloquea su bola al llegar al nivel
+  ---
+  duration_ms: 0.288492
+  type: 'test'
+  ...
+# Subtest: los hitos de ranking del servidor completan sus desafíos y ofrecen la bola
+ok 124 - los hitos de ranking del servidor completan sus desafíos y ofrecen la bola
+  ---
+  duration_ms: 1.645084
+  type: 'test'
+  ...
+# Subtest: cada desafío nuevo tiene una única bola
+ok 125 - cada desafío nuevo tiene una única bola
+  ---
+  duration_ms: 0.233954
+  type: 'test'
+  ...
+# Subtest: niveles por XP
+ok 126 - niveles por XP
+  ---
+  duration_ms: 0.753301
+  type: 'test'
+  ...
+# Subtest: el coste por nivel crece y xpToReach cuadra con la suma
+ok 127 - el coste por nivel crece y xpToReach cuadra con la suma
+  ---
+  duration_ms: 0.187941
+  type: 'test'
+  ...
+# Subtest: ganar desbloquea skins y no se puede equipar una bloqueada
+ok 128 - ganar desbloquea skins y no se puede equipar una bloqueada
+  ---
+  duration_ms: 2.060474
+  type: 'test'
+  ...
+# Subtest: ganar un desempate en práctica desbloquea el desafío y la skin Sangre fría
+ok 129 - ganar un desempate en práctica desbloquea el desafío y la skin Sangre fría
+  ---
+  duration_ms: 0.514004
+  type: 'test'
+  ...
+# Subtest: nuevas skins de desafío desbloquean con sus hitos específicos
+ok 130 - nuevas skins de desafío desbloquean con sus hitos específicos
+  ---
+  duration_ms: 2.328309
+  type: 'test'
+  ...
+# Subtest: hoyo de desempate: la bola nunca entra y el bot tira una sola vez
+ok 131 - hoyo de desempate: la bola nunca entra y el bot tira una sola vez
+  ---
+  duration_ms: 19.213045
+  type: 'test'
+  ...
+# Subtest: el progreso de la cuenta gana si lleva más XP o el móvil era de otra cuenta
+ok 132 - el progreso de la cuenta gana si lleva más XP o el móvil era de otra cuenta
+  ---
+  duration_ms: 0.787029
+  type: 'test'
+  ...
+# Subtest: las míticas se desbloquean con wins50 y aces5
+ok 133 - las míticas se desbloquean con wins50 y aces5
+  ---
+  duration_ms: 0.28923
+  type: 'test'
+  ...
+# Subtest: una skin guardada que ya no existe se sustituye por la de serie
+ok 134 - una skin guardada que ya no existe se sustituye por la de serie
+  ---
+  duration_ms: 0.302019
+  type: 'test'
+  ...
+# Subtest: las skins nuevas se desbloquean con su desafío o nivel y no antes
+ok 135 - las skins nuevas se desbloquean con su desafío o nivel y no antes
+  ---
+  duration_ms: 0.388259
+  type: 'test'
+  ...
+# Subtest: ganar una partida en el nivel 1 sube al menos un nivel, con entrada o en práctica
+ok 136 - ganar una partida en el nivel 1 sube al menos un nivel, con entrada o en práctica
+  ---
+  duration_ms: 4.849337
+  type: 'test'
+  ...
+# Subtest: ganar da más XP que perder y una victoria normal no pasa de ~1,5 niveles al empezar
+ok 137 - ganar da más XP que perder y una victoria normal no pasa de ~1,5 niveles al empezar
+  ---
+  duration_ms: 0.288902
+  type: 'test'
+  ...
+# Subtest: seno y coseno deterministas casi iguales a Math
+ok 138 - seno y coseno deterministas casi iguales a Math
+  ---
+  duration_ms: 5.79739
+  type: 'test'
+  ...
+# Subtest: el servidor obtiene los mismos golpes que el cliente en todos los hoyos
+ok 139 - el servidor obtiene los mismos golpes que el cliente en todos los hoyos
+  ---
+  duration_ms: 13798.112624
+  type: 'test'
+  ...
+# Subtest: no se puede inventar el resultado
+ok 140 - no se puede inventar el resultado
+  ---
+  duration_ms: 1465.297289
+  type: 'test'
+  ...
+# Subtest: ocho golpes sin embocar cuentan como el máximo
+ok 141 - ocho golpes sin embocar cuentan como el máximo
+  ---
+  duration_ms: 19.957002
+  type: 'test'
+  ...
+# Subtest: la función del servidor usa la misma física que el juego
+ok 142 - la función del servidor usa la misma física que el juego
+  ---
+  duration_ms: 4.174944
+  type: 'test'
+  ...
+# Subtest: baja la resolución si los fotogramas van lentos y no pasa del mínimo
+ok 143 - baja la resolución si los fotogramas van lentos y no pasa del mínimo
+  ---
+  duration_ms: 2.065435
+  type: 'test'
+  ...
+# Subtest: vuelve a subir cuando sobra margen, sin pasar del máximo
+ok 144 - vuelve a subir cuando sobra margen, sin pasar del máximo
+  ---
+  duration_ms: 3.978469
+  type: 'test'
+  ...
+# Subtest: a 60 fps estables no cambia nada
+ok 145 - a 60 fps estables no cambia nada
+  ---
+  duration_ms: 0.645937
+  type: 'test'
+  ...
+# Subtest: un hueco largo (pestaña oculta) no cuenta como lento
+ok 146 - un hueco largo (pestaña oculta) no cuenta como lento
+  ---
+  duration_ms: 0.286894
+  type: 'test'
+  ...
+# Subtest: no cambia más de una vez por HOLD_MS
+ok 147 - no cambia más de una vez por HOLD_MS
+  ---
+  duration_ms: 0.317287
+  type: 'test'
+  ...
+# node:internal/modules/package_json_reader:314
+#   throw new ERR_MODULE_NOT_FOUND(packageName, fileURLToPath(base), null);
+#         ^
+# Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'three' imported from /home/user/Golf-cash-battle/src/game/render/skins/skinFx.js
+#     at Object.getPackageJSONURL (node:internal/modules/package_json_reader:314:9)
+#     at packageResolve (node:internal/modules/esm/resolve:772:81)
+#     at moduleResolve (node:internal/modules/esm/resolve:859:18)
+#     at defaultResolve (node:internal/modules/esm/resolve:989:11)
+#     at \#cachedDefaultResolve (node:internal/modules/esm/loader:747:20)
+#     at ModuleLoader.resolve (node:internal/modules/esm/loader:724:38)
+#     at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:320:38)
+#     at ModuleJob._link (node:internal/modules/esm/module_job:182:49) {
+#   code: 'ERR_MODULE_NOT_FOUND'
+# }
+# Node.js v22.23.4
+# Subtest: tests/skin-fx-rules.test.js
+not ok 22 - tests/skin-fx-rules.test.js
+  ---
+  duration_ms: 33.331345
+  type: 'test'
+  location: '/home/user/Golf-cash-battle/tests/skin-fx-rules.test.js:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: SPEC: las 5 skins están registradas, con id único
+ok 149 - SPEC: las 5 skins están registradas, con id único
+  ---
+  duration_ms: 0.603083
+  type: 'test'
+  ...
+# Subtest: SPEC: campos obligatorios completos (incluido shader) y nombre exacto
+ok 150 - SPEC: campos obligatorios completos (incluido shader) y nombre exacto
+  ---
+  duration_ms: 0.358314
+  type: 'test'
+  ...
+# Subtest: SPEC: todas las skins del juego tienen nombre no vacío y único
+ok 151 - SPEC: todas las skins del juego tienen nombre no vacío y único
+  ---
+  duration_ms: 0.180739
+  type: 'test'
+  ...
+# Subtest: SPEC: tope de partículas ≤ 20 y ≤ tope del tier
+ok 152 - SPEC: tope de partículas ≤ 20 y ≤ tope del tier
+  ---
+  duration_ms: 0.103621
+  type: 'test'
+  ...
+# Subtest: cada skin nueva tiene shader en patterns/ con GLSL y calidades
+ok 153 - cada skin nueva tiene shader en patterns/ con GLSL y calidades
+  ---
+  duration_ms: 0.256672
+  type: 'test'
+  ...
+# Subtest: cada skin nueva tiene textura 2D en ballPaint (calidad baja / bloqueada)
+ok 154 - cada skin nueva tiene textura 2D en ballPaint (calidad baja / bloqueada)
+  ---
+  duration_ms: 0.405343
+  type: 'test'
+  ...
+# Subtest: una skin guardada inexistente vuelve a la skin por defecto
+ok 155 - una skin guardada inexistente vuelve a la skin por defecto
+  ---
+  duration_ms: 3.420446
+  type: 'test'
+  ...
+# Subtest: equip() no guarda ids desconocidos ni cambia el estado
+ok 156 - equip() no guarda ids desconocidos ni cambia el estado
+  ---
+  duration_ms: 0.409988
+  type: 'test'
+  ...
+# Subtest: TIERS define los 6 tiers y RARITIES es un alias
+ok 157 - TIERS define los 6 tiers y RARITIES es un alias
+  ---
+  duration_ms: 1.29084
+  type: 'test'
+  ...
+# Subtest: cada skin tiene los campos del esquema y un tier válido
+ok 158 - cada skin tiene los campos del esquema y un tier válido
+  ---
+  duration_ms: 0.65338
+  type: 'test'
+  ...
+# Subtest: ids existentes intactos y re-tier según el plan
+ok 159 - ids existentes intactos y re-tier según el plan
+  ---
+  duration_ms: 0.23074
+  type: 'test'
+  ...
+# Subtest: legendarias y míticas traen contador
+ok 160 - legendarias y míticas traen contador
+  ---
+  duration_ms: 0.169724
+  type: 'test'
+  ...
+# Subtest: los desafíos wins50 y aces5 desbloquean las míticas
+ok 161 - los desafíos wins50 y aces5 desbloquean las míticas
+  ---
+  duration_ms: 0.30192
+  type: 'test'
+  ...
+# Subtest: las 5 skins nuevas: tier, desbloqueo, shader propio y tope de partículas
+ok 162 - las 5 skins nuevas: tier, desbloqueo, shader propio y tope de partículas
+  ---
+  duration_ms: 0.158508
+  type: 'test'
+  ...
+# Subtest: cada desafío nuevo desbloquea una sola skin
+ok 163 - cada desafío nuevo desbloquea una sola skin
+  ---
+  duration_ms: 0.239568
+  type: 'test'
+  ...
+1..163
+# tests 163
+# suites 0
+# pass 159
+# fail 4
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 76567.500307
