@@ -61,3 +61,22 @@ El bloqueo 2 (rama) queda resuelto: el compañero, `la-chaqueta-bionica`. Ningú
 - risk: tier 1
 - controls: tests ✅ (219/219) build ✅ audit ✅ traceability ✅ (AC3, AC5, AC11, AC14)
 - pendiente conocido: la prueba de «`update` no asigna memoria» no existe como prueba automática (no hay forma fiable en `node --test` sin `--expose-gc`); la garantía es estructural (casillas fijas y paquete de emisiones precalculado en `play`)
+
+## T003 — 2026-11-06 (actualización)
+- status: PARKED (blocking), decisión humana pendiente
+- review: ronda 3 de 3 agotada con 1 bloqueante (L13: `validate` sin acotar con un bucle de duración minúscula y `flashes: []`) y 1 should-fix (L14: conteo de ventana O(n²)). Misma clase que el bloqueante de la ronda 2 (trabajo no acotado en el validador).
+- fix (commit `72abc22`, sin cuarta revisión): `flashRate` pasa a forma cerrada (q periodos enteros × destellos + resto cíclico, dos punteros): su coste depende solo del número de destellos, nunca de `1/duración`.
+- evidencia propia: 37 pruebas en verde (suite 226/226), `validate` responde en <1 s con duraciones 1e-9, 1e-12 y 1e-300, con `flashes: []` y con 1e5 destellos; el mutante «el bucle no vuelve a emitir» y los de `strength`/tope mueren.
+- por qué se aparca: el ledger corta en la ronda 3 y el protocolo exige aparcar una tarea que no converge; el agente no puede dar por buena su propia corrección.
+
+## T004 — 2026-11-06 (actualización)
+- status: implemented, ronda 1 de 3 corregida (commit `72abc22`); su cierre espera a T003
+- review: 8 hallazgos (5 should-fix, 3 nit) → 7 corregidos (L16–L22); L15 `intentional`: no hay prueba automática de «`update` no asigna memoria» (no es medible de forma fiable con `node --test`); se sustituyó el `for-of` por un bucle indexado y la garantía sigue siendo estructural
+- controls: tests ✅ (226/226) build ✅ audit ✅ traceability ✅ (AC2, AC3, AC5, AC14)
+- mutantes comprobados: bucle que no vuelve a emitir, sin guarda de `dt`, color sin hex: las pruebas los matan
+
+## Decision queue (añadido)
+
+| id | tipo | tarea | decisión | estado |
+|----|------|-------|----------|--------|
+| 9 | blocking | T003 | ¿Se acepta el arreglo de `flashRate` (forma cerrada, commit `72abc22`) sin una cuarta revisión independiente, dejando que la revisión de cierre de toda la rama lo cubra? Recomendación: sí, porque la causa de la clase de defecto desaparece y está probada con mutantes. Opciones: aceptar / pedir revisión humana del diff `43e515e..72abc22` en `schema.js`. | pendiente |
