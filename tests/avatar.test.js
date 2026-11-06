@@ -101,3 +101,43 @@ test('si la subida inicial falla, se reintenta en la próxima entrada', async ()
   await new Promise((r) => setImmediate(r));
   assert.deepEqual(sent, [{ icon: 'gem', image: null }]);
 });
+
+test('un avatar que no llegó a subirse se reintenta al entrar y no lo pisa el del servidor', async () => {
+  const storage = mem();
+  const a = new AvatarStore('u1', storage);
+  a.onChange = () => Promise.reject(new Error('offline'));
+  a.setImage(PNG);
+  await new Promise((r) => setImmediate(r));
+  // siguiente entrada: el servidor aún tiene el icono viejo
+  const b = new AvatarStore('u1', storage);
+  const sent = [];
+  b.onChange = (v) => { sent.push(v); return Promise.resolve(); };
+  b.hydrate('icon:crown');
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(b.get(), { icon: null, image: PNG });
+  assert.deepEqual(sent, [{ icon: null, image: PNG }]);
+  // ya subido: la siguiente entrada vuelve a mandar el servidor
+  const c = new AvatarStore('u1', storage);
+  c.onChange = () => Promise.resolve();
+  c.hydrate('icon:wolf');
+  assert.deepEqual(c.get(), { icon: 'wolf', image: null });
+});
+
+test('subidas que acaban fuera de orden no dan por subido un avatar que no llegó', async () => {
+  const storage = mem();
+  const a = new AvatarStore('u1', storage);
+  const pending = [];
+  a.onChange = () => new Promise((resolve, reject) => pending.push({ resolve, reject }));
+  a.setIcon('wolf'); // subida 1: lenta
+  a.setImage(PNG); // subida 2: falla
+  pending[1].reject(new Error('offline'));
+  pending[0].resolve(); // la 1 acaba después y bien
+  await new Promise((r) => setImmediate(r));
+  const b = new AvatarStore('u1', storage);
+  const sent = [];
+  b.onChange = (v) => { sent.push(v); return Promise.resolve(); };
+  b.hydrate('icon:wolf');
+  assert.deepEqual(b.get(), { icon: null, image: PNG });
+  assert.deepEqual(sent, [{ icon: null, image: PNG }]);
+  assert.equal(storage.getItem('gcb.avatar.v1.u1.synced'), '1');
+});

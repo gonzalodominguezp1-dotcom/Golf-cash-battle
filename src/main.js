@@ -7,7 +7,9 @@ import { createBackend } from './backend/index.js';
 import { COURSES, TIEBREAK_COURSE } from './game/courses.js';
 import { Bot } from './game/bots.js';
 import { segmentsOf } from './game/physics.js';
-import { enterFinale, isMuted, leaveFinale, setMuted, sfx, unlockAudio } from './game/audio.js';
+import { enterFinale, isMuted, leaveFinale, setAmbientVolume, setMuted, setVolume, sfx, unlockAudio } from './game/audio.js';
+import { settings } from './settings/settings.js';
+import { lastSection, mountSettingsPanel } from './ui/settingsPanel.js';
 import { Progress } from './progress/Progress.js';
 import { AVATAR_ICONS, AvatarStore, checkAvatarFile, fromWire, iconById, imageToAvatar, toWire } from './progress/avatar.js';
 import { FRAMES, frameById, framesUnlocked, frameStyle } from './progress/prestige.js';
@@ -24,7 +26,6 @@ import { newPartyMatch, partyErrorText, partyMessage, readyLabel } from './match
 import { LiveRoom } from './match/LiveRoom.js';
 import { buildRoster, humanLeaders, liveStandings, seededRng } from './match/liveRules.js';
 import { avatarIcon, icon, iconUrl, tierIcon } from './ui/icons.js';
-import { QUALITY_LEVELS, QUALITY_NAMES, getQuality, setQuality } from './game/render/quality.js';
 
 let backend, wallet, matches;
 // práctica forzada con #hoyoN: siempre local, no toca el servidor
@@ -36,13 +37,17 @@ warmThumbs();
 const loadGolfGame = () => import('./game/GolfGame.js').then((m) => m.GolfGame);
 const loadSkinInspector = () => import('./ui/skinInspector.js');
 
-// clave nueva: quien silenció sin querer cuando no se oía nada vuelve a tener sonido
-const MUTE_KEY = 'gcb.muted.v2';
 // "móvil" en pantallas táctiles, "equipo" en PC
 const DEVICE = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? 'móvil' : 'equipo';
-try {
-  setMuted(localStorage.getItem(MUTE_KEY) === '1');
-} catch { }
+
+// sonido según los ajustes guardados (settings.js), ahora y cada vez que cambien
+function applySound(s) {
+  setMuted(s.sound.muted);
+  setVolume(s.sound.master / 100);
+  setAmbientVolume(s.sound.ambient / 100);
+  document.querySelectorAll('.pill.mute').forEach((b) => (b.innerHTML = soundLabel()));
+}
+const toggleMute = () => settings.patch({ sound: { muted: !settings.peek().sound.muted } });
 
 // el audio solo puede arrancar con un gesto: cualquier toque o tecla vale
 for (const ev of ['pointerdown', 'touchend', 'keydown']) document.addEventListener(ev, unlockAudio, { capture: true, passive: true });
@@ -61,6 +66,8 @@ document.documentElement.style.setProperty('--gi-dot', `url("${iconUrl('dot', { 
 const fmt = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
 const coin = (n) => `${icon('coin', { cls: 'coin' })}${fmt(n)}`;
 const soundLabel = () => `${icon(isMuted() ? 'mute' : 'sound')}${isMuted() ? 'Mudo' : 'Sonido'}`;
+applySound(settings.get());
+settings.subscribe(applySound);
 const h = (html) => {
   const t = document.createElement('template');
   t.innerHTML = html.trim();
@@ -129,25 +136,18 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
             <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}">${icon('skins')}Skins <kbd>3</kbd></button>
             <button data-go="ranking" class="${screen === 'ranking' ? 'on' : ''}">${icon('trophy')}Ranking <kbd>4</kbd></button>
             <button data-go="account" class="${screen === 'account' ? 'on' : ''}">${icon('user')}Cuenta <kbd>5</kbd></button>
+            <button data-go="settings" class="${screen === 'settings' ? 'on' : ''}">${icon('gear')}Ajustes <kbd>6</kbd></button>
           </nav>
         </div>
         <div class="topbar-right">
           <button class="balance" data-go="wallet" title="Tu saldo: abre el wallet de tu cuenta">${coin(balance)}<span class="plus">${icon('plus')}</span></button>
           <button class="pill mute topbar-sound-btn" aria-label="Sonido" title="Silenciar / Activar sonido (M)">${soundLabel()}</button>
-          <button class="icon-btn m-settings" aria-label="Ajustes" title="Ajustes">${icon('gear')}</button>
+          <button class="icon-btn m-settings ${screen === 'settings' ? 'on' : ''}" data-go="settings" aria-label="Ajustes" title="Ajustes">${icon('gear')}</button>
           ${document.fullscreenEnabled ? `<button class="icon-btn m-fullscreen" aria-label="Pantalla completa" title="Pantalla completa">${icon('fullscreen')}</button>` : ''}
         </div>
       </header>`),
     );
-    const topMute = app.querySelector('.topbar-sound-btn');
-    if (topMute) {
-      topMute.addEventListener('click', () => {
-        setMuted(!isMuted());
-        topMute.innerHTML = soundLabel();
-        try { localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0'); } catch { }
-      });
-    }
-    app.querySelector('.m-settings')?.addEventListener('click', openMenuSettings);
+    app.querySelector('.topbar-sound-btn')?.addEventListener('click', toggleMute);
     app.querySelector('.m-fullscreen')?.addEventListener('click', toggleFullscreen);
   }
   app.append(content);
@@ -171,6 +171,8 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
 window.addEventListener('keydown', (e) => {
   const overlay = document.querySelector('.overlay');
   if (overlay) {
+    // dentro del panel de ajustes, Enter y las flechas son del control que tiene el foco
+    if (e.target.closest?.('.sp')) return;
     if (e.code === 'Enter') {
       const btn = overlay.querySelector('.primary, .next, .confirm, button:not(.close):not(.cancel)');
       if (btn) { e.preventDefault(); btn.click(); return; }
@@ -206,66 +208,13 @@ window.addEventListener('keydown', (e) => {
   else if (isNum(3)) triggerNav('skins');
   else if (isNum(4)) triggerNav('ranking');
   else if (isNum(5)) triggerNav('account');
-  else if (e.code === 'KeyM') {
-    setMuted(!isMuted());
-    const topMute = document.querySelector('.topbar-sound-btn');
-    if (topMute) topMute.innerHTML = soundLabel();
-    try { localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0'); } catch { }
-  }
+  else if (isNum(6)) triggerNav('settings');
+  else if (e.code === 'KeyM') toggleMute();
 });
 
 function toggleFullscreen() {
   if (document.fullscreenElement) document.exitFullscreen().catch(() => { });
   else document.documentElement.requestFullscreen().catch(() => { });
-}
-
-/** Ajustes fuera de la partida: sonido y calidad gráfica. */
-function openMenuSettings() {
-  if (document.querySelector('.menu-settings-overlay')) return;
-  const overlay = h(`
-    <div class="overlay in-game-settings-overlay menu-settings-overlay">
-      <div class="in-game-settings-modal">
-        <div class="settings-modal-header">
-          <div class="settings-title"><h3>Ajustes</h3></div>
-          <button class="close-settings-btn" aria-label="Cerrar ajustes">${icon('close')}Cerrar</button>
-        </div>
-        <div class="settings-modal-body">
-          <div class="settings-row">
-            <div class="settings-label"><strong>Sonido</strong><small>Efectos ambientales y de golpe</small></div>
-            <button class="settings-btn toggle-sound-btn"></button>
-          </div>
-          <div class="settings-row">
-            <div class="settings-label"><strong>Calidad gráfica</strong><small>Baja si el móvil va lento o se calienta</small></div>
-            <div class="quality-picker">
-              ${QUALITY_LEVELS.map((q) => `<button class="settings-btn quality-btn ${q === getQuality() ? 'on' : ''}" data-q="${q}">${QUALITY_NAMES[q]}</button>`).join('')}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>`);
-  const soundBtn = overlay.querySelector('.toggle-sound-btn');
-  const paintSound = () => {
-    soundBtn.classList.toggle('muted', isMuted());
-    soundBtn.innerHTML = `${icon(isMuted() ? 'mute' : 'sound')}<span class="btn-text">${isMuted() ? 'Silenciado' : 'Activado'}</span>`;
-  };
-  paintSound();
-  soundBtn.addEventListener('click', () => {
-    setMuted(!isMuted());
-    paintSound();
-    const topMute = document.querySelector('.topbar-sound-btn');
-    if (topMute) topMute.innerHTML = soundLabel();
-    try { localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0'); } catch { }
-  });
-  overlay.querySelectorAll('.quality-btn').forEach((btn) => btn.addEventListener('click', () => {
-    setQuality(btn.dataset.q);
-    overlay.querySelectorAll('.quality-btn').forEach((b) => b.classList.toggle('on', b === btn));
-  }));
-  const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
-  const onKey = (e) => { if (e.key === 'Escape') close(); };
-  document.addEventListener('keydown', onKey);
-  overlay.querySelector('.close-settings-btn').addEventListener('click', close);
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-  document.body.append(overlay);
 }
 
 function go(to) {
@@ -274,7 +223,22 @@ function go(to) {
   if (to === 'account') return showAccount();
   if (to === 'ranking') return showRanking();
   if (to === 'freeplay') return showFreePlayCourseSelect();
+  if (to === 'settings') return showSettings();
   return showLobby();
+}
+
+// ---------- ajustes ----------
+
+/** true si los ajustes viajan con la cuenta (no en modo local ni en cuenta de invitado). */
+const settingsSynced = () => !!backend?.account && !backend.account.profile?.is_anonymous;
+
+async function showSettings(section = lastSection()) {
+  leaveFinale();
+  stopLive();
+  screen = 'settings';
+  const view = h('<main class="screen settings-screen"><div class="settings-host"></div></main>');
+  await shell(view, { nav: false });
+  mountSettingsPanel(view.querySelector('.settings-host'), { layout: 'screen', section, synced: settingsSynced(), onBack: () => go('lobby') });
 }
 
 // cartas holográficas: se inclinan y el brillo sigue al dedo
@@ -1497,32 +1461,12 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
             <div class="settings-modal-body">
               <div class="settings-row">
                 <div class="settings-label">
-                  <strong>Sonido</strong>
-                  <small>Efectos ambientales y de golpe</small>
-                </div>
-                <button class="settings-btn toggle-sound-btn ${isMuted() ? 'muted' : ''}">
-                  ${icon(isMuted() ? 'mute' : 'sound')}<span class="btn-text">${isMuted() ? 'Silenciado' : 'Activado'}</span>
-                </button>
-              </div>
-
-              <div class="settings-row">
-                <div class="settings-label">
                   <strong>Pantalla</strong>
                   <small>Modo inmersivo de pantalla completa</small>
                 </div>
                 <button class="settings-btn toggle-fs-btn">
                   ${icon('fullscreen')}<span class="btn-text">${document.fullscreenElement ? 'Ventana' : 'Pantalla Completa'}</span>
                 </button>
-              </div>
-
-              <div class="settings-row">
-                <div class="settings-label">
-                  <strong>Calidad gráfica</strong>
-                  <small>Baja si el móvil va lento o se calienta</small>
-                </div>
-                <div class="quality-picker">
-                  ${QUALITY_LEVELS.map((q) => `<button class="settings-btn quality-btn ${q === getQuality() ? 'on' : ''}" data-q="${q}">${QUALITY_NAMES[q]}</button>`).join('')}
-                </div>
               </div>
 
               <div class="settings-row">
@@ -1535,16 +1479,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
                 </button>
               </div>
 
-              <div class="settings-controls-card">
-                <div class="card-title">Controles Activos</div>
-                <div class="controls-grid">
-                  <div class="c-item"><kbd>Ratón</kbd><span>Apuntar y calcular fuerza (pulsar/arrastrar y soltar)</span></div>
-                  <div class="c-item"><kbd>Clic Der</kbd><span>Rotar cámara alrededor de la bola</span></div>
-                  <div class="c-item"><kbd>Rueda</kbd><span>Zoom de cámara / Ajuste fino de fuerza</span></div>
-                  <div class="c-item"><kbd>Espacio</kbd><span>Visión general y completa del mapa</span></div>
-                  <div class="c-item"><kbd>Esc</kbd><span>Abrir / Cerrar este menú de ajustes</span></div>
-                </div>
-              </div>
+              <div class="ig-settings-panel"></div>
             </div>
 
             <div class="settings-modal-footer">
@@ -1568,16 +1503,8 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         if (e.target === overlay) close();
       });
 
-      const soundBtn = overlay.querySelector('.toggle-sound-btn');
-      soundBtn.addEventListener('click', () => {
-        setMuted(!isMuted());
-        const muted = isMuted();
-        soundBtn.classList.toggle('muted', muted);
-        soundBtn.querySelector('.gi')?.replaceWith(h(icon(muted ? 'mute' : 'sound')));
-        soundBtn.querySelector('.btn-text').textContent = muted ? 'Silenciado' : 'Activado';
-        muteBtn.innerHTML = soundLabel();
-        try { localStorage.setItem(MUTE_KEY, muted ? '1' : '0'); } catch { }
-      });
+      // controles, calidad y sonido: el mismo panel que la pantalla Ajustes; se aplican al momento
+      mountSettingsPanel(overlay.querySelector('.ig-settings-panel'), { layout: 'modal', section: lastSection(), onQuality: () => game.refreshQuality?.() });
 
       const fsModalBtn = overlay.querySelector('.toggle-fs-btn');
       fsModalBtn.addEventListener('click', () => {
@@ -1591,14 +1518,6 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
           fsModalBtn.querySelector('.btn-text').textContent = isFs ? 'Ventana' : 'Pantalla Completa';
         }, 100);
       });
-
-      overlay.querySelectorAll('.quality-btn').forEach((btn) =>
-        btn.addEventListener('click', () => {
-          setQuality(btn.dataset.q);
-          overlay.querySelectorAll('.quality-btn').forEach((b) => b.classList.toggle('on', b === btn));
-          game.refreshQuality?.();
-        }),
-      );
 
       const ovBtn = overlay.querySelector('.toggle-overview-btn');
       ovBtn.addEventListener('click', () => {
@@ -1746,14 +1665,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       window.addEventListener('keydown', onKeyR);
     }
     if (isMuted()) toast('Sonido silenciado · actívalo en Ajustes', '#ffffff');
-    const muteBtn = view.querySelector('.mute');
-    muteBtn.addEventListener('click', () => {
-      setMuted(!isMuted());
-      muteBtn.innerHTML = soundLabel();
-      try {
-        localStorage.setItem(MUTE_KEY, isMuted() ? '1' : '0');
-      } catch { }
-    });
+    view.querySelector('.mute').addEventListener('click', toggleMute);
     const fsBtn = view.querySelector('.fullscreen');
     if (fsBtn) {
       fsBtn.addEventListener('click', () => {
@@ -2803,6 +2715,22 @@ if (skinLab) {
       avatar = new AvatarStore(b.user.id);
       avatar.onChange = (v) => b.account.setAvatar(toWire(v));
       avatar.hydrate(b.account.profile?.avatar);
+      // ajustes: se suben un rato después del último cambio (los deslizadores cambian muchas veces)
+      let settingsTimer = 0, settingsQueued = null;
+      const sendSettings = () => {
+        clearTimeout(settingsTimer);
+        if (!settingsQueued) return;
+        const v = settingsQueued;
+        settingsQueued = null;
+        b.account.setSettings(v).catch(() => { });
+      };
+      settings.onChange = (s) => {
+        settingsQueued = s;
+        clearTimeout(settingsTimer);
+        settingsTimer = setTimeout(sendSettings, 800);
+      };
+      addEventListener('pagehide', sendSettings);
+      settings.hydrate(b.account.profile?.settings, b.user.id);
       progress.attach(b.user.id, b.account.profile?.progress, (s) => b.account.saveProgress(s), (id) => b.account.setFrame(id));
       // hitos de ranking y marco elegido: pueden desbloquear bolas, que se ofrecen al acabar la próxima partida
       b.account.myRanking().then((r) => progress.setServerStats(r)).catch(() => {});

@@ -55,7 +55,13 @@ y controles que se puedan editar.
   - Seguridad: sin bloqueos.
   - Corrección: dos puntos que convenía arreglar, ya corregidos: «restablecer calidad» borraba la del otro dispositivo, y los ajustes de otra cuenta se subían a una cuenta vacía.
   - Tests: diez mutaciones sobrevivían. Se cubrieron con tests nuevos, y se comprobó que tres de ellas ahora fallan.
+- Al subir, `main` traía 11 commits nuevos de la-chaqueta-bionica: iconos, una barra superior nueva en el móvil y un modal pequeño de ajustes (`openMenuSettings`). Al fusionar:
+  - El engranaje del móvil abre la pantalla de Ajustes.
+  - El modal se quitó: escribía en la clave antigua del silencio, que ya no existe.
+  - La etiqueta de sonido con icono se pinta desde los ajustes.
+  - La barra del escritorio, con seis secciones, se compacta entre 900 y 1439 px. Medido sin desbordar de 900 a 1920 px.
+  - Resultado: 212 tests en verde, build correcto, y las pruebas de Playwright repetidas sin errores.
 - Decisión aceptada y no cambiada: gana el último guardado del documento entero, no campo a campo. Una sesión abierta durante horas en otro dispositivo puede pisar un cambio más nuevo al guardar.
 
 ## Next
-Que el equipo apruebe el push a `main` (nivel 2) y las capturas como referencia, y aplique la migración `20261106140000_player_settings.sql` en Supabase. Hasta que se aplique, los ajustes se guardan solo en el dispositivo; nada falla.
+Push a `main` aprobado por el usuario el 2026-11-06. Falta que el equipo apruebe las capturas como referencia y aplique la migración `20261106140000_player_settings.sql` en Supabase. Hasta que se aplique, los ajustes se guardan solo en el dispositivo; nada falla.
