@@ -55,5 +55,7 @@ export function rpcError(error) {
   const code = /^[a-z_]+$/.test(error?.message ?? '') ? error.message : 'unknown';
   const e = new Error(code);
   e.code = code;
+  // lo que dijo el servidor de verdad (para el diagnóstico: el código queda en 'unknown' si no es uno nuestro)
+  e.detail = [error?.code, error?.message, error?.details, error?.hint].filter(Boolean).join(' | ');
   return e;
 }

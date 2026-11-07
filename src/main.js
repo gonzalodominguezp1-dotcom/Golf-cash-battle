@@ -1969,7 +1969,8 @@ async function startTournament(tier, rematchOf = null) {
       backend.account?.load().catch(() => { });
       return showBlocked(e.code);
     }
-    return alertMsg('No se ha podido entrar en la partida. Prueba otra vez.');
+    console.error('join_tournament falló', e.code, e.detail ?? e);
+    return alertMsg(`No se ha podido entrar en la partida. Prueba otra vez.<br><small>Código: ${esc(e.code ?? 'network')}${e.detail ? ` · ${esc(e.detail.slice(0, 160))}` : ''}</small>`);
   }
   enterLive(match);
 }
