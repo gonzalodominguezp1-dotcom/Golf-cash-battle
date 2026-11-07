@@ -79,4 +79,40 @@ El bloqueo 2 (rama) queda resuelto: el compañero, `la-chaqueta-bionica`. Ningú
 
 | id | tipo | tarea | decisión | estado |
 |----|------|-------|----------|--------|
-| 9 | blocking | T003 | ¿Se acepta el arreglo de `flashRate` (forma cerrada, commit `72abc22`) sin una cuarta revisión independiente, dejando que la revisión de cierre de toda la rama lo cubra? Recomendación: sí, porque la causa de la clase de defecto desaparece y está probada con mutantes. Opciones: aceptar / pedir revisión humana del diff `43e515e..72abc22` en `schema.js`. | pendiente |
+| 9 | blocking | T003 | ¿Se acepta el arreglo de `flashRate` (forma cerrada, commit `72abc22`) sin una cuarta revisión independiente, dejando que la revisión de cierre de toda la rama lo cubra? Recomendación: sí, porque la causa de la clase de defecto desaparece y está probada con mutantes. Opciones: aceptar / pedir revisión humana del diff `43e515e..72abc22` en `schema.js`. | cerrada por una persona: aceptado sin cuarta revisión (2026-11-06) |
+
+## T003 — 2026-11-06 (cierre)
+- status: complete. La persona aceptó el arreglo de `flashRate` (`72abc22`) sin cuarta revisión; la revisión de cierre de toda la rama (etapa 5) lo volverá a leer.
+
+## T005 — 2026-11-06
+- status: complete
+- red: 7 de 25 fallaban por aserción antes de implementar; green: 45/45 al implementar
+- commits: `1cbb64e` (feat), `0901fac` (fix ronda 1), `1b…` ver `git log` (test de strength en anillos)
+- risk: tier 1
+- review: ronda 1 → 6 hallazgos (2 should-fix, 3 nit, 1 question), todos corregidos (L23–L28). Ronda 2 → pass, 1 nit (L29, corregido). Decisiones: las luces pasan a su propio pool (MAX_LIGHTS = 4) para que el tope de partículas no las pierda (AC13); `k` se define como brillo 0..1 y se valida; `strength` escala anillos y destellos; los anillos usan mezcla normal como los `Shockwaves` del juego.
+- controls: tests ✅ (256/256 con T006) build ✅ audit ✅ traceability ✅ (AC10, AC13, AC6)
+- mutantes comprobados: orientación wall, calma de luz, `k`, destello que no se repite en bucle, anillo cortado con el pool lleno, `strength` en anillos
+
+## T006 — 2026-11-06
+- status: complete
+- red: 9 de 9 fallaban con el stub; green: 9/9 al implementar
+- commits: `b3be292` (feat), `ecdec25` y `2ece887` (fix ronda 1 y 2)
+- risk: tier 1
+- review: ronda 1 → 4 hallazgos (1 should-fix: un tiempo NaN dejaba el portal atascado; 3 nit de pruebas), corregidos (L30–L33). Ronda 2 → pass, 2 nit (L34–L35), corregidos.
+- files: `src/game/render/vfx/portalState.js` (puro) y `src/game/render/portal.js` (+10 líneas: `group` y `setOpen`, firma intacta, CRLF respetado)
+- controls: tests ✅ (256/256) build ✅ audit ✅ traceability ✅ (AC10)
+- mutantes comprobados: continuidad, guarda de `dt`, ronda de tiempos, `setOpen` con NaN, luz sin `open`, duración entera
+
+## T004 — nota
+- La ronda 2 formal de T004 no se ha hecho; el runtime se releyó entero en las dos rondas de T005 (que dio pass). Queda cubierto por la revisión de cierre de toda la rama (etapa 5).
+
+## T007 — 2026-11-06
+- status: complete (banco, fuera del repo; sin tier, sin revisión por tier)
+- red: 10 de 10 pruebas de `golfito-vfx-lab/test/library.test.js` fallaban con el stub; green: 10/10 (`node --test test/`)
+- done-check: `await window.__lab.selfcheck()` devuelve `ok: true` con 21 pasos: crear, duplicar, editar con errores por nombre, exportación bloqueada con un efecto inválido y con uno que excede el presupuesto (AC9), borrar con aviso y con `force` (AC8), reproducir cada efecto en low/medium/high dentro del tope y terminando vacío o en bucle, pieza del juego ausente (AC15), una sola copia de `three`. Consola sin errores. `grep -c "engine.js" src/main.js` da 0 y se retiraron `engine.js` y los seis efectos de prueba.
+- verificado en el navegador: editar la duración a 0 desde el formulario pone el semáforo en rojo, lista los errores y deshabilita «Exportar»; devolverla a 1 lo vuelve a habilitar. Hallazgo propio: las listas de emisores, anillos y luces salían como `[object HTMLDivElement]` (append no aplana arrays); corregido.
+- files (fuera del repo): `golfito-vfx-lab/src/{main,library,export,palettes,starter,gameBridge}.js`, `index.html`, `vite.config.js`, `test/library.test.js`
+- decisión: `selfcheck` es asíncrono porque comprueba la carga por piezas con `loadGame`.
+
+## Reparto del trabajo restante (a petición de la persona)
+- Subagentes: Sonnet para contenido y pruebas (T008/T009 packs, T015 entidad Skin), Haiku para comprobaciones mecánicas (T013), Opus solo para UI, funcionalidad y complejidad (T016 editor de skins, T010/T011 integración en el juego).
