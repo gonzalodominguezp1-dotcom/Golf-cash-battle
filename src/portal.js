@@ -139,18 +139,19 @@ export async function midgameAd() {
 
 /**
  * Anuncio recompensado (cofre). Devuelve 'ok' si hay que dar el premio, 'adblock' o
- * 'unavailable' si no. Sin SDK o con los anuncios desactivados (Basic Launch de
- * CrazyGames) se da el premio igualmente: es solo cosmético y así el cofre funciona.
+ * 'unavailable' si no. Sin SDK, con los anuncios desactivados o sin anuncio que dar
+ * (Basic Launch de CrazyGames) se da el premio igualmente: es solo cosmético y así el cofre funciona.
  */
 export async function rewardedAd() {
   if (!sdk) return 'ok';
   gameplayStop();
   try {
     const r = await withTimeout(sdk.rewarded(), 90000);
-    return r === 'disabled' ? 'ok' : r;
+    // si no hay anuncio que dar (Basic Launch, sin relleno), el cofre se abre igual
+    return r === 'adblock' ? 'adblock' : 'ok';
   } catch (e) {
     adHooks.unmute();
     console.warn('portal.rewarded', e);
-    return 'unavailable';
+    return 'ok';
   }
 }
