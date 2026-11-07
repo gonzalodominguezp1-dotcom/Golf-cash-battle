@@ -251,7 +251,7 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   position: relative;
   display: flex; align-items: center; gap: 5px; background: none; padding: 8px 10px;
   border-radius: 999px; font-family: var(--display); font-size: 13px; font-weight: 800;
-  text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); white-space: nowrap;
   transition: all 0.24s cubic-bezier(0.16, 1, 0.3, 1);
   overflow: hidden;
 }
@@ -376,6 +376,8 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 .coin { width: 1.15em; height: 1.15em; margin-right: 4px; vertical-align: -0.22em; }
 
 .topbar-sound-btn { font-size: 15px; padding: 6px 10px; cursor: pointer; }
+/* engranaje de la barra del móvil: encendido mientras se está en Ajustes */
+.icon-btn.m-settings.on { box-shadow: 0 0 0 2px rgba(255, 210, 63, 0.6), 0 0 14px rgba(255, 210, 63, 0.35); }
 
 .tabbar {
   position: fixed; left: 50%; transform: translateX(-50%) translateZ(0); bottom: calc(env(safe-area-inset-bottom) + 12px); z-index: 6;
@@ -3444,4 +3446,19 @@ body.sk-noscroll { overflow: hidden; }
     contain-intrinsic-size: auto 360px;
   }
   .course-card, .tier { contain: layout paint; }
+}
+
+/* Barra de escritorio con seis secciones (Ajustes incluida): en pantallas medianas se compacta
+   para no salirse por la derecha. Al final del archivo para ganar al bloque general de escritorio. */
+@media (min-width: 900px) and (max-width: 1439px) {
+  .desktop-nav button { padding: 8px 11px; }
+  .desktop-nav kbd { display: none; }
+}
+@media (min-width: 900px) and (max-width: 1199px) {
+  .topbar { gap: 10px; padding-left: 16px; padding-right: 16px; }
+  .topbar-left { gap: 10px; }
+  .topbar-left .level-text { display: none; }
+  .desktop-nav { gap: 2px; padding: 4px; }
+  .desktop-nav .gi { display: none; }
+  .desktop-nav button { padding: 8px 9px; font-size: 12px; }
 }
