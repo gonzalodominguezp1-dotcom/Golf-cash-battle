@@ -25,6 +25,8 @@ import { addedMessage, cleanFriendName, friendMessage } from './account/friendRu
 import { newPartyMatch, partyErrorText, partyMessage, readyLabel } from './match/partyRules.js';
 import { LiveRoom } from './match/LiveRoom.js';
 import { buildRoster, humanLeaders, liveStandings, seededRng } from './match/liveRules.js';
+import { notify } from './ui/notifyPopup.js';
+import { NOTIFY_POLL_MS, newNotices } from './ui/notifyRules.js';
 import { avatarIcon, icon, iconUrl, tierIcon } from './ui/icons.js';
 import { errorRef } from './backend/rpcError.js';
 
@@ -2785,6 +2787,40 @@ if (skinLab) {
       const m = app.querySelector('.m-coins');
       if (m) m.innerHTML = coin(n);
     });
+    startNotifier(b);
     showLobby();
   });
+}
+
+// ---------- avisos emergentes ----------
+// Cada pocos segundos se mira si llegó una petición de amistad o una invitación a grupo
+// y se enseña un aviso de 5 s. (notify() sirve para cualquier otro aviso.)
+
+function startNotifier(b) {
+  if (!b.account) return;
+  const seen = new Set();
+  let first = true;
+  const tick = async () => {
+    try {
+      if (!document.hidden && b.account.profile?.username) {
+        const [friendsData, partyData] = await Promise.all([
+          b.account.friends().catch(() => null),
+          b.parties ? b.parties.mine().catch(() => null) : null,
+        ]);
+        if (friendsData || partyData) {
+          for (const n of newNotices(seen, friendsData, partyData, { seed: first })) {
+            sfx.tick();
+            if (n.kind === 'friend') {
+              notify({ kind: 'friend', icon: 'user-plus', title: 'Petición de amistad', text: `${n.from} quiere ser tu amigo`, onClick: () => go('account') });
+            } else {
+              notify({ kind: 'invite', icon: 'users', title: 'Invitación a grupo', text: `${n.from} te invita a su grupo`, onClick: () => go('lobby') });
+            }
+          }
+          first = false;
+        }
+      }
+    } catch { }
+    setTimeout(tick, NOTIFY_POLL_MS);
+  };
+  tick();
 }
