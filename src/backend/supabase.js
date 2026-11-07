@@ -50,10 +50,4 @@ export async function connectSupabase() {
   };
 }
 
-/** Pasa los errores de las funciones SQL (raise exception 'x') a algo legible. */
-export function rpcError(error) {
-  const code = /^[a-z_]+$/.test(error?.message ?? '') ? error.message : 'unknown';
-  const e = new Error(code);
-  e.code = code;
-  return e;
-}
+export { rpcError } from './rpcError.js';

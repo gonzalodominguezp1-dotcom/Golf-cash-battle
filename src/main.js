@@ -26,6 +26,7 @@ import { newPartyMatch, partyErrorText, partyMessage, readyLabel } from './match
 import { LiveRoom } from './match/LiveRoom.js';
 import { buildRoster, humanLeaders, liveStandings, seededRng } from './match/liveRules.js';
 import { avatarIcon, icon, iconUrl, tierIcon } from './ui/icons.js';
+import { errorRef } from './backend/rpcError.js';
 
 let backend, wallet, matches;
 // práctica forzada con #hoyoN: siempre local, no toca el servidor
@@ -1969,7 +1970,8 @@ async function startTournament(tier, rematchOf = null) {
       backend.account?.load().catch(() => { });
       return showBlocked(e.code);
     }
-    return alertMsg('No se ha podido entrar en la partida. Prueba otra vez.');
+    console.error('join_tournament', e);
+    return alertMsg(`No se ha podido entrar en la partida. Prueba otra vez.${esc(errorRef(e))}`);
   }
   enterLive(match);
 }
