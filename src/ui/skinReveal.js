@@ -102,12 +102,14 @@ function burst(canvas, color, count, lifeMul = 1) {
 
 // Explosión de la caja: trozos de madera que salen disparados desde su centro (fuera de pantalla).
 const SHARDS = 28;
-const BREAK_MS = 880; // 0,8 s de vuelo + retraso máximo de 60 ms
-function shatter(root, pack) {
+const REVEAL_AT_MS = 320; // la bola empieza mientras los trozos aún vuelan: sin pausa
+function shatter(pack) {
   const r = pack.getBoundingClientRect();
   const cx = r.left + r.width / 2;
   const cy = r.top + r.height / 2;
-  pack.classList.add('sr-pack-out');
+  // se quita la puerta entera (no solo se oculta) para que no quede ningún marco
+  pack.closest('.sr-stage')?.remove();
+  // capa en el body: sobrevive al cambio de la puerta a la animación de la bola
   const layer = document.createElement('div');
   layer.className = 'sr-shards';
   layer.setAttribute('aria-hidden', 'true');
@@ -126,7 +128,7 @@ function shatter(root, pack) {
     s.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px;--tx:${Math.cos(a) * far}px;--ty:${Math.sin(a) * far}px;--rot:${(Math.random() * 2 - 1) * 540}deg;--dl:${Math.round(Math.random() * 60)}ms;clip-path:polygon(${pt()}, ${pt()}, ${pt()}, ${pt()})`;
     layer.append(s);
   }
-  root.append(layer);
+  document.body.append(layer);
   return layer;
 }
 
@@ -227,9 +229,9 @@ export function showSkinReveal(skins, { progress = null } = {}) {
         buzz([30, 40, 80]);
         if (calm) return reveal(i);
         // la caja explota en trozos y, cuando acaban de salir, empieza la bola
-        root.classList.add('sr-breaking');
-        shatter(root, root.querySelector('.sr-pack'));
-        setTimeout(() => reveal(i), BREAK_MS);
+        const layer = shatter(root.querySelector('.sr-pack'));
+        setTimeout(() => reveal(i), REVEAL_AT_MS);
+        setTimeout(() => layer.remove(), 1000);
       };
       const frame = (now) => {
         const dt = Math.min(0.05, (now - last) / 1000);

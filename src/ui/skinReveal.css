@@ -1,6 +1,6 @@
 /* Reveal de skins (P10). Las fases las fijan --s1..--s5 / --d1..--d5 (ms) que pone skinReveal.js en .sr-root. */
 .sr-root {
-  position: fixed; inset: 0; z-index: 1100; display: grid; place-items: center; overflow: hidden;
+  position: fixed; inset: 0; z-index: 1100; display: grid; place-items: center; overflow: hidden; background: #04060a;
   padding: env(safe-area-inset-top, 0) 0 env(safe-area-inset-bottom, 0); color: #fff; cursor: pointer;
   -webkit-tap-highlight-color: transparent; user-select: none;
   animation: sr-in 0.2s ease-out both;
@@ -149,13 +149,12 @@
 }
 .sr-pack-bar { position: absolute; left: 14%; right: 14%; bottom: 7%; height: 5px; border-radius: 5px; background: rgba(0, 0, 0, 0.4); overflow: hidden; }
 .sr-pack-bar i { display: block; height: 100%; width: calc(var(--p) * 100%); background: #f0c24a; box-shadow: 0 0 10px var(--c); }
-.sr-pack-out { visibility: hidden; }
 @keyframes sr-pack-shake {
   0%, 100% { translate: 0 0; } 25% { translate: calc(var(--p) * 3px) calc(var(--p) * -2px); }
   50% { translate: calc(var(--p) * -3px) calc(var(--p) * 2px); } 75% { translate: calc(var(--p) * 2px) calc(var(--p) * 3px); }
 }
 /* explosión de la caja: trozos de madera disparados hacia fuera + destello */
-.sr-shards { position: fixed; inset: 0; z-index: 5; pointer-events: none; }
+.sr-shards { position: fixed; inset: 0; z-index: 1101; pointer-events: none; }
 .sr-shard {
   position: absolute; background: linear-gradient(135deg, #c8393b, #6a1014 60%, #2a0609);
   border: 1px solid rgba(201, 162, 74, 0.5);
@@ -172,7 +171,6 @@
   animation: sr-burst 0.45s ease-out both;
 }
 @keyframes sr-burst { from { transform: scale(0.1); opacity: 1; } to { transform: scale(1); opacity: 0; } }
-.sr-breaking .sr-hint, .sr-breaking .sr-kicker-gate, .sr-breaking .sr-count { visibility: hidden; }
 .sr-pack-fill {
   position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--p) * 100%);
   background: linear-gradient(0deg, color-mix(in srgb, var(--c) 70%, transparent), color-mix(in srgb, var(--c) 18%, transparent));
