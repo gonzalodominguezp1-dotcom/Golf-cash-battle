@@ -101,6 +101,7 @@ export function createSkinInspector(container, opts = {}) {
   const autoSpin = !!opts.autoSpin;
   const bare = !!opts.bare;
   const noFloor = !!opts.noFloor; // sin suelo, brillo ni reflejo (la bola flota sola)
+  const noEnv = !!opts.noEnv; // sin reflejos del entorno en la bola
 
   // ---------------------------------------------------------------- DOM
   const root = el('div', `sk-insp sk-${mode}${bare ? ' sk-bare' : ''}`);
@@ -187,7 +188,7 @@ export function createSkinInspector(container, opts = {}) {
     geo?.dispose();
     const [w, h] = SPHERE[level] ?? SPHERE.medium;
     geo = new THREE.SphereGeometry(R, w, h);
-    handle = createSkinMaterial(skin, { quality: level, instance: { seed: instance.seed } });
+    handle = createSkinMaterial(skin, { quality: level, instance: { seed: instance.seed }, noEnv });
     ball.geometry = mirrorBall.geometry = geo;
     ball.material = mirrorBall.material = handle.material;
     tierColor.set(tierOf(skin).color);

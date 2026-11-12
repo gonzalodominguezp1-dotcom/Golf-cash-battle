@@ -299,7 +299,7 @@ export function showSkinReveal(skins, { progress = null } = {}) {
         root.querySelector('.sr-ball').append(holder);
         loadInspector().then(({ createSkinInspector }) => {
           if (!holder.isConnected) return;
-          const api = createSkinInspector(holder, { skin, instance: inst ?? undefined, mode: 'panel', bare: true, autoSpin: true, noFloor: true, quality: 'high' });
+          const api = createSkinInspector(holder, { skin, instance: inst ?? undefined, mode: 'panel', bare: true, autoSpin: true, noFloor: true, noEnv: true, quality: 'high' });
           inspector = { api, el: holder };
           root.classList.add('sr-live-on');
         }).catch(() => holder.remove());
@@ -327,7 +327,7 @@ export function showSkinReveal(skins, { progress = null } = {}) {
 
       if (!calm) {
         timers.push(...sound(skin, 'charge'));
-        timers.push(setTimeout(mountLive, start[2]));
+        mountLive(); // arranca ya: la bola gira desde que aparece (CSS la muestra en start[2])
         timers.push(setTimeout(() => {
           const b = img.getBoundingClientRect();
           const c = canvas.getBoundingClientRect();
