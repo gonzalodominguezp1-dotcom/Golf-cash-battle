@@ -196,7 +196,7 @@ export function showSkinReveal(skins, { progress = null } = {}) {
         <canvas class="sr-fx" aria-hidden="true"></canvas>
         <div class="sr-stage sr-gate">
           ${list.length > 1 ? `<span class="sr-count">${i + 1} / ${list.length}</span>` : ''}
-          <p class="sr-kicker sr-kicker-gate">Recompensa</p>
+          <p class="sr-kicker sr-kicker-gate">¡Recompensa!</p>
           <button type="button" class="sr-orb" aria-label="${calm ? 'Pulsa para abrir' : 'Mantén pulsado para abrir'}">
             <span class="sr-pack" aria-hidden="true">
               <span class="sr-pack-window">
@@ -206,7 +206,7 @@ export function showSkinReveal(skins, { progress = null } = {}) {
               <span class="sr-pack-bar"><i></i></span>
             </span>
           </button>
-          <p class="sr-hint">${calm ? 'Pulsa para abrir' : 'Mantén pulsado para abrir'}</p>
+          <p class="sr-hint">${calm ? '¡Pulsa para abrir!' : '¡Mantén pulsado para abrir!'}</p>
         </div>`;
       const orb = root.querySelector('.sr-orb');
       let p = 0;
