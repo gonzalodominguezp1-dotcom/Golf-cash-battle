@@ -204,6 +204,18 @@ Otras restricciones:
 | **Historial de partidas** | **No existe** | — |
 | **Monedas blandas** | **No existe** (y no se crean) | — |
 
+### Contenido mínimo por pantalla (con las recomendaciones; *clarify* puede moverlo)
+
+| Pantalla | Contenido mínimo | Datos |
+| --- | --- | --- |
+| Torneos | Mesas (entrada, premio, bote, reglas), mis partidas activas, sala en vivo con cuenta atrás | Reales |
+| Desafíos | Hitos por alcanzar con progreso; sección temporal con cuenta atrás | Hitos reales; temporal DEMO o «Próximamente» |
+| Amigos y grupo | Amigos, solicitudes entrantes/salientes, añadir, grupo actual, invitar, invitaciones recibidas | Reales |
+| Recompensas | Skins por reclamar, skins ganadas, historial de movimientos | Reales; cofres = hueco |
+| Progreso | Nivel y XP, marco de prestigio actual y siguiente, estadísticas (partidas, victorias, racha, mejor racha, birdies, aces) | Reales |
+| Logros | Premios de ranking e hitos ya alcanzados | Reales |
+| Ranking, Skins, Cuenta, Ajustes, Juego libre | Lo que hacen hoy | Reales |
+
 ### Modelo de datos propuesto para desafíos temporales (solo propuesta; otra spec lo construye)
 
 - Un **desafío** tiene: identificador, tipo (`daily` | `weekly` | `event`), título, descripción, métrica que mide (las mismas estadísticas que ya existen: partidas, victorias, birdies, aces, racha…), objetivo numérico, recompensa (skin o XP; **nunca saldo**), inicio y fin en hora del servidor.
@@ -217,8 +229,8 @@ Otras restricciones:
 1. Given el hub, When el jugador toca «Ranking», Then la URL cambia a la de Ranking y se ve la pantalla de Ranking a pantalla completa con cabecera (título, volver, saldo).
 2. Given Ranking abierta desde el hub, When el jugador pulsa atrás del navegador, Then vuelve al hub sin recargar la página y el foco queda en el icono «Ranking».
 3. Given Ranking abierta, When el jugador pulsa Esc en escritorio, Then vuelve al hub.
-4. Given una recarga con la URL de una pantalla, When termina la carga, Then se ve esa pantalla y atrás lleva al hub.
-5. Given cualquier pantalla, When se monta y desmonta 20 veces en la prueba de limpieza, Then no queda ningún listener de `window`/`document` ni timer vivo creado por ella.
+4. Given un jugador con sesión y una recarga con la URL de una pantalla, When termina la carga, Then se ve esa pantalla y atrás lleva al hub. Sin sesión: login, y al entrar, la pantalla pedida.
+5. Given cualquier pantalla, When se monta y desmonta 20 veces en la prueba de limpieza, Then no queda ningún listener de `window`/`document` ni timer vivo creado por ella. (Requisito derivado: las pantallas reciben sus dependencias —backend, wallet, progress, router— por parámetro, no por globales, para poder probarlas con dobles.)
 6. Given `prefers-reduced-motion: reduce`, When se cambia de pantalla, Then no hay animación de deslizamiento; el cambio dura ≤100 ms.
 7. Given movimiento normal, When se cambia de pantalla, Then la transición dura entre 150 y 250 ms.
 8. Given `#hoyo3` en la URL, When carga el juego, Then arranca la práctica en el hoyo 3 como hoy.
@@ -226,11 +238,11 @@ Otras restricciones:
 **Hub**
 
 9. Given un jugador con sesión, When carga el hub, Then se ven saldo, avatar, nombre, nivel con barra de progreso, racha actual, el botón JUGAR, los iconos laterales y la barra inferior de 3-4 pestañas, a 375×812, 360×640 y 1280×800 sin scroll horizontal.
-10. Given el hub, When el jugador pulsa JUGAR, Then llega a una partida de práctica o a una sala en ≤3 toques en total.
+10. Given el hub, When el jugador pulsa JUGAR, Then llega a una partida de práctica o a una sala en ≤3 toques contados desde el hub (JUGAR incluido). Sin mesa previa (primera partida), JUGAR lleva a la elección de mesa con la práctica como primera opción.
 11. Given una solicitud de amistad pendiente, una invitación de grupo o una skin por reclamar, When carga el hub, Then el icono correspondiente muestra un punto rojo con texto accesible («N novedades»); sin pendientes, no hay punto.
 12. Given un dato que no existe (liga, desafío temporal sin backend), When carga el hub, Then no se muestra como real; o se oculta o lleva la marca «DEMO» según *clarify*.
 13. Given el hub abierto en móvil o escritorio, When se mide la red, Then no se ha pedido el chunk de Three.js.
-14. Given el hub en reposo 10 s con CPU ×4, When se mide, Then la media es ≥55 FPS y no baja de la medida de referencia del lobby actual en más de 5 FPS.
+14. Given el hub en reposo 10 s con CPU ×4 a 375×812, When se mide, Then la media es ≥55 FPS y no baja más de 5 FPS respecto a la línea base: el lobby actual medido igual **antes de tocar nada** (primera tarea del plan) y anotado en la verificación.
 
 **Pantallas**
 
@@ -254,7 +266,7 @@ Otras restricciones:
 26. Given el splash, When avanza la carga, Then el porcentaje sube solo al completar hitos reales y nunca baja; no llega a 100 % hasta que el hub está listo.
 27. Given una carga muy rápida, When el hub está listo antes de 600 ms, Then el splash sigue visible hasta los 600 ms y luego se funde.
 28. Given la red caída, When se supera el máximo configurado, Then aparece un mensaje y «Reintentar», que vuelve a intentar la carga.
-29. Given las imágenes y el CSS del splash, When se suman, Then pesan <150 KB y las imágenes son WebP.
+29. Given las imágenes del splash, su CSS inline en `index.html` y su JS propio, When se suman, Then pesan <150 KB y las imágenes son WebP (el logo y las fuentes que ya carga la app no cuentan si se reutilizan).
 30. Given `prefers-reduced-motion`, When se ve el splash, Then es estático (sin parallax, sin deriva, sin partículas animadas).
 31. Given calidad baja, When se ve el splash, Then usa menos capas y menos partículas que en calidad alta.
 32. Given el splash en marcha, When el dedo o el ratón se mueven, Then las capas se desplazan a velocidades distintas (≥3 capas); sin input, derivan solas.
@@ -262,7 +274,7 @@ Otras restricciones:
 
 **Rendimiento y build**
 
-34. Given `pnpm build` antes y después, When se compara, Then el JS de la carga inicial (sin Three.js) no crece más de 15 KB gzip, y la cifra queda anotada.
+34. Given `pnpm build` en la base de la rama (`3d12edf`) y al final, When se compara, Then el JS de la carga inicial no crece más de 15 KB gzip. «Carga inicial» = el chunk de entrada de `index.html` y sus imports estáticos (lo que el navegador pide antes del hub), sin los chunks de import dinámico (Three.js, GolfGame, inspector, Supabase). Las dos cifras quedan anotadas.
 35. Given el repo, When se ejecuta `pnpm test`, Then pasan todos los tests existentes y los nuevos de router y reglas.
 36. Given `vercel.json`, When se compara con el de antes, Then la CSP no cambia.
 
@@ -298,3 +310,4 @@ Otras restricciones:
 ## Revisions
 
 - 2026-11-12 — Borrador inicial.
+- 2026-11-12 — Revisión en frío: línea base de FPS y de bundle definida (14, 34), peso del splash acotado (29), sesión en recarga y dependencias inyectadas (4, 5), JUGAR sin mesa previa (10), tabla de contenido mínimo por pantalla. Los extras 37-39 se mantienen porque los pidió el humano como tareas opcionales.
