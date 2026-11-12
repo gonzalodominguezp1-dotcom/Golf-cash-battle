@@ -704,7 +704,7 @@ async function showSkins() {
     // el visor 3D (three.js + materiales) se descarga y crea solo ahora, al abrir
     loadSkinInspector().then(({ createSkinInspector }) => {
       if (view3d !== mine) return; // cerrado mientras cargaba
-      mine.inspector = createSkinInspector(overlay.querySelector('.sk-view-canvas'), { skin, instance: progress.instance(skin.id) ?? undefined, mode: 'fullscreen' });
+      mine.inspector = createSkinInspector(overlay.querySelector('.sk-view-canvas'), { skin, instance: progress.instance(skin.id) ?? undefined, mode: 'fullscreen', noEnv: true });
       // el candado va sobre el visor 3D, centrado en la bola (el visor vacía el contenedor al crearse)
       overlay.querySelector('.sk-stage')?.append(lockBox);
     }).catch((err) => console.warn('inspector no disponible', err));
