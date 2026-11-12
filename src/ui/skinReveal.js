@@ -14,15 +14,15 @@ const loadInspector = () => import('./skinInspector.js');
 // de la skin actual; después, «Siguiente»/«Continuar» avanza. La promesa se resuelve al cerrar la cola.
 // La bola es una imagen estática (skinThumbs).
 //
-// Fases (ms): 1 oscurece · 2 haz de luz · 3 la bola se materializa · 4 estallido + sello · 5 datos y botones.
-// Los totales salen de (d): Común 1,5 s · Legendaria 3,2 s · Mítica 4,2 s; el resto, interpolados.
+// Fases (ms): 1 oscurece · 2 (sin uso, 0) · 3 la bola aparece al 20 % y crece al 100 % en 2 s, girando · 4 estallido + sello · 5 datos y botones.
+// La bola empieza justo al acabar la apertura; el resto de fases es igual para todas las rarezas.
 const TIMELINE = {
-  common: [250, 350, 400, 300, 200],
-  uncommon: [300, 450, 500, 400, 250],
-  rare: [400, 550, 650, 450, 250],
-  epic: [450, 700, 800, 500, 300],
-  legendary: [500, 800, 900, 600, 400],
-  mythic: [500, 1100, 1200, 800, 600],
+  common: [200, 0, 2000, 300, 200],
+  uncommon: [200, 0, 2000, 350, 250],
+  rare: [200, 0, 2000, 400, 250],
+  epic: [200, 0, 2000, 500, 300],
+  legendary: [200, 0, 2000, 600, 400],
+  mythic: [200, 0, 2000, 800, 600],
 };
 const REDUCED_MS = 600;
 const PARTICLES = { common: 14, uncommon: 22, rare: 36, epic: 56, legendary: 84, mythic: 120 };
