@@ -29,6 +29,10 @@ const PREVIEW_QUALITY = 'high';
 const EPS = 0.02; // rad/s de inercia por debajo de los cuales la bola se considera parada
 const FX_CUP_X = -0.1;
 const FX_WALL_X = 1.0;
+// zona de «Probar efectos» en píxeles CSS: libre arriba (barra con nombre) y abajo (botones), y margen entre paneles
+const FX_TOP = 96;
+const FX_BOTTOM = 136;
+const FX_GAP = 6;
 // Paneles de «Probar efectos»: cada uno repite un efecto de la bola (x en unidades del inspector).
 const FX_SCENES = [
   {
@@ -139,15 +143,20 @@ export function createSkinInspector(container, opts = {}) {
   const root = el('div', `sk-insp sk-${mode}${bare ? ' sk-bare' : ''}`);
   const stage = el('div', 'sk-stage');
   const canvas = el('canvas', 'sk-canvas');
-  const hint = el('p', 'sk-hint', 'Arrastra para girar · pellizca o usa la rueda para acercar · doble toque para voltear');
   const tools = el('div', 'sk-tools');
   const btnFx = el('button', 'sk-btn sk-btn-fx', 'Probar efectos');
   btnFx.type = 'button';
   tools.append(btnFx);
   // rejilla 2×2 de «Probar efectos»: solo visible en ese modo; cada celda lleva el nombre de su efecto
   const fxGrid = el('div', 'sk-fx-grid');
-  for (const sc of FX_SCENES) fxGrid.append(el('span', 'sk-fx-cap', sc.name));
-  stage.append(canvas, fxGrid, hint, tools);
+  fxGrid.style.top = `${FX_TOP}px`;
+  fxGrid.style.bottom = `${FX_BOTTOM}px`;
+  for (const sc of FX_SCENES) {
+    const cell = el('div', 'sk-fx-cell');
+    cell.append(el('span', 'sk-fx-cap', sc.name));
+    fxGrid.append(cell);
+  }
+  stage.append(canvas, fxGrid, tools);
   root.append(stage);
   container.replaceChildren(root);
 
@@ -480,7 +489,9 @@ export function createSkinInspector(container, opts = {}) {
   /** Dibuja los 4 paneles en una rejilla 2×2 con viewport y scissor (un solo renderer). */
   function renderFxGrid(dt) {
     const W = renderer.domElement.width, H = renderer.domElement.height;
-    const cw = Math.max(1, Math.floor(W / 2)), ch = Math.max(1, Math.floor(H / 2));
+    const pr = renderer.getPixelRatio();
+    const top = Math.round(FX_TOP * pr), bottom = Math.round(FX_BOTTOM * pr), gap = Math.round(FX_GAP * pr);
+    const cw = Math.max(1, Math.floor(W / 2)), ch = Math.max(1, Math.floor((H - top - bottom) / 2));
     const t = Math.tan((36 * Math.PI) / 360);
     renderer.setScissorTest(true);
     renderer.setScissor(0, 0, W, H);
@@ -489,11 +500,13 @@ export function createSkinInspector(container, opts = {}) {
     for (const p of fxPanels) {
       stepPanel(p, dt);
       const col = p.index % 2, row = Math.floor(p.index / 2);
-      const x = col * cw, y = H - (row + 1) * ch; // origen de GL abajo
-      renderer.setViewport(x, y, cw, ch);
-      renderer.setScissor(x, y, cw, ch);
+      // celda en GL (origen abajo): fila 0 arriba; el panel va con margen para dejar la separación
+      const cx = col * cw, cy = bottom + (1 - row) * ch;
+      const x = cx + gap, y = cy + gap, w = Math.max(1, cw - 2 * gap), h = Math.max(1, ch - 2 * gap);
+      renderer.setViewport(x, y, w, h);
+      renderer.setScissor(x, y, w, h);
       // distancia que encaja la bola y el tramo en la celda (el mismo encuadre para los 4)
-      const aspect = cw / ch;
+      const aspect = w / h;
       const d = clamp(1.5 / (t * aspect), 1.6, 9);
       p.camera.aspect = aspect;
       p.camera.position.set(0, d * 0.3, d);

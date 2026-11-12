@@ -118,10 +118,18 @@
 .sk-bare, .sk-bare .sk-stage { background: transparent; }
 
 /* «Probar efectos»: rejilla 2×2 con el nombre de cada efecto; el canvas dibuja los 4 paneles */
-.sk-fx-grid { position: absolute; inset: 0; display: none; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; pointer-events: none; }
+/* «Probar efectos»: 4 celdas (2×2) entre la barra superior y los botones; cada una con marco y nombre centrado arriba */
+.sk-fx-grid { position: absolute; left: 0; right: 0; display: none; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; pointer-events: none; }
 .sk-insp.sk-fxon .sk-fx-grid { display: grid; }
 .sk-insp.sk-fxon .sk-hint { display: none; }
+.sk-fx-cell { position: relative; }
+.sk-fx-cell::before {
+  content: ''; position: absolute; inset: 6px; border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(8, 10, 16, 0.3);
+}
 .sk-fx-cap {
-  align-self: start; justify-self: start; margin: 10px; padding: 3px 9px; border-radius: 999px;
-  font: 800 12px/1.2 var(--body, sans-serif); letter-spacing: 0.04em; color: #fff; background: rgba(8, 10, 16, 0.7);
+  position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 1; white-space: nowrap;
+  padding: 4px 12px; border-radius: 999px;
+  font: 800 13px/1.2 var(--body, sans-serif); letter-spacing: 0.06em; text-transform: uppercase;
+  color: #fff; background: rgba(8, 10, 16, 0.78); border: 1px solid rgba(255, 255, 255, 0.2);
 }

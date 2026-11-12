@@ -659,9 +659,9 @@ async function showSkins() {
           <span class="sk-view-title"></span>
         </div>
         <div class="sk-view-stage">
-          <button type="button" class="sk-view-nav prev" aria-label="Skin anterior">‹</button>
+          <button type="button" class="sk-view-nav prev" aria-label="Skin anterior">${icon('back')}</button>
           <div class="sk-view-canvas"><img class="sk-view-poster" alt="" draggable="false"></div>
-          <button type="button" class="sk-view-nav next" aria-label="Skin siguiente">›</button>
+          <button type="button" class="sk-view-nav next" aria-label="Skin siguiente">${icon('back')}</button>
           <div class="sk-view-lock" hidden>
             <span class="sk-lock sk-lock-big">${icon('lock')}</span>
             <div class="sk-view-req"><small></small><span class="bar"><i></i></span></div>
@@ -703,6 +703,7 @@ async function showSkins() {
       current = next;
       overlay.className = `sk-view rarity-${next.tier}`;
       overlay.setAttribute('aria-label', `Inspeccionar ${next.name}`);
+      overlay.style.setProperty('--tier', SKIN_TIERS[next.tier]?.color ?? '#ffffff');
       titleEl.innerHTML = `<b>${next.name}</b><small>${SKIN_TIERS[next.tier]?.name ?? ''}</small>`;
       poster.src = thumbCached(next, progress.instance(next.id)) ?? ballPreview(next, 288);
       syncAction();
@@ -744,7 +745,8 @@ async function showSkins() {
     // el visor 3D (three.js + materiales) se descarga y crea solo ahora, al abrir
     loadSkinInspector().then(({ createSkinInspector }) => {
       if (view3d !== mine) return; // cerrado mientras cargaba
-      mine.inspector = createSkinInspector(overlay.querySelector('.sk-view-canvas'), { skin: current, instance: progress.instance(current.id) ?? undefined, mode: 'fullscreen', noEnv: true });
+      mine.inspector = createSkinInspector(overlay.querySelector('.sk-view-canvas'), { skin: current, instance: progress.instance(current.id) ?? undefined, mode: 'fullscreen', noEnv: true, autoSpin: true });
+      mine.inspector.setSpin(0.5); // giro automático lento: una vuelta cada 16 s
       // el candado va sobre el visor 3D, centrado en la bola (el visor vacía el contenedor al crearse)
       overlay.querySelector('.sk-stage')?.append(lockBox);
     }).catch((err) => console.warn('inspector no disponible', err));
