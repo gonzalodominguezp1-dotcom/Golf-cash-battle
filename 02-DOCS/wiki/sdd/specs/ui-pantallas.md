@@ -135,7 +135,7 @@ Otras restricciones:
 - **CSP de `vercel.json`**: sin scripts inline, sin dominios nuevos. El CSS inline del splash va en `<style>` (permitido por `style-src 'unsafe-inline'`). El JS del splash es un archivo propio.
 - **Permissions-Policy**: no bloquea el giroscopio; en iOS el permiso exige un gesto del usuario, así que en iOS el parallax usa el dedo o la deriva automática.
 - **Calidad gráfica automática** (`quality.js`, ResolutionGovernor, PerfGovernor): no se rompe. Hub y splash consultan el nivel (bajo/medio/alto) para recortar capas y partículas.
-- **Three.js solo cuando hace falta**: el hub y el splash no lo cargan; se sigue cargando al entrar en partida, inspector de skin o vista previa.
+- **Three.js solo cuando hace falta**: el chunk de entrada no lo importa de forma estática. Se carga con import dinámico durante el splash para la escena del hub (C7), y además, como hoy, al entrar en partida, en el inspector de skin o en la vista previa.
 - **Comportamiento que debe seguir igual**: atajos 1-6 y M, Esc en partida (vista general / pausa), enlaces de prueba `#hoyoN` y `#hoyoN-empate`, `?skinlab=1`, el popup de avisos de 5 s, la reclamación con skinReveal, el abandono de partida en vivo al salir.
 - **Decisiones previas**: no hay decisiones de UI en `decisions.md`. Las specs cyberpunk2078 son del hoyo 15, no de la UI.
 
@@ -143,7 +143,7 @@ Otras restricciones:
 
 - **Pruebas unitarias** (`node --test`, en `tests/`): router (push, pop, replace, atrás con pila vacía, hash ↔ pantalla, ciclo montar/desmontar) y cada `*Rules.js` nuevo (badges, cuentas atrás, qué mostrar, progreso de carga, rotación de TIP). Se quedan en el repo.
 - **Prueba de limpieza**: una prueba monta y desmonta cada pantalla N veces con dobles de `window`/timers y comprueba que listeners y timers vuelven a cero.
-- **Navegador** (pane integrado, `pnpm dev`): por fase, capturas a 375×812, 360×640 y 1280×800; consola sin errores; red sin petición al chunk de Three.js en splash y hub.
+- **Navegador** (pane integrado, `pnpm dev`): por fase, capturas a 375×812, 360×640 y 1280×800; consola sin errores; Three.js pedido solo por import dinámico, durante el splash (C7).
 - **Rendimiento**: `pnpm build` antes y después (tamaño de cada chunk, en bruto y gzip) y FPS del hub con CPU ×4 de throttling, 10 s en reposo. Los números se anotan en `02-DOCS/wiki/sdd/verifications/ui-pantallas-<fecha>.md`.
 - **Accesibilidad**: recorrido con solo teclado de hub → pantalla → volver; roles y `aria-label` revisados con el árbol de accesibilidad.
 - **Evidencia que queda**: capturas en `02-DOCS/attachments/ui-pantallas/`, el informe de verificación y los tests.
@@ -228,14 +228,14 @@ Otras restricciones:
 
 **Router y navegación**
 
-1. Given el hub, When el jugador toca «Ranking», Then la URL cambia a la de Ranking y se ve la pantalla de Ranking a pantalla completa con cabecera (título, volver, saldo).
+1. Given el hub, When el jugador toca «Ranking», Then la URL cambia a la de Ranking y se ve la pantalla de Ranking a pantalla completa con cabecera (título y volver; el saldo solo sale en Mesas y Cuenta, C11).
 2. Given Ranking abierta desde el hub, When el jugador pulsa atrás del navegador, Then vuelve al hub sin recargar la página y el foco queda en el icono «Ranking».
 3. Given Ranking abierta, When el jugador pulsa Esc en escritorio, Then vuelve al hub.
 4. Given un jugador con sesión y una recarga con la URL de una pantalla, When termina la carga, Then se ve esa pantalla y atrás lleva al hub. Sin sesión: login, y al entrar, la pantalla pedida.
 5. Given cualquier pantalla, When se monta y desmonta 20 veces en la prueba de limpieza, Then no queda ningún listener de `window`/`document` ni timer vivo creado por ella. (Requisito derivado: las pantallas reciben sus dependencias —backend, wallet, progress, router— por parámetro, no por globales, para poder probarlas con dobles.)
 6. Given `prefers-reduced-motion: reduce`, When se cambia de pantalla, Then no hay animación de deslizamiento; el cambio dura ≤100 ms.
 7. Given movimiento normal, When se cambia de pantalla, Then la transición dura entre 150 y 250 ms.
-8. Given `#hoyo3` en la URL, When carga el juego, Then arranca la práctica en el hoyo 3 como hoy.
+8. Given `#hoyo3` en la URL, When carga el juego, Then el comportamiento es el de hoy: al pulsar Práctica, la partida empieza en el hoyo 3 (el router no borra ese atajo de prueba).
 
 **Hub**
 
@@ -335,3 +335,4 @@ Las 13 preguntas abiertas se resolvieron en *Clarifications* (C1-C13). Quedan:
 - 2026-11-12 — Borrador inicial.
 - 2026-11-12 — Revisión en frío: línea base de FPS y de bundle definida (14, 34), peso del splash acotado (29), sesión en recarga y dependencias inyectadas (4, 5), JUGAR sin mesa previa (10), tabla de contenido mínimo por pantalla. Los extras 37-39 se mantienen porque los pidió el humano como tareas opcionales.
 - 2026-11-12 — Aprobada por el humano («Aprueba la SPEC»). Ejecución por tareas con subagentes de contexto limpio; paradas solo en los bocetos de splash y hub (C13).
+- 2026-11-12 — Coherencia tras el plan: «Three.js solo cuando hace falta», «How it proves», AC1 y AC8 alineados con C7, C11 y el comportamiento real de `#hoyoN`. Sin cambio de alcance.
