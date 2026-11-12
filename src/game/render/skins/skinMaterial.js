@@ -83,13 +83,14 @@ export function createSkinMaterial(skin, opts = {}, deps) {
   const disposables = [];
   const dark = !!theme && !!(theme.dark || theme.neon || theme.lava || (theme.sunIntensity !== undefined && theme.sunIntensity < 2));
   const envTint = theme?.rim ?? pal.glow ?? pal.accent ?? '#ffffff';
-  const envMap = getStudioEnv(dark ? 'dark' : 'light', envTint);
+  // noEnv: sin reflejos del entorno (la bola de recompensa carga más rápido)
+  const envMap = opts.noEnv ? null : getStudioEnv(dark ? 'dark' : 'light', envTint);
 
   const base = {
     roughness: legacy.roughness ?? finish.roughness ?? 0.4,
     metalness: legacy.metalness ?? finish.metalness ?? 0,
     envMap,
-    envMapIntensity: legacy.envMapIntensity ?? finish.envMapIntensity ?? preset.envMapIntensity,
+    envMapIntensity: opts.noEnv ? 0 : (legacy.envMapIntensity ?? finish.envMapIntensity ?? preset.envMapIntensity),
   };
 
   let material;
