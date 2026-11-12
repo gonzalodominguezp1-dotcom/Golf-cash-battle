@@ -7,7 +7,7 @@ export const MAX_STROKES_PER_HOLE = 8;
 export const maxStrokesOf = (course) => course?.maxStrokes ?? MAX_STROKES_PER_HOLE;
 // cuando el primero emboca, los demás tienen estos segundos; quien no emboque
 // queda descalificado en el hoyo y se apunta el máximo de golpes
-export const HOLE_TIME_LIMIT = 20;
+export const HOLE_TIME_LIMIT = 30;
 export const STARTING_DEMO_CREDITS = 100;
 
 export const TIERS = [
