@@ -703,7 +703,7 @@ async function showSkins() {
       current = next;
       overlay.className = `sk-view rarity-${next.tier}`;
       overlay.setAttribute('aria-label', `Inspeccionar ${next.name}`);
-      titleEl.innerHTML = `${tierIcon(next.tier)} ${next.name}`;
+      titleEl.innerHTML = `<b>${next.name}</b><small>${SKIN_TIERS[next.tier]?.name ?? ''}</small>`;
       poster.src = thumbCached(next, progress.instance(next.id)) ?? ballPreview(next, 288);
       syncAction();
       syncNav();

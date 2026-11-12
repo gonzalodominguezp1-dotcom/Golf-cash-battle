@@ -929,12 +929,17 @@ body.sk-noscroll { overflow: hidden; }
   padding-top: env(safe-area-inset-top, 0); animation: sk-view-in 0.22s var(--ease-out, ease-out) both;
 }
 @keyframes sk-view-in { from { opacity: 0; transform: translateY(12px); } }
-.sk-view-bar { flex: none; display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: rgba(14, 19, 28, 0.95); }
+/* sin marcos: la barra y las acciones flotan encima de la bola, transparentes */
+.sk-view-bar { position: absolute; top: 0; left: 0; right: 0; z-index: 4; display: flex; justify-content: center; padding: 10px 64px 0; pointer-events: none; }
+.sk-view-bar .sk-view-back { position: absolute; left: 12px; top: 10px; pointer-events: auto; }
 .sk-view-back {
   appearance: none; min-height: 44px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--edge);
   background: rgba(8, 10, 16, 0.8); color: var(--edge); font: 800 14px var(--body); cursor: pointer;
 }
-.sk-view-title { font: 800 17px/1.1 var(--display); color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* nombre de la bola en el centro, con su categoría debajo */
+.sk-view-title { display: flex; flex-direction: column; align-items: center; min-width: 0; max-width: 100%; text-align: center; pointer-events: none; }
+.sk-view-title b { font: 800 18px/1.1 var(--display); color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.sk-view-title small { margin-top: 3px; font: 700 12px/1.2 var(--body); letter-spacing: 0.06em; text-transform: uppercase; color: rgba(255, 255, 255, 0.7); }
 .sk-view-stage { position: relative; flex: 1 1 auto; min-height: 0; display: flex; }
 .sk-view-canvas { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; }
 .sk-view-canvas > .sk-insp { flex: 1 1 auto; min-width: 0; border-radius: 0; }
@@ -951,8 +956,8 @@ body.sk-noscroll { overflow: hidden; }
 /* imagen estática mientras se descarga el visor 3D */
 .sk-view-poster { margin: auto; width: min(56vmin, 300px); aspect-ratio: 1; object-fit: contain; border-radius: 50%; filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.55)); }
 .sk-view-actions {
-  flex: none; display: flex; align-items: center; gap: 14px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0));
-  border-top: 1px solid var(--line); background: rgba(14, 19, 28, 0.97);
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; display: flex; justify-content: center; align-items: center;
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0)); pointer-events: none;
 }
 /* bloqueada: candado sobre la bola y el progreso para desbloquearla, encima del visor 3D */
 .sk-view-lock {
@@ -964,7 +969,7 @@ body.sk-noscroll { overflow: hidden; }
 .sk-view-req { display: grid; gap: 6px; width: min(360px, 100%); }
 .sk-view-req small { font: 700 13px var(--body); color: #fff; text-align: center; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8); }
 .sk-view-req .bar { height: 6px; }
-.sk-view-actions .primary { margin-left: auto; min-width: 150px; }
+.sk-view-actions .primary { pointer-events: auto; min-width: 150px; }
 
 @media (min-width: 600px) {
   .sk-grid { grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 16px; }

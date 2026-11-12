@@ -81,118 +81,17 @@
 .sk-btn:hover { background: rgba(30, 40, 58, 0.85); border-color: var(--sk-tier); }
 .sk-btn:active { transform: scale(0.97); }
 .sk-btn.sk-on { border-color: var(--sk-tier); box-shadow: 0 0 14px color-mix(in srgb, var(--sk-tier) 55%, transparent); }
-.sk-btn:focus-visible, .sk-grab:focus-visible { outline: 2px solid var(--sk-tier); outline-offset: 2px; }
-
-/* ---------------------------------------------------------------- hoja de datos */
-.sk-sheet {
-  position: relative;
-  flex: 0 0 auto;
-  background: rgba(14, 19, 28, 0.88);
-  border-top: 1px solid var(--sk-line);
-}
-.sk-grab { display: none; }
-.sk-sheet-body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 16px 18px 18px;
-}
-.sk-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.sk-tier {
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  color: #0b0f15;
-  background: var(--sk-tier);
-}
-.sk-coll { font-size: 12px; color: var(--sk-muted); text-transform: capitalize; }
-.sk-name {
-  margin: 0;
-  font: 800 24px/1.1 var(--display, inherit);
-  letter-spacing: -0.01em;
-}
-.sk-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--sk-muted); }
-.sk-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.sk-row .sk-mono:last-child { margin-left: auto; }
-.sk-mono { font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.sk-rare {
-  padding: 2px 9px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 800;
-  color: #0b0f15;
-  background: linear-gradient(90deg, #fde68a, #f59e0b);
-}
-.sk-lcd { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-.sk-lcd-cell {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 6px 4px;
-  border-radius: 8px;
-  background: #1a0d03;
-  border: 1px solid rgba(255, 140, 0, 0.35);
-}
-.sk-lcd-cell b {
-  font: 700 20px/1.1 ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: #ff9a1f;
-  text-shadow: 0 0 8px rgba(255, 140, 0, 0.7);
-  letter-spacing: 0.06em;
-}
-.sk-lcd-cell small { font-size: 10px; color: #b97a35; text-align: center; }
-.sk-lore { margin: 2px 0 0; font-size: 13px; font-style: italic; color: var(--text-dim, #cbd5e1); }
+.sk-btn:focus-visible { outline: 2px solid var(--sk-tier); outline-offset: 2px; }
 
 /* ---------------------------------------------------------------- modo panel */
 .sk-panel .sk-stage { aspect-ratio: 1 / 1; flex: 0 0 auto; width: 100%; max-height: 420px; min-height: 260px; }
 
-/* ---------------------------------------------------------------- pantalla completa */
+/* ---------------------------------------------------------------- pantalla completa: todo dentro del visor, sin marcos */
 .sk-fullscreen { height: 100%; min-height: 520px; border-radius: 0; }
-@media (max-width: 859px) {
-  .sk-fullscreen .sk-stage { position: absolute; inset: 0; min-height: 0; }
-  .sk-fullscreen .sk-tools { bottom: auto; top: 34px; justify-content: flex-start; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
-  .sk-fullscreen .sk-sheet {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    max-height: 70%;
-    overflow: hidden;
-    border-radius: 18px 18px 0 0;
-    transform: translateY(calc(100% - 92px));
-    transition: transform 0.3s var(--ease-out, ease-out);
-    padding-bottom: env(safe-area-inset-bottom, 0);
-  }
-  .sk-fullscreen.sk-open .sk-sheet { transform: none; overflow-y: auto; }
-  .sk-fullscreen .sk-grab {
-    display: block;
-    width: 100%;
-    height: 22px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    cursor: pointer;
-  }
-  .sk-fullscreen .sk-grab::after {
-    content: '';
-    display: block;
-    width: 44px;
-    height: 5px;
-    margin: 9px auto 0;
-    border-radius: 3px;
-    background: rgba(255, 255, 255, 0.3);
-  }
-  .sk-fullscreen .sk-sheet-body { padding-top: 4px; }
-}
-@media (min-width: 860px) {
-  .sk-fullscreen { flex-direction: row; }
-  .sk-fullscreen .sk-stage { flex: 1 1 auto; min-height: 0; }
-  .sk-fullscreen .sk-sheet { flex: 0 0 340px; border-top: 0; border-left: 1px solid var(--sk-line); overflow-y: auto; }
-  .sk-fullscreen .sk-sheet-body { padding: 24px 22px; gap: 12px; }
-}
+.sk-fullscreen .sk-stage { position: absolute; inset: 0; min-height: 0; }
+.sk-fullscreen .sk-tools { bottom: 84px; }
 @media (prefers-reduced-motion: reduce) {
-  .sk-fullscreen .sk-sheet, .sk-btn { transition: none; }
+  .sk-btn { transition: none; }
 }
 
 /* ---------------------------------------------------------------- Skin Lab (?skinlab=1) */
@@ -215,7 +114,7 @@
 .sk-lab-cell.sk-sel { border-color: var(--sk-tier); }
 
 /* modo sin interfaz (reveal): solo la bola */
-.sk-bare .sk-sheet, .sk-bare .sk-tools, .sk-bare .sk-hint { display: none; }
+.sk-bare .sk-tools, .sk-bare .sk-hint { display: none; }
 .sk-bare, .sk-bare .sk-stage { background: transparent; }
 
 /* «Probar efectos»: rejilla 2×2 con el nombre de cada efecto; el canvas dibuja los 4 paneles */

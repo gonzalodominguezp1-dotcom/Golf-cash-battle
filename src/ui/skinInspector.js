@@ -5,8 +5,6 @@ import { SkinFX } from '../game/render/skins/skinFx.js';
 import { BALL_R } from '../game/physics.js';
 import { QUALITY_LEVELS, QUALITY_NAMES, getQuality } from '../game/render/quality.js';
 import { SKINS, TIERS } from '../progress/skins.js';
-import { rarePatternOf } from '../progress/inventory.js';
-import { tierIcon } from './icons.js';
 
 // Inspector 360° de skins v2 (P8).
 //   createSkinInspector(container, { skin, instance, mode: 'panel'|'fullscreen', quality? })
@@ -125,7 +123,7 @@ function makeRenderer(canvas, antialias = true) {
 }
 
 const tierOf = (skin) => TIERS[skin.tier ?? skin.rarity] ?? TIERS.common;
-const SAFE_INSTANCE = { seed: 0, counter: { enabled: false, aces: 0, sinks: 0, birdies: 0 } };
+const SAFE_INSTANCE = { seed: 0 };
 
 export function createSkinInspector(container, opts = {}) {
   const mode = opts.mode === 'fullscreen' ? 'fullscreen' : 'panel';
@@ -150,14 +148,7 @@ export function createSkinInspector(container, opts = {}) {
   const fxGrid = el('div', 'sk-fx-grid');
   for (const sc of FX_SCENES) fxGrid.append(el('span', 'sk-fx-cap', sc.name));
   stage.append(canvas, fxGrid, hint, tools);
-  const sheet = el('aside', 'sk-sheet');
-  const grab = el('button', 'sk-grab');
-  grab.type = 'button';
-  grab.setAttribute('aria-label', 'Mostrar u ocultar datos');
-  sheet.append(grab);
-  const body = el('div', 'sk-sheet-body');
-  sheet.append(body);
-  root.append(stage, sheet);
+  root.append(stage);
   container.replaceChildren(root);
 
   // ---------------------------------------------------------------- WebGL
@@ -166,8 +157,7 @@ export function createSkinInspector(container, opts = {}) {
     renderer = makeRenderer(canvas, true);
   } catch (err) {
     stage.replaceChildren(el('p', 'sk-hint', 'No se pudo iniciar WebGL en este dispositivo.'));
-    renderPanel();
-    return { setSkin(s, i) { skin = s; instance = i ?? instance; renderPanel(); }, playFx() { return false; }, destroy() { root.remove(); }, stats: () => ({ webgl: false }) };
+    return { setSkin(s, i) { skin = s; instance = i ?? SAFE_INSTANCE; }, playFx() { return false; }, destroy() { root.remove(); }, stats: () => ({ webgl: false }) };
   }
 
   const scene = new THREE.Scene();
@@ -218,6 +208,7 @@ export function createSkinInspector(container, opts = {}) {
     ball.geometry = mirrorBall.geometry = geo;
     ball.material = mirrorBall.material = handle.material;
     tierColor.set(tierOf(skin).color);
+    root.style.setProperty('--sk-tier', tierOf(skin).color);
     glow.material.color.copy(tierColor);
     lights.rim.color.set(0xbfd8ff).lerp(tierColor, 0.35);
     if (fxMode) buildFxPanels();
@@ -604,48 +595,6 @@ export function createSkinInspector(container, opts = {}) {
   const onVis = () => invalidate();
   document.addEventListener('visibilitychange', onVis);
 
-  grab.addEventListener('click', () => root.classList.toggle('sk-open'));
-
-  // ---------------------------------------------------------------- panel de datos
-  function renderPanel() {
-    const tier = tierOf(skin);
-    const inst = instance ?? SAFE_INSTANCE;
-    const rare = rarePatternOf(skin, inst.seed);
-    root.style.setProperty('--sk-tier', tier.color);
-    body.replaceChildren();
-
-    const head = el('div', 'sk-head');
-    const chip = el('span', 'sk-tier');
-    chip.innerHTML = `${tierIcon(skin.tier ?? skin.rarity)} ${tier.name}`;
-    head.append(chip);
-    if (skin.collection && skin.collection !== 'clasica') head.append(el('span', 'sk-coll', skin.collection));
-    body.append(head, el('h3', 'sk-name', skin.name));
-
-    const pat = el('div', 'sk-row sk-block');
-    pat.append(el('span', 'sk-label', 'Patrón'), el('strong', 'sk-mono', `#${inst.seed ?? 0}`));
-    if (rare) pat.append(el('span', 'sk-rare', rare.name));
-    body.append(pat);
-
-    if (inst.counter?.enabled) {
-      const lcd = el('div', 'sk-lcd');
-      for (const [label, v] of [['Hoyos en uno', inst.counter.aces], ['Embocadas', inst.counter.sinks], ['Birdies', inst.counter.birdies]]) {
-        const cell = el('div', 'sk-lcd-cell');
-        cell.append(el('b', '', String(v ?? 0).padStart(4, '0')), el('small', '', label));
-        lcd.append(cell);
-      }
-      body.append(el('span', 'sk-label', 'Marcador'), lcd);
-    }
-    if (inst.unlockedAt) {
-      const d = new Date(inst.unlockedAt);
-      if (!Number.isNaN(d.getTime()) && d.getTime() > 1e10) {
-        const r = el('div', 'sk-row sk-block');
-        r.append(el('span', 'sk-label', 'Desbloqueada'), el('span', '', d.toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })));
-        body.append(r);
-      }
-    }
-    if (skin.lore) body.append(el('p', 'sk-lore', `“${skin.lore}”`));
-  }
-
   // ---------------------------------------------------------------- API
   const api = {
     /** Cambia de skin (y opcionalmente de instancia/calidad). Mismo skin+calidad: solo actualiza la semilla. */
@@ -656,7 +605,6 @@ export function createSkinInspector(container, opts = {}) {
       skin = next;
       instance = nextInstance ?? SAFE_INSTANCE; // sin instancia explícita, no se arrastra la de la skin anterior
       level = nextLevel;
-      renderPanel();
       if (same) {
         handle.setInstance({ seed: instance.seed });
         invalidate();
@@ -724,7 +672,6 @@ export function createSkinInspector(container, opts = {}) {
     },
   };
 
-  renderPanel();
   buildBall();
   startEntrance();
   resize();
@@ -781,7 +728,7 @@ function createThumbRenderer(size = 144) {
  */
 export function mountSkinLab(container) {
   const state = { id: SKINS[0].id, seed: 123, quality: getQuality() };
-  const instFor = () => ({ seed: state.seed, counter: { enabled: true, aces: 2, sinks: 47, birdies: 12 }, unlockedAt: '2026-01-15T10:00:00Z' });
+  const instFor = () => ({ seed: state.seed });
   const skinNow = () => SKINS.find((s) => s.id === state.id) ?? SKINS[0];
 
   const root = el('div', 'sk-lab');
