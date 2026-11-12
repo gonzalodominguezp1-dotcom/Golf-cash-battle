@@ -33,6 +33,8 @@ slug: ui-pantallas
 
 - **Hecha:** T001 (`2222714`) — línea base: carga inicial **85424 B gzip** (entrada `main` + `rpcError`), sin three. Tope AC34 ≈ 100,8 KB gzip. 223 tests en verde.
 - **Siguiente:** F1 en paralelo: **T002, T003, T004, T005, T006, T007, T008** (T007 es la única que toca `main.js`). Luego en serie: T009 → T010 → T011 → T012 (verificar fase 1).
+- **Cambios del plan tras analyze (`101fc1f`):** T014 y T020 se dividieron en T014a/b y T020a/b (sin renumerar). `routes.js` y `account.js` cargan pantallas y pestañas con `import.meta.glob` (un `import()` a un archivo que no existe rompe el build). Umbral de FPS en T014b (≥55 medium, ≥45 low, panel visible). T034/T035 son tier 2.
+- **Decision queue:** vive al final de este archivo. Cuando T034 pida `progress/ui-pantallas.md`, créalo copiando esa sección.
 - **Paradas humanas acordadas (solo estas 2):** T018 (boceto del splash) y T024 (boceto del hub). Además, antes de fusionar a main: revisión humana de T034/T035 (tier 2: contraseña, KYC, monedero) y prueba en móvil real (T044).
 - **Al terminar todo:** avisar al humano para que lo pruebe él visualmente y explore los menús.
 
