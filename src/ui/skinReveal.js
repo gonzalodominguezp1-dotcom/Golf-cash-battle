@@ -6,6 +6,8 @@ import { TIERS } from '../progress/skins.js';
 import { rarePatternOf } from '../progress/inventory.js';
 import { upgradeImg } from './skinThumbs.js';
 
+const loadInspector = () => import('./skinInspector.js');
+
 // Animación de reveal/desbloqueo de skins (P10).
 //   await showSkinReveal(skins, { progress })
 // Una secuencia por skin, de menor a mayor tier (la mejor al final). Un toque (o Esc) salta al final
@@ -115,6 +117,7 @@ export function showSkinReveal(skins, { progress = null } = {}) {
     let idx = 0;
     let timers = [];
     let stopBurst = () => { };
+    let inspector = null;
     let skipFn = null;
     let done = false;
 
@@ -124,8 +127,15 @@ export function showSkinReveal(skins, { progress = null } = {}) {
       stopBurst();
       stopBurst = () => { };
     };
+    const closeInspector = () => {
+      if (!inspector) return;
+      try { inspector.api?.destroy(); } catch { }
+      inspector.el.remove();
+      inspector = null;
+    };
     const finish = () => {
       clearAll();
+      closeInspector();
       document.removeEventListener('keydown', onKey, true);
       document.body.classList.remove('sk-noscroll');
       root.classList.add('sr-out');
@@ -136,13 +146,15 @@ export function showSkinReveal(skins, { progress = null } = {}) {
     const onKey = (e) => {
       if (e.key !== 'Escape') return;
       e.stopPropagation();
-      if (!done) skipFn?.();
+      if (inspector) closeInspector();
+      else if (!done) skipFn?.();
     };
     document.addEventListener('keydown', onKey, true);
 
     // Puerta: la recompensa llega sellada y hay que mantenerla pulsada para abrirla.
     function play(i) {
       clearAll();
+      closeInspector();
       done = false;
       const skin = list[i];
       const calm = reduced();
@@ -217,13 +229,13 @@ export function showSkinReveal(skins, { progress = null } = {}) {
 
     function reveal(i) {
       clearAll();
+      closeInspector();
       done = false;
       const skin = list[i];
       const k = tierKey(skin);
       const tier = TIERS[k];
       const inst = progress?.instance(skin.id) ?? null;
       const rare = inst ? rarePatternOf(skin, inst.seed) : null;
-      const mythic = k === 'mythic';
       const calm = reduced();
       const dur = calm ? [0, 0, 0, REDUCED_MS, 0] : TIMELINE[k];
       const start = dur.map((_, n) => dur.slice(0, n).reduce((a, b) => a + b, 0));
@@ -235,9 +247,7 @@ export function showSkinReveal(skins, { progress = null } = {}) {
       root.style.cssText = `${css};--c:${tier.color};--sk-a:${skin.palette?.base ?? tier.color};--sk-b:${skin.palette?.accent ?? tier.color};--k:${tier.order}`;
       root.innerHTML = `
         <div class="sr-vignette"></div>
-        ${mythic ? '<div class="sr-beam sr-beam-gold"></div><div class="sr-beam sr-beam-crimson"></div>' : '<div class="sr-beam"></div>'}
         <div class="sr-rays" aria-hidden="true"></div>
-        <div class="sr-ring" aria-hidden="true"></div><div class="sr-ring sr-ring-2" aria-hidden="true"></div><div class="sr-ring sr-ring-3" aria-hidden="true"></div>
         <canvas class="sr-fx" aria-hidden="true"></canvas>
         <div class="sr-stage">
           ${list.length > 1 ? `<span class="sr-count">${i + 1} / ${list.length}</span>` : ''}
@@ -245,7 +255,6 @@ export function showSkinReveal(skins, { progress = null } = {}) {
           <div class="sr-seal"><span class="sr-seal-ico">${tierIcon(k)}</span>${esc(tier.name)}</div>
           <div class="sr-ball">
             <img src="${ballPreview(skin, 288)}" width="384" height="384" alt="" draggable="false">
-            <span class="sr-scan"></span>
           </div>
           <div class="sr-info">
             <h2 class="sr-name">${esc(skin.name)}</h2>
@@ -280,10 +289,26 @@ export function showSkinReveal(skins, { progress = null } = {}) {
       });
       nextBtn.addEventListener('click', () => (last ? finish() : play(i + 1)));
 
-      // Al terminar, la bola queda plana girando sobre sí misma (CSS, sin visor 3D ni sombras).
+      // Bola 3D en vivo, sin suelo ni reflejo: arranca con la escala de .sr-ball (20 % → 100 %) y gira sobre sí misma.
+      let mounting = false;
+      const mountLive = () => {
+        if (inspector || mounting || calm) return;
+        mounting = true;
+        const holder = document.createElement('div');
+        holder.className = 'sr-live';
+        root.querySelector('.sr-ball').append(holder);
+        loadInspector().then(({ createSkinInspector }) => {
+          if (!holder.isConnected) return;
+          const api = createSkinInspector(holder, { skin, instance: inst ?? undefined, mode: 'panel', bare: true, autoSpin: true, noFloor: true, quality: 'high' });
+          inspector = { api, el: holder };
+          root.classList.add('sr-live-on');
+        }).catch(() => holder.remove());
+      };
+
       const settle = () => {
         done = true;
         stage.classList.add('sr-done');
+        mountLive();
         (list.length > 1 && !last ? nextBtn : equipBtn && !equipBtn.disabled ? equipBtn : nextBtn).focus({ preventScroll: true });
       };
 
@@ -302,6 +327,7 @@ export function showSkinReveal(skins, { progress = null } = {}) {
 
       if (!calm) {
         timers.push(...sound(skin, 'charge'));
+        timers.push(setTimeout(mountLive, start[2]));
         timers.push(setTimeout(() => {
           const b = img.getBoundingClientRect();
           const c = canvas.getBoundingClientRect();

@@ -95,29 +95,14 @@
 .sr-ball { position: relative; width: clamp(170px, 50vw, 220px); aspect-ratio: 1; margin: 0; animation: sr-grow var(--d3) cubic-bezier(0.2, 0.9, 0.3, 1) var(--s3) both; }
 /* sale al 20 % de su tamaño y crece hasta el 100 % */
 @keyframes sr-grow { from { transform: scale(0.2); } to { transform: scale(1); } }
-.sr-ball::before {
-  content: ''; position: absolute; inset: -34%; border-radius: 50%; pointer-events: none;
-  background: radial-gradient(circle, color-mix(in srgb, var(--c) 50%, transparent) 0%, transparent 62%);
-  animation: sr-halo calc(var(--d3) + var(--d4)) ease-out var(--s3) both;
-}
-@keyframes sr-halo { from { opacity: 0; transform: scale(0.5); } 60% { opacity: 1; } to { opacity: 0.7; transform: none; } }
-/* bola plana: gira sobre su eje vertical (sin sombra, reflejo ni filtros) */
 .sr-ball img {
   position: relative; display: block; width: 100%; height: 100%; object-fit: contain;
-  transform-origin: 50% 50%; backface-visibility: visible;
-  animation: sr-spin var(--d3) linear var(--s3) both, sr-spin-loop 3.2s linear calc(var(--s3) + var(--d3)) infinite;
 }
-/* una vuelta completa durante la aparición (escala 1 → 0 → -1 → 0 → 1 aproxima coseno) */
-@keyframes sr-spin {
-  0% { transform: scaleX(1); } 12.5% { transform: scaleX(0.707); } 25% { transform: scaleX(0); } 37.5% { transform: scaleX(-0.707); }
-  50% { transform: scaleX(-1); } 62.5% { transform: scaleX(-0.707); } 75% { transform: scaleX(0); } 87.5% { transform: scaleX(0.707); }
-  100% { transform: scaleX(1); }
-}
-@keyframes sr-spin-loop {
-  0% { transform: scaleX(1); } 12.5% { transform: scaleX(0.707); } 25% { transform: scaleX(0); } 37.5% { transform: scaleX(-0.707); }
-  50% { transform: scaleX(-1); } 62.5% { transform: scaleX(-0.707); } 75% { transform: scaleX(0); } 87.5% { transform: scaleX(0.707); }
-  100% { transform: scaleX(1); }
-}
+/* bola 3D en vivo (sin suelo ni reflejo) que sustituye a la imagen estática al empezar la aparición */
+.sr-live { position: absolute; inset: -14%; z-index: 1; }
+.sr-live .sk-insp { height: 100%; min-height: 0; background: transparent; border: 0; box-shadow: none; }
+.sr-live .sk-stage { width: 100%; height: 100%; max-height: none; min-height: 0; aspect-ratio: auto; background: transparent; }
+.sr-live-on .sr-ball img { visibility: hidden; }
 .sr-scan {
   position: absolute; left: -12%; right: -12%; height: 3px; border-radius: 3px; top: 100%; pointer-events: none;
   background: linear-gradient(90deg, transparent, #fff 20%, #fff 80%, transparent);
