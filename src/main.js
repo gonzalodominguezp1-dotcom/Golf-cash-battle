@@ -652,15 +652,16 @@ async function showSkins() {
   };
   function openInspect(skin, from) {
     closeInspect();
-    const tier = SKIN_TIERS[skin.tier];
     const overlay = h(`
-      <div class="sk-view rarity-${skin.tier}" role="dialog" aria-modal="true" aria-label="Inspeccionar ${skin.name}">
+      <div class="sk-view" role="dialog" aria-modal="true">
         <div class="sk-view-bar">
           <button type="button" class="sk-view-back" aria-label="Cerrar inspección">${icon('back')}Skins</button>
-          <span class="sk-view-title">${tierIcon(skin.tier)} ${skin.name}</span>
+          <span class="sk-view-title"></span>
         </div>
         <div class="sk-view-stage">
-          <div class="sk-view-canvas"><img class="sk-view-poster" src="${thumbCached(skin, progress.instance(skin.id)) ?? ballPreview(skin, 288)}" alt="" draggable="false"></div>
+          <button type="button" class="sk-view-nav prev" aria-label="Skin anterior">‹</button>
+          <div class="sk-view-canvas"><img class="sk-view-poster" alt="" draggable="false"></div>
+          <button type="button" class="sk-view-nav next" aria-label="Skin siguiente">›</button>
           <div class="sk-view-lock" hidden>
             <span class="sk-lock sk-lock-big">${icon('lock')}</span>
             <div class="sk-view-req"><small></small><span class="bar"><i></i></span></div>
@@ -674,37 +675,76 @@ async function showSkins() {
     document.body.classList.add('sk-noscroll');
     const equipBtn = overlay.querySelector('.sk-equip');
     const lockBox = overlay.querySelector('.sk-view-lock');
+    const titleEl = overlay.querySelector('.sk-view-title');
+    const poster = overlay.querySelector('.sk-view-poster');
+    const navBtns = overlay.querySelectorAll('.sk-view-nav');
+    let current = skin;
+    const mine = { overlay, inspector: null, onKey: null, from };
+
+    // la lista de navegación es la rejilla visible (respeta los filtros de tier, colección y «solo abiertas»)
+    const navList = () => [...cards.values()].filter((c) => !c.card.hidden).map((c) => c.skin);
+    const canNav = () => navList().length > 1;
+    const syncNav = () => {
+      const show = canNav();
+      for (const b of navBtns) b.hidden = !show;
+    };
     const syncAction = () => {
-      const req = progress.requirement(skin);
+      const req = progress.requirement(current);
       const open = req.ratio >= 1;
-      const isEq = progress.skin.id === skin.id;
+      const isEq = progress.skin.id === current.id;
       equipBtn.disabled = isEq || !open;
       equipBtn.innerHTML = isEq ? `${icon('check')}Equipada` : open ? 'Equipar' : 'Bloqueada';
       lockBox.hidden = open;
       lockBox.querySelector('small').textContent = req.text;
       lockBox.querySelector('.bar i').style.width = `${req.ratio * 100}%`;
     };
-    syncAction();
+    /** Muestra otra skin dentro del mismo overlay (sin cerrarlo): título, equipar, candado y bola. */
+    const showSkin = (next) => {
+      current = next;
+      overlay.className = `sk-view rarity-${next.tier}`;
+      overlay.setAttribute('aria-label', `Inspeccionar ${next.name}`);
+      titleEl.innerHTML = `${tierIcon(next.tier)} ${next.name}`;
+      poster.src = thumbCached(next, progress.instance(next.id)) ?? ballPreview(next, 288);
+      syncAction();
+      syncNav();
+      mine.inspector?.setSkin(next, progress.instance(next.id) ?? undefined);
+    };
+    /** Salta a la skin anterior (-1) o siguiente (+1) de la rejilla visible, dando la vuelta al final. */
+    const go = (delta) => {
+      const list = navList();
+      if (list.length < 2) return;
+      const i = list.findIndex((s) => s.id === current.id);
+      const j = (Math.max(i, 0) + delta + list.length) % list.length;
+      showSkin(list[j]);
+    };
+
+    showSkin(skin);
     equipBtn.addEventListener('click', () => {
-      if (progress.equip(skin.id)) {
+      if (progress.equip(current.id)) {
         refreshEquipped();
         syncAction();
       }
     });
     overlay.querySelector('.sk-view-back').addEventListener('click', closeInspect);
+    overlay.querySelector('.sk-view-nav.prev').addEventListener('click', () => go(-1));
+    overlay.querySelector('.sk-view-nav.next').addEventListener('click', () => go(1));
     const onKey = (e) => {
-      if (e.key !== 'Escape') return;
-      e.stopPropagation();
-      closeInspect();
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        closeInspect();
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.stopPropagation();
+        go(e.key === 'ArrowLeft' ? -1 : 1);
+      }
     };
+    mine.onKey = onKey;
     document.addEventListener('keydown', onKey, true);
-    const mine = { overlay, inspector: null, onKey, from };
     view3d = mine;
     overlay.querySelector('.sk-view-back').focus({ preventScroll: true });
     // el visor 3D (three.js + materiales) se descarga y crea solo ahora, al abrir
     loadSkinInspector().then(({ createSkinInspector }) => {
       if (view3d !== mine) return; // cerrado mientras cargaba
-      mine.inspector = createSkinInspector(overlay.querySelector('.sk-view-canvas'), { skin, instance: progress.instance(skin.id) ?? undefined, mode: 'fullscreen', noEnv: true });
+      mine.inspector = createSkinInspector(overlay.querySelector('.sk-view-canvas'), { skin: current, instance: progress.instance(current.id) ?? undefined, mode: 'fullscreen', noEnv: true });
       // el candado va sobre el visor 3D, centrado en la bola (el visor vacía el contenedor al crearse)
       overlay.querySelector('.sk-stage')?.append(lockBox);
     }).catch((err) => console.warn('inspector no disponible', err));
