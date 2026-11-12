@@ -3490,3 +3490,16 @@ body.sk-noscroll { overflow: hidden; }
   .desktop-nav .gi { display: none; }
   .desktop-nav button { padding: 8px 9px; font-size: 12px; }
 }
+
+/* HUD de partida simplificado: FPS · latencia a la izquierda, Ajustes y Pantalla a la derecha */
+.hud.hud-lean .net-stats {
+  margin-right: auto;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: #7cfc9a;
+  pointer-events: none;
+}
+.hud.hud-lean .net-stats[data-level='meh'] { color: #ffd23f; }
+.hud.hud-lean .net-stats[data-level='bad'] { color: #ff6b6b; }
+.hud.hud-lean .pill.fullscreen { display: flex !important; }

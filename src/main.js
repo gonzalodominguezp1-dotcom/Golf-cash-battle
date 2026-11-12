@@ -29,6 +29,7 @@ import { notify } from './ui/notifyPopup.js';
 import { NOTIFY_POLL_MS, newNotices } from './ui/notifyRules.js';
 import { avatarIcon, icon, iconUrl, tierIcon } from './ui/icons.js';
 import { errorRef } from './backend/rpcError.js';
+import { mountNetStats } from './ui/netStats.js';
 
 let backend, wallet, matches;
 // práctica forzada con #hoyoN: siempre local, no toca el servidor
@@ -1406,28 +1407,29 @@ async function startMatch(tier, rematchOf = null) {
  */
 function playScreen(match, { course, title, subtitle, players, onDone, firstSunkTick = null, timeLimit = HOLE_TIME_LIMIT, freePlay = false, onRestartHole = null, onSelectMap = null, rivals = null, live = false, onGame = null, onShots = null }) {
   const tiebreak = !!course.noCup;
+  // en partida el HUD solo lleva FPS · latencia, Ajustes y Pantalla completa:
+  // ni golpes de cada rival en directo ni avisos menores (sí el «¡Birdie!» al embocar)
+  const lean = !freePlay;
   const view = h(`
     <main class="play-screen ${tiebreak ? 'is-tiebreak' : ''} ${freePlay ? 'is-freeplay' : ''}">
       <div class="stage"></div>
       <div class="vignette"></div>
-      <div class="hud ${freePlay ? 'hud-freeplay' : ''}">
-        ${freePlay ? '<div class="pill hl freeplay-pill">Modo Libre</div>' : `<div class="pill hl">${title}</div>`}
-        <div class="pill">${freePlay ? course.name : tiebreak ? '1 tiro' : `Par ${course.par}`}</div>
-        ${freePlay ? `<div class="pill">Par ${course.par}</div>` : ''}
-        ${tiebreak ? '' : '<div class="pill strokes">Golpes <b>0</b></div>'}
-        <div class="pill dist">— m</div>
+      <div class="hud ${freePlay ? 'hud-freeplay' : 'hud-lean'}">
+        ${lean ? '<div class="pill net-stats" title="Fotogramas por segundo · latencia con el servidor">— FPS · — ms</div>' : `
+        <div class="pill hl freeplay-pill">Modo Libre</div>
+        <div class="pill">${course.name}</div>
+        <div class="pill">Par ${course.par}</div>
+        <div class="pill strokes">Golpes <b>0</b></div>
+        <div class="pill dist">— m</div>`}
         ${freePlay ? `
         <button class="pill restart-btn hud-freeplay-btn" aria-label="Reiniciar hoyo" title="Reiniciar hoyo al tee (R)">${icon('restart')}Reiniciar <kbd class="kbd-hint">R</kbd></button>
         <button class="pill map-select-btn hud-freeplay-btn" aria-label="Elegir otro mapa" title="Elegir otro mapa">${icon('map')}Mapas</button>
         ` : ''}
-        <button class="pill mute mobile-only" aria-label="Sonido">${soundLabel()}</button>
-        <button class="pill fullscreen mobile-only" aria-label="Pantalla completa" title="Pantalla completa (F11)">${icon('fullscreen')}Pantalla</button>
+        ${lean ? '' : `<button class="pill mute mobile-only" aria-label="Sonido">${soundLabel()}</button>`}
+        <button class="pill fullscreen ${lean ? '' : 'mobile-only'}" aria-label="Pantalla completa" title="Pantalla completa (F11)">${icon('fullscreen')}Pantalla</button>
         <button class="pill settings-btn-hud mobile-only" aria-label="Ajustes" title="Ajustes (Esc)">${icon('gear')}Ajustes</button>
         <button class="pill desktop-esc-hint" aria-label="Ajustes">${icon('gear')}Ajustes <kbd class="kbd-hint">Esc</kbd></button>
       </div>
-      <div class="rivals ${freePlay ? 'rivals-hidden' : ''}">${freePlay ? '' : players
-      .map((p) => `<div class="chip ${p.id === 'me' ? 'me' : ''} ${live && p.isBot ? 'bot' : ''}" data-id="${p.id}" style="--c:${p.color}"><i>${p.name[0]}</i><b>${tiebreak ? '·' : 0}</b></div>`)
-      .join('')}</div>
       <div class="toasts"></div>
       <div class="intro-banner">
         <small>${subtitle}</small>
@@ -1465,7 +1467,11 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
     const stageEl = view.querySelector('.stage');
     const timerEl = view.querySelector('.hole-timer');
     let finished = false;
-    const showDistance = () => (distEl.textContent = `${game.distanceToCup().toFixed(tiebreak ? 2 : 1)} m`);
+    const showDistance = () => distEl && (distEl.textContent = `${game.distanceToCup().toFixed(tiebreak ? 2 : 1)} m`);
+    const netEl = view.querySelector('.net-stats');
+    if (netEl) mountNetStats(netEl, { ping: backend?.ping });
+    // avisos menores (lava, agua, rivales…): solo en Modo Libre
+    const notify = (text, color) => !lean && toast(text, color);
     const banner = (text) => {
       cupBanner.textContent = text;
       cupBanner.classList.add('show');
@@ -1627,7 +1633,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
           return;
         }
         setChip(p.id, st.strokes, st.sunk);
-        if (st.sunk) toast(`${esc(p.name)} ha embocado en ${st.strokes}`, p.color);
+        if (st.sunk) notify(`${esc(p.name)} ha embocado en ${st.strokes}`, p.color);
       },
       onStroke: (n) => {
         if (n > 0) onShots?.(game.shots);
@@ -1639,12 +1645,12 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       onCup: (n) => {
         setChip('me', n, true);
         banner(scoreLabel(n, course.par));
-        distEl.textContent = '0 m';
+        if (distEl) distEl.textContent = '0 m';
       },
       onSunk: finish,
       onTimer: (left) => {
         if (left == null) return (timerEl.hidden = true);
-        if (timerEl.hidden) toast(`¡${left} s para embocar o quedas descalificado!`, '#ff5a5a');
+        if (timerEl.hidden) notify(`¡${left} s para embocar o quedas descalificado!`, '#ff5a5a');
         timerEl.hidden = false;
         timerEl.querySelector('b').textContent = left;
         timerEl.classList.toggle('urgent', left <= 5);
@@ -1660,11 +1666,11 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         cupBanner.classList.add('dq');
         setTimeout(() => finish(maxStrokesOf(course)), 1600);
       },
-      onLip: () => toast('¡Uy! Demasiado fuerte para entrar', '#ffffff'),
-      onLava: () => toast(`${icon('fire')} ¡A la lava! Vuelves al sitio del golpe`, '#ff8a3a'),
-      onWater: () => toast(`${icon('drop')} ¡Al agua! Vuelves al sitio del golpe`, '#7fdcff'),
-      onOut: () => toast(`${icon('palm')} ¡Fuera del campo! Vuelves al sitio del golpe`, '#b8f07a'),
-      onFall: () => toast(`${icon('pit')} ¡Al agujero! Vuelves al sitio del golpe`, '#ffc400'),
+      onLip: () => notify('¡Uy! Demasiado fuerte para entrar', '#ffffff'),
+      onLava: () => notify(`${icon('fire')} ¡A la lava! Vuelves al sitio del golpe`, '#ff8a3a'),
+      onWater: () => notify(`${icon('drop')} ¡Al agua! Vuelves al sitio del golpe`, '#7fdcff'),
+      onOut: () => notify(`${icon('palm')} ¡Fuera del campo! Vuelves al sitio del golpe`, '#b8f07a'),
+      onFall: () => notify(`${icon('pit')} ¡Al agujero! Vuelves al sitio del golpe`, '#ffc400'),
       onRest: (n) => {
         showDistance();
         if (tiebreak) {
@@ -1709,8 +1715,8 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       };
       window.addEventListener('keydown', onKeyR);
     }
-    if (isMuted()) toast('Sonido silenciado · actívalo en Ajustes', '#ffffff');
-    view.querySelector('.mute').addEventListener('click', toggleMute);
+    if (isMuted()) notify('Sonido silenciado · actívalo en Ajustes', '#ffffff');
+    view.querySelector('.mute')?.addEventListener('click', toggleMute);
     const fsBtn = view.querySelector('.fullscreen');
     if (fsBtn) {
       fsBtn.addEventListener('click', () => {
@@ -1979,7 +1985,7 @@ function statsGrid(holes) {
 // cuentan los sigue calculando el servidor.
 
 const LIVE_BEAT_MS = 4000; // latido: estado de la partida (y "sigo conectado")
-const LIVE_NEXT_S = 6; // pausa entre hoyos
+const LIVE_NEXT_MS = 1500; // pausa entre hoyos (sin marcador)
 const LIVE_GRACE_TICKS = 120 * 6; // margen tras acabarse el contador del hoyo
 const LIVE_HOLE_CAP_MS = 150000; // como mucho se espera esto a los demás en un hoyo
 
@@ -2246,34 +2252,15 @@ async function finishLiveHole(live, index, course, result) {
   } catch { }
   if (live.stopped || live.hole !== index) return;
   if (match.status !== 'open') return showLiveResults(live);
+  // sin marcador entre hoyos: la clasificación sale solo al final de la partida.
+  // Una pausa corta para ver el «¡Birdie!» del hoyo y se pasa al siguiente.
   const last = index + 1 >= match.holes;
-  const standings = liveStandings(match, live.roster, live.botScores);
-  const overlay = h(`
-    <div class="overlay">
-      <div class="card ${!result.timedOut && result.strokes <= course.par ? 'good' : ''}">
-        ${holeHeader(result.strokes, course.par, result.timedOut)}
-        ${standingsTable(standings)}
-        <p class="legal">Los bots no cuentan para el premio.</p>
-        <button class="primary next">${last ? 'Ver resultado' : 'Siguiente hoyo'}${icon('next')} <span class="secs">${LIVE_NEXT_S}</span></button>
-      </div>
-    </div>`);
-  let left = LIVE_NEXT_S;
-  const go = () => {
-    clearInterval(live.timer);
-    if (live.stopped || live.hole !== index || !overlay.isConnected) return;
+  clearTimeout(live.timer);
+  live.timer = setTimeout(() => {
+    if (live.stopped || live.hole !== index) return;
     if (last) liveAfterRound(live);
     else playLiveHole(live, index + 1);
-  };
-  overlay.querySelector('.next').addEventListener('click', go);
-  app.querySelector('.overlay')?.remove();
-  app.append(overlay);
-  clearInterval(live.timer);
-  live.timer = setInterval(() => {
-    left--;
-    const el = overlay.querySelector('.secs');
-    if (el) el.textContent = left;
-    if (left <= 0) go();
-  }, 1000);
+  }, LIVE_NEXT_MS);
 }
 
 /** Tras el último hoyo: desempate si empatas en cabeza con otro jugador real; si no, has terminado. */
