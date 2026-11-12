@@ -780,7 +780,7 @@ export function mountSkinLab(container) {
     cells.set(s.id, { b, img });
   }
 
-  const inspector = createSkinInspector(main, { skin: skinNow(), instance: instFor(), mode: 'panel', quality: state.quality });
+  const inspector = createSkinInspector(main, { skin: skinNow(), instance: instFor(), mode: 'panel', quality: state.quality, noEnv: true });
   function select(id) {
     state.id = id;
     for (const [k, c] of cells) c.b.classList.toggle('sk-sel', k === id);
