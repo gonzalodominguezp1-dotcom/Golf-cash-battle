@@ -27,3 +27,9 @@ Why       — mantiene «nunca más emisiones que el presupuesto» y acota el pe
 Context   — se pide un hub tipo MatDrive con pantallas completas y splash; varios datos (liga, desafíos temporales, cofres, historial) no existen.
 Decision  — solo interfaz y navegación; los datos inexistentes se listan como huecos y el modelo de desafíos se propone sin construirlo; sin service worker.
 Why       — el saldo es real y lo decide el servidor (S5.7); mostrar datos falsos o cacheados induciría a error.
+
+## 2026-11-12 — Clarify de la UI por pantallas (feature: ui-pantallas, task: clarify)
+Context   — 13 preguntas al humano sobre datos reales, composición del hub, escena y navegación.
+Decision  — sin retos con fecha ni pantallas Desafíos/Recompensas («desafíos» pasa a «logros»); hub con escena 3D propia (hoyo en bosque de día) cargada durante el splash; composición fija de C10; sin saldo ni botón de silencio en el hub; atrás en el hub no hace nada; bocetos aprobados antes de splash y hub.
+Why       — decisión del humano; mantiene solo datos reales en un juego con saldo real.
+Exception — U6.6 (botón de silencio visible) queda exceptuada en el hub por decisión del humano; el silencio sigue en Ajustes y con M. Pendiente de anotar en la tabla de enmiendas de la constitución.
