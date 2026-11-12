@@ -14,15 +14,15 @@ const loadInspector = () => import('./skinInspector.js');
 // de la skin actual; después, «Siguiente»/«Continuar» avanza. La promesa se resuelve al cerrar la cola.
 // La bola es una imagen estática (skinThumbs).
 //
-// Fases (ms): 1 oscurece · 2 (sin uso, 0) · 3 la bola aparece al 20 % y crece al 100 % en 2 s, girando · 4 estallido + sello · 5 datos y botones.
+// Fases (ms): 1 oscurece · 2 el pack se rasga y sus dos mitades salen despedidas · 3 la bola aparece al 20 % y crece al 100 % en 2 s, girando · 4 estallido + sello · 5 datos y botones.
 // La bola empieza justo al acabar la apertura; el resto de fases es igual para todas las rarezas.
 const TIMELINE = {
-  common: [200, 0, 2000, 300, 200],
-  uncommon: [200, 0, 2000, 350, 250],
-  rare: [200, 0, 2000, 400, 250],
-  epic: [200, 0, 2000, 500, 300],
-  legendary: [200, 0, 2000, 600, 400],
-  mythic: [200, 0, 2000, 800, 600],
+  common: [150, 380, 2000, 300, 200],
+  uncommon: [150, 380, 2000, 350, 250],
+  rare: [150, 380, 2000, 400, 250],
+  epic: [150, 380, 2000, 500, 300],
+  legendary: [150, 380, 2000, 600, 400],
+  mythic: [150, 380, 2000, 800, 600],
 };
 const REDUCED_MS = 600;
 const PARTICLES = { common: 14, uncommon: 22, rare: 36, epic: 56, legendary: 84, mythic: 120 };
@@ -168,8 +168,13 @@ export function showSkinReveal(skins, { progress = null } = {}) {
           ${list.length > 1 ? `<span class="sr-count">${i + 1} / ${list.length}</span>` : ''}
           <p class="sr-kicker sr-kicker-gate">Recompensa</p>
           <button type="button" class="sr-orb" aria-label="${calm ? 'Pulsa para abrir' : 'Mantén pulsado para abrir'}">
-            <svg class="sr-orb-ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46" pathLength="100"></circle></svg>
-            <span class="sr-orb-core"></span>
+            <span class="sr-pack" aria-hidden="true">
+              <span class="sr-pack-fill"></span>
+              <span class="sr-pack-foil"></span>
+              <span class="sr-pack-seam"></span>
+              <span class="sr-pack-mark">?</span>
+              <span class="sr-pack-bar"><i></i></span>
+            </span>
           </button>
           <p class="sr-hint">${calm ? 'Pulsa para abrir' : 'Mantén pulsado para abrir'}</p>
         </div>`;
@@ -248,6 +253,7 @@ export function showSkinReveal(skins, { progress = null } = {}) {
       root.innerHTML = `
         <div class="sr-vignette"></div>
         <div class="sr-rays" aria-hidden="true"></div>
+        <div class="sr-tear" aria-hidden="true"><span class="sr-tear-a"></span><span class="sr-tear-b"></span></div>
         <canvas class="sr-fx" aria-hidden="true"></canvas>
         <div class="sr-stage">
           ${list.length > 1 ? `<span class="sr-count">${i + 1} / ${list.length}</span>` : ''}
