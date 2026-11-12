@@ -6,13 +6,13 @@ tags: [sdd, spec, ui, navegacion, splash]
 timestamp: 2026-11-12T12:00:00Z
 topic: sdd
 slug: ui-pantallas
-status: clarified
+status: approved
 branch: la-chaqueta-bionica-ui
 ---
 
 # Spec — UI por pantallas: hub, pantallas completas y splash de marca
 
-> Slug: `ui-pantallas` · Status: clarified (pendiente de aprobación) · Created: 2026-11-12
+> Slug: `ui-pantallas` · Status: approved (2026-11-12, aprobada por el humano: «Aprueba la SPEC») · Created: 2026-11-12
 > Inherits: [constitution](../constitution.md) · Rama: `la-chaqueta-bionica-ui` (sub-rama de `la-chaqueta-bionica`, se fusiona en ella al terminar).
 > Referencia de estructura: MatDrive (matdrive.app). Solo la estructura y las buenas prácticas; ningún asset, texto ni ilustración suya.
 
@@ -334,3 +334,4 @@ Las 13 preguntas abiertas se resolvieron en *Clarifications* (C1-C13). Quedan:
 
 - 2026-11-12 — Borrador inicial.
 - 2026-11-12 — Revisión en frío: línea base de FPS y de bundle definida (14, 34), peso del splash acotado (29), sesión en recarga y dependencias inyectadas (4, 5), JUGAR sin mesa previa (10), tabla de contenido mínimo por pantalla. Los extras 37-39 se mantienen porque los pidió el humano como tareas opcionales.
+- 2026-11-12 — Aprobada por el humano («Aprueba la SPEC»). Ejecución por tareas con subagentes de contexto limpio; paradas solo en los bocetos de splash y hub (C13).
