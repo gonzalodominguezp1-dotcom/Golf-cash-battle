@@ -92,21 +92,31 @@
 @keyframes sr-pop { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
 /* la bola se materializa: disolución de abajo arriba con borde emisivo */
-.sr-ball { position: relative; width: clamp(170px, 50vw, 220px); aspect-ratio: 1; margin: 0; }
+.sr-ball { position: relative; width: clamp(170px, 50vw, 220px); aspect-ratio: 1; margin: 0; animation: sr-grow var(--d3) cubic-bezier(0.2, 0.9, 0.3, 1) var(--s3) both; }
+/* sale al 20 % de su tamaño y crece hasta el 100 % */
+@keyframes sr-grow { from { transform: scale(0.2); } to { transform: scale(1); } }
 .sr-ball::before {
   content: ''; position: absolute; inset: -34%; border-radius: 50%; pointer-events: none;
   background: radial-gradient(circle, color-mix(in srgb, var(--c) 50%, transparent) 0%, transparent 62%);
   animation: sr-halo calc(var(--d3) + var(--d4)) ease-out var(--s3) both;
 }
 @keyframes sr-halo { from { opacity: 0; transform: scale(0.5); } 60% { opacity: 1; } to { opacity: 0.7; transform: none; } }
+/* bola plana: gira sobre su eje vertical (sin sombra, reflejo ni filtros) */
 .sr-ball img {
   position: relative; display: block; width: 100%; height: 100%; object-fit: contain;
-  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 22px color-mix(in srgb, var(--c) 55%, transparent));
-  animation: sr-materialize var(--d3) ease-in-out var(--s3) both;
+  transform-origin: 50% 50%; backface-visibility: visible;
+  animation: sr-spin var(--d3) linear var(--s3) both, sr-spin-loop 3.2s linear calc(var(--s3) + var(--d3)) infinite;
 }
-@keyframes sr-materialize {
-  0% { clip-path: inset(100% 0 0 0); transform: scale(0.8) rotate(-14deg); opacity: 0.4; }
-  100% { clip-path: inset(-20% -20% -20% -20%); transform: none; opacity: 1; }
+/* una vuelta completa durante la aparición (escala 1 → 0 → -1 → 0 → 1 aproxima coseno) */
+@keyframes sr-spin {
+  0% { transform: scaleX(1); } 12.5% { transform: scaleX(0.707); } 25% { transform: scaleX(0); } 37.5% { transform: scaleX(-0.707); }
+  50% { transform: scaleX(-1); } 62.5% { transform: scaleX(-0.707); } 75% { transform: scaleX(0); } 87.5% { transform: scaleX(0.707); }
+  100% { transform: scaleX(1); }
+}
+@keyframes sr-spin-loop {
+  0% { transform: scaleX(1); } 12.5% { transform: scaleX(0.707); } 25% { transform: scaleX(0); } 37.5% { transform: scaleX(-0.707); }
+  50% { transform: scaleX(-1); } 62.5% { transform: scaleX(-0.707); } 75% { transform: scaleX(0); } 87.5% { transform: scaleX(0.707); }
+  100% { transform: scaleX(1); }
 }
 .sr-scan {
   position: absolute; left: -12%; right: -12%; height: 3px; border-radius: 3px; top: 100%; pointer-events: none;
@@ -141,6 +151,7 @@
 .sr-calm .sr-vignette { animation: sr-dark 0.2s ease-out both; }
 .sr-calm .sr-vignette::after { animation: none; }
 .sr-calm .sr-kicker, .sr-calm .sr-seal, .sr-calm .sr-ball img, .sr-calm .sr-info { animation: sr-fade 0.3s ease-out both; }
+.sr-calm .sr-ball { animation: none; }
 @keyframes sr-fade { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
   .sr-root, .sr-insp { animation: none; }
@@ -226,12 +237,6 @@
 .sr-epic .sr-seal, .sr-legendary .sr-seal, .sr-mythic .sr-seal { animation-name: sr-stamp, sr-glow; animation-duration: var(--d4), 1.8s; animation-delay: var(--s4), calc(var(--s4) + var(--d4)); animation-iteration-count: 1, infinite; animation-fill-mode: both, none; }
 @keyframes sr-glow { 50% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 60%, transparent), 0 6px 46px var(--c); } }
 
-/* la bola de las raras o mejores flota y brilla al terminar */
-.sr-rare .sr-stage.sr-done .sr-ball img, .sr-epic .sr-stage.sr-done .sr-ball img, .sr-legendary .sr-stage.sr-done .sr-ball img, .sr-mythic .sr-stage.sr-done .sr-ball img {
-  animation: sr-float 3s ease-in-out infinite;
-}
-@keyframes sr-float { 50% { transform: translateY(-8px) scale(1.03); } }
-
 /* nombre: dorado brillante (legendaria), carmesí-oro con parpadeo (mítica) */
 .sr-legendary .sr-name, .sr-mythic .sr-name {
   background: linear-gradient(100deg, #fff 0%, var(--c) 30%, #fff 50%, var(--c) 70%, #fff 100%); background-size: 250% 100%;
@@ -252,8 +257,3 @@
 .sr-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
 .sr-actions button { width: 100%; max-width: none; flex: none; }
 
-/* bola en vivo (calidad máxima, giro continuo) que sustituye a la imagen al terminar la revelación */
-.sr-live { position: absolute; inset: -14%; z-index: 1; }
-.sr-live .sk-insp { height: 100%; min-height: 0; background: transparent; border: 0; box-shadow: none; }
-.sr-live .sk-stage { width: 100%; height: 100%; max-height: none; min-height: 0; aspect-ratio: auto; background: transparent; }
-.sr-live-on .sr-ball img { visibility: hidden; animation: none; }
