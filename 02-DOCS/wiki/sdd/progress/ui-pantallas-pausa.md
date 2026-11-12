@@ -1,0 +1,96 @@
+---
+type: progress
+title: Pausa — UI por pantallas (cómo retomar)
+description: Estado exacto de la feature ui-pantallas y pasos para retomarla en una sesión nueva sin releer la conversación.
+tags: [sdd, progress, pausa, ui-pantallas]
+timestamp: 2026-11-12T18:00:00Z
+topic: sdd
+slug: ui-pantallas
+---
+
+# Pausa — UI por pantallas
+
+> Pausado el 2026-11-12 por límite de uso del humano. Retomar desde aquí: **no hace falta releer la conversación**.
+
+## Dónde está el trabajo
+
+- **Worktree:** `C:\Users\DEV\Desktop\golfito\.worktrees\la-chaqueta-bionica-ui`
+- **Rama:** `la-chaqueta-bionica-ui` (sub-rama de `la-chaqueta-bionica`, del humano Chakets). Base: `3d12edf` (main local, **sin subir**). Sin push. Al terminar se fusiona en `la-chaqueta-bionica`.
+- **No tocar** el worktree `.worktrees/la-chaqueta-bionica`: tiene trabajo VFX a medias de otra tarea (27 commits sin subir y cambios sin guardar).
+- **Persona:** Chakets → rama `la-chaqueta-bionica`. Perfil técnico. Responde en español.
+
+## Artefactos (leer solo lo necesario)
+
+| Artefacto | Estado |
+| --- | --- |
+| `02-DOCS/wiki/sdd/specs/ui-pantallas.md` | **approved** (Clarifications C1-C13 mandan sobre el cuerpo) |
+| `02-DOCS/wiki/sdd/plans/ui-pantallas.md` | plan + tabla T001-T044 + «Interfaces por tarea»; corregido tras analyze |
+| `02-DOCS/wiki/sdd/analysis/ui-pantallas.md` | GO con arreglos (H1-H6 aplicados al plan) |
+| `02-DOCS/wiki/sdd/verifications/ui-pantallas-2026-11-12.md` | línea base de build (T001) |
+| `02-DOCS/wiki/sdd/decisions.md` | decisiones de spec, clarify y plan |
+
+## Tareas
+
+- **Hecha:** T001 (`2222714`) — línea base: carga inicial **85424 B gzip** (entrada `main` + `rpcError`), sin three. Tope AC34 ≈ 100,8 KB gzip. 223 tests en verde.
+- **Siguiente:** F1 en paralelo: **T002, T003, T004, T005, T006, T007, T008** (T007 es la única que toca `main.js`). Luego en serie: T009 → T010 → T011 → T012 (verificar fase 1).
+- **Paradas humanas acordadas (solo estas 2):** T018 (boceto del splash) y T024 (boceto del hub). Además, antes de fusionar a main: revisión humana de T034/T035 (tier 2: contraseña, KYC, monedero) y prueba en móvil real (T044).
+- **Al terminar todo:** avisar al humano para que lo pruebe él visualmente y explore los menús.
+
+## Cómo se ejecuta (reglas del humano)
+
+1. **Cada tarea la ejecuta un subagente `developer` de contexto limpio** con el brief de abajo + «TU TAREA: Txxx». Modelo: `sonnet` para tareas normales; el modelo por defecto (opus) para router (T002, T010), escena 3D (T014, T015), splash (T019-T021) y hub (T025, T026).
+2. Tareas tier 1: **un revisor de contexto limpio** (`refuter-correctness` o general con `sonnet`) sobre el diff antes del commit. Tier 0 (docs): sin revisor.
+3. **El orquestador hace los commits** (los subagentes no): `git add <archivos de la fila>`; mensaje con gitmoji + Conventional Commits en español (`✨ feat(router): …`, `✅ test…`, `📝 docs…`, `🔧 chore…` — el hook rechaza mensajes sin gitmoji válido). Autor Chakets, sin trailers de IA, sin push.
+4. El navegador lo usa solo el orquestador, en las tareas de verificación (T012, T022, T027, T040, T044).
+5. Lecturas y trabajo pesado → subagentes haiku/sonnet para no gastar contexto del orquestador.
+
+## Vista previa
+
+- `C:\Users\DEV\Desktop\golfito\.claude\launch.json` tiene la config **`vite-ui-pantallas`**: `pnpm -C .worktrees/la-chaqueta-bionica-ui exec vite --port 5180 --strictPort` con `VITE_BACKEND=local` (modo demo sin login; el modo normal pide credenciales del Supabase real y no se pueden meter).
+- Arranque: `preview_start {name: "vite-ui-pantallas"}` → http://localhost:5180.
+- **FPS:** con el panel del navegador oculto, rAF baja a 1 fps → la medida no vale. Medir solo con el panel visible (pedírselo al humano). El panel no permite throttling de CPU: anotarlo como «no ejecutado».
+- La línea base de FPS del lobby (T001) sigue **pendiente**: medir en T012 con el panel visible, *antes* de que el hub cambie el lobby (o con `git stash`-free: checkout de `3d12edf` en un worktree temporal).
+
+## Brief para cada subagente ejecutor (copiar tal cual)
+
+```text
+Eres el ejecutor de UNA tarea del plan ASDD de golf-cash-battle (minigolf 3D, Vite 5 + Three.js 0.169 + Supabase, JS vanilla). Tienes contexto limpio: todo lo que necesitas está en el repo.
+
+- Worktree (trabaja SOLO aquí): C:\Users\DEV\Desktop\golfito\.worktrees\la-chaqueta-bionica-ui . No toques C:\Users\DEV\Desktop\golfito ni otros worktrees.
+- Usa siempre pnpm (pnpm test, pnpm run build, pnpm exec). Nunca npm/npx.
+
+Lee, en este orden y solo lo necesario:
+1. Plan: 02-DOCS/wiki/sdd/plans/ui-pantallas.md → §0 (restricciones globales), las secciones de §2-§5 que afecten a tu tarea, TU fila en la tabla «Tasks» y TU bloque en «Interfaces por tarea».
+2. Spec: 02-DOCS/wiki/sdd/specs/ui-pantallas.md → solo los criterios de aceptación que cite tu fila y las Clarifications C1-C13 (mandan sobre el cuerpo).
+3. El código que vayas a tocar (lecturas parciales).
+
+Reglas:
+- TDD: si tu tarea tiene test, escríbelo primero, compruébalo en rojo y luego en verde.
+- Toca solo los archivos de tu fila. Si necesitas otro, hazlo mínimo y justifícalo en el informe.
+- Prohibido: cambiar física, economía, RLS, Supabase/Edge Functions, vercel.json; añadir dependencias; textos en inglés en la UI.
+- Puede haber otras tareas trabajando a la vez en el mismo worktree: no reviertas, formatees ni borres archivos ajenos a tu tarea.
+- NO hagas git commit, git stash, git checkout, git reset ni push: el orquestador hace el commit.
+- No uses el navegador salvo que tu done-check lo exija de forma explícita; la verificación visual la hace el orquestador.
+- Ejecuta el done-check LITERAL de tu fila, más `pnpm test` (y `pnpm run build` si tocaste src/, index.html, public/ o vite.config.js).
+
+Devuelve en español, breve (≤25 líneas):
+- Archivos creados/modificados (con líneas aprox. de diff).
+- Salida resumida del done-check y de pnpm test/build (nº de tests, pasa/falla). Lo que no se ejecutó, dilo como «no ejecutado».
+- Desviaciones del plan y por qué.
+- Riesgos o cosas que el orquestador debe verificar en navegador.
+
+TU TAREA: Txxx
+```
+
+## Prompt para retomar (pegar en una sesión nueva)
+
+```text
+Retoma la feature ui-pantallas de golf-cash-battle. Lee SOLO 02-DOCS/wiki/sdd/progress/ui-pantallas-pausa.md en el worktree C:\Users\DEV\Desktop\golfito\.worktrees\la-chaqueta-bionica-ui y sigue sus reglas: orquestas, cada tarea la hace un subagente developer de contexto limpio, tú revisas y commiteas. Empieza por la F1 en paralelo (T002-T008).
+```
+
+## Decision queue
+
+- [blocking] Q1 — Revisión humana de T034/T035 (contraseña, KYC, monedero: B4.3) antes de fusionar a main, plan tier 2, T034/T035
+- [blocking] Q2 — Prueba del humano en móvil real (Q2.5) antes de fusionar a main, constitución Q2.5, T044
+- [review-after] Q3 — Excepción U6.6 (sin botón de silencio en el hub) decidida por el humano en C11; se anota en la constitución en T008, T008
+- [review-after] Q4 — El saldo sigue en la cabecera de Mesas y en Cuenta (suposición de C11), spec C11, T028
