@@ -18,6 +18,7 @@ Mapa de la documentación del proyecto. Cada página cubre un tema y enlaza con 
 - [Configuración SDD](sdd/config.yaml): comandos de prueba y verificación que usa el flujo SDD.
 - [Spec: banco de VFX y efectos](sdd/specs/vfx-lab-efectos.md): banco de pruebas, portales, choques y efectos de skin (borrador, autopilot).
 - [Plan: banco de VFX y efectos](sdd/plans/vfx-lab-efectos.md): arquitectura, contratos, pruebas, secuencia y riesgos del banco de VFX.
+- [Spec: UI por pantallas](sdd/specs/ui-pantallas.md): hub de iconos, pantallas completas con router de pila y splash de marca (borrador).
 - [Pausa: cómo retomar el banco de VFX](sdd/progress/vfx-lab-efectos-pausa.md): estado exacto, agentes parados, trabajo a medias y pasos para continuar.
 - [Decisiones del harness](harness/decisions.md): registro de decisiones de RSC.
 - [Plan de instalación](harness/installation-plan.md) y [perfil de usuario](harness/user-profile.md).
