@@ -100,6 +100,36 @@ function burst(canvas, color, count, lifeMul = 1) {
   };
 }
 
+// Explosión de la caja: trozos de madera que salen disparados desde su centro (fuera de pantalla).
+const SHARDS = 28;
+const BREAK_MS = 880; // 0,8 s de vuelo + retraso máximo de 60 ms
+function shatter(root, pack) {
+  const r = pack.getBoundingClientRect();
+  const cx = r.left + r.width / 2;
+  const cy = r.top + r.height / 2;
+  pack.classList.add('sr-pack-out');
+  const layer = document.createElement('div');
+  layer.className = 'sr-shards';
+  layer.setAttribute('aria-hidden', 'true');
+  layer.innerHTML = '<span class="sr-burst"></span>';
+  const reach = Math.max(innerWidth, innerHeight);
+  const pt = () => `${Math.round(Math.random() * 100)}% ${Math.round(Math.random() * 100)}%`;
+  for (let n = 0; n < SHARDS; n++) {
+    const s = document.createElement('span');
+    s.className = 'sr-shard';
+    const w = r.width * (0.16 + Math.random() * 0.22);
+    const h = r.height * (0.16 + Math.random() * 0.22);
+    const a = Math.random() * Math.PI * 2;
+    const far = reach * (0.6 + Math.random() * 0.7);
+    const x = cx + (Math.random() - 0.5) * r.width * 0.8 - w / 2;
+    const y = cy + (Math.random() - 0.5) * r.height * 0.8 - h / 2;
+    s.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px;--tx:${Math.cos(a) * far}px;--ty:${Math.sin(a) * far}px;--rot:${(Math.random() * 2 - 1) * 540}deg;--dl:${Math.round(Math.random() * 60)}ms;clip-path:polygon(${pt()}, ${pt()}, ${pt()}, ${pt()})`;
+    layer.append(s);
+  }
+  root.append(layer);
+  return layer;
+}
+
 export function showSkinReveal(skins, { progress = null } = {}) {
   const list = [...(skins ?? [])].sort((a, b) => TIERS[tierKey(a)].order - TIERS[tierKey(b)].order);
   if (!list.length) return Promise.resolve();
@@ -169,10 +199,10 @@ export function showSkinReveal(skins, { progress = null } = {}) {
           <p class="sr-kicker sr-kicker-gate">Recompensa</p>
           <button type="button" class="sr-orb" aria-label="${calm ? 'Pulsa para abrir' : 'Mantén pulsado para abrir'}">
             <span class="sr-pack" aria-hidden="true">
-              <span class="sr-pack-fill"></span>
-              <span class="sr-pack-foil"></span>
-              <span class="sr-pack-seam"></span>
-              <span class="sr-pack-mark">?</span>
+              <span class="sr-pack-window">
+                <span class="sr-pack-fill"></span>
+                <span class="sr-pack-q">?</span>
+              </span>
               <span class="sr-pack-bar"><i></i></span>
             </span>
           </button>
@@ -195,7 +225,11 @@ export function showSkinReveal(skins, { progress = null } = {}) {
         opened = true;
         stopGate();
         buzz([30, 40, 80]);
-        reveal(i);
+        if (calm) return reveal(i);
+        // la caja explota en trozos y, cuando acaban de salir, empieza la bola
+        root.classList.add('sr-breaking');
+        shatter(root, root.querySelector('.sr-pack'));
+        setTimeout(() => reveal(i), BREAK_MS);
       };
       const frame = (now) => {
         const dt = Math.min(0.05, (now - last) / 1000);
@@ -253,7 +287,6 @@ export function showSkinReveal(skins, { progress = null } = {}) {
       root.innerHTML = `
         <div class="sr-vignette"></div>
         <div class="sr-rays" aria-hidden="true"></div>
-        <div class="sr-tear" aria-hidden="true"><span class="sr-tear-a"></span><span class="sr-tear-b"></span></div>
         <canvas class="sr-fx" aria-hidden="true"></canvas>
         <div class="sr-stage">
           ${list.length > 1 ? `<span class="sr-count">${i + 1} / ${list.length}</span>` : ''}

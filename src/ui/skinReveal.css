@@ -89,7 +89,7 @@
 .sr-insp-stage > .sk-insp { flex: 1 1 auto; min-width: 0; border-radius: 0; }
 
 /* movimiento reducido: 0,6 s, sin haces ni partículas */
-.sr-calm .sr-fx, .sr-calm .sr-tear { display: none; }
+.sr-calm .sr-fx { display: none; }
 .sr-calm .sr-vignette { animation: sr-dark 0.2s ease-out both; }
 .sr-calm .sr-vignette::after { animation: none; }
 .sr-calm .sr-kicker, .sr-calm .sr-seal, .sr-calm .sr-ball img, .sr-calm .sr-info { animation: sr-fade 0.3s ease-out both; }
@@ -105,64 +105,77 @@
 .sr-kicker-gate { animation: sr-pop 0.5s var(--ease-out, ease-out) both; }
 .sr-vignette-gate { animation: sr-dark 0.4s ease-out both; }
 .sr-orb {
-  position: relative; width: clamp(150px, 44vw, 200px); aspect-ratio: 5 / 7; padding: 0; border: 0; border-radius: 22px;
+  position: relative; width: clamp(190px, 56vw, 250px); aspect-ratio: 1; padding: 0; border: 0; border-radius: 16px;
   background: none; cursor: pointer; touch-action: none; outline: none;
   transform: scale(calc(1 + var(--p) * 0.08)) rotate(calc(var(--p) * -2deg));
   animation: sr-orb-float 2.4s ease-in-out infinite, sr-orb-in 0.6s cubic-bezier(0.2, 1.4, 0.4, 1) both;
 }
 .sr-orb:focus-visible { outline: 3px solid #fff; outline-offset: 6px; }
-/* pack sellado: carta metálica con lámina iridiscente, se llena de luz del color --c al mantener pulsado */
+/* caja de madera lacada (estilo vitrina) con ventana oscura y un ? dorado; se llena de luz del color --c al mantener pulsado */
 .sr-pack {
-  position: absolute; inset: 0; overflow: hidden; border-radius: inherit;
-  background: linear-gradient(160deg, #1b2333 0%, #0d121c 55%, #161d2b 100%);
-  border: 1.5px solid color-mix(in srgb, var(--c) calc(30% + var(--p) * 60%), #2a3346);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55), 0 0 calc(18px + var(--p) * 70px) color-mix(in srgb, var(--c) calc(25% + var(--p) * 55%), transparent), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  position: absolute; inset: 0; border-radius: inherit;
+  background:
+    repeating-linear-gradient(92deg, rgba(0, 0, 0, 0.07) 0 2px, transparent 2px 9px),
+    linear-gradient(170deg, #b13236 0%, #7d1719 45%, #4f0c11 100%);
+  border: 2px solid #c9a24a;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.6), 0 0 calc(18px + var(--p) * 70px) color-mix(in srgb, var(--c) calc(25% + var(--p) * 55%), transparent), inset 0 2px 0 rgba(255, 255, 255, 0.22), inset 0 -6px 12px rgba(0, 0, 0, 0.35);
   animation: sr-pack-shake 0.08s linear infinite;
+}
+.sr-pack::before { content: ''; position: absolute; left: 30%; right: 30%; top: 4%; height: 4px; border-radius: 2px; background: linear-gradient(#f5d77a, #8a6212); }
+.sr-pack-window {
+  position: absolute; left: 12%; right: 12%; top: 13%; bottom: 22%; border-radius: 6px; overflow: hidden;
+  background: radial-gradient(ellipse at 50% 40%, #2b2b30 0%, #0c0c0f 70%);
+  box-shadow: inset 0 0 22px #000, 0 0 0 2px #c9a24a;
+  display: grid; place-items: center;
 }
 .sr-pack-fill {
   position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--p) * 100%);
   background: linear-gradient(0deg, color-mix(in srgb, var(--c) 70%, transparent), color-mix(in srgb, var(--c) 18%, transparent));
 }
-.sr-pack-foil {
-  position: absolute; inset: -40%; mix-blend-mode: screen; opacity: 0.35;
-  background: linear-gradient(115deg, transparent 38%, rgba(255, 255, 255, 0.5) 47%, color-mix(in srgb, var(--c) 60%, #fff) 50%, transparent 60%);
-  animation: sr-foil 2.8s ease-in-out infinite;
+/* el ? dorado del centro: brilla más cuanto más se mantiene pulsado */
+.sr-pack-q {
+  position: relative; font: 900 clamp(72px, 24vw, 104px)/1 var(--display);
+  background: linear-gradient(180deg, #fff4bf 0%, #f0c24a 45%, #a06a12 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 calc(3px + var(--p) * 12px) rgba(240, 194, 74, 0.75));
 }
-/* costura horizontal por donde se rasga: brilla más cuanto más cerca de abrirse */
-.sr-pack-seam {
-  position: absolute; left: 8%; right: 8%; top: 50%; height: 2px; margin-top: -1px; border-radius: 2px;
-  background: repeating-linear-gradient(90deg, #fff 0 6px, transparent 6px 10px);
-  opacity: calc(0.25 + var(--p) * 0.75); box-shadow: 0 0 calc(var(--p) * 16px) var(--c);
-}
-.sr-pack-mark {
-  position: absolute; inset: 0; display: grid; place-items: center; font: 900 clamp(56px, 18vw, 80px) var(--display);
-  color: rgba(255, 255, 255, calc(0.18 + var(--p) * 0.6)); text-shadow: 0 0 24px var(--c);
-}
-.sr-pack-bar { position: absolute; left: 12%; right: 12%; bottom: 9%; height: 5px; border-radius: 5px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
-.sr-pack-bar i { display: block; height: 100%; width: calc(var(--p) * 100%); background: #fff; box-shadow: 0 0 10px var(--c); }
-@keyframes sr-foil { 0%, 100% { translate: -30% 0; } 50% { translate: 30% 0; } }
+.sr-pack-bar { position: absolute; left: 14%; right: 14%; bottom: 7%; height: 5px; border-radius: 5px; background: rgba(0, 0, 0, 0.4); overflow: hidden; }
+.sr-pack-bar i { display: block; height: 100%; width: calc(var(--p) * 100%); background: #f0c24a; box-shadow: 0 0 10px var(--c); }
+.sr-pack-out { visibility: hidden; }
 @keyframes sr-pack-shake {
   0%, 100% { translate: 0 0; } 25% { translate: calc(var(--p) * 3px) calc(var(--p) * -2px); }
   50% { translate: calc(var(--p) * -3px) calc(var(--p) * 2px); } 75% { translate: calc(var(--p) * 2px) calc(var(--p) * 3px); }
 }
-/* apertura: las dos mitades del pack salen despedidas (arriba/abajo) durante la fase 2, antes de la bola */
-.sr-tear { position: absolute; left: 50%; top: 46%; width: clamp(150px, 44vw, 200px); aspect-ratio: 5 / 7; translate: -50% -50%; pointer-events: none; z-index: 3; }
-.sr-tear span {
-  position: absolute; left: 0; right: 0; height: 50%; background: linear-gradient(160deg, #1b2333, #0d121c);
-  border: 1.5px solid var(--c); box-shadow: 0 0 30px color-mix(in srgb, var(--c) 70%, transparent);
-  animation: sr-tear-a var(--d2) cubic-bezier(0.5, 0, 0.8, 0.4) var(--s2) both;
+/* explosión de la caja: trozos de madera disparados hacia fuera + destello */
+.sr-shards { position: fixed; inset: 0; z-index: 5; pointer-events: none; }
+.sr-shard {
+  position: absolute; background: linear-gradient(135deg, #c8393b, #6a1014 60%, #2a0609);
+  border: 1px solid rgba(201, 162, 74, 0.5);
+  animation: sr-shard 0.8s cubic-bezier(0.15, 0.7, 0.3, 1) var(--dl) both;
 }
-.sr-tear-a { top: 0; border-radius: 22px 22px 0 0; border-bottom-color: #fff !important; }
-.sr-tear-b { bottom: 0; border-radius: 0 0 22px 22px; border-top-color: #fff !important; animation-name: sr-tear-b !important; }
-@keyframes sr-tear-a { 0% { transform: none; opacity: 1; } 100% { transform: translateY(-70vh) rotate(-14deg); opacity: 0; } }
-@keyframes sr-tear-b { 0% { transform: none; opacity: 1; } 100% { transform: translateY(70vh) rotate(10deg); opacity: 0; } }
+@keyframes sr-shard {
+  0% { transform: translate(0, 0) rotate(0) scale(0.9); opacity: 1; }
+  60% { opacity: 1; }
+  100% { transform: translate(var(--tx), var(--ty)) rotate(var(--rot)) scale(0.6); opacity: 0; }
+}
+.sr-burst {
+  position: absolute; left: 50%; top: 50%; width: 60vmax; height: 60vmax; margin: -30vmax 0 0 -30vmax; border-radius: 50%;
+  background: radial-gradient(circle, #fff 0%, color-mix(in srgb, var(--c) 40%, transparent) 25%, transparent 60%);
+  animation: sr-burst 0.45s ease-out both;
+}
+@keyframes sr-burst { from { transform: scale(0.1); opacity: 1; } to { transform: scale(1); opacity: 0; } }
+.sr-breaking .sr-hint, .sr-breaking .sr-kicker-gate, .sr-breaking .sr-count { visibility: hidden; }
+.sr-pack-fill {
+  position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--p) * 100%);
+  background: linear-gradient(0deg, color-mix(in srgb, var(--c) 70%, transparent), color-mix(in srgb, var(--c) 18%, transparent));
+}
 .sr-hint { margin: 0; font: 800 14px var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255, 255, 255, 0.75); animation: sr-hint 1.6s ease-in-out infinite; }
 .sr-gate-on { cursor: default; }
 @keyframes sr-orb-in { from { opacity: 0; transform: scale(0.3); } }
 @keyframes sr-orb-float { 0%, 100% { translate: 0 0; } 50% { translate: 0 -8px; } }
 @keyframes sr-hint { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
 
-.sr-calm .sr-orb, .sr-calm .sr-pack, .sr-calm .sr-pack-foil { animation: none; transform: none; }
+.sr-calm .sr-orb, .sr-calm .sr-pack { animation: none; transform: none; }
 .sr-calm .sr-shake .sr-stage, .sr-calm.sr-shake .sr-stage { animation: none; }
 
 /* ---- efectos por tier: cuanto más rara, más espectáculo (--k = 0 común … 5 mítica) ---- */
