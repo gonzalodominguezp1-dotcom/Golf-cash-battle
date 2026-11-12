@@ -100,6 +100,7 @@ export function createSkinInspector(container, opts = {}) {
   let level = QUALITY_LEVELS.includes(opts.quality) ? opts.quality : PREVIEW_QUALITY;
   const autoSpin = !!opts.autoSpin;
   const bare = !!opts.bare;
+  const noFloor = !!opts.noFloor; // sin suelo, brillo ni reflejo (la bola flota sola)
 
   // ---------------------------------------------------------------- DOM
   const root = el('div', `sk-insp sk-${mode}${bare ? ' sk-bare' : ''}`);
@@ -515,7 +516,7 @@ export function createSkinInspector(container, opts = {}) {
     lookY += (targetLook - lookY) * f;
     camera.position.set(0, camY, d);
     camera.lookAt(0, lookY, 0);
-    const show = !fxMode;
+    const show = !fxMode && !noFloor;
     floor.visible = show;
     mirror.visible = show && level === 'high';
     glow.visible = show;
