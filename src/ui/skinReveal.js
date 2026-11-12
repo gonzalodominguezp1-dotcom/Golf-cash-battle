@@ -332,6 +332,7 @@ export function showSkinReveal(skins, { progress = null } = {}) {
 
       // Bola 3D en vivo, sin suelo ni reflejo: arranca con la escala de .sr-ball (20 % → 100 %) y gira sobre sí misma.
       let mounting = false;
+      let boost = false; // giro al doble mientras la bola crece
       const mountLive = () => {
         if (inspector || mounting || calm) return;
         mounting = true;
@@ -342,6 +343,7 @@ export function showSkinReveal(skins, { progress = null } = {}) {
           if (!holder.isConnected) return;
           const api = createSkinInspector(holder, { skin, instance: inst ?? undefined, mode: 'panel', bare: true, autoSpin: true, noFloor: true, noEnv: true, quality: 'high' });
           inspector = { api, el: holder };
+          api.setSpin(boost ? 2 : 1);
           root.classList.add('sr-live-on');
         }).catch(() => holder.remove());
       };
@@ -369,6 +371,9 @@ export function showSkinReveal(skins, { progress = null } = {}) {
       if (!calm) {
         timers.push(...sound(skin, 'charge'));
         mountLive(); // arranca ya: la bola gira desde que aparece (CSS la muestra en start[2])
+        // al crecer, el giro va al doble; al llegar al 100 % vuelve a la velocidad normal (misma dirección)
+        timers.push(setTimeout(() => { boost = true; inspector?.api?.setSpin(2); }, start[2]));
+        timers.push(setTimeout(() => { boost = false; inspector?.api?.setSpin(1); }, start[2] + dur[2]));
         timers.push(setTimeout(() => {
           const b = img.getBoundingClientRect();
           const c = canvas.getBoundingClientRect();

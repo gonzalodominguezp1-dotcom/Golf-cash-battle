@@ -208,6 +208,7 @@ export function createSkinInspector(container, opts = {}) {
   const AZ = new THREE.Vector3(0, 0, 1);
   const goodQ = new THREE.Quaternion();
   let vx = 0, vy = 0; // velocidad angular (rad/s)
+  let spinMul = 1, spinTarget = 1; // multiplicador del giro automático (setSpin), suavizado; la dirección no cambia
   let zoom = 1;
   let zoomT = 1;
   let baseDist = 3;
@@ -256,12 +257,13 @@ export function createSkinInspector(container, opts = {}) {
       } else q.slerpQuaternions(tween.from, tween.to, e);
       if (u >= 1) tween = null;
     } else {
+      spinMul += (spinTarget - spinMul) * (1 - Math.exp(-4 * dt)); // cambio de velocidad suave
       const decay = Math.exp(-3.4 * dt);
       vx *= decay;
       vy *= decay;
       if (!dragging && Math.abs(vx) < EPS && Math.abs(vy) < EPS) vx = vy = 0;
       if (!dragging) {
-        qTmp.setFromAxisAngle(AY, vy * dt + (autoSpin && !reducedMotion() ? SPIN * dt : 0));
+        qTmp.setFromAxisAngle(AY, vy * dt + (autoSpin && !reducedMotion() ? SPIN * spinMul * dt : 0));
         q.premultiply(qTmp);
         qTmp.setFromAxisAngle(AX, vx * dt);
         q.premultiply(qTmp);
@@ -633,6 +635,9 @@ export function createSkinInspector(container, opts = {}) {
       resize();
       sync();
       return fxMode;
+    },
+    setSpin(m) {
+      spinTarget = Math.max(0, m);
     },
     stats() {
       return { geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, programs: renderer.info.programs?.length ?? 0, running: !!raf, fx: fxMode, quality: level };
