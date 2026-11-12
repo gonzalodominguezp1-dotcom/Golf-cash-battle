@@ -22,3 +22,8 @@ Why       — las guardas (a) y (b) dejaban siempre otra entrada que se cuelga; 
 Context   — con un tope fraccionario `emissions` superaba `budget()`, y el plan original fijaba 40/120/300 para los efectos.
 Decision  — `maxParticles` debe ser entero y `budget` lo trunca; el tope por efecto es el del `VfxPlayer` (24/60/120), el más estricto.
 Why       — mantiene «nunca más emisiones que el presupuesto» y acota el peor caso junto a `SkinFX`.
+
+## 2026-11-12 — Alcance de la UI por pantallas (feature: ui-pantallas, task: spec)
+Context   — se pide un hub tipo MatDrive con pantallas completas y splash; varios datos (liga, desafíos temporales, cofres, historial) no existen.
+Decision  — solo interfaz y navegación; los datos inexistentes se listan como huecos y el modelo de desafíos se propone sin construirlo; sin service worker.
+Why       — el saldo es real y lo decide el servidor (S5.7); mostrar datos falsos o cacheados induciría a error.
