@@ -11,7 +11,7 @@ import { enterFinale, isMuted, leaveFinale, setAmbientVolume, setMuted, setVolum
 import { settings } from './settings/settings.js';
 import { lastSection, mountSettingsPanel } from './ui/settingsPanel.js';
 import { Progress } from './progress/Progress.js';
-import { AVATAR_ICONS, AvatarStore, checkAvatarFile, fromWire, iconById, imageToAvatar, toWire } from './progress/avatar.js';
+import { AVATAR_ICONS, AvatarStore, checkAvatarFile, fromWire, imageToAvatar, toWire } from './progress/avatar.js';
 import { FRAMES, frameById, framesUnlocked, frameStyle } from './progress/prestige.js';
 import { CHALLENGES, TIERS as SKIN_TIERS, SKINS } from './progress/skins.js';
 import { ballPreview } from './game/render/ballPaint.js';
@@ -29,6 +29,7 @@ import { notify } from './ui/notifyPopup.js';
 import { NOTIFY_POLL_MS, newNotices } from './ui/notifyRules.js';
 import { avatarIcon, icon, iconUrl, tierIcon } from './ui/icons.js';
 import { errorRef } from './backend/rpcError.js';
+import { avatarHtml, coin, createBall, esc, fmt, h } from './screens/shared.js';
 
 let backend, wallet, matches;
 // práctica forzada con #hoyoN: siempre local, no toca el servidor
@@ -66,34 +67,14 @@ const app = document.getElementById('app');
 document.documentElement.style.setProperty('--gi-check', `url("${iconUrl('check')}")`);
 document.documentElement.style.setProperty('--gi-dot', `url("${iconUrl('dot', { tone: 'gray' })}")`);
 
-const fmt = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
-const coin = (n) => `${icon('coin', { cls: 'coin' })}${fmt(n)}`;
 const soundLabel = () => `${icon(isMuted() ? 'mute' : 'sound')}${isMuted() ? 'Mudo' : 'Sonido'}`;
 applySound(settings.get());
 settings.subscribe(applySound);
-const h = (html) => {
-  const t = document.createElement('template');
-  t.innerHTML = html.trim();
-  return t.content.firstElementChild;
-};
-// miniatura estática si ya está en caché; si no, marcador 2D que installThumbObserver cambia por ella (data-skin-id)
-const ball = (skin, size = 96, cls = '') => {
-  const cached = thumbCached(skin, progress.instance(skin.id));
-  return `<img class="ball-img ${cls}" src="${cached ?? ballPreview(skin, size * 2)}" data-skin-id="${skin.id}"${cached ? ' data-hd="1"' : ''} width="${size}" height="${size}" alt="">`;
-};
+// miniatura estática en caché o marcador 2D (ver screens/shared.js)
+const { ball } = { ball: createBall(progress) };
 
 let avatar = new AvatarStore(null);
 let accountTab = 'profile';
-
-/** Cara del avatar: imagen propia, icono elegido o la inicial del nombre. */
-const avatarFace = (av, initial) =>
-  av?.image ? `<img src="${av.image}" alt="">`
-    : av?.icon ? `<span class="pf-glyph">${avatarIcon(iconById(av.icon).id)}</span>`
-      : `<b class="pf-initial">${esc(String(initial || '?')[0])}</b>`;
-
-/** Avatar con marco de prestigio. size: xs | sm | lg. */
-const avatarHtml = ({ size = 'sm', frame = null, av = null, initial = '?' }) =>
-  `<span class="pf pf-${size} ${frame ? `pf-framed pf-${frame.id}` : ''}" style="${frameStyle(frame)}"><i class="pf-halo"></i><i class="pf-wing l"></i><i class="pf-wing r"></i><i class="pf-ring"></i><span class="pf-face">${avatarFace(av, initial)}</span><i class="pf-gem"></i></span>`;
 
 let game = null;
 let screen = 'lobby';
@@ -726,7 +707,6 @@ async function showSkins() {
 
 // ---------- cuenta ----------
 
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 const BLOCK_TEXT = {
   account_required: 'Para jugar con créditos necesitas una cuenta con email. Crea tu cuenta para conservar tu saldo, nivel y skins.',
