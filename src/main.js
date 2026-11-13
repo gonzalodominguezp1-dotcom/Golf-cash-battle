@@ -1,4 +1,5 @@
 import './style.css';
+import './screens/screens.css';
 import { HOLES_PER_MATCH, HOLE_TIME_LIMIT, PLATFORM_COMMISSION, PLAYERS_PER_MATCH, TIERS, maxStrokesOf, potFor, prizeFor } from './config.js';
 import { LocalWallet } from './wallet/LocalWallet.js';
 import { InsufficientFundsError } from './wallet/WalletService.js';
@@ -30,6 +31,12 @@ import { NOTIFY_POLL_MS, newNotices } from './ui/notifyRules.js';
 import { avatarIcon, icon, iconUrl, tierIcon } from './ui/icons.js';
 import { errorRef } from './backend/rpcError.js';
 import { avatarHtml, coin, createBall, esc, fmt, h } from './screens/shared.js';
+import { createRouter } from './screens/router.js';
+import { createRoutes } from './screens/routes.js';
+import { createHost } from './screens/host.js';
+import { createContext } from './screens/context.js';
+import { ACCOUNT_TABS, createNavigator } from './screens/navigate.js';
+import { getQuality } from './game/render/quality.js';
 
 let backend, wallet, matches;
 // práctica forzada con #hoyoN: siempre local, no toca el servidor
@@ -75,6 +82,12 @@ const { ball } = { ball: createBall(progress) };
 
 let avatar = new AvatarStore(null);
 let accountTab = 'profile';
+
+// router de pila (src/screens): la raíz es el lobby hasta que llegue el hub (F3)
+const ROOT_SCREEN = 'lobby';
+let router = null;
+let screenHost = null;
+let testHole = null; // #hoyoN / #hoyoN-empate capturado al arrancar (el router reescribe el hash)
 
 let game = null;
 let screen = 'lobby';
@@ -194,6 +207,7 @@ window.addEventListener('keydown', (e) => {
   else if (isNum(5)) triggerNav('account');
   else if (isNum(6)) triggerNav('settings');
   else if (e.code === 'KeyM') toggleMute();
+  else if (e.code === 'Escape') router?.back();
 });
 
 function toggleFullscreen() {
@@ -201,15 +215,8 @@ function toggleFullscreen() {
   else document.documentElement.requestFullscreen().catch(() => { });
 }
 
-function go(to) {
-  if (to === 'wallet') return showAccount('', 'wallet');
-  if (to === 'skins') return showSkins();
-  if (to === 'account') return showAccount();
-  if (to === 'ranking') return showRanking();
-  if (to === 'freeplay') return showFreePlayCourseSelect();
-  if (to === 'settings') return showSettings();
-  return showLobby();
-}
+// fachada sobre el router (src/screens/navigate.js): los `data-go` y los atajos 1-6 siguen igual
+let go = () => {};
 
 // ---------- ajustes ----------
 
@@ -1290,7 +1297,7 @@ async function startMatch(tier, rematchOf = null) {
   leaveFinale();
   // #hoyo3 en la URL: la práctica empieza por ese hoyo (útil para probar);
   // #hoyo3-empate además fuerza el desempate al final
-  const forced = tier.entryFee === 0 && /^#hoyo(\d+)(-empate)?$/.exec(location.hash);
+  const forced = tier.entryFee === 0 && testHole;
   // con servidor, las mesas de pago son torneos contra jugadores reales y la
   // práctica se juega en el móvil contra rivales simulados
   if (!forced && tier.entryFee > 0 && backend.tournaments) return startTournament(tier, rematchOf);
@@ -1304,7 +1311,7 @@ async function startMatch(tier, rematchOf = null) {
   }
   match.service = service;
   match.myHoles = [];
-  if (forced) Object.assign(match, { courses: [Number(forced[1]) - 1], holes: 1, forceTie: !!forced[2] });
+  if (forced) Object.assign(match, { courses: [forced.hole - 1], holes: 1, forceTie: forced.tie });
   const view = h(`
     <main class="screen matchmaking tier--${tier.id}">
       <div class="radar"><span></span><span></span><span></span>${ball(progress.skin, 64)}</div>
@@ -2726,8 +2733,32 @@ if (skinLab) {
       if (m) m.innerHTML = coin(n);
     });
     startNotifier(b);
-    showLobby();
+    startRouting(b);
   });
+}
+
+// ---------- navegación ----------
+// El router y el host llevan la pila de pantallas; las pantallas aún no migradas se pintan con sus show* de siempre.
+function startRouting(b) {
+  const routes = createRoutes({ root: ROOT_SCREEN });
+  router = createRouter({ routes, root: ROOT_SCREEN, win: window, isBusy: () => screenHost?.isBusy() ?? false });
+  const ctx = createContext({
+    backend: b, wallet, progress, avatar, settings, router, sfx, notify, icon,
+    quality: () => getQuality(),
+    legacy: {
+      lobby: () => showLobby(),
+      ranking: () => showRanking(),
+      skins: () => showSkins(),
+      account: (p) => showAccount('', ACCOUNT_TABS[p?.tab] ?? 'profile'),
+      settings: () => showSettings(),
+      maps: () => showFreePlayCourseSelect(),
+    },
+  });
+  screenHost = createHost({ router, routes, root: app, ctx, notify, win: window, doc: document });
+  go = createNavigator({ router, host: screenHost, rootId: ROOT_SCREEN });
+  screenHost.attach();
+  testHole = router.start().testHole;
+  ctx.testHole = testHole;
 }
 
 // ---------- avisos emergentes ----------
