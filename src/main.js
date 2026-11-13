@@ -23,11 +23,13 @@ import { getCourseDistance, staticCoursePreview } from './game/render/coursePrev
 import { mountAuth } from './ui/authScreen.js';
 import { validatePassword, authMessage } from './account/authRules.js';
 import { addedMessage, cleanFriendName, friendMessage } from './account/friendRules.js';
-import { newPartyMatch, partyErrorText, partyMessage, readyLabel } from './match/partyRules.js';
+import { partyErrorText, readyLabel } from './match/partyRules.js';
 import { LiveRoom } from './match/LiveRoom.js';
 import { buildRoster, humanLeaders, liveStandings, seededRng } from './match/liveRules.js';
 import { notify } from './ui/notifyPopup.js';
-import { NOTIFY_POLL_MS, newNotices } from './ui/notifyRules.js';
+import { createNotifier } from './ui/notifier.js';
+import { createPartyWatch } from './match/partyWatch.js';
+import { createScope } from './screens/lifecycle.js';
 import { avatarIcon, icon, iconUrl, tierIcon } from './ui/icons.js';
 import { errorRef } from './backend/rpcError.js';
 import { avatarHtml, coin, createBall, esc, fmt, h } from './screens/shared.js';
@@ -89,6 +91,25 @@ let router = null;
 let screenHost = null;
 let testHole = null; // #hoyoN / #hoyoN-empate capturado al arrancar (el router reescribe el hash)
 
+// guarda de «atrás»: en partida abre la pausa; en una mesa en vivo pide confirmación (T011)
+let gameGuard = null;
+let playScope = null; // listeners y timers de la partida en curso; se libera al salir o cambiar de hoyo
+let notifier = null;
+let partyWatch = null;
+let partyUnsub = null;
+
+function backGuard() {
+  if (gameGuard) return gameGuard();
+  if (currentLive && !currentLive.finished) {
+    if (!confirm('¿Seguro que quieres salir de la partida en vivo? Cuenta como abandono.')) return true; // cancelar conserva la pila
+    // aceptar = lo mismo que el botón de salir: abandona (stopLive -> leave) y vuelve a la raíz con la pila coherente
+    stopLive();
+    router.reset(ROOT_SCREEN);
+    return true;
+  }
+  return false;
+}
+
 let game = null;
 let screen = 'lobby';
 let activeSkinInspector = null;
@@ -96,6 +117,12 @@ let activeSkinInspector = null;
 async function shell(content, { hideHeader = false, nav = true } = {}) {
   game?.dispose();
   game = null;
+  playScope?.dispose();
+  playScope = null;
+  gameGuard = null;
+  partyUnsub?.();
+  partyUnsub = null;
+  partyWatch?.stop();
   if (activeSkinInspector) {
     try { activeSkinInspector.destroy(); } catch { }
     activeSkinInspector = null;
@@ -323,7 +350,7 @@ async function showLobby() {
     const play = card.querySelector('.play');
     play.dataset.tier = tier.id;
     play.dataset.label = play.textContent;
-    play.addEventListener('click', () => (!free && party.state?.party ? party.pickTier(tier) : startMatch(tier)));
+    play.addEventListener('click', () => (!free && partyWatch?.state?.party ? partyWatch.pickTier(tier) : startMatch(tier)));
     list.append(card);
   }
   await shell(view);
@@ -336,68 +363,13 @@ async function showLobby() {
 // los mete juntos en el mismo torneo. Se consulta cada pocos segundos mientras
 // se ve el lobby; cuando aparece un torneo nuevo del grupo, se abre su sala.
 
-const PARTY_POLL_MS = 3000;
-const PARTY_SEEN = 'gcb.party.seen';
-const party = { state: null, pickTier: () => { } };
 
 async function partyPanel(box, tierList, balance) {
   const svc = backend.parties;
   const hasName = Boolean(backend.account?.profile?.username);
   let friends = null;
   let msg = '';
-  let busy = false;
-
-  const seen = () => {
-    try { return localStorage.getItem(PARTY_SEEN); } catch { return null; }
-  };
-  const markSeen = (id) => {
-    try { localStorage.setItem(PARTY_SEEN, id); } catch { }
-  };
-
-  // si el grupo acaba de entrar en un torneo, a su sala (o a seguir jugando)
-  async function openIfNew(state) {
-    const id = newPartyMatch(state?.party, seen());
-    if (!id) return false;
-    markSeen(id);
-    let match;
-    try {
-      match = await backend.tournaments.get(id, TIERS);
-    } catch {
-      return false;
-    }
-    if (match.status !== 'open' || !match.me || match.me.finished) return false;
-    await wallet.getBalance();
-    sfx.tick();
-    enterLive(match);
-    return true;
-  }
-
-  async function apply(job, okMsg = '') {
-    if (busy) return;
-    busy = true;
-    try {
-      const state = await job();
-      msg = okMsg;
-      if (await openIfNew(state)) return;
-      paint(state);
-    } catch (e) {
-      msg = partyMessage(e.code);
-      paint(party.state);
-    } finally {
-      busy = false;
-    }
-  }
-
-  party.pickTier = (tier) =>
-    apply(async () => {
-      if (!party.state.party.leader) {
-        // un miembro solo puede confirmar la mesa que ya eligió el líder
-        if (party.state.party.tier_id !== tier.id) throw Object.assign(new Error(), { code: 'not_leader' });
-        return svc.ready(true);
-      }
-      await svc.setTier(tier.id);
-      return svc.ready(true);
-    });
+  const apply = (job, okMsg = '') => partyWatch.apply(job, okMsg);
 
   // los botones de las mesas dicen qué pasa al pulsarlos estando en grupo
   function paintTiers(p) {
@@ -420,7 +392,6 @@ async function partyPanel(box, tierList, balance) {
 
   function paint(state) {
     if (!box.isConnected) return;
-    party.state = state;
     const p = state?.party ?? null;
     const invites = state?.invites ?? [];
     paintTiers(p);
@@ -484,31 +455,21 @@ async function partyPanel(box, tierList, balance) {
   if (hasName) {
     backend.account.friends().then((d) => {
       friends = d.friends;
-      paint(party.state);
+      paint(partyWatch.state);
     }).catch(() => { friends = []; });
   }
 
-  const poll = async () => {
-    if (!box.isConnected) return;
-    if (!busy) {
-      try {
-        const state = await svc.mine();
-        if (!box.isConnected) return;
-        if (await openIfNew(state)) return;
-        // no repintar si no ha cambiado nada (no se pierde lo que estés tocando)
-        if (JSON.stringify(state) !== JSON.stringify(party.state)) {
-          msg = '';
-          paint(state);
-        }
-      } catch { }
-    }
-    setTimeout(poll, PARTY_POLL_MS);
-  };
-  party.state = null;
+  partyWatch.state = null;
+  paint(null);
   if (hasName) {
-    paint(null);
-    poll();
-  } else paint(null);
+    partyUnsub?.();
+    partyUnsub = partyWatch.subscribe((state, info) => {
+      if (!box.isConnected) return;
+      msg = info.msg;
+      paint(state);
+    });
+    partyWatch.start();
+  }
 }
 
 // ---------- skins ----------
@@ -1401,6 +1362,8 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
   const gameClass = loadGolfGame();
   Promise.all([gameClass, shell(view, { hideHeader: true })]).then(([GolfGame]) => {
     if (!view.isConnected) return; // se salió de la pantalla mientras cargaba el motor
+    playScope?.dispose();
+    playScope = createScope();
     const strokesEl = view.querySelector('.strokes b');
     const distEl = view.querySelector('.dist');
     const power = view.querySelector('.power');
@@ -1428,6 +1391,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       }
     });
 
+    gameGuard = () => { openSettingsMenu(); return true; };
     function openSettingsMenu() {
       const existing = view.querySelector('.in-game-settings-overlay');
       if (existing) {
@@ -1652,7 +1616,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
           }
         }
       };
-      window.addEventListener('keydown', onKeyR);
+      playScope.on(window, 'keydown', onKeyR);
     }
     if (isMuted()) toast('Sonido silenciado · actívalo en Ajustes', '#ffffff');
     view.querySelector('.mute').addEventListener('click', toggleMute);
@@ -1665,7 +1629,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
           document.exitFullscreen().catch(() => { });
         }
       });
-      document.addEventListener('fullscreenchange', () => {
+      playScope.on(document, 'fullscreenchange', () => {
         fsBtn.innerHTML = `${icon('fullscreen')}${document.fullscreenElement ? 'Ventana' : 'Pantalla'}`;
       });
     }
@@ -1683,7 +1647,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
     function toast(text, color) {
       const el = h(`<div class="toast" style="--c:${color}">${text}</div>`);
       view.querySelector('.toasts').append(el);
-      setTimeout(() => el.remove(), 2600);
+      playScope.timeout(() => el.remove(), 2600);
     }
     mapBtn?.addEventListener('click', (e) => {
       e.preventDefault();
@@ -2732,7 +2696,8 @@ if (skinLab) {
       const m = app.querySelector('.m-coins');
       if (m) m.innerHTML = coin(n);
     });
-    startNotifier(b);
+    startNotices(b);
+    startPartyWatch(b);
     startRouting(b);
   });
 }
@@ -2759,37 +2724,41 @@ function startRouting(b) {
   screenHost.attach();
   testHole = router.start().testHole;
   ctx.testHole = testHole;
+  ctx.notifier = notifier;
+  ctx.partyWatch = partyWatch;
+  router.setBackGuard(backGuard);
 }
 
 // ---------- avisos emergentes ----------
 // Cada pocos segundos se mira si llegó una petición de amistad o una invitación a grupo
 // y se enseña un aviso de 5 s. (notify() sirve para cualquier otro aviso.)
 
-function startNotifier(b) {
+// TODO(F3): notifier y partyWatch sondean ambos parties.mine() con el lobby abierto; compartir el resultado cuando el hub unifique el sondeo.
+function startNotices(b) {
   if (!b.account) return;
-  const seen = new Set();
-  let first = true;
-  const tick = async () => {
-    try {
-      if (!document.hidden && b.account.profile?.username) {
-        const [friendsData, partyData] = await Promise.all([
-          b.account.friends().catch(() => null),
-          b.parties ? b.parties.mine().catch(() => null) : null,
-        ]);
-        if (friendsData || partyData) {
-          for (const n of newNotices(seen, friendsData, partyData, { seed: first })) {
-            sfx.tick();
-            if (n.kind === 'friend') {
-              notify({ kind: 'friend', icon: 'user-plus', title: 'Petición de amistad', text: `${n.from} quiere ser tu amigo`, onClick: () => go('account') });
-            } else {
-              notify({ kind: 'invite', icon: 'users', title: 'Invitación a grupo', text: `${n.from} te invita a su grupo`, onClick: () => go('lobby') });
-            }
-          }
-          first = false;
-        }
+  notifier = createNotifier({
+    account: b.account,
+    parties: b.parties,
+    isHidden: () => document.hidden,
+    onNotice: (n) => {
+      sfx.tick();
+      if (n.kind === 'friend') {
+        notify({ kind: 'friend', icon: 'user-plus', title: 'Petición de amistad', text: `${n.from} quiere ser tu amigo`, onClick: () => go('account') });
+      } else {
+        notify({ kind: 'invite', icon: 'users', title: 'Invitación a grupo', text: `${n.from} te invita a su grupo`, onClick: () => go('lobby') });
       }
-    } catch { }
-    setTimeout(tick, NOTIFY_POLL_MS);
-  };
-  tick();
+    },
+  });
+  notifier.start();
+}
+
+function startPartyWatch(b) {
+  if (!b.parties) return;
+  partyWatch = createPartyWatch({ parties: b.parties, tournaments: b.tournaments, tiers: TIERS });
+  // el grupo entra en un torneo: a su sala (o a seguir jugando), como antes
+  partyWatch.onNewMatch(async (match) => {
+    await wallet.getBalance();
+    sfx.tick();
+    enterLive(match);
+  });
 }
