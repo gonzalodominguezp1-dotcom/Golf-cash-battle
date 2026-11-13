@@ -32,7 +32,9 @@ slug: ui-pantallas
 ## Tareas
 
 - **Hecha:** T001 (`2222714`) — línea base: carga inicial **85424 B gzip** (entrada `main` + `rpcError`), sin three. Tope AC34 ≈ 100,8 KB gzip. 223 tests en verde.
-- **Siguiente:** F1 en paralelo: **T002, T003, T004, T005, T006, T007, T008** (T007 es la única que toca `main.js`). Luego en serie: T009 → T010 → T011 → T012 (verificar fase 1).
+- **Hechas F1 (2026-11-13):** T002 `23e4b3f`, T003 `bac2e0f`, T004 `6686eaf`, T005 `43446bd`, T006 `4c15062`, T007 `5636677`, T008 `996ecf0`. `pnpm test` 303/303. T007: sin comparar recuentos de DOM «antes» ni 375×812 (solo sin errores de consola en lobby, Skins y Cuenta a 1024 px).
+- **Siguiente:** en serie T009 → T010 → T011 → T012 (verificar fase 1). Al cablear el router en T010: comprobar en navegador Adelante, `reset()` y edición manual del hash (el fake usa popstate simulado).
+- **Nota:** T011 debe usar `createNotifier`/`createPartyWatch` (T006); `onNewMatch` sin suscriptores no marca el torneo como visto.
 - **Cambios del plan tras analyze (`101fc1f`):** T014 y T020 se dividieron en T014a/b y T020a/b (sin renumerar). `routes.js` y `account.js` cargan pantallas y pestañas con `import.meta.glob` (un `import()` a un archivo que no existe rompe el build). Umbral de FPS en T014b (≥55 medium, ≥45 low, panel visible). T034/T035 son tier 2.
 - **Decision queue:** vive al final de este archivo. Cuando T034 pida `progress/ui-pantallas.md`, créalo copiando esa sección.
 - **Paradas humanas acordadas (solo estas 2):** T018 (boceto del splash) y T024 (boceto del hub). Además, antes de fusionar a main: revisión humana de T034/T035 (tier 2: contraseña, KYC, monedero) y prueba en móvil real (T044).
