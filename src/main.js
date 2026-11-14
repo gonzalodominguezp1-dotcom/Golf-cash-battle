@@ -1,5 +1,6 @@
 import './style.css';
 import './screens/screens.css';
+import './screens/hub.css';
 import { HOLES_PER_MATCH, HOLE_TIME_LIMIT, PLATFORM_COMMISSION, PLAYERS_PER_MATCH, TIERS, maxStrokesOf, potFor, prizeFor } from './config.js';
 import { LocalWallet } from './wallet/LocalWallet.js';
 import { InsufficientFundsError } from './wallet/WalletService.js';
@@ -38,6 +39,7 @@ import { createRoutes } from './screens/routes.js';
 import { createHost } from './screens/host.js';
 import { createContext } from './screens/context.js';
 import { ACCOUNT_TABS, createNavigator } from './screens/navigate.js';
+import { createGoHome } from './screens/playLifecycle.js';
 import { getQuality } from './game/render/quality.js';
 import { createBoot, createHubPreloader, trackProgress, waitPainted } from './ui/splashBridge.js';
 
@@ -91,7 +93,7 @@ let avatar = new AvatarStore(null);
 let accountTab = 'profile';
 
 // router de pila (src/screens): la raíz es el lobby hasta que llegue el hub (F3)
-const ROOT_SCREEN = 'lobby';
+const ROOT_SCREEN = 'hub'; // el hub es la raíz; el lobby de hoy es la ruta «Mesas» (tables)
 let router = null;
 let screenHost = null;
 let testHole = null; // #hoyoN / #hoyoN-empate capturado al arrancar (el router reescribe el hash)
@@ -119,7 +121,8 @@ let game = null;
 let screen = 'lobby';
 let activeSkinInspector = null;
 
-async function shell(content, { hideHeader = false, nav = true } = {}) {
+// libera todo lo de la partida y de las pantallas heredadas (la usan shell() y goHome())
+function releasePlay() {
   game?.dispose();
   game = null;
   playScope?.dispose();
@@ -132,6 +135,10 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
     try { activeSkinInspector.destroy(); } catch { }
     activeSkinInspector = null;
   }
+}
+
+async function shell(content, { hideHeader = false, nav = true } = {}) {
+  releasePlay();
   const balance = await wallet.getBalance();
   app.innerHTML = '';
   window.scrollTo(0, 0);
@@ -141,7 +148,7 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
       h(`
       <header class="topbar game-hud-topbar">
         <div class="topbar-left">
-          <button class="brand-btn desktop-brand-btn" data-go="lobby" aria-label="Golf Cash Battle">
+          <button class="brand-btn desktop-brand-btn" data-go="home" aria-label="Golf Cash Battle">
             <img src="/logo-header.png" alt="Golf Cash Battle" class="brand-logo" />
           </button>
           <div class="m-stats">
@@ -156,7 +163,7 @@ async function shell(content, { hideHeader = false, nav = true } = {}) {
           </button>
         </div>
         <div class="topbar-center">
-          <button class="brand-btn mobile-brand-btn" data-go="lobby" aria-label="Golf Cash Battle">
+          <button class="brand-btn mobile-brand-btn" data-go="home" aria-label="Golf Cash Battle">
             <img src="/logo-header.png" alt="Golf Cash Battle" class="brand-logo" />
           </button>
           <nav class="desktop-nav">
@@ -249,6 +256,8 @@ function toggleFullscreen() {
 
 // fachada sobre el router (src/screens/navigate.js): los `data-go` y los atajos 1-6 siguen igual
 let go = () => {};
+// fin de partida o salida: libera la partida (final, sala en vivo, renderer, guard) y vuelve al hub (la raíz)
+const goHome = createGoHome({ leaveFinale: () => leaveFinale(), stopLive: () => stopLive(), releasePlay, go: (to) => go(to) });
 
 // ---------- ajustes ----------
 
@@ -261,7 +270,7 @@ async function showSettings(section = lastSection()) {
   screen = 'settings';
   const view = h('<main class="screen settings-screen"><div class="settings-host"></div></main>');
   await shell(view, { nav: false });
-  mountSettingsPanel(view.querySelector('.settings-host'), { layout: 'screen', section, synced: settingsSynced(), onBack: () => go('lobby') });
+  mountSettingsPanel(view.querySelector('.settings-host'), { layout: 'screen', section, synced: settingsSynced(), onBack: () => goHome() });
 }
 
 // cartas holográficas: se inclinan y el brillo sigue al dedo
@@ -1292,7 +1301,7 @@ async function startMatch(tier, rematchOf = null) {
   view.querySelector('.cancel').addEventListener('click', async () => {
     cancelled = true;
     await match.service.cancel(match);
-    showLobby();
+    goHome();
   });
   await shell(view, { nav: false });
   for (let i = 0; i < match.players.length; i++) {
@@ -1489,7 +1498,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
           overlay.remove();
           game.setPaused?.(false);
           game.dispose();
-          showLobby();
+          goHome();
         }
       });
 
@@ -1862,7 +1871,7 @@ function showEndOverlay({ won, position, total, prize, ranking, legal, holes, ga
     overlay.remove();
     onRematch();
   });
-  overlay.querySelector('.next').addEventListener('click', () => showLobby());
+  overlay.querySelector('.next').addEventListener('click', () => goHome());
   app.append(overlay);
   enterFinale();
   sfx.endJingle(won, position);
@@ -2039,7 +2048,7 @@ function showLiveRoom(live) {
     clearInterval(live.timer);
     live.finished = true;
     await backend.tournaments.leave(match).catch(() => { });
-    showLobby();
+    goHome();
   });
   render();
   shell(view, { nav: false });
@@ -2292,7 +2301,7 @@ function liveRanking(live) {
 }
 
 async function showLiveResults(live) {
-  if (!live || live.stopped) return showLobby();
+  if (!live || live.stopped) return goHome();
   const { match } = live;
   live.finished = true;
   live.check = null;
@@ -2356,7 +2365,7 @@ async function showLiveResults(live) {
       ${open ? '<p class="legal">Si alguien se ha desconectado, en menos de un minuto se le da por terminado. Si sales, el premio te llega igual al saldo.</p>' : ''}
       <div class="row">
         ${open ? '' : `<button class="primary again">${icon('restart')}Revancha</button>`}
-        <button class="${open ? 'primary' : 'ghost'}" data-go="lobby">${icon('back')}Lobby</button>
+        <button class="${open ? 'primary' : 'ghost'}" data-go="home">${icon('back')}Lobby</button>
       </div>
     </main>`);
   view.querySelector('.again')?.addEventListener('click', () => startMatch(tier, match.id));
@@ -2400,7 +2409,7 @@ function alertMsg(text) {
         <button class="primary">${icon('back')}Volver al lobby</button>
       </div>
     </div>`);
-  overlay.querySelector('button').addEventListener('click', () => showLobby());
+  overlay.querySelector('button').addEventListener('click', () => goHome());
   app.append(overlay);
 }
 
@@ -2468,7 +2477,7 @@ export async function showFreePlayCourseSelect() {
       <div class="courses-grid"></div>
 
       <div class="freeplay-footer-actions">
-        <button class="ghost back-to-lobby" data-go="lobby">${icon('back')}Volver al Menú Principal</button>
+        <button class="ghost back-to-lobby" data-go="home">${icon('back')}Volver al Menú Principal</button>
       </div>
     </main>
   `);
@@ -2646,7 +2655,7 @@ export function showFreePlayHoleResult(courseIndex, course, strokes) {
   });
   overlay.querySelector('.to-lobby-btn').addEventListener('click', () => {
     overlay.remove();
-    showLobby();
+    goHome();
   });
 
   app.append(overlay);
@@ -2742,8 +2751,16 @@ function startRouting(b) {
   const ctx = createContext({
     backend: b, wallet, progress, avatar, settings, router, sfx, notify, icon,
     quality: () => getQuality(),
+    actions: {
+      startMatch: (tier) => startMatch(tier),
+      startPractice: () => startMatch(TIERS.find((x) => x.entryFee === 0) ?? TIERS[0]),
+      claimRewards: () => claimRewards(),
+      toggleFullscreen: () => toggleFullscreen(),
+      toggleMute: () => toggleMute(),
+    },
     legacy: {
       lobby: () => showLobby(),
+      tables: () => showLobby(),
       ranking: () => showRanking(),
       skins: () => showSkins(),
       account: (p) => showAccount('', ACCOUNT_TABS[p?.tab] ?? 'profile'),
@@ -2752,7 +2769,8 @@ function startRouting(b) {
     },
   });
   screenHost = createHost({ router, routes, root: app, ctx, notify, win: window, doc: document });
-  go = createNavigator({ router, host: screenHost, rootId: ROOT_SCREEN });
+  const navigate = createNavigator({ router, host: screenHost, rootId: ROOT_SCREEN });
+  go = (to) => navigate(to === 'lobby' ? 'tables' : to); // «lobby» (Jugar, tecla 1) = Mesas
   startCtx = ctx;
   screenHost.attach();
   testHole = router.start().testHole;

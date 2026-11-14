@@ -1,0 +1,84 @@
+/* Hub (T025). Boceto aprobado + decisión T024: etiqueta visible bajo cada icono, logo adaptable a la altura. */
+.hub {
+  --side: 72px; --pad: 12px;
+  position: fixed; inset: 0; overflow: hidden; z-index: 0;
+  background: #6fb07a url('/splash/hub-fallback.webp') center / cover no-repeat;
+  display: grid; grid-template-rows: auto 1fr auto; color: var(--text);
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+/* velo oscuro arriba y abajo para el contraste AA de los controles sobre la escena */
+.hub::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(8, 14, 24, 0.55) 0%, rgba(8, 14, 24, 0) 26%),
+    linear-gradient(0deg, rgba(8, 14, 24, 0.66) 0%, rgba(8, 14, 24, 0) 32%);
+}
+.hub > * { position: relative; }
+.hub button { font: inherit; color: inherit; cursor: pointer; border: 0; padding: 0; }
+.hub button:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+
+/* barra superior */
+.hub-top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: var(--pad); }
+.hub-logo { margin: 0; justify-self: center; min-width: 0; max-width: 100%; display: flex; justify-content: center; }
+.hub-logo img {
+  display: block; height: clamp(32px, 8vh, 64px); width: auto; max-width: min(100%, 44vw); object-fit: contain;
+  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.5));
+}
+.hub-tools { display: flex; gap: 8px; }
+.hub-tool { width: 60px; min-height: 56px; }
+
+.hub-nav-t { font: 700 12px/1.1 var(--display); color: var(--text); letter-spacing: 0.01em; text-align: center; }
+
+/* usuario con anillo de nivel (conic-gradient) */
+.hub-user {
+  --pct: 0; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  min-width: 56px; min-height: 56px; background: transparent;
+}
+.hub-face {
+  position: relative; width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center;
+  background: conic-gradient(var(--emerald) calc(var(--pct) * 1%), rgba(255, 255, 255, 0.3) 0);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+}
+.hub-face::before { content: ''; position: absolute; inset: 4px; border-radius: 50%; background: #15202e; }
+.hub-face > svg { position: relative; margin-top: -6px; }
+.hub-lv {
+  position: absolute; bottom: -3px; left: 50%; transform: translateX(-50%); min-width: 24px; height: 20px; padding: 0 6px;
+  box-sizing: border-box; border-radius: 999px; display: grid; place-items: center; background: var(--gold); color: #1a1405;
+  font: 800 12px/1 var(--display); border: 2px solid #0b0f15; font-variant-numeric: tabular-nums;
+}
+
+/* columnas laterales y accesos */
+.hub-mid { display: flex; justify-content: space-between; align-items: center; padding: 0 var(--pad); min-height: 0; }
+.hub-col { display: flex; flex-direction: column; gap: 14px; }
+.hub-nav {
+  position: relative; min-width: var(--side); min-height: 64px; padding: 6px 4px; box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  border-radius: 16px; background: rgba(11, 15, 21, 0.78); border: 1px solid var(--line-light);
+  backdrop-filter: blur(6px); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+}
+.hub-user.hub-needs-account .hub-face, .hub-nav.hub-needs-account { opacity: 0.8; }
+.hub-nav.hub-needs-account { border-style: dashed; }
+.hub-nav .scr-badge { position: absolute; top: -4px; right: -4px; width: 14px; height: 14px; }
+.hub-nav .scr-badge-dot { width: 14px; height: 14px; border: 2px solid #fff; box-sizing: border-box; box-shadow: none; }
+
+/* barra inferior */
+.hub-bottom { display: grid; grid-template-columns: 1fr auto 1fr; align-items: end; gap: 10px; padding: var(--pad) var(--pad) 14px; }
+.hub-a { justify-self: start; }
+.hub-c { justify-self: end; }
+.hub-play {
+  min-height: 64px; min-width: 130px; padding: 0 24px; border-radius: 18px;
+  font: 800 24px var(--display); letter-spacing: 0.06em; color: #04251a;
+  background: linear-gradient(180deg, #4ade9f, var(--emerald));
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.3), 0 0 0 3px rgba(255, 255, 255, 0.35) inset;
+}
+
+@media (max-width: 420px) {
+  .hub { --side: 64px; --pad: 10px; }
+  .hub-tool { width: 52px; }
+  .hub-play { min-width: 112px; padding: 0 18px; font-size: 21px; }
+}
+@media (min-aspect-ratio: 1/1) {
+  .hub { --side: 84px; --pad: 20px; }
+  .hub-col { gap: 18px; }
+  .hub-play { min-width: 200px; min-height: 72px; font-size: 30px; }
+}

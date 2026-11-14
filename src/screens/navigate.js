@@ -2,7 +2,7 @@
 // Si el host está ocupado (carga + transición), recuerda solo el último destino y lo aplica al quedar libre.
 export const GO_ROUTES = {
   wallet: ['account', { tab: 'monedero' }], skins: ['skins'], account: ['account'],
-  ranking: ['ranking'], freeplay: ['maps'], settings: ['settings'],
+  tables: ['tables'], ranking: ['ranking'], freeplay: ['maps'], settings: ['settings'],
 };
 // pestañas de la ruta de cuenta -> pestañas de la pantalla actual (aún no hay «Progreso»)
 export const ACCOUNT_TABS = { perfil: 'profile', progreso: 'profile', monedero: 'wallet' };
