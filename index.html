@@ -56,9 +56,10 @@
       @keyframes gcb-fire-in { from { opacity: 0; } to { opacity: 1; } }
       @keyframes gcb-fire-out { from { opacity: 1; } to { opacity: 0.15; } }
       #splash .ball-shadow { position: absolute; left: -26px; top: 30px; width: 52px; height: 12px; border-radius: 50%; background: rgba(0, 0, 0, 0.34); filter: blur(3px); }
-      #splash .loader { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 5vh); box-sizing: border-box; width: min(100% - 40px, 520px); display: grid; gap: 14px; text-align: center; }
+      #splash .loader { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 5vh); box-sizing: border-box; width: min(100% - 40px, 520px); display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; text-align: center; }
       #splash .row { display: flex; justify-content: space-between; align-items: baseline; font-size: 17px; font-weight: 600; color: #f1f5f9; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.75); }
-      #splash .pct { font-family: 'Outfit', system-ui, sans-serif; font-weight: 700; font-size: 30px; color: #f5c542; font-variant-numeric: tabular-nums; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7); }
+      #splash .row .label { flex: 1 1 auto; min-width: 0; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      #splash .pct { flex: none; margin-left: 12px; white-space: nowrap; font-family: 'Outfit', system-ui, sans-serif; font-weight: 700; font-size: 30px; color: #f5c542; font-variant-numeric: tabular-nums; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7); }
       #splash .bar { height: 14px; border-radius: 999px; background: rgba(0, 0, 0, 0.38); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2); overflow: hidden; }
       #splash .bar > i { display: block; height: 100%; width: 5%; border-radius: inherit; background: linear-gradient(90deg, #d9a82e, #ffe08a 50%, #d9a82e); box-shadow: 0 0 14px rgba(245, 197, 66, 0.55); background-size: 200% 100%; animation: gcb-sheen 1.6s linear infinite; transition: width 0.3s ease; }
       @keyframes gcb-sheen { from { background-position: 100% 0; } to { background-position: -100% 0; } }
