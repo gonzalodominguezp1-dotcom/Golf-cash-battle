@@ -43,3 +43,47 @@ export function shouldRender(state) {
   const { covered = false, hidden = false } = state ?? {};
   return !covered && !hidden;
 }
+
+// Tamaño de cada aparición por calidad: chispas, duración de la mariposa y de la bola (segundos).
+const AMBIENT = {
+  low:    { sparks: 8,  butterflyS: 8,  ballS: 4 },
+  medium: { sparks: 20, butterflyS: 10, ballS: 5 },
+  high:   { sparks: 36, butterflyS: 12, ballS: 6 },
+};
+
+export function ambientSpec(quality) {
+  return { ...AMBIENT[Object.hasOwn(AMBIENT, quality) ? quality : 'medium'] };
+}
+
+/**
+ * Bola que entra en la copa. u ∈ [0,1] es el progreso:
+ * `remaining` (1 → 0) es la fracción de distancia que le queda (frena al llegar),
+ * `sink` (0 → 1) es lo hundida que está en la copa (solo el último 10 %).
+ */
+export function ballRollState(u) {
+  const x = Number.isFinite(u) ? Math.min(1, Math.max(0, u)) : 0;
+  const run = Math.min(1, x / 0.9);
+  const remaining = (1 - run) * (1 - run); // ease-out cuadrático
+  const sink = x <= 0.9 ? 0 : x >= 1 ? 1 : (x - 0.9) / 0.1;
+  return { remaining: x >= 0.9 ? 0 : remaining, sink };
+}
+
+export const AMBIENT_KINDS = KINDS;
+export const AMBIENT_MAX_DT = 0.1; // tras una pausa o un frame lento el reloj de las apariciones no salta
+
+/** Paso de reloj válido: 0 si no es un número finito > 0; acotado a AMBIENT_MAX_DT. */
+export function clampDt(dt) {
+  if (typeof dt !== 'number' || !Number.isFinite(dt) || dt <= 0) return 0;
+  return Math.min(dt, AMBIENT_MAX_DT);
+}
+
+/**
+ * Rotación de tipos: antes de repetir uno salen los tres. `seen` no se muta.
+ * @returns {{kind: string, seen: Set<string>}} la ronda se reinicia (seen vacío) al completar los tres
+ */
+export function nextAmbientKind(seen, asked) {
+  let kind = asked;
+  if (seen.has(kind)) kind = KINDS.find((x) => !seen.has(x)) ?? kind;
+  const next = new Set(seen).add(kind);
+  return { kind, seen: next.size >= KINDS.length ? new Set() : next };
+}

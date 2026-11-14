@@ -106,3 +106,67 @@ test('scenePreset: sombras y resolución mínima exactas por calidad', () => {
   assert.ok(l.minPixelRatio < m.minPixelRatio && m.minPixelRatio < h.minPixelRatio);
   for (const p of [l, m, h]) assert.ok(p.minPixelRatio <= p.pixelRatio);
 });
+
+import { ambientSpec, ballRollState } from '../src/game/render/hubSceneRules.js';
+
+test('ambientSpec: en calidad baja se reduce cada aparición respecto a high', () => {
+  const l = ambientSpec('low'), m = ambientSpec('medium'), h = ambientSpec('high');
+  assert.ok(l.sparks < m.sparks && m.sparks < h.sparks);
+  assert.ok(l.sparks > 0);
+  assert.ok(l.butterflyS <= h.butterflyS && l.ballS <= h.ballS);
+  assert.deepEqual(ambientSpec('x'), ambientSpec('medium'));
+});
+
+test('ballRollState: rueda hacia la copa, frena y se hunde al final', () => {
+  const a = ballRollState(0), b = ballRollState(0.5), c = ballRollState(1);
+  assert.equal(a.remaining, 1);
+  assert.equal(c.remaining, 0);
+  assert.ok(b.remaining > 0 && b.remaining < 1);
+  assert.equal(a.sink, 0);
+  assert.equal(c.sink, 1);
+  assert.equal(ballRollState(0.5).sink, 0);
+  // monótona y acotada
+  let prev = 1;
+  for (let u = 0; u <= 1.0001; u += 0.05) {
+    const s = ballRollState(u);
+    assert.ok(s.remaining <= prev + 1e-9 && s.remaining >= 0 && s.sink >= 0 && s.sink <= 1);
+    prev = s.remaining;
+  }
+  assert.deepEqual(ballRollState(-3), a);
+  assert.deepEqual(ballRollState(9), c);
+  assert.deepEqual(ballRollState(NaN), a);
+});
+
+import { nextAmbientKind, clampDt, AMBIENT_MAX_DT, AMBIENT_KINDS } from '../src/game/render/hubSceneRules.js';
+
+test('nextAmbientKind: los tres tipos salen antes de repetir y la ronda se reinicia', () => {
+  let seen = new Set();
+  const out = [];
+  for (const asked of ['ballIn', 'ballIn', 'ballIn', 'particles', 'particles', 'particles']) {
+    const r = nextAmbientKind(seen, asked);
+    out.push(r.kind);
+    seen = r.seen;
+  }
+  assert.equal(new Set(out.slice(0, 3)).size, 3);
+  assert.equal(new Set(out.slice(3)).size, 3);
+  assert.equal(out[0], 'ballIn'); // si el pedido no se ha visto, se respeta
+  assert.deepEqual([...seen], []);
+});
+
+test('nextAmbientKind: no muta el conjunto de entrada y marca el tipo como visto', () => {
+  const seen = new Set(['particles']);
+  const r = nextAmbientKind(seen, 'butterfly');
+  assert.deepEqual([...seen], ['particles']);
+  assert.equal(r.kind, 'butterfly');
+  assert.deepEqual([...r.seen].sort(), ['butterfly', 'particles']);
+  const r2 = nextAmbientKind(seen, 'particles'); // repetido: cambia a uno no visto
+  assert.notEqual(r2.kind, 'particles');
+  assert.ok(AMBIENT_KINDS.includes(r2.kind));
+});
+
+test('clampDt: descarta <=0, NaN e infinito; acota a AMBIENT_MAX_DT', () => {
+  assert.equal(clampDt(0.016), 0.016);
+  assert.equal(clampDt(5), AMBIENT_MAX_DT);
+  assert.equal(clampDt(AMBIENT_MAX_DT), AMBIENT_MAX_DT);
+  for (const bad of [0, -1, NaN, undefined, null, Infinity, '0.5']) assert.equal(clampDt(bad), 0, String(bad));
+});

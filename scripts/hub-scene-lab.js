@@ -19,9 +19,10 @@ if (p.get('nowebgl') === '1') {
 try {
   const scene = await createHubScene(document.getElementById('scene'), {
     quality: q,
-    reducedMotion: false,
     rng: Number.isFinite(seed) && p.has('seed') ? seededRng(seed) : Math.random,
     transparent: !!layer && layer !== 'sky',
+    ambient: p.get('ambient') !== '0' && !layer, // ?ambient=0 o ?layer= (capturas): sin apariciones
+    reducedMotion: p.get('reduced') === '1',
   });
   window.lab.scene = scene;
   let layerOk = !!layer;

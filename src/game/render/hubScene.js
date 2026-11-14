@@ -1,13 +1,14 @@
 // Escena 3D de fondo del hub (AC13, AC14, C7, C8): green con copa y bandera, anillo de bosque
 // de día y montañas, con la cámara orbitando 360°. Se carga con import() dinámico para que
-// three no entre en la carga inicial. Las apariciones al azar (hubAmbient) y la calidad en
-// caliente llegan en T014b / T015.
+// three no entre en la carga inicial. Las apariciones al azar viven en hubAmbient.js
+// (`ambient: false` las desactiva, p. ej. para capturar capas).
 import * as THREE from 'three';
 import { THEMES } from '../themes.js';
 import { ResolutionGovernor } from './resolutionGovernor.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { lushMountains, makeLushBush, makeLushCloud, makeLushRock, makeLushTree, meadowGroundTexture } from './lushEnvironment.js';
 import { orbitAngle, scenePreset, shouldRender } from './hubSceneRules.js';
+import { createHubAmbient } from './hubAmbient.js';
 
 const THEME = THEMES.meadowDay;
 const GREEN_R = 7;
@@ -148,7 +149,7 @@ function buildForest(rng, preset) {
  * Crea la escena y la monta en `container`. Rechaza si no hay WebGL.
  * @returns {Promise<object>} HubScene (ver plan §3.9)
  */
-export async function createHubScene(container, { quality = 'medium', reducedMotion = false, rng = Math.random, transparent = false } = {}) {
+export async function createHubScene(container, { quality = 'medium', reducedMotion = false, rng = Math.random, transparent = false, ambient: ambientOn = true } = {}) {
   let renderer;
   try {
     renderer = new THREE.WebGLRenderer({ antialias: quality !== 'low', alpha: transparent, powerPreference: 'high-performance' });
@@ -158,7 +159,7 @@ export async function createHubScene(container, { quality = 'medium', reducedMot
     throw new Error('Sin WebGL: ' + (err?.message ?? err));
   }
 
-  let sun, scene, vis, onVis, disposed = false;
+  let sun, scene, vis, onVis, ambient, disposed = false;
   const release = () => {
     disposed = true;
     renderer.setAnimationLoop(null);
@@ -167,6 +168,7 @@ export async function createHubScene(container, { quality = 'medium', reducedMot
       o.geometry?.dispose?.();
       for (const m of [].concat(o.material ?? [])) { m.map?.dispose?.(); m.dispose?.(); }
     });
+    ambient?.dispose();
     sun?.dispose?.();
     sun?.shadow?.map?.dispose?.();
     renderer.forceContextLoss();
@@ -220,6 +222,16 @@ export async function createHubScene(container, { quality = 'medium', reducedMot
       scene.traverse((o) => { for (const m of [].concat(o.material ?? [])) m.needsUpdate = true; });
     };
 
+    ambient = null;
+    if (ambientOn && !reducedMotion) {
+      const ambientRng = seededRng((rng() * 4294967296) >>> 0);
+      try { ambient = createHubAmbient(scene, { quality, reducedMotion, rng: ambientRng }); } catch (e) {
+        // un fallo de las apariciones no tumba la escena: sigue sin ellas
+        console.warn('hubAmbient no disponible:', e?.message ?? e);
+        ambient = null;
+      }
+    }
+
     const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 400);
     const placeCamera = (t) => {
       const a = orbitAngle(t);
@@ -253,7 +265,7 @@ export async function createHubScene(container, { quality = 'medium', reducedMot
     };
 
     vis = { covered: false, hidden: false };
-    let paused = false, started = false, layerMode = false, t0 = null, lastT = 0;
+    let paused = false, started = false, layerMode = false, t0 = null, lastT = 0, prevNow = null;
     let resolveFirst;
     const firstFrame = new Promise((r) => (resolveFirst = r));
 
@@ -267,9 +279,10 @@ export async function createHubScene(container, { quality = 'medium', reducedMot
     function frame(now) {
       if (disposed) return;
       if (t0 === null) t0 = now;
-      if (!shouldRender(vis)) { stats._times.length = 0; return; }
+      if (!shouldRender(vis)) { stats._times.length = 0; prevNow = null; return; }
       lastT = (now - t0) / 1000;
       placeCamera(lastT);
+      if (ambient) { ambient.update(prevNow === null ? 0 : (now - prevNow) / 1000); prevNow = now; }
       gov.tick(now);
       renderer.render(scene, camera);
       stats.renderCalls++;
@@ -290,12 +303,13 @@ export async function createHubScene(container, { quality = 'medium', reducedMot
     return {
       firstFrame,
       stats,
-      pause() { paused = true; renderer.setAnimationLoop(null); stats._times.length = 0; },
+      pause() { paused = true; renderer.setAnimationLoop(null); stats._times.length = 0; prevNow = null; },
       get paused() { return paused; },
       resume() {
         if (!paused || disposed || layerMode) return;
         paused = false;
         stats._times.length = 0;
+        prevNow = null;
         if (reducedMotion) { drawOnce(); return; }
         t0 = null; // la cámara sigue desde el ángulo en que se paró
         const resumeAt = lastT;
@@ -309,6 +323,7 @@ export async function createHubScene(container, { quality = 'medium', reducedMot
         const next = scenePreset(q);
         const treesChanged = next.trees !== preset.trees;
         preset = next;
+        ambient?.setQuality(q);
         applyShadows(preset.shadows);
         if (treesChanged) rebuildForest();
         gov.configure(preset.minPixelRatio, preset.pixelRatio);
@@ -323,6 +338,7 @@ export async function createHubScene(container, { quality = 'medium', reducedMot
       renderLayer(name) {
         if (!HUB_LAYERS.includes(name)) throw new Error('capa desconocida: ' + name);
         layerMode = true;
+        ambient?.setEnabled(false);
         renderer.setAnimationLoop(null);
         for (const n of HUB_LAYERS) layers[n].visible = n === name;
         scene.fog = null;
