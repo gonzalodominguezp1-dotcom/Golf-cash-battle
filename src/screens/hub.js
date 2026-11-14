@@ -1,5 +1,5 @@
 // Hub: pantalla raíz con la composición C10 (usuario · logo · Ajustes y pantalla completa arriba; Ranking/Logros a la
-// izquierda, Skins/Amigos a la derecha; Mapas · JUGAR · Práctica abajo). Fondo: imagen fija (la escena 3D es T026).
+// izquierda, Skins/Amigos a la derecha; Mapas · JUGAR · Práctica abajo). Fondo: escena 3D precargada (ctx.hubScene) o, sin ella, la imagen fija del CSS.
 // El CSS (hub.css) lo importa el arranque, no este módulo, para poder probarlo en Node.
 import { CHALLENGES } from '../progress/skins.js';
 import { esc } from './shared.js';
@@ -48,9 +48,10 @@ export async function mount(root, ctx) {
   };
 
   root.innerHTML = `<main class="hub" aria-label="${esc(t('hub.title'))}">
+    <div class="hub-scene" data-hub-scene="1" aria-hidden="true"></div>
     <header class="hub-top">
       <button type="button" class="hub-user${guest ? ' hub-needs-account' : ''}" data-hub="account" data-focus-key="account" style="--pct:${ring.pct}" aria-label="${esc(accountLabel)}">
-        <span class="hub-face">${icon('user', { size: 24 })}<b class="hub-lv" aria-hidden="true">${ring.level}</b></span>
+        <span class="hub-face">${icon('user', { size: 24 })}<b class="hub-lv" data-hub-lv="1" aria-hidden="true">${ring.level}</b></span>
         <span class="hub-nav-t" aria-hidden="true">${esc(t('hub.account'))}</span>
       </button>
       <h1 class="hub-logo"><img src="/logo-header.png" alt="${esc(t('hub.logoAlt'))}"></h1>
@@ -70,9 +71,29 @@ export async function mount(root, ctx) {
     </footer>
   </main>`;
 
+  // Referencias guardadas al montar: con el hub tapado su DOM está fuera de la raíz y root.querySelector ya no lo ve.
+  const refs = {
+    friends: root.querySelector('[data-badge="friends"]'),
+    achievements: root.querySelector('[data-badge="achievements"]'),
+    user: root.querySelector('[data-hub="account"]'),
+    lv: root.querySelector('[data-hub-lv="1"]'),
+  };
   const paintBadge = (key) => {
-    const el = root.querySelector(`[data-badge="${key}"]`);
+    const el = refs[key];
     if (el) el.innerHTML = badges[key] ? badge(badges[key]) : '';
+  };
+  // Al destapar se recalcula todo: pudo cambiar el notifier, los logros vistos o el nivel mientras estaba tapado.
+  const repaintAll = () => {
+    const r = levelRing(progress.level);
+    badges.friends = friendsNow(notifier?.counts);
+    badges.achievements = achievementsNow();
+    paintBadge('friends');
+    paintBadge('achievements');
+    if (refs.user) {
+      refs.user.style?.setProperty?.('--pct', String(r.pct));
+      refs.user.setAttribute?.('aria-label', t(guest ? 'hub.accountGuestLabel' : 'hub.accountLabel', { level: r.label }));
+    }
+    if (refs.lv) refs.lv.textContent = String(r.level);
   };
 
   const go = (id) => { ctx.sfx?.tap?.(); router.push(id); };
@@ -83,11 +104,57 @@ export async function mount(root, ctx) {
   if (notifier) {
     scope.sub(notifier.subscribe((c) => { badges.friends = friendsNow(c); paintBadge('friends'); }));
   }
-  // TODO(T026): sin keepAlive, claimRewards() se repite en cada visita al hub (lo protege `rewardsOpen` en main.js).
+  // Escena 3D de fondo. Es del contexto (la libera la partida), no del hub: aquí solo se coloca, se pausa y se suelta.
+  // Si no hay (sin WebGL, omitida por el margen, three bloqueado, liberada por una partida) se ve la imagen fija.
+  const box = root.querySelector('[data-hub-scene="1"]');
+  const doc = scope.doc;
+  let scene = null, attached = false, covered = false;
+  const sync = () => {
+    if (!scene) return;
+    try { (!covered && !doc?.hidden) ? scene.resume() : scene.pause(); } catch { /* una escena rota no tumba el hub */ }
+  };
+  const place = () => {
+    if (!scene || !box || covered) return; // tapado el contenedor mide 0: se coloca al destapar
+    try {
+      if (!attached) { scene.attach(box); attached = true; }
+      scene.setQuality?.(ctx.quality?.());
+      scene.resize?.();
+    } catch { /* idem */ }
+    sync();
+  };
+  const drop = () => {
+    try { scene?.pause(); } catch { /* ya liberada */ }
+    scene = null; attached = false;
+    if (box) box.innerHTML = '';
+  };
+  const adopt = (sc) => {
+    if (sc === scene) return;
+    if (scene) drop();
+    scene = sc || null;
+    place();
+  };
+  adopt(ctx.getHubScene ? ctx.getHubScene() : ctx.hubScene);
+  if (ctx.watchHubScene) scope.sub(ctx.watchHubScene(adopt));
+  scope.on(doc, 'visibilitychange', sync);
+  scope.on(scope.win, 'resize', () => { if (!covered) scene?.resize?.(); });
+  if (import.meta.env?.DEV && scope.win) scope.win.__gcbHub = { get stats() { return scene?.stats; } };
+
   ctx.actions.claimRewards();
 
   return {
     title: t('hub.title'),
-    destroy() {}, // los listeners y la suscripción los libera el scope del host
+    onCover() { covered = true; sync(); },
+    onUncover(from) {
+      covered = false;
+      repaintAll();
+      const cur = ctx.getHubScene ? ctx.getHubScene() : ctx.hubScene;
+      if (cur !== scene) adopt(cur); else place();
+      if (from) root.querySelector?.(`[data-focus-key="${from}"]`)?.focus?.();
+      ctx.actions.claimRewards();
+    },
+    destroy() { // los listeners y la suscripción los libera el scope del host
+      drop();
+      if (scope.win?.__gcbHub) delete scope.win.__gcbHub;
+    },
   };
 }

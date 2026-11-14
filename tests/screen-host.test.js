@@ -179,3 +179,69 @@ test('si falla la raíz queda un aviso con «Reintentar» y whenIdle avisa al ac
   assert.equal(idle, 1)
   env.timers.advance(300)
 })
+
+// ---- keepAlive (hub): no se destruye al taparse; onCover/onUncover; el DOM sobrevive a quien repinta la raíz ----
+test('keepAlive: el hub no se remonta al navegar; onCover/onUncover con el origen y su DOM intacto', async () => {
+  const log = []
+  let mounts = 0
+  const hubNodes = ['<hub>']
+  const modules = {
+    './hub.js': async () => ({
+      mount(root) {
+        mounts++
+        root.append?.(...hubNodes)
+        return { destroy() { log.push('destroy') }, onCover() { log.push('cover') }, onUncover(from) { log.push(`uncover:${from}`) } }
+      },
+    }),
+    './ranking.js': async () => ({ mount(root) { root.innerHTML = ''; log.push('ranking'); return { destroy() { log.push('rk-destroy') } } } }),
+  }
+  const s = setup({ modules })
+  // raíz con DOM mínimo: childNodes, replaceChildren y append
+  const kids = []
+  Object.defineProperty(s.el, 'childNodes', { get: () => kids })
+  s.el.replaceChildren = () => { kids.length = 0 }
+  s.el.append = (...n) => { kids.push(...n) }
+  Object.defineProperty(s.el, 'innerHTML', { get: () => kids.join(''), set: () => { kids.length = 0 } })
+  s.router.start(); await calm(s.env)
+  assert.deepEqual(kids, hubNodes)
+  s.router.push('ranking'); await calm(s.env)
+  assert.deepEqual(log, ['cover', 'ranking'])
+  assert.deepEqual(kids, []) // lo repintado por la pantalla de encima no pisa el hub
+  s.router.back(); await calm(s.env)
+  assert.deepEqual(log, ['cover', 'ranking', 'rk-destroy', 'uncover:ranking'])
+  assert.equal(mounts, 1)
+  assert.deepEqual(kids, hubNodes)
+  s.host.dispose()
+  assert.equal(log.at(-1), 'destroy')
+})
+
+test('keepAlive: si la pantalla de encima falla, el hub se destapa y se avisa', async () => {
+  const log = []
+  const modules = {
+    './hub.js': async () => ({ mount() { return { destroy() { log.push('destroy') }, onCover() { log.push('cover') }, onUncover() { log.push('uncover') } } } }),
+    './ranking.js': () => Promise.reject(new Error('roto')),
+  }
+  const { router, env, notices, host } = setup({ modules })
+  router.start(); await calm(env)
+  router.push('ranking'); await calm(env)
+  assert.equal(notices.length, 1)
+  assert.equal(router.top.id, 'hub')
+  assert.ok(!log.includes('destroy'))
+  host.dispose()
+})
+
+test('keepAlive: 20 ciclos taparse/destapar no remontan ni dejan fugas', async () => {
+  let mounts = 0, destroyed = 0
+  const modules = {
+    './hub.js': async () => ({ mount(_r, ctx) { mounts++; ctx.scope.timeout(() => {}, 99999); return { destroy() { destroyed++ }, onCover() {}, onUncover() {} } } }),
+    './ranking.js': async () => ({ mount(_r, ctx) { ctx.scope.on(ctx.scope.win, 'resize', () => {}); return { destroy() {} } } }),
+  }
+  const { router, env, host } = setup({ modules })
+  router.start(); await calm(env)
+  for (let i = 0; i < 20; i++) { router.push('ranking'); await calm(env); router.back(); await calm(env) }
+  assert.equal(mounts, 1)
+  assert.equal(destroyed, 0)
+  host.dispose()
+  assert.equal(destroyed, 1)
+  assert.equal(env.liveListeners() + env.liveTimers(), 0)
+})

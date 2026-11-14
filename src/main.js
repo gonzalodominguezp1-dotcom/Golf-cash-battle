@@ -2718,7 +2718,7 @@ if (skinLab) {
     trackProgress(boot, () => wallet.getBalance());
     const hubScene = hubPreloader.preload();
     startRouting(b);
-    hubScene.then((scene) => { if (scene && hubPreloader.current() === scene) startCtx.hubScene = scene; });
+    hubScene.then((scene) => { if (scene && hubPreloader.current() === scene) startCtx.setHubScene(scene); });
     // `hub` espera al lobby pintado y a que la escena llegue o se omita (margen de 8 s)
     const maxMs = Number(document.getElementById('splash')?.dataset.maxMs) || 15000;
     Promise.all([hubScene, waitPainted(app, { maxMs })]).then(([, painted]) => {
@@ -2740,7 +2740,7 @@ const hubPreloader = createHubPreloader({
   importScene: () => import('./game/render/hubScene.js').then((m) => ({ createHubScene: m.createHubScene })),
   quality: () => getQuality(),
   reducedMotion: () => matchMedia('(prefers-reduced-motion: reduce)').matches,
-  onReleased: (sc) => { if (startCtx && startCtx.hubScene === sc) startCtx.hubScene = null; },
+  onReleased: (sc) => { if (startCtx && startCtx.hubScene === sc) startCtx.setHubScene(null); },
 });
 
 // ---------- navegación ----------
