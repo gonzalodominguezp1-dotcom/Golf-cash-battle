@@ -22,7 +22,8 @@ const NAV = {
 
 export async function mount(root, ctx) {
   const { router, scope, progress, notifier } = ctx;
-  const icon = (n, o = {}) => ctx.icon(n, { size: 28, ...o });
+  // El tamaño real lo fija hub.css (--ico-svg, por pantalla); este valor es solo el de reserva del atributo.
+  const icon = (n, o = {}) => ctx.icon(n, { size: 52, ...o });
   const account = ctx.backend?.account;
   const guest = !account || !!account.profile?.is_anonymous;
   const userId = ctx.backend?.user?.id ?? 'local';
@@ -42,22 +43,22 @@ export async function mount(root, ctx) {
     const n = NAV[key];
     const needs = n.guest && guest;
     return `<button type="button" class="${cls}${needs ? ' hub-needs-account' : ''}" data-hub="${key}" data-focus-key="${key}">`
-      + `${icon(n.icon, n.opts)}<span class="hub-nav-t">${esc(t(`hub.${n.text}`))}</span>`
-      + `${needs ? `<span class="sr-only">${esc(t('hub.needsAccount'))}</span>` : ''}`
-      + `<span data-badge="${key}">${badges[key] ? badge(badges[key]) : ''}</span></button>`;
+      + `<span class="hub-ico">${icon(n.icon, n.opts)}<span data-badge="${key}">${badges[key] ? badge(badges[key]) : ''}</span></span>`
+      + `<span class="hub-nav-t">${esc(t(`hub.${n.text}`))}</span>`
+      + `${needs ? `<span class="sr-only">${esc(t('hub.needsAccount'))}</span>` : ''}</button>`;
   };
 
   root.innerHTML = `<main class="hub" aria-label="${esc(t('hub.title'))}">
     <div class="hub-scene" data-hub-scene="1" aria-hidden="true"></div>
     <header class="hub-top">
       <button type="button" class="hub-user${guest ? ' hub-needs-account' : ''}" data-hub="account" data-focus-key="account" style="--pct:${ring.pct}" aria-label="${esc(accountLabel)}">
-        <span class="hub-face">${icon('user', { size: 24 })}<b class="hub-lv" data-hub-lv="1" aria-hidden="true">${ring.level}</b></span>
+        <span class="hub-face">${icon('user', { size: 40 })}<b class="hub-lv" data-hub-lv="1" aria-hidden="true">${ring.level}</b></span>
         <span class="hub-nav-t" aria-hidden="true">${esc(t('hub.account'))}</span>
       </button>
       <h1 class="hub-logo"><img src="/logo-header.png" alt="${esc(t('hub.logoAlt'))}"></h1>
       <div class="hub-tools">
-        <button type="button" class="hub-nav hub-tool" data-hub="settings" data-focus-key="settings" aria-label="${esc(t('hub.settings'))}">${icon('gear')}<span class="hub-nav-t" aria-hidden="true">${esc(t('hub.settings'))}</span></button>
-        <button type="button" class="hub-nav hub-tool" data-hub="fullscreen" aria-label="${esc(t('hub.fullscreenLabel'))}">${icon('fullscreen')}<span class="hub-nav-t" aria-hidden="true">${esc(t('hub.fullscreen'))}</span></button>
+        <button type="button" class="hub-nav hub-tool" data-hub="settings" data-focus-key="settings" aria-label="${esc(t('hub.settings'))}"><span class="hub-ico">${icon('gear')}</span><span class="hub-nav-t" aria-hidden="true">${esc(t('hub.settings'))}</span></button>
+        <button type="button" class="hub-nav hub-tool" data-hub="fullscreen" aria-label="${esc(t('hub.fullscreenLabel'))}"><span class="hub-ico">${icon('fullscreen')}</span><span class="hub-nav-t" aria-hidden="true">${esc(t('hub.fullscreen'))}</span></button>
       </div>
     </header>
     <nav class="hub-mid" aria-label="${esc(t('hub.title'))}">

@@ -1,6 +1,7 @@
 /* Hub (T025). Boceto aprobado + decisión T024: etiqueta visible bajo cada icono, logo adaptable a la altura. */
 .hub {
-  --side: 72px; --pad: 12px;
+  /* --ico: lado del recuadro del icono; --ico-svg: tamaño del icono dentro; las herramientas de arriba y el avatar usan los suyos */
+  --ico: 84px; --ico-svg: 62px; --tool: 68px; --tool-svg: 48px; --face: 72px; --face-svg: 42px; --pad: 12px;
   position: fixed; inset: 0; overflow: hidden; z-index: 0;
   background: #6fb07a url('/splash/hub-fallback.webp') center / cover no-repeat;
   display: grid; grid-template-rows: auto 1fr auto; color: var(--text);
@@ -28,17 +29,22 @@
   filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.5));
 }
 .hub-tools { display: flex; gap: 8px; }
-.hub-tool { width: 60px; min-height: 56px; }
+.hub-tool { --ico: var(--tool); --ico-svg: var(--tool-svg); }
 
-.hub-nav-t { font: 700 12px/1.1 var(--display); color: var(--text); letter-spacing: 0.01em; text-align: center; }
+/* la etiqueta va FUERA del recuadro, sin fondo: sombra fuerte para leerse sobre la escena */
+.hub-nav-t {
+  font: 800 14px/1.1 var(--display); color: #fff; letter-spacing: 0.01em; text-align: center;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 10px rgba(0, 0, 0, 0.7);
+}
 
 /* usuario con anillo de nivel (conic-gradient) */
 .hub-user {
-  --pct: 0; display: flex; flex-direction: column; align-items: center; gap: 3px;
-  min-width: 56px; min-height: 56px; background: transparent;
+  --pct: 0; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  min-width: var(--face); min-height: 56px; background: transparent;
 }
+.hub-face > svg { width: var(--face-svg); height: var(--face-svg); }
 .hub-face {
-  position: relative; width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center;
+  position: relative; width: var(--face); height: var(--face); border-radius: 50%; display: grid; place-items: center;
   background: conic-gradient(var(--emerald) calc(var(--pct) * 1%), rgba(255, 255, 255, 0.3) 0);
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
 }
@@ -53,35 +59,49 @@
 /* columnas laterales y accesos */
 .hub-mid { display: flex; justify-content: space-between; align-items: center; padding: 0 var(--pad); min-height: 0; }
 .hub-col { display: flex; flex-direction: column; gap: 14px; }
+/* el botón es transparente: el único recuadro es .hub-ico (solo el icono); el texto queda debajo */
 .hub-nav {
-  position: relative; min-width: var(--side); min-height: 64px; padding: 6px 4px; box-sizing: border-box;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  border-radius: 16px; background: rgba(11, 15, 21, 0.78); border: 1px solid var(--line-light);
+  position: relative; min-width: var(--ico); padding: 0; box-sizing: border-box; background: transparent;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 6px;
+}
+.hub-ico {
+  position: relative; width: var(--ico); height: var(--ico); box-sizing: border-box; border-radius: 22px;
+  display: grid; place-items: center; background: rgba(11, 15, 21, 0.78); border: 1px solid var(--line-light);
   backdrop-filter: blur(6px); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
 }
+.hub-ico > svg { width: var(--ico-svg); height: var(--ico-svg); }
+.hub-nav:active .hub-ico { transform: scale(0.96); }
 .hub-user.hub-needs-account .hub-face, .hub-nav.hub-needs-account { opacity: 0.8; }
-.hub-nav.hub-needs-account { border-style: dashed; }
-.hub-nav .scr-badge { position: absolute; top: -4px; right: -4px; width: 14px; height: 14px; }
-.hub-nav .scr-badge-dot { width: 14px; height: 14px; border: 2px solid #fff; box-sizing: border-box; box-shadow: none; }
+.hub-nav.hub-needs-account .hub-ico { border-style: dashed; }
+.hub-ico .scr-badge { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; }
+.hub-ico .scr-badge-dot { width: 18px; height: 18px; border: 2px solid #fff; box-sizing: border-box; box-shadow: none; }
 
 /* barra inferior */
 .hub-bottom { display: grid; grid-template-columns: 1fr auto 1fr; align-items: end; gap: 10px; padding: var(--pad) var(--pad) 14px; }
 .hub-a { justify-self: start; }
 .hub-c { justify-self: end; }
 .hub-play {
-  min-height: 64px; min-width: 130px; padding: 0 24px; border-radius: 18px;
-  font: 800 24px var(--display); letter-spacing: 0.06em; color: #04251a;
+  min-height: 76px; min-width: 150px; padding: 0 26px; border-radius: 20px;
+  font: 800 28px var(--display); letter-spacing: 0.06em; color: #04251a;
   background: linear-gradient(180deg, #4ade9f, var(--emerald));
   box-shadow: 0 8px 24px rgba(16, 185, 129, 0.3), 0 0 0 3px rgba(255, 255, 255, 0.35) inset;
 }
 
 @media (max-width: 420px) {
-  .hub { --side: 64px; --pad: 10px; }
-  .hub-tool { width: 52px; }
-  .hub-play { min-width: 112px; padding: 0 18px; font-size: 21px; }
+  .hub { --ico: 78px; --ico-svg: 56px; --tool: 62px; --tool-svg: 44px; --face: 66px; --face-svg: 38px; --pad: 10px; }
+  .hub-play { min-width: 124px; min-height: 72px; padding: 0 18px; font-size: 24px; }
+}
+/* pantallas bajas (móvil apaisado o 360x640): el icono se reduce lo justo para que quepan las dos filas */
+@media (max-height: 700px) {
+  .hub { --ico: 70px; --ico-svg: 50px; --tool: 58px; --tool-svg: 40px; --face: 62px; --face-svg: 36px; }
+  .hub-col { gap: 10px; }
 }
 @media (min-aspect-ratio: 1/1) {
-  .hub { --side: 84px; --pad: 20px; }
-  .hub-col { gap: 18px; }
-  .hub-play { min-width: 200px; min-height: 72px; font-size: 30px; }
+  .hub { --ico: 104px; --ico-svg: 76px; --tool: 84px; --tool-svg: 60px; --face: 84px; --face-svg: 48px; --pad: 20px; }
+  .hub-col { gap: 20px; }
+  .hub-nav-t { font-size: 16px; }
+  .hub-play { min-width: 220px; min-height: 88px; font-size: 34px; }
+}
+@media (min-aspect-ratio: 1/1) and (max-height: 520px) {
+  .hub { --ico: 76px; --ico-svg: 54px; --tool: 62px; --tool-svg: 44px; --face: 62px; --face-svg: 36px; }
 }
