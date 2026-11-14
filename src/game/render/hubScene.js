@@ -12,8 +12,10 @@ import { createHubAmbient } from './hubAmbient.js';
 
 const THEME = THEMES.meadowDay;
 const GREEN_R = 7;
-const ORBIT_R = 20;
-const CAM_Y = 5.5;
+// Cámara cerca del green: el borde del collar está en GREEN_R + 1.6 y el anillo de arbustos/rocas
+// empieza en r ≈ 10, así que 8.5 orbita entre los dos sin atravesar nada y el green llena el encuadre.
+const ORBIT_R = 8.5;
+const CAM_Y = 3.2;
 export const HUB_LAYERS = ['sky', 'forest', 'green'];
 
 /** Generador determinista (mulberry32) para que `?seed=N` repita la misma escena. */
@@ -90,7 +92,7 @@ function buildGreen() {
   const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 2.4, 8), new THREE.MeshStandardMaterial({ color: 0xf2f2f2 }));
   pole.position.y = 1.2;
   pole.castShadow = true;
-  const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.55), new THREE.MeshStandardMaterial({ color: 0xff3b3b, side: THREE.DoubleSide }));
+  const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.55), new THREE.MeshStandardMaterial({ color: 0xe01212, emissive: 0x3a0000, side: THREE.DoubleSide }));
   flag.position.set(0.45, 2.1, 0);
   flag.castShadow = true;
   g.add(meadow, collar, green, cup, pole, flag);
@@ -236,7 +238,7 @@ export async function createHubScene(container, { quality = 'medium', reducedMot
     const placeCamera = (t) => {
       const a = orbitAngle(t);
       camera.position.set(Math.cos(a) * ORBIT_R, CAM_Y, Math.sin(a) * ORBIT_R);
-      camera.lookAt(0, 1.2, 0);
+      camera.lookAt(0, 1.1, 0);
     };
 
     const dpr = () => (typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1);
