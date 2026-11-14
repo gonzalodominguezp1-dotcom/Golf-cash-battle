@@ -65,20 +65,21 @@ export function computeLocks({ guest = false, hasBackend = true, hasName = true 
 
 // Centrado óptico de los iconos del hub: el recuadro centra el lienzo del svg (viewBox -1 -1 51 51, centro 24,5) pero cada
 // dibujo (contorno y extrusión incluidos) tiene su propio centro. [dx, dy] en unidades del viewBox que hay que mover el dibujo
-// para que su caja envolvente quede en el centro exacto. Medido con tests/helpers/svgBounds.js; lo vigila tests/hub-icon-centering.test.js.
+// para que su CAJA VISIBLE (píxeles con alfa > 40 del render real) quede en el centro exacto. Valores de
+// `node scripts/measure-hub-icons.mjs --json`; los vigila tests/hub-icon-centering.test.js.
 export const ICON_NUDGE = {
-  trophy: [-0.1, -1.7],
-  medal: [-0.4, 0.4],
-  skins: [0.2, 0.6],
+  trophy: [-0.2, -1.7],
+  medal: [-0.3, 0.7],
+  skins: [0.2, 0.5],
   users: [-0.2, -3.6],
-  map: [0.1, -1.3],
+  map: [0.1, -1.2],
   robot: [-0.3, 2.6],
-  gear: [-0.1, -1],
+  gear: [-0.1, -0.9],
   fullscreen: [-0.2, -0.8],
   user: [-0.2, -3.4],
-  coins: [-0.8, -1],
+  coins: [-0.9, -1],
   lock: [-0.1, 0.1],
-  chains: [-0.7, -1.3],
+  chains: [-0.7, -1.3], // las cadenas llegan al borde del lienzo (recortadas): se centra el cruce de la X, no la caja
 };
 
 /** Variables CSS `--nx/--ny` (unidades del viewBox) para poner como style en el contenedor del icono. */

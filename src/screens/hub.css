@@ -99,6 +99,9 @@
 .hub-ico--skins { --t1: #8b5cf6; --t2: #4c1d95; --tg: rgba(139, 92, 246, 0.55); }
 .hub-ico--friends { --t1: #3b82f6; --t2: #1e3a8a; --tg: rgba(59, 130, 246, 0.55); }
 .hub-ico--tool { --t1: #5b6676; --t2: #1f2733; --tg: rgba(15, 23, 42, 0.6); }
+/* svg y marca de novedades comparten UNA celda: si el span vacío del badge ocupara una 2.ª fila, el sobrante del recuadro se
+   repartiría entre las dos filas y el icono quedaría ~5 px por encima del centro (medido con scripts/measure-hub-icons.mjs) */
+.hub-ico > svg, .hub-ico > [data-badge] { grid-area: 1 / 1; }
 .hub-ico > svg { position: relative; width: var(--ico-svg); height: var(--ico-svg); filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35)); }
 .hub-nav:active .hub-ico { transform: scale(0.96); }
 /* centrado óptico: --nx/--ny (unidades del viewBox de 51, ver ICON_NUDGE en hubRules.js) mueven el DIBUJO al centro exacto de su caja;
