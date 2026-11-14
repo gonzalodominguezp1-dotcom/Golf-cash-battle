@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Boceto del hub</title>
+<!--
+  Boceto estático del hub de Golf Cash Battle (T023). Se abre con doble clic, sin servidor y sin scripts.
+  Composición fijada en C10: barra superior (usuario con anillo de nivel · logo · Ajustes y pantalla completa),
+  columna izquierda (Ranking, Logros), columna derecha (Skins, Amigos), barra inferior (Mapas · JUGAR · Práctica).
+  Sin saldo ni botón de silencio (C11, excepción U6.6). La escena 3D real va detrás; aquí se usa hub-fallback.webp.
+  Datos de ejemplo solo para el boceto: nivel 7 al 40 %, 2 novedades en Amigos, 1 en Logros.
+-->
+<style>
+  :root {
+    --bg: #0b0f15;
+    --panel: rgba(11, 15, 21, 0.78);
+    --panel-card: rgba(22, 31, 44, 0.78);
+    --line: rgba(255, 255, 255, 0.14);
+    --text: #f1f5f9;
+    --text-dim: #cbd5e1;
+    --emerald: #10b981;
+    --emerald-glow: rgba(16, 185, 129, 0.3);
+    --gold: #d4af37;
+    --neg: #ef4444;
+    --radius-sm: 10px;
+    --display: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --body: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --side: 72px;     /* ancho del acceso lateral */
+    --pad: 12px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: var(--body); }
+  body { overflow: hidden; }
+  .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+  #hub {
+    position: fixed; inset: 0; overflow: hidden;
+    background: #6fb07a url('../../../public/splash/hub-fallback.webp') center / cover no-repeat;
+    display: grid; grid-template-rows: auto 1fr auto;
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  }
+  /* Velo suave arriba y abajo para dar contraste a los controles sobre la escena */
+  #hub::before {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background:
+      linear-gradient(180deg, rgba(8, 14, 24, 0.5) 0%, rgba(8, 14, 24, 0) 24%),
+      linear-gradient(0deg, rgba(8, 14, 24, 0.62) 0%, rgba(8, 14, 24, 0) 30%);
+  }
+  #hub > * { position: relative; }
+
+  button { font: inherit; color: inherit; cursor: pointer; }
+  button:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+
+  /* --- Barra superior --- */
+  .top {
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+    padding: var(--pad); gap: 8px;
+  }
+  .top .left { justify-self: start; }
+  .top .right { justify-self: end; display: flex; gap: 8px; }
+  .logo { display: block; height: 62px; width: auto; filter: drop-shadow(0 3px 8px rgba(0,0,0,.5)); }
+
+  .icon-btn {
+    width: 48px; height: 48px; display: grid; place-items: center; padding: 0;
+    border-radius: 14px; background: var(--panel); border: 1px solid var(--line); color: var(--text);
+    backdrop-filter: blur(6px);
+  }
+  .icon-btn svg { width: 24px; height: 24px; }
+
+  /* Usuario con anillo de nivel: el anillo es un conic-gradient (40 %), el número va dentro */
+  .user {
+    --pct: 40;
+    width: 56px; height: 56px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center;
+    background: conic-gradient(var(--emerald) calc(var(--pct) * 1%), rgba(255,255,255,.28) 0);
+    box-shadow: 0 3px 10px rgba(0,0,0,.45);
+  }
+  .user .face {
+    width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center;
+    background: #15202e; border: 2px solid #0b0f15; position: relative;
+  }
+  .user .face svg { width: 24px; height: 24px; color: var(--text-dim); margin-top: -6px; }
+  .user .lv {
+    position: absolute; bottom: -3px; left: 50%; transform: translateX(-50%);
+    min-width: 24px; padding: 0 6px; height: 20px; border-radius: 999px; display: grid; place-items: center;
+    background: var(--gold); color: #1a1405; font: 800 12px/1 var(--display);
+    border: 2px solid #0b0f15; font-variant-numeric: tabular-nums;
+  }
+
+  /* --- Columnas laterales --- */
+  .mid { display: flex; justify-content: space-between; align-items: center; padding: 0 var(--pad); min-height: 0; }
+  .col { display: flex; flex-direction: column; gap: 14px; }
+  .nav {
+    position: relative; width: var(--side); min-height: var(--side); padding: 8px 4px 6px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    border-radius: 16px; background: var(--panel); border: 1px solid var(--line);
+    backdrop-filter: blur(6px); box-shadow: 0 6px 16px rgba(0,0,0,.3);
+  }
+  .nav svg { width: 28px; height: 28px; color: var(--gold); }
+  .nav span.t { font: 700 12px/1.1 var(--display); color: var(--text); letter-spacing: .01em; }
+  .dot {
+    position: absolute; top: -4px; right: -4px; width: 14px; height: 14px; border-radius: 50%;
+    background: var(--neg); border: 2px solid #fff; /* punto + texto accesible, no solo color */
+  }
+
+  /* --- Barra inferior --- */
+  .bottom {
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: end; gap: 10px;
+    padding: var(--pad) var(--pad) 14px;
+  }
+  .bottom .a { justify-self: start; } .bottom .c { justify-self: end; }
+  .pill {
+    min-height: 52px; padding: 0 16px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    border-radius: 14px; background: var(--panel); border: 1px solid var(--line); color: var(--text);
+    font: 700 14px var(--display); backdrop-filter: blur(6px);
+  }
+  .pill svg { width: 22px; height: 22px; color: var(--gold); flex: none; }
+  .play {
+    min-height: 64px; min-width: 150px; padding: 0 30px; border: 0; border-radius: 18px;
+    font: 800 26px var(--display); letter-spacing: .06em; color: #04251a;
+    background: linear-gradient(180deg, #4ade9f, var(--emerald));
+    box-shadow: 0 8px 24px var(--emerald-glow), 0 0 0 3px rgba(255,255,255,.35) inset;
+  }
+
+  @media (max-width: 420px) {
+    :root { --side: 64px; --pad: 10px; }
+    .pill { padding: 0 10px; font-size: 13px; }
+    .pill svg { display: none; }
+    .play { min-width: 120px; padding: 0 20px; font-size: 22px; }
+    .logo { height: 54px; }
+  }
+  @media (min-aspect-ratio: 1/1) {
+    :root { --side: 84px; --pad: 20px; }
+    .logo { height: 80px; }
+    .play { min-width: 200px; min-height: 72px; font-size: 30px; }
+    .col { gap: 18px; }
+  }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z" fill="currentColor"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="12" cy="12" r="3.6" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="i-full" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+    <symbol id="i-rank" viewBox="0 0 24 24"><path fill="currentColor" d="M3 21v-8h5.5v8zM9.2 21V4h5.6v17zM15.5 21v-11H21v11z"/></symbol>
+    <symbol id="i-trophy" viewBox="0 0 24 24"><path fill="currentColor" d="M7 3h10v6a5 5 0 0 1-10 0zM5 4H2v2a4 4 0 0 0 4 4V8a2 2 0 0 1-1-2zM19 4h3v2a4 4 0 0 1-4 4V8a2 2 0 0 0 1-2zM11 14h2v3h3v3H8v-3h3z"/></symbol>
+    <symbol id="i-skin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="9" r="1.3" fill="currentColor"/><circle cx="14" cy="8.5" r="1.3" fill="currentColor"/><circle cx="15.5" cy="13" r="1.3" fill="currentColor"/><circle cx="10" cy="14.5" r="1.3" fill="currentColor"/></symbol>
+    <symbol id="i-friends" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.4" fill="currentColor"/><path fill="currentColor" d="M2 20c0-3.8 3.1-6 7-6s7 2.2 7 6z"/><circle cx="17" cy="9" r="2.6" fill="currentColor" opacity=".7"/><path fill="currentColor" opacity=".7" d="M17.5 14.2c2.6.3 4.5 2 4.5 5.8h-4.2c0-2.3-.5-4.2-.3-5.8z"/></symbol>
+    <symbol id="i-map" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2zM9 4v14M15 6v14"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/></symbol>
+  </defs>
+</svg>
+
+<main id="hub" aria-label="Inicio">
+  <!-- Barra superior: usuario+nivel · logo · Ajustes y pantalla completa -->
+  <header class="top">
+    <div class="left">
+      <button type="button" class="user" style="--pct:40" aria-label="Mi cuenta. Nivel 7, 40 % al siguiente">
+        <span class="face"><svg aria-hidden="true"><use href="#i-user"/></svg><span class="lv" aria-hidden="true">7</span></span>
+      </button>
+    </div>
+    <img class="logo" src="../../../public/logo-header.png" alt="Golf Cash Battle">
+    <div class="right">
+      <button type="button" class="icon-btn" aria-label="Ajustes"><svg aria-hidden="true"><use href="#i-gear"/></svg></button>
+      <button type="button" class="icon-btn" aria-label="Pantalla completa"><svg aria-hidden="true"><use href="#i-full"/></svg></button>
+    </div>
+  </header>
+
+  <!-- Columnas: izquierda Ranking, Logros · derecha Skins, Amigos -->
+  <nav class="mid" aria-label="Secciones">
+    <div class="col">
+      <button type="button" class="nav"><svg aria-hidden="true"><use href="#i-rank"/></svg><span class="t">Ranking</span></button>
+      <button type="button" class="nav"><svg aria-hidden="true"><use href="#i-trophy"/></svg><span class="t">Logros</span><i class="dot" aria-hidden="true"></i><span class="sr-only">1 novedad</span></button>
+    </div>
+    <div class="col">
+      <button type="button" class="nav"><svg aria-hidden="true"><use href="#i-skin"/></svg><span class="t">Skins</span></button>
+      <button type="button" class="nav"><svg aria-hidden="true"><use href="#i-friends"/></svg><span class="t">Amigos</span><i class="dot" aria-hidden="true"></i><span class="sr-only">2 novedades</span></button>
+    </div>
+  </nav>
+
+  <!-- Barra inferior: Mapas · JUGAR · Práctica -->
+  <footer class="bottom">
+    <button type="button" class="pill a"><svg aria-hidden="true"><use href="#i-map"/></svg>Mapas</button>
+    <button type="button" class="play">JUGAR</button>
+    <button type="button" class="pill c"><svg aria-hidden="true"><use href="#i-target"/></svg>Práctica</button>
+  </footer>
+</main>
+</body>
+</html>
