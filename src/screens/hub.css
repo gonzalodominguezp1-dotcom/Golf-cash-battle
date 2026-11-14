@@ -50,13 +50,12 @@
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
 }
 .hub-face::before { content: ''; position: absolute; inset: 4px; border-radius: 50%; background: #15202e; }
-.hub-face > svg { position: relative; margin-top: -6px; }
+.hub-face > svg { position: relative; } /* centrado exacto: el chip de nivel (abajo) queda libre porque el dibujo mide ~31 de 72 px */
 .hub-lv {
   position: absolute; bottom: -3px; left: 50%; transform: translateX(-50%); min-width: 24px; height: 20px; padding: 0 6px;
   box-sizing: border-box; border-radius: 999px; display: grid; place-items: center; background: var(--gold); color: #1a1405;
   font: 800 12px/1 var(--display); border: 2px solid #0b0f15; font-variant-numeric: tabular-nums;
 }
-.hub-user.hub-needs-account .hub-face { opacity: 0.8; }
 
 /* píldora de saldo: UN botón (monedas · cantidad · monedero), centrado en vertical con el avatar */
 .hub-wallet {
@@ -102,8 +101,22 @@
 .hub-ico--tool { --t1: #5b6676; --t2: #1f2733; --tg: rgba(15, 23, 42, 0.6); }
 .hub-ico > svg { position: relative; width: var(--ico-svg); height: var(--ico-svg); filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35)); }
 .hub-nav:active .hub-ico { transform: scale(0.96); }
-.hub-nav.hub-needs-account { opacity: 0.85; }
-.hub-nav.hub-needs-account .hub-ico { border-style: dashed; }
+/* centrado óptico: --nx/--ny (unidades del viewBox de 51, ver ICON_NUDGE en hubRules.js) mueven el DIBUJO al centro exacto de su caja;
+   el porcentaje de translate es el del propio svg, así escala con cualquier tamaño de pantalla */
+.hub-ico > svg, .hub-face > svg, .hub-wallet-ico > svg, .hub-padlock > svg, .hub-chains > svg {
+  transform: translate(calc(var(--nx, 0) * 100% / 51), calc(var(--ny, 0) * 100% / 51));
+}
+/* acceso bloqueado: mismo tile, mismo borde y misma opacidad que los demás; solo se apaga un poco el icono y encima van las cadenas y el candado */
+.hub-nav[data-locked] .hub-ico > svg { filter: saturate(0.55) brightness(0.78) drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35)); }
+.hub-lock { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; }
+.hub-chains { position: absolute; inset: 0; }
+.hub-chains > svg { display: block; width: 100%; height: 100%; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55)); }
+.hub-padlock {
+  position: absolute; left: 50%; top: 50%; width: 46%; height: 46%; margin: -23% 0 0 -23%; box-sizing: border-box; border-radius: 50%;
+  display: grid; place-items: center; background: radial-gradient(circle at 35% 30%, #2f2a44, #12101c);
+  border: 2px solid var(--gold); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(0, 0, 0, 0.5);
+}
+.hub-padlock > svg { display: block; width: 68%; height: 68%; }
 .hub-ico .scr-badge { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; }
 .hub-ico .scr-badge-dot { width: 18px; height: 18px; border: 2px solid #fff; box-sizing: border-box; box-shadow: none; }
 

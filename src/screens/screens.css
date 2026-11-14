@@ -49,3 +49,31 @@
 @keyframes scr-fade-in { from { opacity: 0; } to { opacity: 1; } }
 .scr-t-slide > * { animation: scr-slide-in var(--scr-ms, 200ms) ease-out backwards; }
 .scr-t-fade > * { animation: scr-fade-in var(--scr-ms, 80ms) linear backwards; }
+
+/* Diálogo de motivo (reasonDialog): usa .overlay de style.css (el manejador global de Esc/Intro de main.js lo reconoce) */
+.reason-overlay { z-index: 40; animation: reason-fade 0.18s ease-out; padding: calc(env(safe-area-inset-top, 0px) + 16px) calc(env(safe-area-inset-right, 0px) + 16px) calc(env(safe-area-inset-bottom, 0px) + 16px) calc(env(safe-area-inset-left, 0px) + 16px); }
+.reason-card {
+  box-sizing: border-box; width: min(100%, 380px); max-height: 100%; overflow: auto; padding: 18px; color: var(--text);
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.98), rgba(11, 15, 21, 0.98));
+  border: 1.5px solid rgba(212, 175, 55, 0.75); border-radius: var(--radius-lg);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.2); animation: reason-pop 0.18s ease-out;
+}
+.reason-head { display: flex; align-items: center; gap: 10px; }
+.reason-ico { flex: none; display: grid; place-items: center; width: 34px; height: 34px; }
+.reason-ico > svg { width: 30px; height: 30px; }
+.reason-title { margin: 0; font: 800 1.25rem/1.2 var(--display); color: #fff; }
+.reason-body { margin: 12px 0 0; font: 500 0.95rem/1.45 var(--body); color: var(--text-dim); }
+.reason-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+.reason-btn {
+  min-height: 48px; min-width: 112px; padding: 0 18px; box-sizing: border-box; border-radius: var(--radius-sm); cursor: pointer;
+  font: 800 1rem/1 var(--display); flex: 1 1 auto;
+}
+.reason-btn-ghost { background: rgba(255, 255, 255, 0.08); color: #fff; border: 1px solid var(--line-light); }
+.reason-btn-primary { background: linear-gradient(180deg, #4ade9f, var(--emerald)); color: #04251a; border: 1px solid rgba(255, 255, 255, 0.45); }
+.reason-btn:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.reason-btn:active { transform: scale(0.97); }
+@keyframes reason-fade { from { opacity: 0; } }
+@keyframes reason-pop { from { opacity: 0; transform: translateY(8px) scale(0.97); } }
+@media (prefers-reduced-motion: reduce) {
+  .reason-overlay, .reason-card { animation: none; }
+}

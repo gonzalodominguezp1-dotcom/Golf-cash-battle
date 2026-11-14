@@ -56,3 +56,60 @@ export function bindHeader(root, ctx) {
   if (ctx.scope) ctx.scope.on(btn, 'click', go);
   else btn.addEventListener('click', go);
 }
+
+// ---------- diálogo de motivo (accesos bloqueados y requisitos) ----------
+const openDialogs = new WeakMap(); // doc -> manejador del diálogo abierto (solo uno a la vez)
+let dialogSeq = 0;
+
+/**
+ * Diálogo modal accesible con un título, un motivo y botones. Se monta en doc.body con la clase `.overlay`, que es el mecanismo
+ * con el que el manejador global de teclado de main.js ya trata los overlays (Esc pulsa el primer `.close`; Intro, el primer botón
+ * que no sea `.close`). El botón de cierre va primero en el DOM por eso.
+ *   reasonDialog({ title, body, closeLabel, actions: [{ label, onClick }], iconHtml, returnTo, onClose, scope, doc })
+ * close({ restoreFocus: false }) cierra sin devolver el foco (hub tapado por otra pantalla). `actions` son acciones primarias: cierran el diálogo y luego llaman a onClick. Devuelve { close(), el }; cerrar dos veces no hace nada.
+ * Sus listeners cuelgan de un scope hijo: al cerrar (o al liberar el scope padre) no queda nada vivo.
+ */
+export function reasonDialog({ title, body, closeLabel, actions = [], iconHtml = '', returnTo = null, onClose, scope, doc = scope?.doc } = {}) {
+  openDialogs.get(doc)?.close();
+  const sc = scope.child ? scope.child() : scope;
+  const id = `rd${++dialogSeq}`;
+  const el = doc.createElement('div');
+  el.className = 'overlay reason-overlay';
+  el.innerHTML = `<div class="reason-card" role="dialog" aria-modal="true" aria-labelledby="${id}-t" aria-describedby="${id}-d">`
+    + `<div class="reason-head"><span class="reason-ico" aria-hidden="true">${iconHtml}</span><h2 class="reason-title" id="${id}-t">${esc(title)}</h2></div>`
+    + `<p class="reason-body" id="${id}-d">${esc(body)}</p>`
+    + `<div class="reason-actions"><button type="button" class="close reason-btn reason-btn-ghost" data-rd="close">${esc(closeLabel)}</button>`
+    + actions.map((a, i) => `<button type="button" class="reason-btn reason-btn-primary" data-rd="a${i}">${esc(a.label)}</button>`).join('')
+    + '</div></div>';
+  const buttons = [...el.querySelectorAll('[data-rd]')];
+  let closed = false;
+  const handle = {
+    el,
+    close({ restoreFocus = true } = {}) {
+      if (closed) return;
+      closed = true;
+      if (openDialogs.get(doc) === handle) openDialogs.delete(doc);
+      el.remove();
+      if (sc !== scope) sc.dispose();
+      try { if (restoreFocus) returnTo?.focus?.(); } catch { /* el botón de origen pudo desaparecer */ }
+      onClose?.();
+    },
+  };
+  openDialogs.set(doc, handle);
+  buttons.forEach((b) => {
+    const a = actions[Number(b.dataset.rd.slice(1))];
+    sc.on(b, 'click', () => { handle.close(); if (b.dataset.rd !== 'close') a?.onClick?.(); });
+  });
+  sc.on(el, 'click', (e) => { if (e.target === el) handle.close(); }); // clic en el fondo
+  sc.on(el, 'keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault?.(); e.stopPropagation?.(); handle.close(); return; }
+    if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation?.(); return; } // Intro/espacio pulsan el botón con foco, no el «primario» del manejador global
+    if (e.key !== 'Tab' || !buttons.length) return;
+    const first = buttons[0], last = buttons[buttons.length - 1], on = doc.activeElement;
+    if (e.shiftKey && on === first) { e.preventDefault?.(); last.focus?.(); } else if (!e.shiftKey && on === last) { e.preventDefault?.(); first.focus?.(); }
+    else if (!buttons.includes(on)) { e.preventDefault?.(); first.focus?.(); }
+  });
+  doc.body.append(el);
+  buttons[0]?.focus?.({ preventScroll: true }); // foco inicial en «Entendido»: una Intro mantenida no pulsa la acción nada más abrirse; la acción útil queda a un Tab
+  return handle;
+}

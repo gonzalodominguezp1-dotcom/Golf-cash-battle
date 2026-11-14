@@ -43,3 +43,46 @@ export function rememberTier(storage, tierId) {
     /* sin almacenamiento: la mesa no se recuerda */
   }
 }
+
+/**
+ * Bloqueos de los accesos del hub (mecanismo genérico). Devuelve { [clave]: { reasonKey, actionKey?, go? } } solo para los
+ * accesos bloqueados; `reasonKey` (popup), `shortKey` (nombre accesible) y `actionKey` son claves de texto (t()), `go` la ruta a la que lleva la acción.
+ * Hoy solo hay requisitos que ya existían: cuenta y nombre de usuario para Amigos y grupo, y servidor para Ranking (y Amigos) sin backend.
+ * Para añadir un bloqueo nuevo: un caso aquí, sus textos en texts/hub.js y un parámetro de entrada si hace falta.
+ */
+export function computeLocks({ guest = false, hasBackend = true, hasName = true } = {}) {
+  const locks = {};
+  if (!hasBackend) {
+    locks.friends = { reasonKey: 'hub.lock.friendsOffline', shortKey: 'hub.lock.offlineShort' };
+    locks.ranking = { reasonKey: 'hub.lock.rankingOffline', shortKey: 'hub.lock.offlineShort' };
+  } else if (guest) {
+    locks.friends = { reasonKey: 'hub.lock.friendsNeedsAccount', shortKey: 'hub.lock.needsAccountShort', actionKey: 'hub.goAccount', go: 'account' };
+  } else if (!hasName) { // cuenta real sin nombre de usuario: el panel de amigos de main.js lo exige
+    locks.friends = { reasonKey: 'hub.lock.friendsNeedsName', shortKey: 'hub.lock.needsNameShort', actionKey: 'hub.goAccount', go: 'account' };
+  }
+  return locks;
+}
+
+// Centrado óptico de los iconos del hub: el recuadro centra el lienzo del svg (viewBox -1 -1 51 51, centro 24,5) pero cada
+// dibujo (contorno y extrusión incluidos) tiene su propio centro. [dx, dy] en unidades del viewBox que hay que mover el dibujo
+// para que su caja envolvente quede en el centro exacto. Medido con tests/helpers/svgBounds.js; lo vigila tests/hub-icon-centering.test.js.
+export const ICON_NUDGE = {
+  trophy: [-0.1, -1.7],
+  medal: [-0.4, 0.4],
+  skins: [0.2, 0.6],
+  users: [-0.2, -3.6],
+  map: [0.1, -1.3],
+  robot: [-0.3, 2.6],
+  gear: [-0.1, -1],
+  fullscreen: [-0.2, -0.8],
+  user: [-0.2, -3.4],
+  coins: [-0.8, -1],
+  lock: [-0.1, 0.1],
+  chains: [0.8, -1.3],
+};
+
+/** Variables CSS `--nx/--ny` (unidades del viewBox) para poner como style en el contenedor del icono. */
+export function nudgeVars(name) {
+  const [dx, dy] = ICON_NUDGE[name] ?? [0, 0];
+  return `--nx:${dx};--ny:${dy}`;
+}

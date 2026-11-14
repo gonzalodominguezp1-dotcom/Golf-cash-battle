@@ -5,6 +5,8 @@ import { createScope } from '../src/screens/lifecycle.js';
 import { mount, fmtCoins } from '../src/screens/hub.js';
 import { CHALLENGES } from '../src/progress/skins.js';
 import { seenSet, markSeen } from '../src/screens/achievementsRules.js';
+import { computeLocks } from '../src/screens/hubRules.js';
+import { icon, ICON_NAMES } from '../src/ui/icons.js';
 
 // Raíz falsa: reconoce [data-x] y [data-x="v"] sobre el HTML pintado y devuelve elementos estables.
 function fakeRoot(env) {
@@ -12,7 +14,15 @@ function fakeRoot(env) {
   const camel = (a) => a.replace(/^data-/, '').replace(/-(\w)/g, (_, c) => c.toUpperCase());
   const get = (attr, val) => {
     const k = `${attr}=${val}`;
-    if (!els.has(k)) { const e = env.el('button'); e.dataset = { [camel(attr)]: val }; els.set(k, e); }
+    if (!els.has(k)) {
+      const e = env.el('button'); e.dataset = { [camel(attr)]: val };
+      const attrs = new Map();
+      Object.assign(e, { // atributos y foco reales para poder comprobarlos
+        setAttribute: (n, v) => attrs.set(n, String(v)), getAttribute: (n) => attrs.get(n) ?? null, removeAttribute: (n) => attrs.delete(n),
+        focus: () => { env.doc.activeElement = e; },
+      });
+      els.set(k, e);
+    }
     return els.get(k);
   };
   return {
@@ -29,7 +39,29 @@ function fakeRoot(env) {
   };
 }
 
+// DOM mínimo para el diálogo: doc.body, createElement('div') con sus botones [data-rd] y remove().
+function ensureDom(env) {
+  if (env.doc.body) return;
+  const body = { children: [], append(c) { this.children.push(c); } };
+  env.doc.body = body;
+  env.doc.activeElement = null;
+  env.doc.createElement = () => {
+    const el = env.el('div');
+    const btns = new Map();
+    return Object.assign(el, {
+      querySelectorAll() {
+        return [...this.innerHTML.matchAll(/data-rd="([^"]+)"/g)].map((m) => {
+          if (!btns.has(m[1])) { const b = env.el('button'); b.dataset = { rd: m[1] }; b.focus = () => { env.doc.activeElement = b; }; btns.set(m[1], b); }
+          return btns.get(m[1]);
+        });
+      },
+      remove() { body.children.splice(body.children.indexOf(el), 1); },
+    });
+  };
+}
+
 function makeCtx(env, over = {}) {
+  ensureDom(env);
   const calls = { push: [], params: [], actions: [] };
   const subs = new Set();
   const notifier = {
@@ -132,17 +164,263 @@ test('hub: badge de logros = completados no vistos', async () => {
   assert.ok(html === '' || /1 novedad/.test(html));
 });
 
-test('hub: invitado marca los huecos de cuenta', async () => {
+// ---------- accesos bloqueados ----------
+const guestBackend = () => ({ user: { id: 'g' }, account: { profile: { is_anonymous: true } } });
+const friendsBtn = (root) => root.querySelector('[data-hub="friends"]');
+const dialogs = (env) => env.doc.body.children;
+
+test('computeLocks: invitado bloquea Amigos con la acción «Ir a Cuenta»; con cuenta no hay bloqueos', () => {
+  assert.deepEqual(computeLocks({ guest: false, hasBackend: true }), {});
+  const g = computeLocks({ guest: true, hasBackend: true });
+  assert.deepEqual(Object.keys(g), ['friends']);
+  assert.equal(g.friends.reasonKey, 'hub.lock.friendsNeedsAccount');
+  assert.equal(g.friends.actionKey, 'hub.goAccount');
+  assert.equal(g.friends.go, 'account');
+  assert.deepEqual(computeLocks(), {}); // sin datos = nada bloqueado
+});
+
+test('computeLocks: cuenta real sin nombre de usuario bloquea Amigos con el motivo real y «Ir a Cuenta»; con nombre, libre', () => {
+  const n = computeLocks({ guest: false, hasBackend: true, hasName: false });
+  assert.deepEqual(Object.keys(n), ['friends']);
+  assert.equal(n.friends.reasonKey, 'hub.lock.friendsNeedsName');
+  assert.equal(n.friends.actionKey, 'hub.goAccount');
+  assert.equal(n.friends.go, 'account');
+  assert.deepEqual(computeLocks({ guest: false, hasBackend: true, hasName: true }), {});
+  assert.equal(computeLocks({ guest: true, hasBackend: true, hasName: false }).friends.reasonKey, 'hub.lock.friendsNeedsAccount'); // el invitado conserva su motivo
+  assert.equal(computeLocks({ guest: true, hasBackend: false, hasName: false }).friends.reasonKey, 'hub.lock.friendsOffline');
+});
+
+test('hub: cuenta sin nombre de usuario: popup con el mensaje de main.js y botón «Ir a Cuenta»; con nombre no hay cadenas', async () => {
   const env = fakeEnv();
   const root = fakeRoot(env);
-  const { ctx } = makeCtx(env, { backend: { user: { id: 'g' }, account: { profile: { is_anonymous: true } } } });
+  const { ctx, calls } = makeCtx(env, { backend: { user: { id: 'u' }, account: { profile: { username: '', is_anonymous: false } } } });
   await mount(root, ctx, {});
-  assert.match(root.innerHTML, /Requiere cuenta/);
-  assert.match(root.innerHTML, /hub-needs-account/);
+  assert.match(root.innerHTML, /aria-label="Amigos y grupo, bloqueado: requiere nombre de usuario"/);
+  click(root, 'friends');
+  assert.match(dialogs(env)[0].innerHTML, /Ponte primero un nombre de usuario para añadir amigos./);
+  const go = dialogs(env)[0].querySelectorAll().find((b) => b.dataset.rd === 'a0');
+  go.emit('click');
+  assert.deepEqual(calls.push, ['account']);
+  assert.doesNotMatch((await (async () => { const r = fakeRoot(env); await mount(r, makeCtx(env).ctx, {}); return r; })()).innerHTML, /data-icon="chains"/);
+});
+
+test('computeLocks: sin backend se bloquean Amigos y Ranking, sin acción (no hay cuenta que crear)', () => {
+  const l = computeLocks({ guest: true, hasBackend: false });
+  assert.deepEqual(Object.keys(l).sort(), ['friends', 'ranking']);
+  assert.equal(l.ranking.reasonKey, 'hub.lock.rankingOffline');
+  assert.equal(l.friends.actionKey, undefined);
+  assert.equal(l.friends.go, undefined);
+});
+
+test('hub: invitado ve Amigos encadenado, con aria-disabled (nunca disabled) y el requisito en el nombre accesible', async () => {
+  const env = fakeEnv();
+  const root = fakeRoot(env);
+  const { ctx } = makeCtx(env, { backend: guestBackend() });
+  await mount(root, ctx, {});
+  const html = root.innerHTML;
+  const at = html.indexOf('data-hub="friends"');
+  const btn = html.slice(at - 40, html.indexOf('</button>', at));
+  assert.match(btn, /aria-disabled="true"/);
+  assert.match(btn, /aria-label="Amigos y grupo, bloqueado: requiere cuenta"/);
+  assert.match(btn, /data-icon="chains"/);
+  assert.match(btn, /data-icon="users"/); // el icono normal sigue debajo
+  assert.equal((btn.match(/data-icon="lock"/g) || []).length, 1);
+  assert.doesNotMatch(html, /\sdisabled[\s=>]/);
+  assert.doesNotMatch(html, /hub-needs-account|Requiere cuenta/); // sin variantes de estado ni sr-only viejo
+  assert.equal((html.match(/data-icon="chains"/g) || []).length, 1); // solo Amigos
   const { ctx: ctx2 } = makeCtx(env);
   const root2 = fakeRoot(env);
   await mount(root2, ctx2, {});
-  assert.doesNotMatch(root2.innerHTML, /Requiere cuenta/);
+  assert.doesNotMatch(root2.innerHTML, /data-icon="chains"|aria-disabled/);
+});
+
+test('hub: pulsar un acceso bloqueado abre el popup y NO navega; uno libre navega como siempre', async () => {
+  const env = fakeEnv();
+  const root = fakeRoot(env);
+  const { ctx, calls } = makeCtx(env, { backend: guestBackend() });
+  await mount(root, ctx, {});
+  let prevented = false;
+  friendsBtn(root).emit('click', { preventDefault() { prevented = true; } });
+  assert.deepEqual(calls.push, []);
+  assert.ok(prevented);
+  assert.equal(dialogs(env).length, 1);
+  const html = dialogs(env)[0].innerHTML;
+  assert.match(html, /role="dialog" aria-modal="true" aria-labelledby="[^"]+" aria-describedby="[^"]+"/);
+  assert.match(html, /Amigos y grupo/);
+  assert.match(html, /Necesitas una cuenta para usar Amigos y grupo/);
+  assert.match(html, /data-icon="lock"/);
+  assert.equal(dialogs(env)[0].className, 'overlay reason-overlay'); // lo reconoce el manejador global de Esc de main.js
+  assert.equal(env.doc.activeElement.dataset.rd, 'close'); // foco inicial dentro, en «Entendido» (la acción útil queda a un Tab)
+  friendsBtn(root).emit('click'); // segundo clic con el popup abierto: no se duplica
+  assert.equal(dialogs(env).length, 1);
+  dialogs(env)[0].querySelectorAll()[0].emit('click');
+  click(root, 'ranking');
+  assert.deepEqual(calls.push, ['ranking']);
+});
+
+test('popup: «Entendido», Esc y el fondo lo cierran y devuelven el foco al botón; el hub sigue en pie', async () => {
+  const env = fakeEnv();
+  const root = fakeRoot(env);
+  const { ctx, calls } = makeCtx(env, { backend: guestBackend() });
+  await mount(root, ctx, {});
+  const closers = [
+    () => dialogs(env)[0].querySelectorAll().find((b) => b.dataset.rd === 'close').emit('click'),
+    () => { let stopped = false; dialogs(env)[0].emit('keydown', { key: 'Escape', preventDefault() {}, stopPropagation() { stopped = true; } }); assert.ok(stopped); },
+    () => { const o = dialogs(env)[0]; o.emit('click', { target: {} }); assert.equal(dialogs(env).length, 1, 'un clic dentro de la tarjeta no cierra'); o.emit('click', { target: o }); },
+  ];
+  for (const close of closers) {
+    friendsBtn(root).emit('click');
+    assert.equal(dialogs(env).length, 1);
+    close();
+    assert.equal(dialogs(env).length, 0);
+    assert.equal(env.doc.activeElement, friendsBtn(root));
+  }
+  assert.deepEqual(calls.push, []);
+  assert.equal(ctx.scope.live().subs, 1);
+  assert.equal(env.liveTimers(), 0);
+});
+
+test('popup: «Ir a Cuenta» cierra y navega a Cuenta; Tab da la vuelta dentro del diálogo', async () => {
+  const env = fakeEnv();
+  const root = fakeRoot(env);
+  const { ctx, calls } = makeCtx(env, { backend: guestBackend() });
+  await mount(root, ctx, {});
+  friendsBtn(root).emit('click');
+  const [close, go] = dialogs(env)[0].querySelectorAll();
+  assert.equal(env.doc.activeElement, close);
+  go.focus(); // Tab desde «Entendido» llega a la acción; otro Tab da la vuelta
+  let tabbed = false;
+  dialogs(env)[0].emit('keydown', { key: 'Tab', shiftKey: false, preventDefault() { tabbed = true; } });
+  assert.ok(tabbed);
+  assert.equal(env.doc.activeElement, close);
+  go.emit('click');
+  assert.equal(dialogs(env).length, 0);
+  assert.deepEqual(calls.push, ['account']);
+});
+
+test('popup: onCover y destroy cierran SIN robar el foco a la pantalla nueva; el usuario sí lo recupera al cerrar', async () => {
+  const env = fakeEnv();
+  const root = fakeRoot(env);
+  const { ctx } = makeCtx(env, { backend: guestBackend() });
+  const s = await mount(root, ctx, {});
+  friendsBtn(root).emit('click');
+  const other = { focus() { env.doc.activeElement = other; } };
+  other.focus();
+  s.onCover();
+  assert.equal(dialogs(env).length, 0);
+  assert.equal(env.doc.activeElement, other);
+  s.onUncover();
+  friendsBtn(root).emit('click');
+  other.focus();
+  s.destroy();
+  assert.equal(dialogs(env).length, 0);
+  assert.equal(env.doc.activeElement, other);
+});
+
+test('hub: onUncover sin cambios no regenera las cadenas; un cambio sí actualiza', async () => {
+  const env = fakeEnv();
+  const root = fakeRoot(env);
+  const backend = guestBackend();
+  let gen = 0;
+  const { ctx } = makeCtx(env, { backend, icon: (n) => { if (n === 'chains') gen++; return `<svg data-icon="${n}"></svg>`; } });
+  const s = await mount(root, ctx, {});
+  assert.equal(gen, 1);
+  s.onCover(); s.onUncover(); s.onCover(); s.onUncover();
+  assert.equal(gen, 1, 'sin cambio no se vuelve a generar');
+  backend.account.profile.is_anonymous = false;
+  backend.account.profile.username = 'ana';
+  s.onCover(); s.onUncover();
+  assert.equal(gen, 1);
+  assert.equal(root.querySelector('[data-lock="friends"]').innerHTML, '');
+  backend.account.profile.username = '';
+  s.onCover(); s.onUncover();
+  assert.equal(gen, 2, 'un cambio sí regenera');
+  assert.match(root.querySelector('[data-lock="friends"]').innerHTML, /chains/);
+});
+
+test('popup: destruir el hub con el popup abierto lo cierra y deja el scope a cero; cerrar dos veces no falla', async () => {
+  const env = fakeEnv();
+  const { ctx } = makeCtx(env, { backend: guestBackend() });
+  const root = fakeRoot(env);
+  const s = await mount(root, ctx, {});
+  friendsBtn(root).emit('click');
+  const btn = dialogs(env)[0].querySelectorAll()[0];
+  s.destroy();
+  assert.equal(dialogs(env).length, 0);
+  btn.emit('click'); // listener ya liberado: no hace nada
+  s.destroy();
+  ctx.scope.dispose();
+  assert.deepEqual(ctx.scope.live(), { listeners: 0, timers: 0, subs: 0 });
+  assert.equal(env.liveListeners(), 0);
+});
+
+test('popup: 20 montajes con el popup abierto y destruidos no dejan nada', async () => {
+  const env = fakeEnv();
+  const { ctx: base } = makeCtx(env, { backend: guestBackend() });
+  for (let i = 0; i < 20; i++) {
+    const scope = createScope({ win: env.win, doc: env.doc, timers: env.timers });
+    const root = fakeRoot(env);
+    const s = await mount(root, { ...base, scope }, {});
+    friendsBtn(root).emit('click');
+    assert.equal(dialogs(env).length, 1);
+    if (i % 2) dialogs(env)[0].querySelectorAll()[0].emit('click');
+    s.destroy();
+    scope.dispose();
+    assert.equal(dialogs(env).length, 0);
+    assert.deepEqual(scope.live(), { listeners: 0, timers: 0, subs: 0 });
+  }
+  assert.equal(env.liveListeners(), 0);
+});
+
+test('hub: al crear la cuenta y volver (onUncover) se quitan las cadenas y el acceso navega', async () => {
+  const env = fakeEnv();
+  const root = fakeRoot(env);
+  const backend = guestBackend();
+  const { ctx, calls } = makeCtx(env, { backend });
+  const s = await mount(root, ctx, {});
+  const layer = root.querySelector('[data-lock="friends"]');
+  assert.match(root.innerHTML, /data-lock="friends"[^>]*><span class="hub-chains"/);
+  assert.match(root.innerHTML, /data-hub="friends"[^>]*aria-disabled="true"/);
+  s.onCover();
+  backend.account.profile.is_anonymous = false; backend.account.profile.username = 'ana'; // la cuenta se crea (con nombre) en la pantalla Cuenta
+  s.onUncover('account');
+  assert.equal(layer.innerHTML, '');
+  assert.equal(friendsBtn(root).getAttribute('aria-disabled'), null);
+  assert.equal(friendsBtn(root).getAttribute('aria-label'), null);
+  click(root, 'friends');
+  assert.deepEqual(calls.push, ['friends']);
+  backend.account.profile.is_anonymous = true; // y se vuelve a bloquear si la sesión vuelve a ser de invitado
+  s.onCover(); s.onUncover();
+  assert.match(layer.innerHTML, /chains/);
+  assert.equal(friendsBtn(root).getAttribute('aria-disabled'), 'true');
+  assert.match(friendsBtn(root).getAttribute('aria-label'), /bloqueado: requiere cuenta/);
+});
+
+test('hub: sin conexión se bloquean Amigos y Ranking; el popup solo trae «Entendido» y el mensaje real del ranking', async () => {
+  const env = fakeEnv();
+  const root = fakeRoot(env);
+  const { ctx, calls } = makeCtx(env, { backend: { user: { id: 'l' }, account: null } });
+  await mount(root, ctx, {});
+  assert.equal((root.innerHTML.match(/data-icon="chains"/g) || []).length, 2);
+  click(root, 'ranking');
+  assert.match(dialogs(env)[0].innerHTML, /El ranking de victorias necesita conexión con el servidor\./);
+  assert.doesNotMatch(dialogs(env)[0].innerHTML, /data-rd="a0"/);
+  assert.deepEqual(calls.push, []);
+});
+
+test('icono chains: svg válido registrado, con muchos eslabones', () => {
+  assert.ok(ICON_NAMES.includes('chains'));
+  const svg = icon('chains');
+  assert.match(svg, /^<svg class="gi gi-chains/);
+  assert.match(svg, /viewBox="-1 -1 51 51"/);
+  assert.equal((svg.match(/<\/svg>/g) || []).length, 1);
+  assert.ok((svg.match(/<path/g) || []).length > 60);
+});
+
+test('CSS del hub: ningún acceso cambia de borde ni de opacidad por su estado, y sin :hover', () => {
+  assert.doesNotMatch(HUB_CSS, /needs-account|dashed/);
+  assert.equal((HUB_CSS.match(/:hover/g) || []).length, 0);
+  assert.doesNotMatch(rule('.hub-nav[data-locked] .hub-ico > svg'), /border|opacity:/);
 });
 
 test('hub: sin notifier (modo local) monta igual', async () => {
