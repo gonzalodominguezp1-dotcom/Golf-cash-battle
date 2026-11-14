@@ -10,7 +10,8 @@
     "sync:functions": "node scripts/sync-functions.mjs",
     "previews:capture": "node scripts/capture-course-previews.mjs",
     "splash:capture": "node scripts/capture-splash-layers.mjs",
-    "banderin:make": "node scripts/make-banderin.mjs"
+    "banderin:make": "node scripts/make-banderin.mjs",
+    "fireball:make": "node scripts/make-fireball.mjs"
   },
   "repository": {
     "type": "git",

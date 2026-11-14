@@ -87,8 +87,8 @@ test('ningún ciclo de animación < 0,5 s (en segundos y con alternate x2)', () 
   assert.deepEqual(fastCycles(css), []);
   const by = (sel) => cycles(css).find((c) => c.sel === sel)?.seconds;
   assert.equal(by('#splash .brand img'), 2.4);
-  assert.ok(Math.abs(by('#splash .trail') - 1.4) < 1e-9, 'gcb-flicker 0,7 s alternate = 1,4 s');
-  assert.ok(Math.abs(by('#splash .trail.t2') - 1.0) < 1e-9, '.t2 0,5 s alternate = 1 s');
+  assert.ok(Math.abs(by('#splash .fire .fa') - 1.8) < 1e-9, 'fundido de la bola de fuego 0,9 s alternate = 1,8 s');
+  assert.ok(Math.abs(by('#splash .fire .fb') - 1.8) < 1e-9);
   // caso positivo: el detector falla con 0.2s, con 0.2s alternate (0,4 s) y con animation-duration
   assert.equal(fastCycles('a { animation: x 0.2s linear infinite; }').length, 1);
   assert.equal(fastCycles('a { animation: x 0.2s ease alternate infinite; }').length, 1);
