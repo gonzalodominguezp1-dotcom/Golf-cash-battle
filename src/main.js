@@ -39,7 +39,11 @@ import { createHost } from './screens/host.js';
 import { createContext } from './screens/context.js';
 import { ACCOUNT_TABS, createNavigator } from './screens/navigate.js';
 import { getQuality } from './game/render/quality.js';
+import { createBoot, createHubPreloader, trackProgress, waitPainted } from './ui/splashBridge.js';
 
+// hitos del arranque hacia el splash (no-op si no hay #splash: ?skinlab=1)
+const boot = createBoot();
+boot.bundle();
 let backend, wallet, matches;
 // práctica forzada con #hoyoN: siempre local, no toca el servidor
 const practice = new MatchService(new LocalWallet(), Math.random, COURSES.length);
@@ -47,7 +51,8 @@ const progress = new Progress();
 // miniaturas de skins guardadas (IndexedDB) a memoria cuanto antes: las <img> salen ya con su imagen
 warmThumbs();
 // three.js (partida, inspector 3D) se carga solo cuando hace falta: lobby y pantalla de skins no lo pagan
-const loadGolfGame = () => import('./game/GolfGame.js').then((m) => m.GolfGame);
+// la partida usa su propio renderer: se libera la escena del hub precargada (T026 la recreará si la necesita)
+const loadGolfGame = () => { hubPreloader.release(); return import('./game/GolfGame.js').then((m) => m.GolfGame); };
 const loadSkinInspector = () => import('./ui/skinInspector.js');
 
 // "móvil" en pantallas táctiles, "equipo" en PC
@@ -2658,12 +2663,14 @@ if (skinLab) {
   loadSkinInspector().then(({ mountSkinLab }) => mountSkinLab(app));
 } else {
   app.innerHTML = '<main class="screen loading"><h1>Golf Cash Battle</h1><p class="sub">Conectando…</p></main>';
-  createBackend().then((b) => {
+  createBackend().then(async (b) => {
     if (b.mode === 'auth') {
       // sin sesión: pantallas de entrada. Al entrar se recarga para arrancar limpio con la cuenta
       mountAuth(app, b.auth, { recovery: b.recovery, guest: b.guest, onDone: () => location.replace(location.origin + location.pathname + location.hash) });
+      boot.noSession();
       return;
     }
+    boot.session();
     backend = b;
     ({ wallet, matches } = b);
     if (b.account) {
@@ -2698,9 +2705,34 @@ if (skinLab) {
     });
     startNotices(b);
     startPartyWatch(b);
+    // el saldo no frena el arranque: `progress` se marca al llegar o a los 3 s
+    trackProgress(boot, () => wallet.getBalance());
+    const hubScene = hubPreloader.preload();
     startRouting(b);
+    hubScene.then((scene) => { if (scene && hubPreloader.current() === scene) startCtx.hubScene = scene; });
+    // `hub` espera al lobby pintado y a que la escena llegue o se omita (margen de 8 s)
+    const maxMs = Number(document.getElementById('splash')?.dataset.maxMs) || 15000;
+    Promise.all([hubScene, waitPainted(app, { maxMs })]).then(([, painted]) => {
+      // un lobby que no se pinta es un fallo de arranque: «Reintentar» (splash.js no lo da solo con `session` marcada)
+      if (painted) boot.hub(); else boot.fail('lobby sin pintar');
+    });
+  }).catch((err) => {
+    // solo backend/sesión (y el lobby sin pintar) pueden bloquear el splash con «Reintentar»
+    boot.fail(String(err?.message ?? err));
+    throw err;
   });
 }
+
+// three y la escena del hub se piden con import() dinámico durante el splash (nunca en la carga inicial) y se montan
+// en un contenedor oculto; el hub la reclama de ctx.hubScene (T026), que debe llamar a resume(): llega pausada.
+let startCtx = null;
+const hubPreloader = createHubPreloader({
+  boot,
+  importScene: () => import('./game/render/hubScene.js').then((m) => ({ createHubScene: m.createHubScene })),
+  quality: () => getQuality(),
+  reducedMotion: () => matchMedia('(prefers-reduced-motion: reduce)').matches,
+  onReleased: (sc) => { if (startCtx && startCtx.hubScene === sc) startCtx.hubScene = null; },
+});
 
 // ---------- navegación ----------
 // El router y el host llevan la pila de pantallas; las pantallas aún no migradas se pintan con sus show* de siempre.
@@ -2721,6 +2753,7 @@ function startRouting(b) {
   });
   screenHost = createHost({ router, routes, root: app, ctx, notify, win: window, doc: document });
   go = createNavigator({ router, host: screenHost, rootId: ROOT_SCREEN });
+  startCtx = ctx;
   screenHost.attach();
   testHole = router.start().testHole;
   ctx.testHole = testHole;
