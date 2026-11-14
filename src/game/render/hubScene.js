@@ -7,7 +7,8 @@ import { THEMES } from '../themes.js';
 import { ResolutionGovernor } from './resolutionGovernor.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { lushMountains, makeLushBush, makeLushCloud, makeLushRock, makeLushTree, meadowGroundTexture } from './lushEnvironment.js';
-import { orbitAngle, scenePreset, shouldRender } from './hubSceneRules.js';
+import { flagWindSpec, orbitAngle, scenePreset, shouldRender } from './hubSceneRules.js';
+import { createFlagRig } from './hubFlag.js';
 import { createHubAmbient } from './hubAmbient.js';
 
 const THEME = THEMES.meadowDay;
@@ -71,7 +72,7 @@ function buildSky(rng) {
   return g;
 }
 
-function buildGreen() {
+function buildGreen(flagObject) {
   const g = new THREE.Group();
   const grass = meadowGroundTexture();
   // pradera grande, un poco más oscura, y el green encima con su collar
@@ -89,13 +90,7 @@ function buildGreen() {
   const cup = new THREE.Mesh(new THREE.CircleGeometry(0.2, 24), new THREE.MeshBasicMaterial({ color: 0x0b0f0c }));
   cup.rotation.x = -Math.PI / 2;
   cup.position.y = 0.02;
-  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 2.4, 8), new THREE.MeshStandardMaterial({ color: 0xf2f2f2 }));
-  pole.position.y = 1.2;
-  pole.castShadow = true;
-  const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.55), new THREE.MeshStandardMaterial({ color: 0xe01212, emissive: 0x3a0000, side: THREE.DoubleSide }));
-  flag.position.set(0.45, 2.1, 0);
-  flag.castShadow = true;
-  g.add(meadow, collar, green, cup, pole, flag);
+  g.add(meadow, collar, green, cup, flagObject); // mástil, banderín y sus sombras (hubFlag.js)
   return g;
 }
 
@@ -161,7 +156,7 @@ export async function createHubScene(container, { quality = 'medium', reducedMot
     throw new Error('Sin WebGL: ' + (err?.message ?? err));
   }
 
-  let sun, scene, vis, onVis, ambient, disposed = false;
+  let sun, scene, vis, onVis, ambient, flagRig, disposed = false;
   const release = () => {
     disposed = true;
     renderer.setAnimationLoop(null);
@@ -171,6 +166,7 @@ export async function createHubScene(container, { quality = 'medium', reducedMot
       for (const m of [].concat(o.material ?? [])) { m.map?.dispose?.(); m.dispose?.(); }
     });
     ambient?.dispose();
+    flagRig?.dispose();
     sun?.dispose?.();
     sun?.shadow?.map?.dispose?.();
     renderer.forceContextLoss();
@@ -201,7 +197,27 @@ export async function createHubScene(container, { quality = 'medium', reducedMot
     // OJO: este rng() extra cambia la disposición del bosque respecto a T014a para un mismo ?seed=N
     // (T016 debe capturar con este código).
     const forestSeed = (rng() * 4294967296) >>> 0; // el bosque se reconstruye igual al cambiar de calidad
-    const layers = { sky, forest: buildForest(seededRng(forestSeed), preset), green: buildGreen() };
+    // Banderín con el logo: la textura se carga dentro de la escena (three ya está cargado); si falla, queda la tela roja.
+    const textureBase = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/';
+    const loadFlagTexture = (file) => new Promise((ok, fail) => {
+      const t = new THREE.TextureLoader().load(`${textureBase}hub/${file}`, ok, undefined, fail);
+      t.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+    });
+    flagRig = createFlagRig({
+      spec: flagWindSpec(quality, reducedMotion),
+      sunDir: THEME.sunDir,
+      loadTextures: async () => {
+        const [front, back] = await Promise.allSettled([loadFlagTexture('banderin.webp'), loadFlagTexture('banderin-back.webp')]);
+        if (front.status !== 'fulfilled' || back.status !== 'fulfilled') {
+          front.value?.dispose(); back.value?.dispose(); // una sola cara cargada no sirve: se queda la tela roja
+          throw new Error('banderín sin textura');
+        }
+        return { front: front.value, back: back.value };
+      },
+      // sin bucle de animación (reduced-motion o capa de captura) hay que redibujar cuando llega la tela
+      onTextures: () => { if (!disposed && started && !paused && (reducedMotion || layerMode)) drawOnce(); },
+    });
+    const layers = { sky, forest: buildForest(seededRng(forestSeed), preset), green: buildGreen(flagRig.object) };
     for (const name of HUB_LAYERS) scene.add(layers[name]);
     const disposeTree = (root) => root.traverse((o) => {
       o.geometry?.dispose?.();
@@ -284,6 +300,7 @@ export async function createHubScene(container, { quality = 'medium', reducedMot
       if (!shouldRender(vis)) { stats._times.length = 0; prevNow = null; return; }
       lastT = (now - t0) / 1000;
       placeCamera(lastT);
+      flagRig.update(lastT);
       if (ambient) { ambient.update(prevNow === null ? 0 : (now - prevNow) / 1000); prevNow = now; }
       gov.tick(now);
       renderer.render(scene, camera);
@@ -326,6 +343,7 @@ export async function createHubScene(container, { quality = 'medium', reducedMot
         const treesChanged = next.trees !== preset.trees;
         preset = next;
         ambient?.setQuality(q);
+        flagRig.setSpec(flagWindSpec(q, reducedMotion));
         applyShadows(preset.shadows);
         if (treesChanged) rebuildForest();
         gov.configure(preset.minPixelRatio, preset.pixelRatio);
