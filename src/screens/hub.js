@@ -18,7 +18,7 @@ const NAV = {
   skins: { go: 'skins', icon: 'skins', text: 'skins' },
   friends: { go: 'friends', icon: 'users', text: 'friends', guest: true },
   maps: { go: 'maps', icon: 'map', text: 'maps' },
-  practice: { act: 'startPractice', icon: 'tee', text: 'practice' },
+  practice: { act: 'startPractice', icon: 'robot', text: 'practice' }, // práctica = partida contra bots
 };
 
 // 1250 -> «1.250» (separador de miles fijo: Intl es-ES no agrupa los números de 4 cifras). Siempre entero y >= 0;

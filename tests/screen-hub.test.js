@@ -73,7 +73,7 @@ test('hub: composición C10 con textos en español y sin saldo ni silencio', asy
   assert.match(root.innerHTML, /--pct:40/);
   assert.doesNotMatch(root.innerHTML, /mute|silencio/i);
   // iconos del set existente
-  for (const n of ['trophy', 'medal', 'skins', 'users', 'map', 'tee', 'gear', 'fullscreen', 'user']) assert.ok(root.innerHTML.includes(`data-icon="${n}"`), n);
+  for (const n of ['trophy', 'medal', 'skins', 'users', 'map', 'robot', 'gear', 'fullscreen', 'user']) assert.ok(root.innerHTML.includes(`data-icon="${n}"`), n);
 });
 
 // NOTA: el logo vuelve como banderín en la escena (tarea aparte); la barra del hub no lleva imagen de logo.
