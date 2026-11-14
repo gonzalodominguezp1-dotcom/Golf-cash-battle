@@ -611,3 +611,26 @@ test('Ajustes, pantalla completa y Cuenta no llevan texto visible (solo nombre a
   assert.doesNotMatch(top, /hub-nav-t/); // sin etiquetas de texto en la barra superior
   for (const key of ['settings', 'fullscreen', 'account']) assert.match(top, new RegExp(`data-hub="${key}"[^>]*aria-label="[^"]+"`), key);
 });
+
+test('el candado de un acceso bloqueado no tiene fondo ni borde y es grande', () => {
+  const r = rule('.hub-padlock');
+  assert.ok(r, 'existe la regla .hub-padlock');
+  assert.match(r, /background:\s*none/);
+  assert.match(r, /border:\s*0/);
+  assert.match(r, /box-shadow:\s*none/);
+  assert.doesNotMatch(r, /border-radius|radial-gradient|var\(--gold\)/);
+  const w = Number(/width:\s*(\d+)%/.exec(r)?.[1]);
+  assert.ok(w >= 70, `el candado ocupa ${w}% del recuadro (mín. 70 %)`);
+});
+
+test('las cadenas se leen como cadena: muchos eslabones pequeños por diagonal', () => {
+  const svg = icon('chains');
+  const paths = (svg.match(/<path/g) || []).length;
+  assert.ok(paths >= 120, `${paths} paths: con 11 eslabones por cadena debería haber bastantes más que con 6`);
+  // el óvalo de frente mide ~9,2×5,8 unidades (antes 14×8,8): ningún eslabón de frente debe volver a ser grande
+  const src = readFileSync(new URL('../src/ui/icons.js', import.meta.url), 'utf8');
+  const m = /Math\.cos\(a\) \* ([\d.]+), Math\.sin\(a\) \* ([\d.]+)/.exec(src);
+  assert.ok(m, 'se encontró el óvalo del eslabón');
+  assert.ok(Number(m[1]) <= 5.2 && Number(m[2]) <= 3.3, `eslabón ${m[1]}×${m[2]} demasiado grande`);
+  assert.match(src, /chains: \(\) => \[\.\.\.chainParts\(2, 2, 47, 47, 1\d, true\)/); // ≥ 10 eslabones por cadena
+});

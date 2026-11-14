@@ -78,7 +78,7 @@ export const ICON_NUDGE = {
   user: [-0.2, -3.4],
   coins: [-0.8, -1],
   lock: [-0.1, 0.1],
-  chains: [0.8, -1.3],
+  chains: [-0.7, -1.3],
 };
 
 /** Variables CSS `--nx/--ny` (unidades del viewBox) para poner como style en el contenedor del icono. */

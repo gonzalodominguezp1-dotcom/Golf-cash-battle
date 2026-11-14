@@ -168,10 +168,10 @@ const chainParts = (x0, y0, x1, y1, n, frontFirst) => {
     const cy = y0 + ((y1 - y0) * k) / (n - 1);
     if ((k % 2 === 0) === frontFirst) {
       const ring = [];
-      for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; ring.push(rot(Math.cos(a) * 7, Math.sin(a) * 4.4, cx, cy)); }
-      out.push(T(smooth(ring, true, 0), 'silver', 2.6));
+      for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; ring.push(rot(Math.cos(a) * 4.6, Math.sin(a) * 2.9, cx, cy)); }
+      out.push(T(smooth(ring, true, 0), 'silver', 1.9));
     } else {
-      out.push(S(rpoly([rot(-4.8, -1.8, cx, cy), rot(4.8, -1.8, cx, cy), rot(4.8, 1.8, cx, cy), rot(-4.8, 1.8, cx, cy)], 1.4, 0.15), 'gray'));
+      out.push(S(rpoly([rot(-3.4, -1.3, cx, cy), rot(3.4, -1.3, cx, cy), rot(3.4, 1.3, cx, cy), rot(-3.4, 1.3, cx, cy)], 1, 0.15), 'gray'));
     }
   }
   return out;
@@ -278,7 +278,7 @@ const ICONS = {
     G(14, 25, 1.6),
   ],
   // dos cadenas cruzadas en X de esquina a esquina (para el estado bloqueado del hub); la segunda pasa por encima
-  chains: () => [...chainParts(2, 2, 47, 47, 6, true), ...chainParts(47, 2, 2, 47, 6, false)],
+  chains: () => [...chainParts(2, 2, 47, 47, 11, true), ...chainParts(47, 2, 2, 47, 11, false)],
   check: (t = 'green') => [T('M9 25l9.5 9.5L39 13', t, 6.5)],
   close: (t = 'red') => [T('M13 13l22 22M35 13L13 35', t, 6.5)],
   plus: (t = 'green') => [T('M24 9v30M9 24h30', t, 6.5)],

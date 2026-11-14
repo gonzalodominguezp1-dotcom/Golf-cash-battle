@@ -112,11 +112,11 @@
 .hub-chains { position: absolute; inset: 0; }
 .hub-chains > svg { display: block; width: 100%; height: 100%; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55)); }
 .hub-padlock {
-  position: absolute; left: 50%; top: 50%; width: 46%; height: 46%; margin: -23% 0 0 -23%; box-sizing: border-box; border-radius: 50%;
-  display: grid; place-items: center; background: radial-gradient(circle at 35% 30%, #2f2a44, #12101c);
-  border: 2px solid var(--gold); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(0, 0, 0, 0.5);
+  /* candado SIN fondo ni borde, grande, centrado en el cruce de las cadenas; el contorno oscuro del propio icono + una sombra lo separan de ellas */
+  position: absolute; left: 50%; top: 50%; width: 76%; height: 76%; margin: -38% 0 0 -38%; box-sizing: border-box;
+  display: grid; place-items: center; background: none; border: 0; box-shadow: none;
 }
-.hub-padlock > svg { display: block; width: 68%; height: 68%; }
+.hub-padlock > svg { display: block; width: 100%; height: 100%; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.75)); }
 .hub-ico .scr-badge { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; }
 .hub-ico .scr-badge-dot { width: 18px; height: 18px; border: 2px solid #fff; box-sizing: border-box; box-shadow: none; }
 
