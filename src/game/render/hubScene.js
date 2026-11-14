@@ -5,7 +5,6 @@
 import * as THREE from 'three';
 import { THEMES } from '../themes.js';
 import { ResolutionGovernor } from './resolutionGovernor.js';
-import { qualityPreset } from './quality.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { lushMountains, makeLushBush, makeLushCloud, makeLushRock, makeLushTree, meadowGroundTexture } from './lushEnvironment.js';
 import { orbitAngle, scenePreset, shouldRender } from './hubSceneRules.js';
@@ -180,7 +179,7 @@ export async function createHubScene(container, { quality = 'medium', reducedMot
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.shadowMap.enabled = qualityPreset(quality).shadows;
+    renderer.shadowMap.enabled = preset.shadows;
     renderer.domElement.style.cssText = 'display:block;width:100%;height:100%';
     container.appendChild(renderer.domElement);
 
@@ -194,8 +193,32 @@ export async function createHubScene(container, { quality = 'medium', reducedMot
     Object.assign(sun.shadow.camera, { left: -32, right: 32, top: 32, bottom: -32, near: 1, far: 100 });
     scene.add(sun);
 
-    const layers = { sky: buildSky(rng), forest: buildForest(rng, preset), green: buildGreen() };
+    const sky = buildSky(rng);
+    // OJO: este rng() extra cambia la disposición del bosque respecto a T014a para un mismo ?seed=N
+    // (T016 debe capturar con este código).
+    const forestSeed = (rng() * 4294967296) >>> 0; // el bosque se reconstruye igual al cambiar de calidad
+    const layers = { sky, forest: buildForest(seededRng(forestSeed), preset), green: buildGreen() };
     for (const name of HUB_LAYERS) scene.add(layers[name]);
+    const disposeTree = (root) => root.traverse((o) => {
+      o.geometry?.dispose?.();
+      for (const m of [].concat(o.material ?? [])) m.dispose?.(); // materiales propios del bosque
+    });
+    const rebuildForest = () => {
+      const old = layers.forest;
+      const visible = old.visible;
+      scene.remove(old);
+      disposeTree(old);
+      layers.forest = buildForest(seededRng(forestSeed), preset);
+      layers.forest.visible = visible;
+      scene.add(layers.forest);
+    };
+    const applyShadows = (on) => {
+      if (renderer.shadowMap.enabled === on) return;
+      renderer.shadowMap.enabled = on;
+      sun.castShadow = on;
+      if (!on) { sun.shadow.map?.dispose?.(); sun.shadow.map = null; }
+      scene.traverse((o) => { for (const m of [].concat(o.material ?? [])) m.needsUpdate = true; });
+    };
 
     const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 400);
     const placeCamera = (t) => {
@@ -205,7 +228,7 @@ export async function createHubScene(container, { quality = 'medium', reducedMot
     };
 
     const dpr = () => (typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1);
-    const gov = new ResolutionGovernor({ min: qualityPreset(quality).minPixelRatio, max: preset.pixelRatio, apply: (v) => setPR(v) });
+    const gov = new ResolutionGovernor({ min: preset.minPixelRatio, max: preset.pixelRatio, apply: (v) => setPR(v) });
     function setPR(v) {
       renderer.setPixelRatio(Math.min(dpr(), v));
       resize();
@@ -222,9 +245,10 @@ export async function createHubScene(container, { quality = 'medium', reducedMot
     const stats = {
       renderCalls: 0,
       _times: [],
+      /** FPS medios de los últimos ≤60 frames dibujados; 0 si está en pausa o sin muestras. */
       fps() {
         const t = this._times;
-        return t.length < 2 ? 0 : ((t.length - 1) * 1000) / (t[t.length - 1] - t[0] || 1);
+        return paused || t.length < 2 ? 0 : ((t.length - 1) * 1000) / (t[t.length - 1] - t[0] || 1);
       },
     };
 
@@ -243,7 +267,7 @@ export async function createHubScene(container, { quality = 'medium', reducedMot
     function frame(now) {
       if (disposed) return;
       if (t0 === null) t0 = now;
-      if (!shouldRender(vis)) return;
+      if (!shouldRender(vis)) { stats._times.length = 0; return; }
       lastT = (now - t0) / 1000;
       placeCamera(lastT);
       gov.tick(now);
@@ -266,9 +290,10 @@ export async function createHubScene(container, { quality = 'medium', reducedMot
     return {
       firstFrame,
       stats,
-      pause() { paused = true; renderer.setAnimationLoop(null); },
+      pause() { paused = true; renderer.setAnimationLoop(null); stats._times.length = 0; },
+      get paused() { return paused; },
       resume() {
-        if (!paused || disposed) return;
+        if (!paused || disposed || layerMode) return;
         paused = false;
         stats._times.length = 0;
         if (reducedMotion) { drawOnce(); return; }
@@ -280,9 +305,15 @@ export async function createHubScene(container, { quality = 'medium', reducedMot
         });
       },
       setQuality(q) {
-        preset = scenePreset(q);
-        gov.configure(qualityPreset(q).minPixelRatio, preset.pixelRatio);
+        if (disposed) return;
+        const next = scenePreset(q);
+        const treesChanged = next.trees !== preset.trees;
+        preset = next;
+        applyShadows(preset.shadows);
+        if (treesChanged) rebuildForest();
+        gov.configure(preset.minPixelRatio, preset.pixelRatio);
         setPR(preset.pixelRatio);
+        stats._times.length = 0;
         if (reducedMotion && !paused) drawOnce();
       },
       resize,

@@ -94,3 +94,15 @@ test('shouldRender: false si tapada u oculta', () => {
   assert.equal(shouldRender(), true);
   assert.equal(shouldRender(null), true);
 });
+
+test('scenePreset: sombras y resolución mínima exactas por calidad', () => {
+  const l = scenePreset('low'), m = scenePreset('medium'), h = scenePreset('high');
+  assert.equal(l.shadows, false);
+  assert.equal(m.shadows, true);
+  assert.equal(h.shadows, true);
+  assert.equal(l.minPixelRatio, 0.65);
+  assert.equal(m.minPixelRatio, 0.8);
+  assert.equal(h.minPixelRatio, 1);
+  assert.ok(l.minPixelRatio < m.minPixelRatio && m.minPixelRatio < h.minPixelRatio);
+  for (const p of [l, m, h]) assert.ok(p.minPixelRatio <= p.pixelRatio);
+});

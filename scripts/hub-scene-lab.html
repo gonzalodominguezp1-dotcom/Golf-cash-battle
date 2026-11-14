@@ -12,9 +12,11 @@
 </head>
 <body>
   <!-- Solo dev (no entra en el build). Parámetros: ?q=low|medium|high&layer=sky|forest|green&nowebgl=1&seed=N
+       El botón «Medir FPS 10 s» se oculta con ?capture=1 y siempre que haya ?layer= (capturas).
        Expone window.lab = { scene, error } -->
   <div id="scene"></div>
   <div id="info">cargando…</div>
+  <button id="measure" style="position:fixed;right:8px;top:8px;padding:6px 10px">Medir FPS 10 s</button>
   <script type="module" src="./hub-scene-lab.js"></script>
 </body>
 </html>

@@ -19,7 +19,8 @@ const SCENE = {
 
 export function scenePreset(quality) {
   const key = Object.hasOwn(SCENE, quality) ? quality : 'medium';
-  return { pixelRatio: qualityPreset(key).pixelRatio, ...SCENE[key] };
+  const q = qualityPreset(key);
+  return { pixelRatio: q.pixelRatio, minPixelRatio: q.minPixelRatio, shadows: q.shadows, ...SCENE[key] };
 }
 
 const KINDS = ['particles', 'butterfly', 'ballIn'];
