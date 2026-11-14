@@ -102,3 +102,5 @@ Retoma la feature ui-pantallas de golf-cash-battle. Lee SOLO 02-DOCS/wiki/sdd/pr
 - [blocking] Q2 — Prueba del humano en móvil real (Q2.5) antes de fusionar a main, constitución Q2.5, T044
 - [review-after] Q3 — Excepción U6.6 (sin botón de silencio en el hub) decidida por el humano en C11; se anota en la constitución en T008, T008
 - [review-after] Q4 — El saldo sigue en la cabecera de Mesas y en Cuenta (suposición de C11), spec C11, T028
+- [review-after] Q5 — Splash sin tope duro: con `session` marcada y sin `hub` no hay error ni «Reintentar» (el plan §3.10 lo fija; AC28 podría pedir un tope también ahí, p. ej. error a 30 s), T019/T021
+- [review-after] Q6 — TIP del splash: solo el primero sale del boceto; los otros tres (pendiente, arrastre, práctica gratis) son provisionales del ejecutor, T019/T020b
