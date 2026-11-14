@@ -56,14 +56,14 @@
       @keyframes gcb-fire-in { from { opacity: 0; } to { opacity: 1; } }
       @keyframes gcb-fire-out { from { opacity: 1; } to { opacity: 0.15; } }
       #splash .ball-shadow { position: absolute; left: -26px; top: 30px; width: 52px; height: 12px; border-radius: 50%; background: rgba(0, 0, 0, 0.34); filter: blur(3px); }
-      #splash .loader { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 5vh); box-sizing: border-box; width: min(100% - 32px, 440px); padding: 14px 16px 12px; display: grid; gap: 10px; text-align: center; border-radius: 14px; border: 1.5px solid rgba(245, 197, 66, 0.75); background: linear-gradient(180deg, rgba(54, 60, 70, 0.88), rgba(18, 22, 28, 0.92)); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08); }
-      #splash .row { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; color: var(--dim); }
-      #splash .pct { font-family: 'Outfit', system-ui, sans-serif; font-weight: 700; font-size: 20px; color: var(--gold); font-variant-numeric: tabular-nums; }
-      #splash .bar { height: 10px; border-radius: 999px; background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(245, 197, 66, 0.35); overflow: hidden; }
-      #splash .bar > i { display: block; height: 100%; width: 5%; border-radius: inherit; background: linear-gradient(90deg, var(--emerald), #f5c542 50%, var(--emerald)); box-shadow: 0 0 12px rgba(16, 185, 129, 0.35); background-size: 200% 100%; animation: gcb-sheen 1.6s linear infinite; transition: width 0.3s ease; }
+      #splash .loader { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 5vh); box-sizing: border-box; width: min(100% - 40px, 520px); display: grid; gap: 14px; text-align: center; }
+      #splash .row { display: flex; justify-content: space-between; align-items: baseline; font-size: 17px; font-weight: 600; color: #f1f5f9; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.75); }
+      #splash .pct { font-family: 'Outfit', system-ui, sans-serif; font-weight: 700; font-size: 30px; color: #f5c542; font-variant-numeric: tabular-nums; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7); }
+      #splash .bar { height: 14px; border-radius: 999px; background: rgba(0, 0, 0, 0.38); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2); overflow: hidden; }
+      #splash .bar > i { display: block; height: 100%; width: 5%; border-radius: inherit; background: linear-gradient(90deg, #d9a82e, #ffe08a 50%, #d9a82e); box-shadow: 0 0 14px rgba(245, 197, 66, 0.55); background-size: 200% 100%; animation: gcb-sheen 1.6s linear infinite; transition: width 0.3s ease; }
       @keyframes gcb-sheen { from { background-position: 100% 0; } to { background-position: -100% 0; } }
-      #splash .tip { margin: 0; min-height: 2.8em; font-size: 14px; line-height: 1.4; color: var(--dim); text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6); }
-      #splash .tip b { color: var(--gold); letter-spacing: 0.08em; margin-right: 4px; }
+      #splash .tip { margin: 0; min-height: 2.8em; font-size: 18px; line-height: 1.4; font-weight: 500; color: #f1f5f9; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85); }
+      #splash .tip b { color: #f5c542; letter-spacing: 0.08em; margin-right: 6px; }
       #splash .err { display: none; gap: 12px; justify-items: center; }
       #splash .err h1 { margin: 0; font: 700 18px/1.25 'Outfit', system-ui, sans-serif; }
       #splash .err p { margin: 0; font-size: 14px; line-height: 1.4; color: var(--dim); }
@@ -81,7 +81,7 @@
         #splash .brand { top: 6vh; }
         #splash .brand img { width: min(18vw, 230px); }
         #splash .ball-wrap { bottom: 36vh; transform: translateX(-2vw); }
-        #splash .loader { width: 460px; }
+        #splash .loader { width: 560px; }
       }
     </style>
   </head>
