@@ -40,3 +40,8 @@ Options   — (a) pantallas vivas apiladas en el DOM; (b) destruir al tapar y re
 Decision  — (b) con pantallas `mount(ctx) → { destroy }` cargadas por `import()` y todo efecto secundario en un `scope` inyectado; splash como script clásico en `public/splash.js` que habla con el bundle por `window.gcbSplash`. Three/escena no bloquean el splash: tras 8 s el hub usa la imagen fija.
 Why       — el `scope` hace cumplir AC5 por construcción; los chunks por pantalla adelgazan la entrada (AC34); Vite agrupa los scripts módulo del HTML y el splash no podría pintarse antes del bundle (AC25).
 Open      — saldo en la cabecera de Ranking (AC1 frente a C11; el plan sigue C11); amigos salen de Cuenta › Perfil hacia «Amigos y grupo» con un acceso en Perfil; `#hoyoN` se mantiene «como hoy» (prepara la práctica, se juega al pulsar Práctica).
+
+## T018 — Aprobación del boceto del splash (2026-11-14)
+Decision  — El humano (Chakets) aprueba el boceto `02-DOCS/attachments/ui-pantallas/splash-boceto.html`. Incluye: capas en vertical a 60vh ancladas abajo con el cielo prolongado en #5594c5, bosque sobre el green, estela de la pelota en CSS, barra con %, TIP y estado «Reintentar». Con la aprobación se cambió también la escena del hub: bandera roja intensa y cámara más cerca (órbita 8,5 y altura 3,2); las capas de `public/splash/` se regeneraron con ese encuadre.
+Why       — Gate humano C13: sin aprobación no empieza T019.
+Open      — Los PNG del boceto (`splash-boceto-*.png`) son anteriores al cambio de cámara y bandera; el HTML usa las capas nuevas. TIP de ejemplo («Un golpe suave en el green vale más que uno fuerte») pendiente de textos definitivos.
