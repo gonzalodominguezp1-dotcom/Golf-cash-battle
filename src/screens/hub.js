@@ -1,4 +1,5 @@
-// Hub: pantalla raíz con la composición C10 (usuario · logo · Ajustes y pantalla completa arriba; Ranking/Logros a la
+// NOTA: el logo ya no está en la barra; vuelve como banderín en la escena (tarea aparte). Queda un h1 sr-only con el nombre del juego.
+// Hub: pantalla raíz con la composición C10 (usuario · saldo · Ajustes y pantalla completa arriba; Ranking/Logros a la
 // izquierda, Skins/Amigos a la derecha; Mapas · JUGAR · Práctica abajo). Fondo: escena 3D precargada (ctx.hubScene) o, sin ella, la imagen fija del CSS.
 // El CSS (hub.css) lo importa el arranque, no este módulo, para poder probarlo en Node.
 import { CHALLENGES } from '../progress/skins.js';
@@ -18,6 +19,15 @@ const NAV = {
   friends: { go: 'friends', icon: 'users', text: 'friends', guest: true },
   maps: { go: 'maps', icon: 'map', text: 'maps' },
   practice: { act: 'startPractice', icon: 'tee', text: 'practice' },
+};
+
+// 1250 -> «1.250» (separador de miles fijo: Intl es-ES no agrupa los números de 4 cifras). Siempre entero y >= 0;
+// desde 10 millones pasa a formato compacto («12,3 M») para que nunca haga falta truncar el número; el nombre accesible lleva la cantidad completa.
+const group = (s) => s.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+export const fmtCoins = (n, compact = true) => {
+  const v = Math.min(Math.max(Math.trunc(n), 0), 999_999_999_999_999);
+  if (compact && v >= 10_000_000) return `${group(String(Math.floor(v / 1e6)))}${v % 1e6 >= 1e5 && v < 1e9 ? `,${Math.floor((v % 1e6) / 1e5)}` : ''} M`;
+  return group(String(v));
 };
 
 export async function mount(root, ctx) {
@@ -43,22 +53,33 @@ export async function mount(root, ctx) {
     const n = NAV[key];
     const needs = n.guest && guest;
     return `<button type="button" class="${cls}${needs ? ' hub-needs-account' : ''}" data-hub="${key}" data-focus-key="${key}">`
-      + `<span class="hub-ico">${icon(n.icon, n.opts)}<span data-badge="${key}">${badges[key] ? badge(badges[key]) : ''}</span></span>`
+      + `<span class="hub-ico hub-ico--${key}">${icon(n.icon, n.opts)}<span data-badge="${key}">${badges[key] ? badge(badges[key]) : ''}</span></span>`
       + `<span class="hub-nav-t">${esc(t(`hub.${n.text}`))}</span>`
       + `${needs ? `<span class="sr-only">${esc(t('hub.needsAccount'))}</span>` : ''}</button>`;
   };
 
+  // botones grandes de la barra inferior: icono y texto DENTRO de la caja, con color de fondo propio
+  const big = (key, cls) => {
+    const n = NAV[key];
+    return `<button type="button" class="hub-big ${cls}" data-hub="${key}" data-focus-key="${key}">${icon(n.icon, { size: 34 })}<span class="hub-big-t">${esc(t(`hub.${n.text}`))}</span></button>`;
+  };
+
   root.innerHTML = `<main class="hub" aria-label="${esc(t('hub.title'))}">
     <div class="hub-scene" data-hub-scene="1" aria-hidden="true"></div>
+    <h1 class="sr-only">${esc(t('hub.logoAlt'))}</h1>
     <header class="hub-top">
-      <button type="button" class="hub-user${guest ? ' hub-needs-account' : ''}" data-hub="account" data-focus-key="account" style="--pct:${ring.pct}" aria-label="${esc(accountLabel)}">
-        <span class="hub-face">${icon('user', { size: 40 })}<b class="hub-lv" data-hub-lv="1" aria-hidden="true">${ring.level}</b></span>
-        <span class="hub-nav-t" aria-hidden="true">${esc(t('hub.account'))}</span>
-      </button>
-      <h1 class="hub-logo"><img src="/logo-header.png" alt="${esc(t('hub.logoAlt'))}"></h1>
+      <div class="hub-left">
+        <button type="button" class="hub-user${guest ? ' hub-needs-account' : ''}" data-hub="account" data-focus-key="account" style="--pct:${ring.pct}" aria-label="${esc(accountLabel)}">
+          <span class="hub-face">${icon('user', { size: 40 })}<b class="hub-lv" data-hub-lv="1" aria-hidden="true">${ring.level}</b></span>
+        </button>
+        ${ctx.wallet ? `<button type="button" class="hub-wallet" data-hub="wallet" data-focus-key="wallet" aria-label="${esc(t('hub.wallet'))}">
+          <span class="hub-wallet-ico" aria-hidden="true">${icon('coins', { size: 26 })}</span>
+          <b class="hub-wallet-n" data-hub-balance="1" aria-hidden="true">${esc(t('hub.walletEmpty'))}</b>
+        </button>` : ''}
+      </div>
       <div class="hub-tools">
-        <button type="button" class="hub-nav hub-tool" data-hub="settings" data-focus-key="settings" aria-label="${esc(t('hub.settings'))}"><span class="hub-ico">${icon('gear')}</span><span class="hub-nav-t" aria-hidden="true">${esc(t('hub.settings'))}</span></button>
-        <button type="button" class="hub-nav hub-tool" data-hub="fullscreen" aria-label="${esc(t('hub.fullscreenLabel'))}"><span class="hub-ico">${icon('fullscreen')}</span><span class="hub-nav-t" aria-hidden="true">${esc(t('hub.fullscreen'))}</span></button>
+        <button type="button" class="hub-nav hub-tool" data-hub="settings" data-focus-key="settings" aria-label="${esc(t('hub.settings'))}"><span class="hub-ico hub-ico--tool">${icon('gear')}</span></button>
+        <button type="button" class="hub-nav hub-tool" data-hub="fullscreen" aria-label="${esc(t('hub.fullscreenLabel'))}"><span class="hub-ico hub-ico--tool">${icon('fullscreen')}</span></button>
       </div>
     </header>
     <nav class="hub-mid" aria-label="${esc(t('hub.title'))}">
@@ -66,9 +87,9 @@ export async function mount(root, ctx) {
       <div class="hub-col">${nav('skins')}${nav('friends')}</div>
     </nav>
     <footer class="hub-bottom">
-      ${nav('maps', 'hub-nav hub-a')}
-      <button type="button" class="hub-play" data-hub="play" data-focus-key="play">${esc(t('hub.play'))}</button>
-      ${nav('practice', 'hub-nav hub-c')}
+      ${big('maps', 'hub-maps')}
+      <button type="button" class="hub-play" data-hub="play" data-focus-key="play"><span class="hub-shine" aria-hidden="true"></span>${icon('play', { size: 34 })}<span class="hub-play-t">${esc(t('hub.play'))}</span></button>
+      ${big('practice', 'hub-practice')}
     </footer>
   </main>`;
 
@@ -78,7 +99,28 @@ export async function mount(root, ctx) {
     achievements: root.querySelector('[data-badge="achievements"]'),
     user: root.querySelector('[data-hub="account"]'),
     lv: root.querySelector('[data-hub-lv="1"]'),
+    wallet: root.querySelector('[data-hub="wallet"]'),
+    balance: root.querySelector('[data-hub-balance="1"]'),
   };
+  // Saldo (decisión del humano, cambia C10): sin ctx.wallet no hay píldora; si getBalance falla o no resuelve queda «—».
+  let gone = false, fresh = false, seq = 0; // fresh: ya llegó un valor por suscripción, que manda sobre las lecturas; seq: solo pinta la última lectura lanzada
+  const paintBalance = (n) => {
+    if (gone || !Number.isFinite(n)) return;
+    if (refs.balance) refs.balance.textContent = fmtCoins(n);
+    refs.wallet?.setAttribute?.('aria-label', Math.trunc(n) === 1 ? t('hub.walletLabelOne') : t('hub.walletLabel', { n: fmtCoins(n, false) }));
+  };
+  const readBalance = () => {
+    if (!ctx.wallet) return;
+    const my = ++seq;
+    try {
+      Promise.resolve(ctx.wallet.getBalance()).then((n) => { if (my === seq && !fresh && !gone) paintBalance(n); }, () => {});
+    } catch { /* un monedero roto no tumba el hub */ }
+  };
+  if (ctx.wallet) {
+    if (refs.balance) refs.balance.textContent = t('hub.walletEmpty');
+    readBalance();
+    try { scope.sub(ctx.wallet.subscribe((n) => { fresh = true; paintBalance(n); })); } catch { /* idem */ }
+  }
   const paintBadge = (key) => {
     const el = refs[key];
     if (el) el.innerHTML = badges[key] ? badge(badges[key]) : '';
@@ -95,10 +137,12 @@ export async function mount(root, ctx) {
       refs.user.setAttribute?.('aria-label', t(guest ? 'hub.accountGuestLabel' : 'hub.accountLabel', { level: r.label }));
     }
     if (refs.lv) refs.lv.textContent = String(r.level);
+    fresh = false;
+    readBalance();
   };
 
   const go = (id) => { ctx.sfx?.tap?.(); router.push(id); };
-  const ACTIONS = { play: () => go('tables'), account: () => go('account'), settings: () => go('settings'), fullscreen: () => ctx.actions.toggleFullscreen() };
+  const ACTIONS = { play: () => go('tables'), account: () => go('account'), wallet: () => { ctx.sfx?.tap?.(); router.push('account', { tab: 'monedero' }); }, settings: () => go('settings'), fullscreen: () => ctx.actions.toggleFullscreen() };
   for (const [key, n] of Object.entries(NAV)) ACTIONS[key] = n.go ? () => go(n.go) : () => { ctx.sfx?.tap?.(); ctx.actions[n.act](); };
   for (const el of root.querySelectorAll('[data-hub]')) scope.on(el, 'click', ACTIONS[el.dataset.hub]);
 
@@ -154,6 +198,7 @@ export async function mount(root, ctx) {
       ctx.actions.claimRewards();
     },
     destroy() { // los listeners y la suscripción los libera el scope del host
+      gone = true;
       drop();
       if (scope.win?.__gcbHub) delete scope.win.__gcbHub;
     },

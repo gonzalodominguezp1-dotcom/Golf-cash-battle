@@ -20,4 +20,8 @@ register('hub', {
   maps: 'Mapas',
   practice: 'Práctica',
   play: 'JUGAR',
+  wallet: 'Monedero',
+  walletLabel: 'Monedero: {n} monedas',
+  walletLabelOne: 'Monedero: 1 moneda',
+  walletEmpty: '—',
 });
