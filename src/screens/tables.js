@@ -1,9 +1,10 @@
 // Mesas (T028): la lista de mesas del lobby de siempre, ahora como pantalla del router. Saldo en la cabecera, última mesa
-// destacada y acceso al grupo. El panel de grupo (partyPanel) sigue en main.js hasta T030: llega por ctx.legacy.
+// destacada y acceso al grupo. El panel de grupo vive en partyPanel.js (T030).
 // El CSS (tables.css) lo importa el arranque, no este módulo, para poder probarlo en Node.
 import { HOLES_PER_MATCH, PLATFORM_COMMISSION, PLAYERS_PER_MATCH, TIERS, potFor, prizeFor } from '../config.js';
 import { bindHeader, header, listState } from './components.js';
 import { lastTier, rememberTier } from './hubRules.js';
+import { mountPartyPanel } from './partyPanel.js';
 import { coin, esc, fmt } from './shared.js';
 import { t } from './texts/index.js';
 import './texts/common.js';
@@ -18,7 +19,7 @@ export async function mount(root, ctx) {
   const icon = (n, o = {}) => ctx.icon(n, o);
   const storage = ctx.storage ?? globalThis.localStorage;
   const device = t(scope.win?.matchMedia?.('(pointer: coarse)')?.matches ? 'tables.deviceMobile' : 'tables.deviceComputer');
-  let gone = false, run = 0, sc = null; // sc: scope hijo de lo pintado; se libera en cada repintado
+  let gone = false, run = 0, sc = null, party = null; // sc: scope hijo de lo pintado; party: panel de grupo montado
 
   legacy.enterTables?.(); // lo que showLobby hacía al entrar: cerrar final y sala en vivo, liberar la partida
 
@@ -48,6 +49,8 @@ export async function mount(root, ctx) {
   };
 
   function paint(state, balance = 0) {
+    party?.destroy(); // para el sondeo del grupo; el panel nuevo lo vuelve a arrancar
+    party = null;
     sc?.dispose();
     sc = scope.child();
     const last = lastTier(storage, TIERS);
@@ -89,7 +92,7 @@ export async function mount(root, ctx) {
     }
     for (const btn of root.querySelectorAll('[data-go]')) sc.on(btn, 'click', () => router.push(btn.dataset.go));
     const box = root.querySelector('[data-party-box]');
-    if (box && legacy.partyPanel) legacy.partyPanel(box, root.querySelector('[data-tier-list]'), balance);
+    if (box) party = mountPartyPanel(box, root.querySelector('[data-tier-list]'), balance, { ...ctx, scope: sc });
   }
 
   async function load() {
@@ -120,8 +123,9 @@ export async function mount(root, ctx) {
     destroy() {
       gone = true;
       run++;
+      party?.destroy(); // para el sondeo del grupo, como hacía releasePlay al salir del lobby
+      party = null;
       scope.dispose();
-      legacy.releaseParty?.(); // para el sondeo del grupo, como hacía releasePlay al salir del lobby
     },
   };
 }

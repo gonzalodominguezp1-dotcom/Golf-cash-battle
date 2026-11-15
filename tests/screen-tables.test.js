@@ -39,7 +39,7 @@ function fakeRoot(env) {
 const settle = () => new Promise((r) => setImmediate(r));
 
 function makeCtx(env, over = {}) {
-  const calls = { push: [], back: 0, start: [], claim: 0, party: [], release: 0, enter: 0, pick: [] };
+  const calls = { push: [], back: 0, start: [], claim: 0, release: 0, enter: 0, pick: [] };
   const store = new Map();
   const walletSubs = new Set();
   const wallet = {
@@ -53,12 +53,10 @@ function makeCtx(env, over = {}) {
     backend: { mode: 'remote', account: { profile: {} }, parties: {}, tournaments: {} },
     storage: { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) },
     icon: (n) => `<svg data-icon="${n}"></svg>`,
-    partyWatch: { state: null, pickTier: (t) => calls.pick.push(t.id) },
+    partyWatch: { state: null, pickTier: (t) => calls.pick.push(t.id), stop: () => { calls.release++; } },
     actions: { startMatch: (t) => calls.start.push(t.id), claimRewards: () => { calls.claim++; } },
     legacy: {
       enterTables: () => { calls.enter++; },
-      partyPanel: (box, list, balance) => calls.party.push({ box, list, balance }),
-      releaseParty: () => { calls.release++; },
     },
     ...over,
   };
@@ -81,8 +79,7 @@ test('tables: cabecera con saldo, lista de mesas y textos en español', async ()
   assert.ok(root.innerHTML.includes('Jugar Torneo'));
   assert.equal(calls.claim, 1);
   assert.equal(calls.enter, 1);
-  assert.equal(calls.party.length, 1); // el panel de grupo se monta con (contenedor, lista, saldo)
-  assert.equal(calls.party[0].balance, 100);
+  assert.match(root.querySelector('[data-party-box]').innerHTML, /Juega con amigos/); // el panel de grupo (partyPanel.js) se monta en su caja
 });
 
 test('tables: pulsar una mesa arranca la partida, recuerda la última y volver usa el router', async () => {
@@ -102,8 +99,8 @@ test('tables: en grupo, las mesas de pago confirman la mesa del grupo; la práct
   const env = fakeEnv();
   const root = fakeRoot(env);
   const { ctx, calls } = makeCtx(env);
-  ctx.partyWatch.state = { party: { leader: true } };
   await mount(root, ctx, {}); await settle();
+  ctx.partyWatch.state = { party: { leader: true } }; // el panel limpia el estado al montarse; el sondeo lo rellena después
   root.querySelector(`[data-tier="${paidTier().id}"]`).emit('click');
   root.querySelector(`[data-tier="${freeTier().id}"]`).emit('click');
   assert.deepEqual(calls.pick, [paidTier().id]);
@@ -144,7 +141,7 @@ test('tables: aviso de mesas de pago bloqueadas y modo sin conexión', async () 
   await mount(root, ctx, {}); await settle();
   assert.ok(root.innerHTML.includes('Verifica tu edad e identidad para jugar mesas con entrada'));
   assert.ok(root.innerHTML.includes('Modo sin conexión'));
-  assert.equal(calls.party.length, 0); // sin parties no hay panel de grupo
+  assert.equal(root.querySelector('[data-party-box]'), null); // sin parties no hay panel de grupo
   root.querySelector('[data-go="account"]').emit('click');
   assert.deepEqual(calls.push, ['account']);
 });
@@ -216,7 +213,7 @@ test('tables: destroy durante la carga no deja nada vivo ni pinta después', asy
   env.timers.advance(20000);
   await settle();
   assert.doesNotMatch(root.innerHTML, /data-tier=/);
-  assert.equal(calls.party.length, 0);
+  assert.equal(root.querySelector('[data-party-box]'), null);
 });
 
 test('tables: la última mesa solo se recuerda si la entrada se inició sin error', async () => {

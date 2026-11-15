@@ -2,6 +2,7 @@ import './style.css';
 import './screens/screens.css';
 import './screens/hub.css';
 import './screens/tables.css';
+import './screens/friends.css';
 import { HOLE_TIME_LIMIT, PLAYERS_PER_MATCH, TIERS, maxStrokesOf, potFor } from './config.js';
 import { LocalWallet } from './wallet/LocalWallet.js';
 import { InsufficientFundsError } from './wallet/WalletService.js';
@@ -14,7 +15,7 @@ import { enterFinale, isMuted, leaveFinale, setAmbientVolume, setMuted, setVolum
 import { settings } from './settings/settings.js';
 import { lastSection, mountSettingsPanel } from './ui/settingsPanel.js';
 import { Progress } from './progress/Progress.js';
-import { AVATAR_ICONS, AvatarStore, checkAvatarFile, fromWire, imageToAvatar, toWire } from './progress/avatar.js';
+import { AVATAR_ICONS, AvatarStore, checkAvatarFile, imageToAvatar, toWire } from './progress/avatar.js';
 import { FRAMES, frameById, framesUnlocked, frameStyle } from './progress/prestige.js';
 import { CHALLENGES, TIERS as SKIN_TIERS, SKINS } from './progress/skins.js';
 import { ballPreview } from './game/render/ballPaint.js';
@@ -24,8 +25,6 @@ import { rarePatternOf } from './progress/inventory.js';
 import { getCourseDistance, staticCoursePreview } from './game/render/coursePreviewStatic.js';
 import { mountAuth } from './ui/authScreen.js';
 import { validatePassword, authMessage } from './account/authRules.js';
-import { addedMessage, cleanFriendName, friendMessage } from './account/friendRules.js';
-import { partyErrorText, readyLabel } from './match/partyRules.js';
 import { LiveRoom } from './match/LiveRoom.js';
 import { buildRoster, humanLeaders, liveStandings, seededRng } from './match/liveRules.js';
 import { notify } from './ui/notifyPopup.js';
@@ -104,7 +103,6 @@ let gameGuard = null;
 let playScope = null; // listeners y timers de la partida en curso; se libera al salir o cambiar de hoyo
 let notifier = null;
 let partyWatch = null;
-let partyUnsub = null;
 
 function backGuard() {
   if (gameGuard) return gameGuard();
@@ -129,8 +127,6 @@ function releasePlay() {
   playScope?.dispose();
   playScope = null;
   gameGuard = null;
-  partyUnsub?.();
-  partyUnsub = null;
   partyWatch?.stop();
   if (activeSkinInspector) {
     try { activeSkinInspector.destroy(); } catch { }
@@ -297,120 +293,6 @@ function bindHolo(root) {
     card.addEventListener('pointerleave', leave);
     card.addEventListener('pointercancel', leave);
   });
-}
-
-// ---------- grupos ----------
-// Hasta 4 amigos: el líder elige la mesa, cada uno pulsa «Listo» y el servidor
-// los mete juntos en el mismo torneo. Se consulta cada pocos segundos mientras
-// se ve el lobby; cuando aparece un torneo nuevo del grupo, se abre su sala.
-
-
-async function partyPanel(box, tierList, balance) {
-  const svc = backend.parties;
-  const hasName = Boolean(backend.account?.profile?.username);
-  let friends = null;
-  let msg = '';
-  const apply = (job, okMsg = '') => partyWatch.apply(job, okMsg);
-
-  // los botones de las mesas dicen qué pasa al pulsarlos estando en grupo
-  function paintTiers(p) {
-    for (const b of tierList.querySelectorAll('.play')) {
-      const tier = TIERS.find((t) => t.id === b.dataset.tier);
-      if (!tier || tier.entryFee === 0 || balance < tier.entryFee) continue;
-      b.classList.toggle('party-pick', Boolean(p) && p.tier_id === tier.id);
-      if (!p) {
-        b.textContent = b.dataset.label;
-        b.disabled = false;
-      } else if (p.leader) {
-        b.textContent = p.tier_id === tier.id ? 'Mesa del grupo' : 'Jugar con el grupo';
-        b.disabled = false;
-      } else {
-        b.textContent = p.tier_id === tier.id ? 'Mesa del grupo · Listo' : 'La elige el líder';
-        b.disabled = p.tier_id !== tier.id;
-      }
-    }
-  }
-
-  function paint(state) {
-    if (!box.isConnected) return;
-    const p = state?.party ?? null;
-    const invites = state?.invites ?? [];
-    paintTiers(p);
-    const inviteRows = invites.map((i) => `<li class="friend">
-        <span class="friend-name"><b>${esc(i.from)}</b><small>te invita a su grupo</small></span>
-        <span class="friend-actions"><button class="chip-btn" data-join="${esc(i.party)}">${icon('check')}Unirme</button><button class="chip-btn" data-no="${esc(i.party)}">${icon('close')}No</button></span>
-      </li>`).join('');
-    const inParty = new Set([...(p?.members ?? []).map((m) => m.name.toLowerCase()), ...(p?.invited ?? []).map((n) => n.toLowerCase())]);
-    const room = p ? p.size - p.members.length - p.invited.length : 3;
-    const candidates = (friends ?? []).filter((f) => !inParty.has(f.name.toLowerCase())).slice(0, 6);
-    const friendRows = room > 0 && candidates.length
-      ? `<ul class="friend-list">${candidates.map((f) => `<li class="friend">
-          ${avatarHtml({ size: 'sm', frame: frameById(f.frame), av: fromWire(f.avatar), initial: f.name })}
-          <span class="friend-name"><b>${esc(f.name)}</b><small>Nv. ${esc(f.level)}</small></span>
-          <button class="chip-btn" data-invite="${esc(f.name)}">${icon('user-plus')}Invitar</button>
-        </li>`).join('')}</ul>`
-      : '';
-    const tier = p?.tier_id ? TIERS.find((t) => t.id === p.tier_id) : null;
-    let body;
-    if (!hasName) {
-      body = `<p class="sub">Ponte un nombre de usuario y añade amigos para buscar partida juntos.</p><button class="chip-btn" data-go="account">${icon('user')}Ir a la cuenta</button>`;
-    } else if (!p) {
-      body = `
-        ${inviteRows ? `<ul class="friend-list">${inviteRows}</ul>` : ''}
-        <p class="sub">Invita a tus amigos y entraréis juntos en el mismo torneo.</p>
-        ${friends === null ? '<p class="sub">Cargando amigos…</p>' : friendRows || `<p class="sub">Aún no tienes amigos. Añádelos en tu cuenta.</p><button class="chip-btn" data-go="account">${icon('user-plus')}Añadir amigos</button>`}`;
-    } else {
-      const members = p.members.map((m) => `<li class="party-member ${m.ready ? 'ready' : ''}">
-          <span class="avatar">${esc(m.name[0] ?? '?')}</span>
-          <span><b>${m.me ? 'Tú' : esc(m.name)}</b><small>${m.leader ? 'Líder · ' : ''}${m.ready ? 'Listo' : 'Esperando'}</small></span>
-        </li>`).join('');
-      const invited = p.invited.map((n) => `<li class="party-member invited"><span class="avatar">${esc(n[0] ?? '?')}</span><span><b>${esc(n)}</b><small>Invitado</small></span></li>`).join('');
-      const me = p.members.find((m) => m.me);
-      const alone = p.members.length < 2;
-      body = `
-        <ul class="party-members">${members}${invited}</ul>
-        <p class="sub">${tier ? `Mesa: <b>${tier.name}</b> · entrada ${coin(tier.entryFee)} cada uno` : p.leader ? 'Elige abajo la mesa del torneo.' : 'El líder está eligiendo la mesa.'}</p>
-        ${p.last_error ? `<p class="party-err">${esc(partyErrorText(p.last_error))}</p>` : ''}
-        ${tier ? `<button class="primary party-ready" ${alone && !me?.ready ? 'disabled' : ''}>${alone ? 'Espera a que entre un amigo' : icon('check') + readyLabel(p)}</button>` : ''}
-        <p class="legal">Al pulsar «${p.leader ? 'Buscar partida' : 'Estoy listo'}» aceptas pagar tu entrada. Cuando estéis todos listos entráis juntos en el mismo torneo; cada uno juega su ronda y gana quien menos golpes haga.</p>
-        ${inviteRows ? `<ul class="friend-list">${inviteRows}</ul>` : ''}
-        ${friendRows ? `<h3 class="friends-sub">Invitar a más amigos</h3>${friendRows}` : ''}`;
-    }
-    box.innerHTML = `
-      <div class="party-card">
-        <div class="section-head party-head">
-          <h2>${p ? `Tu grupo · ${p.members.length}/${p.size}` : 'Juega con amigos'}</h2>
-          ${p ? `<button class="chip-btn party-leave">${icon('logout')}Salir del grupo</button>` : ''}
-        </div>
-        ${msg ? `<p class="party-msg" role="status">${esc(msg)}</p>` : ''}
-        ${body}
-      </div>`;
-    box.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => go(b.dataset.go)));
-    box.querySelectorAll('[data-invite]').forEach((b) => b.addEventListener('click', () => apply(() => svc.invite(b.dataset.invite), `Invitación enviada a ${b.dataset.invite}.`)));
-    box.querySelectorAll('[data-join]').forEach((b) => b.addEventListener('click', () => apply(() => svc.respond(b.dataset.join, true))));
-    box.querySelectorAll('[data-no]').forEach((b) => b.addEventListener('click', () => apply(() => svc.respond(b.dataset.no, false))));
-    box.querySelector('.party-leave')?.addEventListener('click', () => apply(() => svc.leave()));
-    box.querySelector('.party-ready')?.addEventListener('click', () => apply(() => svc.ready(!p.members.find((m) => m.me)?.ready)));
-  }
-
-  if (hasName) {
-    backend.account.friends().then((d) => {
-      friends = d.friends;
-      paint(partyWatch.state);
-    }).catch(() => { friends = []; });
-  }
-
-  partyWatch.state = null;
-  paint(null);
-  if (hasName) {
-    partyUnsub?.();
-    partyUnsub = partyWatch.subscribe((state, info) => {
-      if (!box.isConnected) return;
-      msg = info.msg;
-      paint(state);
-    });
-    partyWatch.start();
-  }
 }
 
 // ---------- skins ----------
@@ -824,9 +706,8 @@ async function showAccount(note = '', tab = 'profile') {
       <div class="account-card-panel friends-panel">
         <div class="panel-head">
           <h2>Amigos</h2>
-          <span class="panel-badge friends-count"></span>
         </div>
-        <div class="friends-box"><p class="sub">Cargando…</p></div>
+        <button class="chip-btn friends-open">${icon('users')}Amigos y grupo</button>
       </div>
       ${note ? `<p class="notice">${note}</p>` : ''}
       ${p.in_review ? `<p class="offline">Tu cuenta está en revisión por el sistema antitrampas.${p.held > 0 ? ` Tienes ${coin(Number(p.held))} en premios retenidos hasta que termine.` : ''}</p>` : ''}
@@ -861,7 +742,7 @@ async function showAccount(note = '', tab = 'profile') {
     if (progress.equipFrame(b.dataset.frame)) showAccount(note);
   }));
 
-  friendsPanel(view.querySelector('.friends-box'), view.querySelector('.friends-count'), Boolean(p.username));
+  view.querySelector('.friends-open').addEventListener('click', () => go('friends'));
 
   const emailBox = view.querySelector('.email-box');
   emailBox.innerHTML = `<p class="field-ok">${esc(p.email ?? '')}</p>${confirmed ? '' : '<p class="sub">Abre el enlace que te enviamos al registrarte para confirmar el email.</p>'}`;
@@ -902,66 +783,6 @@ async function showAccount(note = '', tab = 'profile') {
     await account.signOut();
   });
   await shell(view);
-}
-
-// amigos: se añaden por nombre de usuario y la otra persona acepta o rechaza
-async function friendsPanel(box, badge, hasName) {
-  const account = backend.account;
-  const paint = (data, msg = '', isErr = false) => {
-    badge.textContent = `${data.friends.length} ${data.friends.length === 1 ? 'amigo' : 'amigos'}`;
-    const row = (f) => {
-      const frame = frameById(f.frame);
-      return `<li class="friend">
-        ${avatarHtml({ size: 'sm', frame, av: fromWire(f.avatar), initial: f.name })}
-        <span class="friend-name"><b>${esc(f.name)}</b><small>Nv. ${esc(f.level)}</small></span>
-        <button class="chip-btn" data-remove="${esc(f.name)}">${icon('trash')}Quitar</button>
-      </li>`;
-    };
-    const asks = (list, buttons) => list.map((r) => `<li class="friend">
-        <span class="friend-name"><b>${esc(r.name)}</b></span>${buttons(esc(r.name))}
-      </li>`).join('');
-    box.innerHTML = `
-      <form class="friend-add form">
-        <div class="row"><input name="name" maxlength="17" placeholder="Nombre de usuario" autocomplete="off" autocapitalize="off" spellcheck="false" ${hasName ? '' : 'disabled'}><button class="primary" ${hasName ? '' : 'disabled'}>${icon('plus')}Añadir</button></div>
-        <p class="friend-msg ${isErr ? 'err' : 'ok'}" role="status">${esc(msg || (hasName ? '' : 'Ponte primero un nombre de usuario para añadir amigos.'))}</p>
-      </form>
-      ${data.incoming.length ? `<h3 class="friends-sub">Peticiones recibidas</h3><ul class="friend-list">${asks(data.incoming, (n) => `<span class="friend-actions"><button class="chip-btn" data-accept="${n}">${icon('check')}Aceptar</button><button class="chip-btn" data-decline="${n}">${icon('close')}Rechazar</button></span>`)}</ul>` : ''}
-      ${data.friends.length ? `<ul class="friend-list">${data.friends.map(row).join('')}</ul>` : '<p class="sub">Aún no tienes amigos. Añade a alguien por su nombre de usuario.</p>'}
-      ${data.outgoing.length ? `<h3 class="friends-sub">Peticiones enviadas</h3><ul class="friend-list">${asks(data.outgoing, (n) => `<button class="chip-btn" data-remove="${n}">${icon('close')}Cancelar</button>`)}</ul>` : ''}`;
-    const run = (name, job, ok) => async () => {
-      try {
-        await job(name);
-        refresh(ok);
-      } catch (err) {
-        refresh(friendMessage(err.code), true);
-      }
-    };
-    box.querySelectorAll('[data-accept]').forEach((b) => b.addEventListener('click', run(b.dataset.accept, (n) => account.respondFriend(n, true), `Ahora eres amigo de ${b.dataset.accept}.`)));
-    box.querySelectorAll('[data-decline]').forEach((b) => b.addEventListener('click', run(b.dataset.decline, (n) => account.respondFriend(n, false), 'Petición rechazada.')));
-    box.querySelectorAll('[data-remove]').forEach((b) => b.addEventListener('click', run(b.dataset.remove, (n) => account.removeFriend(n), 'Hecho.')));
-    box.querySelector('.friend-add').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const name = cleanFriendName(e.target.name.value);
-      if (!name) return void refresh(friendMessage('invalid_username'), true, e.target.name.value);
-      e.target.querySelector('button').disabled = true;
-      try {
-        refresh(addedMessage(await account.addFriend(name), name));
-      } catch (err) {
-        refresh(friendMessage(err.code), true, name);
-      }
-    });
-  };
-  async function refresh(msg = '', isErr = false, keep = '') {
-    let data;
-    try {
-      data = await account.friends();
-    } catch {
-      return void (box.innerHTML = '<p class="sub">No se han podido cargar tus amigos.</p>');
-    }
-    paint(data, msg, isErr);
-    if (keep) box.querySelector('[name=name]').value = keep;
-  }
-  await refresh();
 }
 
 // cambio de contraseña desde la cuenta: pide la actual antes de aceptar la nueva
@@ -2686,10 +2507,8 @@ function startRouting(b) {
       toggleMute: () => toggleMute(),
     },
     legacy: {
-      // Mesas (T028): lo que la pantalla necesita de main.js; el panel de grupo se migra en T030
+      // Mesas (T028): lo que la pantalla necesita de main.js
       enterTables: () => { leaveFinale(); stopLive(); screen = 'lobby'; releasePlay(); },
-      partyPanel: (box, list, balance) => partyPanel(box, list, balance),
-      releaseParty: () => { partyUnsub?.(); partyUnsub = null; partyWatch?.stop(); },
       ranking: () => showRanking(),
       skins: () => showSkins(),
       account: (p) => showAccount('', ACCOUNT_TABS[p?.tab] ?? 'profile'),
@@ -2723,7 +2542,7 @@ function startNotices(b) {
     onNotice: (n) => {
       sfx.tick();
       if (n.kind === 'friend') {
-        notify({ kind: 'friend', icon: 'user-plus', title: 'Petición de amistad', text: `${n.from} quiere ser tu amigo`, onClick: () => go('account') });
+        notify({ kind: 'friend', icon: 'user-plus', title: 'Petición de amistad', text: `${n.from} quiere ser tu amigo`, onClick: () => go('friends') });
       } else {
         notify({ kind: 'invite', icon: 'users', title: 'Invitación a grupo', text: `${n.from} te invita a su grupo`, onClick: () => go('lobby') });
       }
