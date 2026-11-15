@@ -4,6 +4,7 @@ import './screens/hub.css';
 import './screens/tables.css';
 import './screens/friends.css';
 import './screens/ranking.css';
+import './screens/skins.css';
 import { HOLE_TIME_LIMIT, PLAYERS_PER_MATCH, TIERS, maxStrokesOf, potFor } from './config.js';
 import { LocalWallet } from './wallet/LocalWallet.js';
 import { InsufficientFundsError } from './wallet/WalletService.js';
@@ -22,7 +23,6 @@ import { CHALLENGES, TIERS as SKIN_TIERS, SKINS } from './progress/skins.js';
 import { ballPreview } from './game/render/ballPaint.js';
 import { showSkinReveal } from './ui/skinReveal.js';
 import { installThumbObserver, thumbCached, upgradeImg, warmThumbs } from './ui/skinThumbs.js';
-import { rarePatternOf } from './progress/inventory.js';
 import { getCourseDistance, staticCoursePreview } from './game/render/coursePreviewStatic.js';
 import { mountAuth } from './ui/authScreen.js';
 import { validatePassword, authMessage } from './account/authRules.js';
@@ -41,6 +41,7 @@ import { createHost } from './screens/host.js';
 import { createContext } from './screens/context.js';
 import { ACCOUNT_TABS, createNavigator } from './screens/navigate.js';
 import { createGoHome } from './screens/playLifecycle.js';
+import { createThumbs } from './screens/skinThumbsHook.js';
 import { getQuality } from './game/render/quality.js';
 import { createBoot, createHubPreloader, trackProgress, waitPainted } from './ui/splashBridge.js';
 
@@ -297,208 +298,85 @@ function bindHolo(root) {
 }
 
 // ---------- skins ----------
+// La rejilla y los filtros son la pantalla src/screens/skins.js. Aquí queda solo el inspector a pantalla completa heredado
+// (T033 lo convierte en pantalla apilada #/skins/:id y borra este bloque).
 
-const tierOrder = (s) => SKIN_TIERS[s.tier]?.order ?? 0;
-const FILTER_TIERS = Object.keys(SKIN_TIERS).reverse();
+let skinInspect = null;
+const closeSkinInspect = () => {
+  if (!skinInspect) return;
+  const { overlay, onKey, from, inspector } = skinInspect;
+  skinInspect = null;
+  activeSkinInspector = null;
+  document.removeEventListener('keydown', onKey, true);
+  try { inspector?.destroy(); } catch { }
+  overlay.remove();
+  document.body.classList.remove('sk-noscroll');
+  if (from?.isConnected) from.focus({ preventScroll: true });
+};
 
-async function showSkins() {
-  screen = 'skins';
-  const unlocked = SKINS.filter((s) => progress.isUnlocked(s)).length;
-  const { level, into, need } = progress.level;
-  const collections = [...new Set(SKINS.map((s) => s.collection))];
-  const filter = { tier: 'all', owned: false, collection: 'all' };
-
-  const view = h(`
-    <main class="screen skins">
-      <div class="section-head">
-        <h1>Skins</h1>
-        <p class="sub">${unlocked}/${SKINS.length} desbloqueadas · solo cambian el aspecto, nunca el juego</p>
+// inspección a pantalla completa (también en móvil); equipar es un botón explícito
+function openSkinInspect(skin, from, { onEquipped } = {}) {
+  closeSkinInspect();
+  activeSkinInspector = { destroy: closeSkinInspect };
+  const tier = SKIN_TIERS[skin.tier];
+  const overlay = h(`
+    <div class="sk-view rarity-${skin.tier}" role="dialog" aria-modal="true" aria-label="Inspeccionar ${skin.name}">
+      <div class="sk-view-bar">
+        <button type="button" class="sk-view-back" aria-label="Cerrar inspección">${icon('back')}Skins</button>
+        <span class="sk-view-title">${tierIcon(skin.tier)} ${skin.name}</span>
       </div>
-      <div class="level-card">
-        <div><small>Nivel</small><strong>${level}</strong></div>
-        <div class="level-progress"><span><i style="width:${(into / need) * 100}%"></i></span><small>${into} / ${need} XP</small></div>
-      </div>
-      <div class="sk-filters" role="toolbar" aria-label="Filtros de skins">
-        <div class="sk-filter-row">
-          <button type="button" class="sk-fchip on" data-tier="all">Todas</button>
-          ${FILTER_TIERS.map((id) => `<button type="button" class="sk-fchip rarity-${id}" data-tier="${id}"><i>${tierIcon(id)}</i>${SKIN_TIERS[id].name}</button>`).join('')}
+      <div class="sk-view-stage">
+        <div class="sk-view-canvas"><img class="sk-view-poster" src="${thumbCached(skin, progress.instance(skin.id)) ?? ballPreview(skin, 288)}" alt="" draggable="false"></div>
+        <div class="sk-view-lock" hidden>
+          <span class="sk-lock sk-lock-big">${icon('lock')}</span>
+          <div class="sk-view-req"><small></small><span class="bar"><i></i></span></div>
         </div>
-        <div class="sk-filter-row">
-          <button type="button" class="sk-fchip sk-fowned" aria-pressed="false">Solo desbloqueadas</button>
-          ${collections.length > 1 ? `<select class="sk-fcoll" aria-label="Colección"><option value="all">Todas las colecciones</option>${collections.map((c) => `<option value="${c}">${c[0].toUpperCase()}${c.slice(1)}</option>`).join('')}</select>` : ''}
-        </div>
       </div>
-      <div class="sk-grid"></div>
-      <p class="sk-empty" hidden>Ninguna skin cumple estos filtros.</p>
-      <h2>Desafíos</h2>
-      <ul class="challenges">
-        ${CHALLENGES.map((c) => {
-    const st = progress.challenge(c.id);
-    const reward = SKINS.find((s) => s.unlock?.challenge === c.id);
-    return `<li class="${st.done ? 'done' : ''}">
-            ${ball(reward, 34)}
-            <div><b>${c.name}</b><span class="bar"><i style="width:${(st.value / st.goal) * 100}%"></i></span></div>
-            <small>${st.done ? 'Completado' : `${st.value}/${st.goal}`}</small>
-          </li>`;
-  }).join('')}
-      </ul>
-    </main>`);
-
-  const grid = view.querySelector('.sk-grid');
-  const empty = view.querySelector('.sk-empty');
-  const cards = new Map();
-
-  const isOpen = (s) => progress.isUnlocked(s);
-  const sorted = [...SKINS].sort((a, b) => tierOrder(b) - tierOrder(a) || isOpen(b) - isOpen(a) || a.name.localeCompare(b.name, 'es'));
-  const jobs = [];
-
-  for (const skin of sorted) {
-    const tier = SKIN_TIERS[skin.tier];
-    const open = isOpen(skin);
-    const inst = progress.instance(skin.id);
+      <div class="sk-view-actions">
+        <button type="button" class="primary sk-equip"></button>
+      </div>
+    </div>`);
+  document.body.append(overlay);
+  document.body.classList.add('sk-noscroll');
+  const equipBtn = overlay.querySelector('.sk-equip');
+  const lockBox = overlay.querySelector('.sk-view-lock');
+  const syncAction = () => {
     const req = progress.requirement(skin);
-    const rare = open && inst ? rarePatternOf(skin, inst.seed) : null;
-    const card = h(`
-      <button type="button" class="sk-card rarity-${skin.tier} ${open ? '' : 'locked'}" data-skin-id="${skin.id}" style="--sk-a:${skin.palette.base};--sk-b:${skin.palette.accent}">
-        <div class="shine"></div>
-        <div class="sk-scene">
-          <span class="sk-ico" title="${tier.name}">${tierIcon(skin.tier)}</span>
-          <span class="sk-eq">Equipada</span>
-          <img class="sk-thumb" src="${(open && thumbCached(skin, inst)) || ballPreview(skin, 152)}" width="76" height="76" alt="" draggable="false">
-          ${open ? '' : `<span class="sk-lock">${icon('lock')}</span>`}
-          ${open && inst?.counter?.enabled ? '<span class="sk-chip">Marcador</span>' : ''}
-          ${rare ? `<span class="sk-chip sk-chip-rare">${icon('sparkle')} Patrón raro</span>` : ''}
-        </div>
-        <div class="sk-strip">
-          <b>${skin.name}</b>
-          <small>${tier.name}</small>
-        </div>
-      </button>`);
-    const img = card.querySelector('.sk-thumb');
-    img.dataset.thumb = '1';
-    // bloqueadas: silueta con el marcador 2D (no se renderiza nada en 3D)
-    if (open) jobs.push({ img, skin, inst });
-    card.addEventListener('click', () => openInspect(skin, card));
-    cards.set(skin.id, { card, skin, open });
-    grid.append(card);
-  }
-
-  const refreshEquipped = () => {
-    for (const { card, skin } of cards.values()) card.classList.toggle('equipped', progress.skin.id === skin.id);
+    const open = req.ratio >= 1;
+    const isEq = progress.skin.id === skin.id;
+    equipBtn.disabled = isEq || !open;
+    equipBtn.innerHTML = isEq ? `${icon('check')}Equipada` : open ? 'Equipar' : 'Bloqueada';
+    lockBox.hidden = open;
+    lockBox.querySelector('small').textContent = req.text;
+    lockBox.querySelector('.bar i').style.width = `${req.ratio * 100}%`;
   };
-  const applyFilters = () => {
-    let shown = 0;
-    for (const { card, skin, open } of cards.values()) {
-      const ok = (filter.tier === 'all' || skin.tier === filter.tier) && (filter.collection === 'all' || skin.collection === filter.collection) && (!filter.owned || open);
-      card.hidden = !ok;
-      if (ok) shown++;
+  syncAction();
+  equipBtn.addEventListener('click', () => {
+    if (progress.equip(skin.id)) {
+      onEquipped?.();
+      syncAction();
     }
-    empty.hidden = shown > 0;
-  };
-  view.querySelectorAll('[data-tier]').forEach((b) => b.addEventListener('click', () => {
-    filter.tier = b.dataset.tier;
-    view.querySelectorAll('[data-tier]').forEach((x) => x.classList.toggle('on', x === b));
-    applyFilters();
-  }));
-  const ownedBtn = view.querySelector('.sk-fowned');
-  ownedBtn.addEventListener('click', () => {
-    filter.owned = !filter.owned;
-    ownedBtn.classList.toggle('on', filter.owned);
-    ownedBtn.setAttribute('aria-pressed', String(filter.owned));
-    applyFilters();
   });
-  view.querySelector('.sk-fcoll')?.addEventListener('change', (e) => {
-    filter.collection = e.target.value;
-    applyFilters();
-  });
-
-  // inspección a pantalla completa (también en móvil); equipar es un botón explícito
-  let view3d = null;
-  const closeInspect = () => {
-    if (!view3d) return;
-    const { overlay, onKey, from } = view3d;
-    const inspector = view3d.inspector;
-    view3d = null;
-    document.removeEventListener('keydown', onKey, true);
-    try { inspector?.destroy(); } catch { }
-    overlay.remove();
-    document.body.classList.remove('sk-noscroll');
-    if (from?.isConnected) from.focus({ preventScroll: true });
+  overlay.querySelector('.sk-view-back').addEventListener('click', closeSkinInspect);
+  const onKey = (e) => {
+    if (e.key !== 'Escape') return;
+    e.stopPropagation();
+    closeSkinInspect();
   };
-  function openInspect(skin, from) {
-    closeInspect();
-    const tier = SKIN_TIERS[skin.tier];
-    const overlay = h(`
-      <div class="sk-view rarity-${skin.tier}" role="dialog" aria-modal="true" aria-label="Inspeccionar ${skin.name}">
-        <div class="sk-view-bar">
-          <button type="button" class="sk-view-back" aria-label="Cerrar inspección">${icon('back')}Skins</button>
-          <span class="sk-view-title">${tierIcon(skin.tier)} ${skin.name}</span>
-        </div>
-        <div class="sk-view-stage">
-          <div class="sk-view-canvas"><img class="sk-view-poster" src="${thumbCached(skin, progress.instance(skin.id)) ?? ballPreview(skin, 288)}" alt="" draggable="false"></div>
-          <div class="sk-view-lock" hidden>
-            <span class="sk-lock sk-lock-big">${icon('lock')}</span>
-            <div class="sk-view-req"><small></small><span class="bar"><i></i></span></div>
-          </div>
-        </div>
-        <div class="sk-view-actions">
-          <button type="button" class="primary sk-equip"></button>
-        </div>
-      </div>`);
-    document.body.append(overlay);
-    document.body.classList.add('sk-noscroll');
-    const equipBtn = overlay.querySelector('.sk-equip');
-    const lockBox = overlay.querySelector('.sk-view-lock');
-    const syncAction = () => {
-      const req = progress.requirement(skin);
-      const open = req.ratio >= 1;
-      const isEq = progress.skin.id === skin.id;
-      equipBtn.disabled = isEq || !open;
-      equipBtn.innerHTML = isEq ? `${icon('check')}Equipada` : open ? 'Equipar' : 'Bloqueada';
-      lockBox.hidden = open;
-      lockBox.querySelector('small').textContent = req.text;
-      lockBox.querySelector('.bar i').style.width = `${req.ratio * 100}%`;
-    };
-    syncAction();
-    equipBtn.addEventListener('click', () => {
-      if (progress.equip(skin.id)) {
-        refreshEquipped();
-        syncAction();
-      }
-    });
-    overlay.querySelector('.sk-view-back').addEventListener('click', closeInspect);
-    const onKey = (e) => {
-      if (e.key !== 'Escape') return;
-      e.stopPropagation();
-      closeInspect();
-    };
-    document.addEventListener('keydown', onKey, true);
-    const mine = { overlay, inspector: null, onKey, from };
-    view3d = mine;
-    overlay.querySelector('.sk-view-back').focus({ preventScroll: true });
-    // el visor 3D (three.js + materiales) se descarga y crea solo ahora, al abrir
-    loadSkinInspector().then(({ createSkinInspector }) => {
-      if (view3d !== mine) return; // cerrado mientras cargaba
-      mine.inspector = createSkinInspector(overlay.querySelector('.sk-view-canvas'), { skin, instance: progress.instance(skin.id) ?? undefined, mode: 'fullscreen' });
-      // el candado va sobre el visor 3D, centrado en la bola (el visor vacía el contenedor al crearse)
-      overlay.querySelector('.sk-stage')?.append(lockBox);
-    }).catch((err) => console.warn('inspector no disponible', err));
-  }
-
-  refreshEquipped();
-  applyFilters();
-  await shell(view);
-  // shell() destruye el inspector anterior: el nuevo se registra después
-  activeSkinInspector = { destroy: closeInspect };
-
-  // miniaturas estáticas (caché); las que falten se renderizan una vez, en cola, la equipada primero
-  const eqId = progress.skin.id;
-  jobs.sort((a, b) => (b.skin.id === eqId) - (a.skin.id === eqId));
-  for (const j of jobs) upgradeImg(j.img, j.skin, j.inst, { size: 76, priority: j.skin.id === eqId });
+  document.addEventListener('keydown', onKey, true);
+  const mine = { overlay, inspector: null, onKey, from };
+  skinInspect = mine;
+  overlay.querySelector('.sk-view-back').focus({ preventScroll: true });
+  // el visor 3D (three.js + materiales) se descarga y crea solo ahora, al abrir
+  loadSkinInspector().then(({ createSkinInspector }) => {
+    if (skinInspect !== mine) return; // cerrado mientras cargaba
+    mine.inspector = createSkinInspector(overlay.querySelector('.sk-view-canvas'), { skin, instance: progress.instance(skin.id) ?? undefined, mode: 'fullscreen' });
+    // el candado va sobre el visor 3D, centrado en la bola (el visor vacía el contenedor al crearse)
+    overlay.querySelector('.sk-stage')?.append(lockBox);
+  }).catch((err) => console.warn('inspector no disponible', err));
 }
 
 // ---------- cuenta ----------
-
 
 const BLOCK_TEXT = {
   account_required: 'Para jugar con créditos necesitas una cuenta con email. Crea tu cuenta para conservar tu saldo, nivel y skins.',
@@ -2441,8 +2319,10 @@ function startRouting(b) {
   const routes = createRoutes({ root: ROOT_SCREEN });
   router = createRouter({ routes, root: ROOT_SCREEN, win: window, isBusy: () => screenHost?.isBusy() ?? false });
   const ctx = createContext({
-    backend: b, wallet, progress, avatar, settings, router, sfx, notify, icon,
+    backend: b, wallet, progress, avatar, settings, router, sfx, notify, icon, ball,
     quality: () => getQuality(),
+    // miniaturas de skins (canvas y observador) aisladas de la pantalla
+    thumbs: createThumbs({ upgrade: upgradeImg, cached: thumbCached, preview: ballPreview, warm: warmThumbs }),
     actions: {
       startMatch: (tier) => startMatch(tier),
       startPractice: () => startMatch(TIERS.find((x) => x.entryFee === 0) ?? TIERS[0]),
@@ -2453,7 +2333,9 @@ function startRouting(b) {
     legacy: {
       // Mesas (T028): lo que la pantalla necesita de main.js
       enterTables: () => { leaveFinale(); stopLive(); screen = 'lobby'; releasePlay(); },
-      skins: () => showSkins(),
+      // Skins (T032): el inspector heredado hasta que T033 lo convierta en pantalla
+      inspectSkin: (skin, from, o) => openSkinInspect(skin, from, o),
+      closeSkinInspect: () => closeSkinInspect(),
       account: (p) => showAccount('', ACCOUNT_TABS[p?.tab] ?? 'profile'),
       settings: () => showSettings(),
       maps: () => showFreePlayCourseSelect(),

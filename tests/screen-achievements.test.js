@@ -167,3 +167,15 @@ test('logros: sin usuario usa la clave local y apaga el badge igual', async () =
   assert.equal(count(), 0);
   assert.ok(ctx.storage.getItem('gcb.achievements.seen.v1:local'));
 });
+
+test('logros: la recompensa muestra la miniatura de la bola cuando el contexto la ofrece', async () => {
+  const env = fakeEnv();
+  const root = fakeRoot(env);
+  const ctx = makeCtx(env, { states: { ace: { value: 1, goal: 1, done: true } } });
+  const seen = [];
+  ctx.ball = (skin, size) => { seen.push([skin.id, size]); return `<img class="ball-img" data-skin-id="${skin.id}" width="${size}" alt="">`; };
+  await mount(root, ctx, {});
+  assert.ok(seen.length > 0 && seen.every(([, size]) => size === 34));
+  assert.match(list(root).innerHTML, /<img class="ball-img"/);
+  assert.match(list(root).innerHTML, /Recompensa: /); // el texto sigue ahí: la imagen es decorativa
+});

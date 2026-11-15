@@ -30,7 +30,7 @@ export async function mount(root, ctx) {
     const status = st.done
       ? `<span class="ach-status">${ctx.icon('check', { size: 18 })}<span>${esc(t('achievements.completed'))}</span></span>`
       : `<span class="ach-num">${esc(t('achievements.progress', { value, goal: st.goal }))}</span>`;
-    const rw = skin ? `<span class="ach-reward">${ctx.icon('skins', { size: 18 })}<span>${esc(t('achievements.reward', { skin: skin.name }))}</span></span>` : '';
+    const rw = skin ? `<span class="ach-reward">${ctx.ball ? ctx.ball(skin, 34) : ctx.icon('skins', { size: 18 })}<span>${esc(t('achievements.reward', { skin: skin.name }))}</span></span>` : '';
     return `<li data-ach="${esc(c.id)}">${card({
       cls: `ach-card${st.done ? ' ach-done' : ''}`,
       body: `<span class="ach-top"><span class="ach-ico" aria-hidden="true">${icon('medal', st.done ? { tone: 'gold' } : {})}</span><h3 class="ach-name">${esc(c.name)}</h3></span>${bar}${status}${rw}`,
