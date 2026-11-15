@@ -1,0 +1,10 @@
+/* Ranking (T031). Las clases .rank-* (lista, filas, puesto) vienen de style.css; aquí solo lo propio de la pantalla. */
+.ranking .ranking-body { display: grid; gap: 8px; padding: 0 calc(env(safe-area-inset-right, 0px) + 12px) calc(env(safe-area-inset-bottom, 0px) + 16px) calc(env(safe-area-inset-left, 0px) + 12px); }
+.ranking .ranking-sub { margin: 0; color: var(--muted); font-size: 13px; font-weight: 700; }
+.ranking .rank-tabs { margin-bottom: 0; }
+.ranking .rank-tabs button { min-height: 44px; }
+.ranking .rank-tabs button[aria-pressed="true"] { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.ranking .rank-me:empty { display: none; }
+.ranking .rank-me .rank-mine { margin-top: 4px; }
+.ranking .scr-state { margin: 8px 0; }
+.ranking .scr-btn { min-height: 44px; }

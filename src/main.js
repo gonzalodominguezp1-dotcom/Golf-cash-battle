@@ -3,6 +3,7 @@ import './screens/screens.css';
 import './screens/hub.css';
 import './screens/tables.css';
 import './screens/friends.css';
+import './screens/ranking.css';
 import { HOLE_TIME_LIMIT, PLAYERS_PER_MATCH, TIERS, maxStrokesOf, potFor } from './config.js';
 import { LocalWallet } from './wallet/LocalWallet.js';
 import { InsufficientFundsError } from './wallet/WalletService.js';
@@ -16,7 +17,7 @@ import { settings } from './settings/settings.js';
 import { lastSection, mountSettingsPanel } from './ui/settingsPanel.js';
 import { Progress } from './progress/Progress.js';
 import { AVATAR_ICONS, AvatarStore, checkAvatarFile, imageToAvatar, toWire } from './progress/avatar.js';
-import { FRAMES, frameById, framesUnlocked, frameStyle } from './progress/prestige.js';
+import { FRAMES, framesUnlocked, frameStyle } from './progress/prestige.js';
 import { CHALLENGES, TIERS as SKIN_TIERS, SKINS } from './progress/skins.js';
 import { ballPreview } from './game/render/ballPaint.js';
 import { showSkinReveal } from './ui/skinReveal.js';
@@ -538,9 +539,6 @@ function showBlocked(code) {
 
 // ---------- ranking de victorias ----------
 
-const RANKING_TABS = { weekly: 'Semanal', monthly: 'Mensual', historic: 'Histórico' };
-let rankingTab = 'weekly';
-
 /** Aviso de marco nuevo si la partida hizo cruzar un nivel de prestigio. */
 const prestigeNote = (gained) => {
   const now = framesUnlocked(gained.level.level);
@@ -548,60 +546,6 @@ const prestigeNote = (gained) => {
   const f = now.at(-1);
   return `<p class="reward-note prestige-note" style="${frameStyle(f)}"><i></i>¡Marco de prestigio ${esc(f.name)} desbloqueado!</p>`;
 };
-
-async function showRanking() {
-  screen = 'ranking';
-  const account = backend.account;
-  if (!account) {
-    await shell(
-      h(`<main class="screen ranking"><div class="section-head"><h1>Ranking</h1></div>
-        <p class="offline">El ranking de victorias necesita conexión con el servidor.</p></main>`),
-    );
-    return;
-  }
-  const view = h(`
-    <main class="screen ranking">
-      <div class="section-head"><h1>Ranking</h1><span class="sub">Victorias en mesas online</span></div>
-      <div class="rank-tabs">${Object.entries(RANKING_TABS).map(([k, v]) => `<button data-tab="${k}" class="${k === rankingTab ? 'on' : ''}">${v}</button>`).join('')}</div>
-      <p class="rank-period"></p>
-      <ol class="rank-list"></ol>
-      <div class="rank-me"></div>
-      <p class="legal">Cuentan las mesas con jugadores reales ya liquidadas. Semana de lunes a domingo y mes natural (hora UTC). En empate gana quien llegó antes a esas victorias. Terminar un periodo entre los mejores desbloquea bolas exclusivas en Skins.</p>
-    </main>`);
-  const list = view.querySelector('.rank-list');
-  const me = view.querySelector('.rank-me');
-  const period = view.querySelector('.rank-period');
-  const row = (r) => {
-    const f = frameById(r.frame);
-    return `<li class="rank-row ${r.me ? 'me' : ''} ${r.pos <= 3 ? `podium p${r.pos}` : ''}">
-      <b class="rank-pos">${r.pos <= 3 ? icon('medal', { tone: ['gold', 'silver', 'bronze'][r.pos - 1], arg: r.pos, label: `Puesto ${r.pos}` }) : r.pos}</b>
-      ${avatarHtml({ size: 'sm', frame: f, av: r.me ? avatar.get() : null, initial: (r.name ?? '?')[0] })}
-      <span class="rank-name">${esc(r.name)}<small>Nv. ${r.level}${f ? ` · ${esc(f.name)}` : ''}</small></span>
-      <span class="rank-wins"><b>${r.wins}</b><small>victoria${r.wins === 1 ? '' : 's'}</small></span>
-    </li>`;
-  };
-  const load = async (tab) => {
-    rankingTab = tab;
-    view.querySelectorAll('.rank-tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
-    list.innerHTML = '<li class="rank-empty">Cargando…</li>';
-    me.innerHTML = '';
-    try {
-      const r = await account.ranking(tab);
-      if (rankingTab !== tab || !view.isConnected) return;
-      period.textContent = tab === 'historic' ? 'Desde el principio' : `${new Date(r.from).toLocaleDateString('es', { day: 'numeric', month: 'short', timeZone: 'UTC' })} – ${new Date(new Date(r.to) - 1).toLocaleDateString('es', { day: 'numeric', month: 'short', timeZone: 'UTC' })}`;
-      list.innerHTML = r.top.length ? r.top.map(row).join('') : '<li class="rank-empty">Aún no hay victorias en este periodo. ¡Sé el primero!</li>';
-      const inTop = r.top.some((x) => x.me);
-      me.innerHTML = inTop ? '' : r.me
-        ? `<p class="rank-mine">Tu posición: <b>#${r.me.pos}</b> · ${r.me.wins} victoria${r.me.wins === 1 ? '' : 's'}</p>`
-        : '<p class="rank-mine">Aún no tienes victorias en este periodo. Gana una mesa online para entrar.</p>';
-    } catch {
-      if (rankingTab === tab && view.isConnected) list.innerHTML = '<li class="rank-empty">No se ha podido cargar el ranking. Prueba otra vez.</li>';
-    }
-  };
-  view.querySelectorAll('.rank-tabs button').forEach((b) => b.addEventListener('click', () => load(b.dataset.tab)));
-  await shell(view);
-  load(rankingTab);
-}
 
 const accountTabs = (balance) => `
   <div class="rank-tabs acc-tabs">
@@ -2509,7 +2453,6 @@ function startRouting(b) {
     legacy: {
       // Mesas (T028): lo que la pantalla necesita de main.js
       enterTables: () => { leaveFinale(); stopLive(); screen = 'lobby'; releasePlay(); },
-      ranking: () => showRanking(),
       skins: () => showSkins(),
       account: (p) => showAccount('', ACCOUNT_TABS[p?.tab] ?? 'profile'),
       settings: () => showSettings(),
