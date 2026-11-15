@@ -1,7 +1,8 @@
 import './style.css';
 import './screens/screens.css';
 import './screens/hub.css';
-import { HOLES_PER_MATCH, HOLE_TIME_LIMIT, PLATFORM_COMMISSION, PLAYERS_PER_MATCH, TIERS, maxStrokesOf, potFor, prizeFor } from './config.js';
+import './screens/tables.css';
+import { HOLE_TIME_LIMIT, PLAYERS_PER_MATCH, TIERS, maxStrokesOf, potFor } from './config.js';
 import { LocalWallet } from './wallet/LocalWallet.js';
 import { InsufficientFundsError } from './wallet/WalletService.js';
 import { MatchService, leaders } from './match/MatchService.js';
@@ -296,80 +297,6 @@ function bindHolo(root) {
     card.addEventListener('pointerleave', leave);
     card.addEventListener('pointercancel', leave);
   });
-}
-
-// ---------- lobby ----------
-
-async function showLobby() {
-  leaveFinale();
-  stopLive();
-  screen = 'lobby';
-  const balance = await wallet.getBalance();
-  const skin = progress.skin;
-  const view = h(`
-    <main class="screen lobby">
-      <section class="hero rarity-${skin.rarity}">
-        <div class="hero-ball">
-          <div class="hero-ball-aura"></div>
-          ${ball(skin, 110, 'spin')}
-          <div class="hero-shadow"></div>
-        </div>
-        <div class="hero-text">
-          <div class="hero-badge-row">
-            <span class="rarity-pill rarity-${skin.rarity}">${SKIN_TIERS[skin.rarity].name}</span>
-            <span class="hero-level-tag">Nivel ${progress.level.level}</span>
-          </div>
-          <strong>${skin.name}</strong>
-          <button class="chip-btn" data-go="skins">Personalizar skin</button>
-        </div>
-      </section>
-      ${backend.mode === 'local' ? `<p class="offline">Modo sin conexión: el saldo se guarda solo en este ${DEVICE}</p>` : ''}
-      ${backend.account?.profile?.paid_block ? `<button class="notice account-hint" data-go="account">${{ account_required: 'Crea tu cuenta con email para jugar mesas con entrada', kyc_required: 'Verifica tu edad e identidad para jugar mesas con entrada', account_review: 'Tu cuenta está en revisión: de momento solo Práctica', underage: 'Mesas con entrada solo para mayores de 18' }[backend.account.profile.paid_block]} ${icon('next')}</button>` : ''}
-      ${backend.parties ? '<section class="party-box"></section>' : ''}
-      <div class="section-head">
-        <div class="section-title-row">
-          <h1>Mesas de Torneo</h1>
-          <span class="live-pill"><i class="pulse-dot"></i> EN VIVO</span>
-        </div>
-        <div class="lobby-specs">
-          <span class="spec-chip">${PLAYERS_PER_MATCH} Jugadores</span>
-          <span class="spec-chip">${HOLES_PER_MATCH} Hoyos</span>
-          <span class="spec-chip">Determinista</span>
-        </div>
-      </div>
-      <div class="tiers"></div>
-      <p class="legal">Créditos de demostración sin valor real. ${backend.tournaments ? 'Las mesas de pago son partidas en vivo contra jugadores reales: todos jugáis los mismos hoyos a la vez y el servidor repite cada golpe para validarlo. Los huecos libres los ocupan bots, que nunca cuentan para el premio. La práctica es contra rivales simulados. ' : ''}El resultado depende solo de la habilidad: mismo campo para todos y sin elementos aleatorios. En empate, tiro de desempate: gana quien deje la bola más cerca. Comisión de la plataforma: ${Math.round(PLATFORM_COMMISSION * 100)}% del bote.</p>
-    </main>`);
-  const list = view.querySelector('.tiers');
-  for (const tier of TIERS) {
-    const free = tier.entryFee === 0;
-    const enough = balance >= tier.entryFee;
-    const card = h(`
-      <div class="tier holo tier--${tier.id}">
-        <div class="shine"></div>
-        <div class="tier-ambient"></div>
-        <div class="tier-top">
-          <div class="gem-wrapper"><span class="gem gem--${tier.id}"></span></div>
-          <div class="tier-identity">
-            <span class="tier-name">${tier.name}</span>
-            <span class="tier-tagline">${free ? 'Entrenamiento' : 'Torneo Esports'}</span>
-          </div>
-          <span class="tier-fee">${free ? 'Gratis' : `Entrada ${coin(tier.entryFee)}`}</span>
-        </div>
-        <div class="tier-mid">
-          ${free ? '<span class="tier-prize small">Entrena sin arriesgar créditos</span>' : `<span class="tier-label">Premio Garantizado</span><span class="tier-prize">${coin(prizeFor(tier))}</span><span class="tier-pot">Bote ${fmt(potFor(tier))}</span>`}
-        </div>
-        <button class="play" ${enough ? '' : 'disabled'}>${!enough ? 'Saldo insuficiente' : free ? 'Practicar' : 'Jugar Torneo'}</button>
-      </div>`);
-    const play = card.querySelector('.play');
-    play.dataset.tier = tier.id;
-    play.dataset.label = play.textContent;
-    play.addEventListener('click', () => (!free && partyWatch?.state?.party ? partyWatch.pickTier(tier) : startMatch(tier)));
-    list.append(card);
-  }
-  await shell(view);
-  if (backend.parties) partyPanel(view.querySelector('.party-box'), list, balance);
-  claimRewards();
 }
 
 // ---------- grupos ----------
@@ -2759,8 +2686,10 @@ function startRouting(b) {
       toggleMute: () => toggleMute(),
     },
     legacy: {
-      lobby: () => showLobby(),
-      tables: () => showLobby(),
+      // Mesas (T028): lo que la pantalla necesita de main.js; el panel de grupo se migra en T030
+      enterTables: () => { leaveFinale(); stopLive(); screen = 'lobby'; releasePlay(); },
+      partyPanel: (box, list, balance) => partyPanel(box, list, balance),
+      releaseParty: () => { partyUnsub?.(); partyUnsub = null; partyWatch?.stop(); },
       ranking: () => showRanking(),
       skins: () => showSkins(),
       account: (p) => showAccount('', ACCOUNT_TABS[p?.tab] ?? 'profile'),
