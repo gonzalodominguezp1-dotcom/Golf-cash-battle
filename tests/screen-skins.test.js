@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { fakeEnv } from './helpers/fakeEnv.js';
 import { createScope } from '../src/screens/lifecycle.js';
 import { createRoutes } from '../src/screens/routes.js';
-import { mount } from '../src/screens/skins.js';
+import { mount, __resetFilter } from '../src/screens/skins.js';
 import { createThumbs } from '../src/screens/skinThumbsHook.js';
 import { SKINS, TIERS, skinById } from '../src/progress/skins.js';
 
@@ -61,7 +61,8 @@ function nullThumbs() {
 }
 
 function makeCtx(env, over = {}) {
-  const calls = { back: 0, push: [], inspect: [], closeInspect: 0 };
+  __resetFilter();
+  const calls = { back: 0, push: [] };
   const thumbs = nullThumbs();
   const progress = makeProgress();
   const ctx = {
@@ -69,10 +70,6 @@ function makeCtx(env, over = {}) {
     scope: createScope({ win: env.win, doc: env.doc, timers: env.timers }),
     progress, thumbs,
     icon: (n) => `<svg data-icon="${n}"></svg>`,
-    legacy: {
-      inspectSkin: (skin, from, o) => calls.inspect.push({ skin, from, o }),
-      closeSkinInspect: () => { calls.closeInspect++; },
-    },
     ...over,
   };
   return { ctx, calls, thumbs, progress };
@@ -131,20 +128,14 @@ test('skins: filtros por rareza, solo desbloqueadas y colección; vacío con men
   assert.ok(coll.length > 0 && coll.every((id) => skinById(id).collection === 'prestigio'));
 });
 
-test('skins: pulsar una skin abre el inspector heredado y equipar repinta el estado', async () => {
+test('skins: pulsar una skin apila el inspector con router.push(skin, { id }) y la tarjeta lleva su clave de foco', async () => {
   const env = fakeEnv();
   const root = fakeNode(env);
-  const { ctx, calls, progress } = makeCtx(env);
+  const { ctx, calls } = makeCtx(env);
   await mount(root, ctx, {}); await settle();
+  assert.match(list(root).innerHTML, /data-skin-id="mint" data-focus-key="skin-mint"/);
   clickCard(root, 'mint');
-  assert.equal(calls.inspect.length, 1);
-  assert.equal(calls.inspect[0].skin.id, 'mint');
-  progress.equip('mint');
-  calls.inspect[0].o.onEquipped();
-  const html = list(root).innerHTML;
-  const cardOf = (id) => html.split('<li').find((c) => c.includes(`data-skin-id="${id}"`));
-  assert.match(cardOf('mint'), /sk-state">Equipada</);
-  assert.match(cardOf('classic'), /sk-state">Obtenida</);
+  assert.deepEqual(calls.push, [['skin', { id: 'mint' }]]);
 });
 
 test('skins: la lista de retos se sustituye por un enlace a Logros', async () => {
@@ -213,7 +204,7 @@ test('skins: si la caché falla, la rejilla sigue; si falla el progreso, error c
   const handle = await mount(root, ctx, {}); await settle();
   assert.match(list(root).innerHTML, /<ul class="sk-grid"/);
   handle.destroy();
-  const root2 = fakeNode(env);
+  let root2 = fakeNode(env);
   const { ctx: c2, progress: p2 } = makeCtx(env);
   const real = p2.instance;
   p2.instance = () => { throw new Error('x'); };
@@ -241,10 +232,10 @@ test('skins: destroy antes de que llegue la caché no toca las imágenes', async
   assert.ok(imgs.length > 0 && imgs.every((i) => i.src === undefined));
 });
 
-test('skins: destroy deja el scope a {0,0,0} (medido antes de scope.dispose) y libera miniaturas e inspector', async () => {
+test('skins: destroy deja el scope a {0,0,0} (medido antes de scope.dispose) y libera miniaturas', async () => {
   const env = fakeEnv();
   const root = fakeNode(env);
-  const { ctx, thumbs, calls } = makeCtx(env);
+  const { ctx, thumbs } = makeCtx(env);
   const handle = await mount(root, ctx, {}); await settle();
   const before = ctx.scope.live();
   assert.ok(before.listeners > 0, `había algo vivo: ${JSON.stringify(before)}`);
@@ -253,7 +244,6 @@ test('skins: destroy deja el scope a {0,0,0} (medido antes de scope.dispose) y l
   handle.destroy();
   assert.deepEqual(ctx.scope.live(), { listeners: 0, timers: 0, subs: 0 });
   assert.equal(thumbs.released, thumbs.bound);
-  assert.equal(calls.closeInspect, 1);
   ctx.scope.dispose();
   assert.equal(env.liveListeners(), 0);
   assert.equal(env.liveTimers(), 0);
@@ -329,4 +319,50 @@ test('skins: routes resuelve la ruta skins a esta pantalla y no al adaptador her
   const main = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
   assert.doesNotMatch(main, /async function showSkins/);
   assert.match(main, /import '\.\/screens\/skins\.css'/);
+});
+
+test('skins: el filtro y el scroll sobreviven a abrir el inspector y volver; un valor desconocido cae al defecto', async () => {
+  const env = fakeEnv();
+  const scrolls = [];
+  env.win.scrollY = 480;
+  env.win.scrollTo = (x, y) => scrolls.push(y);
+  const { ctx, calls } = makeCtx(env);
+  const root = fakeNode(env);
+  const h = await mount(root, ctx, {}); await settle();
+  tierBtn(root, 'rare').emit('click');
+  clickCard(root, idsIn(list(root).innerHTML)[0]);
+  assert.equal(calls.push.length, 1);
+  h.destroy(); // el host destruye Skins al apilar el inspector
+  assert.deepEqual(scrolls, []);
+  let root2 = fakeNode(env);
+  const h2 = await mount(root2, ctx, {}); await settle(); // vuelta
+  const ids = idsIn(list(root2).innerHTML);
+  assert.ok(ids.length > 0 && ids.every((id) => skinById(id).tier === 'rare'));
+  assert.match(root2.innerHTML, /class="sk-fchip rarity-rare on" data-tier="rare" aria-pressed="true"/);
+  assert.match(root2.innerHTML, /data-tier="all" aria-pressed="false"/);
+  assert.deepEqual(scrolls, [480]);
+  h2.destroy();
+  const h3 = await mount(fakeNode(env), ctx, {}); // visita nueva: sin scroll pendiente
+  assert.deepEqual(scrolls, [480]);
+  h3.destroy();
+  __resetFilter();
+  root2 = fakeNode(env);
+  const h4 = await mount(root2, ctx, {}); await settle();
+  assert.equal(idsIn(list(root2).innerHTML).length, SKINS.length);
+  h4.destroy();
+});
+
+test('skins: una colección o rareza guardadas que ya no existen caen a Todas', async () => {
+  const env = fakeEnv();
+  const { ctx } = makeCtx(env);
+  const root = fakeNode(env);
+  const h = await mount(root, ctx, {}); await settle();
+  root.querySelector('[data-sk-coll="1"]').emit('change', { target: { value: 'inventada' } });
+  tierBtn(root, 'rare').emit('click');
+  h.destroy();
+  let root2 = fakeNode(env);
+  const h2 = await mount(root2, ctx, {}); await settle();
+  assert.match(root2.innerHTML, /<option value="all">/);
+  assert.doesNotMatch(root2.innerHTML, /selected/);
+  h2.destroy();
 });

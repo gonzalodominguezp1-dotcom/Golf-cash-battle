@@ -20,4 +20,13 @@ register('skins', {
   stateEquipped: 'Equipada',
   logrosText: 'Algunas skins se consiguen completando logros.',
   logrosLink: 'Ver logros',
+  inspectLabel: 'Inspeccionar {name}',
+  inspectState: 'Estado',
+  inspectHow: 'Cómo conseguirla',
+  inspectHowReq: 'Requisito: {text}',
+  inspectHowLogro: 'Se consigue con un logro: {text}',
+  inspectEquip: 'Equipar',
+  inspectEquipped: 'Skin equipada: {name}',
+  inspectViewer: 'Cargando visor 3D…',
+  inspectUnknown: 'Esa skin no existe o no está disponible. Volvemos a Skins.',
 });

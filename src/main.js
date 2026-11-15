@@ -5,6 +5,7 @@ import './screens/tables.css';
 import './screens/friends.css';
 import './screens/ranking.css';
 import './screens/skins.css';
+import './screens/skinInspect.css';
 import { HOLE_TIME_LIMIT, PLAYERS_PER_MATCH, TIERS, maxStrokesOf, potFor } from './config.js';
 import { LocalWallet } from './wallet/LocalWallet.js';
 import { InsufficientFundsError } from './wallet/WalletService.js';
@@ -19,7 +20,7 @@ import { lastSection, mountSettingsPanel } from './ui/settingsPanel.js';
 import { Progress } from './progress/Progress.js';
 import { AVATAR_ICONS, AvatarStore, checkAvatarFile, imageToAvatar, toWire } from './progress/avatar.js';
 import { FRAMES, framesUnlocked, frameStyle } from './progress/prestige.js';
-import { CHALLENGES, TIERS as SKIN_TIERS, SKINS } from './progress/skins.js';
+import { CHALLENGES, SKINS } from './progress/skins.js';
 import { ballPreview } from './game/render/ballPaint.js';
 import { showSkinReveal } from './ui/skinReveal.js';
 import { installThumbObserver, thumbCached, upgradeImg, warmThumbs } from './ui/skinThumbs.js';
@@ -32,7 +33,7 @@ import { notify } from './ui/notifyPopup.js';
 import { createNotifier } from './ui/notifier.js';
 import { createPartyWatch } from './match/partyWatch.js';
 import { createScope } from './screens/lifecycle.js';
-import { avatarIcon, icon, iconUrl, tierIcon } from './ui/icons.js';
+import { avatarIcon, icon, iconUrl } from './ui/icons.js';
 import { errorRef } from './backend/rpcError.js';
 import { avatarHtml, coin, createBall, esc, fmt, h } from './screens/shared.js';
 import { createRouter } from './screens/router.js';
@@ -120,7 +121,6 @@ function backGuard() {
 
 let game = null;
 let screen = 'lobby';
-let activeSkinInspector = null;
 
 // libera todo lo de la partida y de las pantallas heredadas (la usan shell() y goHome())
 function releasePlay() {
@@ -130,10 +130,6 @@ function releasePlay() {
   playScope = null;
   gameGuard = null;
   partyWatch?.stop();
-  if (activeSkinInspector) {
-    try { activeSkinInspector.destroy(); } catch { }
-    activeSkinInspector = null;
-  }
 }
 
 async function shell(content, { hideHeader = false, nav = true } = {}) {
@@ -295,85 +291,6 @@ function bindHolo(root) {
     card.addEventListener('pointerleave', leave);
     card.addEventListener('pointercancel', leave);
   });
-}
-
-// ---------- skins ----------
-// La rejilla y los filtros son la pantalla src/screens/skins.js. Aquí queda solo el inspector a pantalla completa heredado
-// (T033 lo convierte en pantalla apilada #/skins/:id y borra este bloque).
-
-let skinInspect = null;
-const closeSkinInspect = () => {
-  if (!skinInspect) return;
-  const { overlay, onKey, from, inspector } = skinInspect;
-  skinInspect = null;
-  activeSkinInspector = null;
-  document.removeEventListener('keydown', onKey, true);
-  try { inspector?.destroy(); } catch { }
-  overlay.remove();
-  document.body.classList.remove('sk-noscroll');
-  if (from?.isConnected) from.focus({ preventScroll: true });
-};
-
-// inspección a pantalla completa (también en móvil); equipar es un botón explícito
-function openSkinInspect(skin, from, { onEquipped } = {}) {
-  closeSkinInspect();
-  activeSkinInspector = { destroy: closeSkinInspect };
-  const tier = SKIN_TIERS[skin.tier];
-  const overlay = h(`
-    <div class="sk-view rarity-${skin.tier}" role="dialog" aria-modal="true" aria-label="Inspeccionar ${skin.name}">
-      <div class="sk-view-bar">
-        <button type="button" class="sk-view-back" aria-label="Cerrar inspección">${icon('back')}Skins</button>
-        <span class="sk-view-title">${tierIcon(skin.tier)} ${skin.name}</span>
-      </div>
-      <div class="sk-view-stage">
-        <div class="sk-view-canvas"><img class="sk-view-poster" src="${thumbCached(skin, progress.instance(skin.id)) ?? ballPreview(skin, 288)}" alt="" draggable="false"></div>
-        <div class="sk-view-lock" hidden>
-          <span class="sk-lock sk-lock-big">${icon('lock')}</span>
-          <div class="sk-view-req"><small></small><span class="bar"><i></i></span></div>
-        </div>
-      </div>
-      <div class="sk-view-actions">
-        <button type="button" class="primary sk-equip"></button>
-      </div>
-    </div>`);
-  document.body.append(overlay);
-  document.body.classList.add('sk-noscroll');
-  const equipBtn = overlay.querySelector('.sk-equip');
-  const lockBox = overlay.querySelector('.sk-view-lock');
-  const syncAction = () => {
-    const req = progress.requirement(skin);
-    const open = req.ratio >= 1;
-    const isEq = progress.skin.id === skin.id;
-    equipBtn.disabled = isEq || !open;
-    equipBtn.innerHTML = isEq ? `${icon('check')}Equipada` : open ? 'Equipar' : 'Bloqueada';
-    lockBox.hidden = open;
-    lockBox.querySelector('small').textContent = req.text;
-    lockBox.querySelector('.bar i').style.width = `${req.ratio * 100}%`;
-  };
-  syncAction();
-  equipBtn.addEventListener('click', () => {
-    if (progress.equip(skin.id)) {
-      onEquipped?.();
-      syncAction();
-    }
-  });
-  overlay.querySelector('.sk-view-back').addEventListener('click', closeSkinInspect);
-  const onKey = (e) => {
-    if (e.key !== 'Escape') return;
-    e.stopPropagation();
-    closeSkinInspect();
-  };
-  document.addEventListener('keydown', onKey, true);
-  const mine = { overlay, inspector: null, onKey, from };
-  skinInspect = mine;
-  overlay.querySelector('.sk-view-back').focus({ preventScroll: true });
-  // el visor 3D (three.js + materiales) se descarga y crea solo ahora, al abrir
-  loadSkinInspector().then(({ createSkinInspector }) => {
-    if (skinInspect !== mine) return; // cerrado mientras cargaba
-    mine.inspector = createSkinInspector(overlay.querySelector('.sk-view-canvas'), { skin, instance: progress.instance(skin.id) ?? undefined, mode: 'fullscreen' });
-    // el candado va sobre el visor 3D, centrado en la bola (el visor vacía el contenedor al crearse)
-    overlay.querySelector('.sk-stage')?.append(lockBox);
-  }).catch((err) => console.warn('inspector no disponible', err));
 }
 
 // ---------- cuenta ----------
@@ -2322,6 +2239,8 @@ function startRouting(b) {
     backend: b, wallet, progress, avatar, settings, router, sfx, notify, icon, ball,
     quality: () => getQuality(),
     // miniaturas de skins (canvas y observador) aisladas de la pantalla
+    // visor 3D del inspector de skin: three.js solo se descarga al abrir la pantalla (import() dinámico)
+    loadViewer: () => loadSkinInspector().then((m) => m.createSkinInspector),
     thumbs: createThumbs({ upgrade: upgradeImg, cached: thumbCached, preview: ballPreview, warm: warmThumbs }),
     actions: {
       startMatch: (tier) => startMatch(tier),
@@ -2333,9 +2252,6 @@ function startRouting(b) {
     legacy: {
       // Mesas (T028): lo que la pantalla necesita de main.js
       enterTables: () => { leaveFinale(); stopLive(); screen = 'lobby'; releasePlay(); },
-      // Skins (T032): el inspector heredado hasta que T033 lo convierta en pantalla
-      inspectSkin: (skin, from, o) => openSkinInspect(skin, from, o),
-      closeSkinInspect: () => closeSkinInspect(),
       account: (p) => showAccount('', ACCOUNT_TABS[p?.tab] ?? 'profile'),
       settings: () => showSettings(),
       maps: () => showFreePlayCourseSelect(),

@@ -1,6 +1,6 @@
 // Skins (T032): lo que showSkins hacía en main.js, ahora como pantalla del router.
 // El CSS (skins.css) lo importa el arranque. Las miniaturas con canvas/observador viven en ctx.thumbs (skinThumbsHook.js).
-// El inspector sigue siendo el heredado de main.js (ctx.legacy.inspectSkin); T033 lo convierte en pantalla.
+// Pulsar una skin apila la pantalla del inspector (skinInspect.js, #/skins/:id).
 import { SKINS, TIERS as SKIN_TIERS } from '../progress/skins.js';
 import { rarePatternOf } from '../progress/inventory.js';
 import { tierIcon } from '../ui/icons.js';
@@ -14,12 +14,25 @@ const tierOrder = (s) => SKIN_TIERS[s.tier]?.order ?? 0;
 const FILTER_TIERS = Object.keys(SKIN_TIERS).reverse();
 const cap = (c) => `${c[0].toUpperCase()}${c.slice(1)}`;
 
+// El filtro y el scroll sobreviven a ir al inspector (Skins se destruye al apilarlo): memoria de módulo, sin storage.
+const DEFAULT_FILTER = { tier: 'all', owned: false, collection: 'all' };
+let lastFilter = { ...DEFAULT_FILTER };
+let pendingScroll = null; // solo al volver del inspector; una visita nueva empieza arriba
+export const __resetFilter = () => { lastFilter = { ...DEFAULT_FILTER }; pendingScroll = null; };
+
 export async function mount(root, ctx) {
   const { progress, thumbs } = ctx;
   const scope = ctx.scope.child(); // todo lo de la pantalla cuelga de aquí: destroy lo libera entero
   const icon = (n, o = {}) => ctx.icon(n, o);
   const collections = [...new Set(SKINS.map((s) => s.collection))];
-  const filter = { tier: 'all', owned: false, collection: 'all' };
+  const filter = {
+    tier: lastFilter.tier === 'all' || SKIN_TIERS[lastFilter.tier] ? lastFilter.tier : 'all',
+    owned: lastFilter.owned === true,
+    collection: lastFilter.collection === 'all' || collections.includes(lastFilter.collection) ? lastFilter.collection : 'all',
+  };
+  const win = ctx.scope.win;
+  const restoreY = pendingScroll;
+  pendingScroll = null;
   let gone = false, sc = null, binding = null, items = [];
 
   const { level, into, need } = progress.level;
@@ -34,12 +47,12 @@ export async function mount(root, ctx) {
       </div>
       <div class="sk-filters" role="group" aria-label="${esc(t('skins.filtersLabel'))}">
         <div class="sk-filter-row">
-          <button type="button" class="sk-fchip on" data-tier="all" aria-pressed="true">${esc(t('skins.all'))}</button>
-          ${FILTER_TIERS.map((id) => `<button type="button" class="sk-fchip rarity-${id}" data-tier="${id}" aria-pressed="false"><i aria-hidden="true">${tierIcon(id)}</i>${esc(SKIN_TIERS[id].name)}</button>`).join('')}
+          <button type="button" class="sk-fchip${filter.tier === 'all' ? ' on' : ''}" data-tier="all" aria-pressed="${filter.tier === 'all'}">${esc(t('skins.all'))}</button>
+          ${FILTER_TIERS.map((id) => `<button type="button" class="sk-fchip rarity-${id}${filter.tier === id ? ' on' : ''}" data-tier="${id}" aria-pressed="${filter.tier === id}"><i aria-hidden="true">${tierIcon(id)}</i>${esc(SKIN_TIERS[id].name)}</button>`).join('')}
         </div>
         <div class="sk-filter-row">
-          <button type="button" class="sk-fchip sk-fowned" data-sk-owned="1" aria-pressed="false">${esc(t('skins.owned'))}</button>
-          ${collections.length > 1 ? `<select class="sk-fcoll" data-sk-coll="1" aria-label="${esc(t('skins.collection'))}"><option value="all">${esc(t('skins.allCollections'))}</option>${collections.map((c) => `<option value="${esc(c)}">${esc(cap(c))}</option>`).join('')}</select>` : ''}
+          <button type="button" class="sk-fchip sk-fowned${filter.owned ? ' on' : ''}" data-sk-owned="1" aria-pressed="${filter.owned}">${esc(t('skins.owned'))}</button>
+          ${collections.length > 1 ? `<select class="sk-fcoll" data-sk-coll="1" aria-label="${esc(t('skins.collection'))}"><option value="all">${esc(t('skins.allCollections'))}</option>${collections.map((c) => `<option value="${esc(c)}"${filter.collection === c ? ' selected' : ''}>${esc(cap(c))}</option>`).join('')}</select>` : ''}
         </div>
       </div>
       <div class="sk-list" data-sk-list="1"></div>
@@ -59,7 +72,7 @@ export async function mount(root, ctx) {
     const inst = progress.instance(skin.id);
     const rare = open && inst ? rarePatternOf(skin, inst.seed) : null;
     const eq = progress.skin.id === skin.id;
-    return `<li><button type="button" class="sk-card rarity-${skin.tier}${open ? '' : ' locked'}${eq ? ' equipped' : ''}" data-skin-id="${esc(skin.id)}" style="--sk-a:${skin.palette.base};--sk-b:${skin.palette.accent}">
+    return `<li><button type="button" class="sk-card rarity-${skin.tier}${open ? '' : ' locked'}${eq ? ' equipped' : ''}" data-skin-id="${esc(skin.id)}" data-focus-key="skin-${esc(skin.id)}" style="--sk-a:${skin.palette.base};--sk-b:${skin.palette.accent}">
         <div class="shine"></div>
         <div class="sk-scene">
           <span class="sk-ico" aria-hidden="true">${tierIcon(skin.tier)}</span>
@@ -122,7 +135,7 @@ export async function mount(root, ctx) {
 
   for (const b of tierBtns) {
     scope.on(b, 'click', () => {
-      filter.tier = b.dataset.tier;
+      filter.tier = lastFilter.tier = b.dataset.tier;
       for (const x of tierBtns) {
         x.classList.toggle('on', x === b);
         x.setAttribute('aria-pressed', String(x === b));
@@ -131,7 +144,7 @@ export async function mount(root, ctx) {
     });
   }
   scope.on(ownedBtn, 'click', () => {
-    filter.owned = !filter.owned;
+    filter.owned = lastFilter.owned = !filter.owned;
     ownedBtn.classList.toggle('on', filter.owned);
     ownedBtn.setAttribute('aria-pressed', String(filter.owned));
     if (list.dataset.state === 'ready' || list.dataset.state === 'empty') render();
@@ -139,23 +152,24 @@ export async function mount(root, ctx) {
   const coll = root.querySelector('[data-sk-coll="1"]');
   if (coll) {
     scope.on(coll, 'change', (e) => {
-      filter.collection = e.target.value;
+      filter.collection = lastFilter.collection = e.target.value;
       if (list.dataset.state === 'ready' || list.dataset.state === 'empty') render();
     });
   }
   for (const b of root.querySelectorAll('[data-go]')) scope.on(b, 'click', () => ctx.router.push(b.dataset.go));
 
-  // pulsar una skin abre el inspector heredado; al equipar vuelve a pintar y el foco regresa a la tarjeta (que se repinta)
+  // pulsar una skin abre el inspector (#/skins/:id); al volver, el host remonta Skins y devuelve el foco a la tarjeta (data-focus-key)
   scope.on(list, 'click', (e) => {
     const btn = e.target?.closest?.('[data-skin-id]');
     const skin = btn && SKINS.find((s) => s.id === btn.dataset.skinId);
     if (!skin) return;
-    const find = () => list.querySelector(`[data-skin-id="${skin.id}"]`);
-    const from = { get isConnected() { return !!find(); }, focus: (o) => find()?.focus?.(o) };
-    ctx.legacy?.inspectSkin?.(skin, from, { onEquipped: () => { if (!gone) render(); } });
+    btn.focus?.({ preventScroll: true }); // Safari no enfoca los botones al pulsar: el host necesita el foco para devolverlo
+    pendingScroll = win?.scrollY ?? 0; // al volver se restaura antes de que el host devuelva el foco
+    ctx.router.push('skin', { id: skin.id });
   });
 
   load();
+  if (restoreY != null) win?.scrollTo?.(0, restoreY);
   Promise.resolve().then(() => thumbs.warm()).then(applyCache, () => {});
   return {
     title: t('skins.title'),
@@ -164,7 +178,6 @@ export async function mount(root, ctx) {
       items = [];
       binding?.release();
       binding = null;
-      ctx.legacy?.closeSkinInspect?.();
       scope.dispose();
     },
   };
