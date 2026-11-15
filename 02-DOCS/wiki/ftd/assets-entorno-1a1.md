@@ -130,8 +130,8 @@ los entornos tras la aprobación.
 - `pnpm test` en verde. Recapturar previews (`pnpm previews:capture`).
 
 ## Checklist
-- [ ] Paso L — laboratorio
-- [ ] Paso 0 — viento compartido
+- [ ] Paso L — laboratorio (entregado, pendiente de visto bueno del usuario)
+- [ ] Paso 0 — viento compartido (entregado, pendiente de visto bueno del usuario)
 - [ ] Paso 1 — árbol redondo
 - [ ] Paso 2 — pino
 - [ ] Paso 3 — palmera
@@ -150,7 +150,12 @@ los entornos tras la aprobación.
 - Trabajo en la rama `la-chaqueta-bionica`; no se hace push a `main` ni a la rama del otro.
 
 ## Evidence
-(vacío: se rellena con cada paso)
+(2026-11-15) **Paso L + Paso 0 entregados, pendientes del visto bueno visual del usuario.**
+- Paso L (Sonnet): `assets-lab.html`, `src/lab/` (registro, escena, antes/después, viento, contadores), `tests/assets-lab.test.js`. `pnpm build` ok y `assets-lab.html` no entra en `dist`.
+- Paso 0 (Opus): `src/game/render/assets/wind.js` (tronco/copa/hoja + ráfagas viajeras), `bakeStatic` conserva `WIND_ATTRS`, viento aplicado en `environment.js`, `flora.js`, `lushEnvironment.js`. `tests/wind.test.js` 17/17; mutación (quitar la línea de `bakeStatic`) lo pone en rojo.
+- Revisión de contexto limpio (`rsc risk`: 1 revisor): sin bloqueantes. Un should-fix (tercera ráfaga borraba la más avanzada de golpe) corregido con fundido y 2 tests que fallan con el código viejo.
+- `pnpm test`: 314 tests, 309 pasan. Los 5 fallos están en `vfx-runtime`/`vfx-packs`, trabajo VFX ajeno sin commitear. `pnpm build` ok.
+- Sin verificar: el GLSL no se ha compilado en GPU real ni se ha visto el laboratorio en pantalla (lo comprueba el usuario).
 
 ## Next step
-Abrir una sesión nueva en `la-chaqueta-bionica` y empezar por el Paso L y el Paso 0.
+Usuario revisa el laboratorio (`pnpm dev` → `/assets-lab.html`). Con su visto bueno, marcar L y 0 y seguir con el Paso 1 (árbol redondo).
