@@ -1,0 +1,23 @@
+/* Pantalla Logros (prefijo ach-). Rejilla de 2 por fila también en móvil. Sin estados de hover. */
+.ach { display: flex; flex-direction: column; min-height: 100%; box-sizing: border-box; color: var(--text); }
+.ach-body {
+  flex: 1; box-sizing: border-box; max-width: 720px; width: 100%; margin: 0 auto;
+  padding: 4px calc(env(safe-area-inset-right, 0px) + 12px) calc(env(safe-area-inset-bottom, 0px) + 16px) calc(env(safe-area-inset-left, 0px) + 12px);
+}
+.ach-h { margin: 14px 2px 8px; font: 800 1rem/1.2 var(--display); color: var(--text-dim); }
+.ach-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.ach-card { display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 44px; padding: 10px; }
+.ach-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ach-ico { flex: none; display: grid; place-items: center; width: 32px; height: 32px; }
+.ach-ico > svg { width: 32px; height: 32px; }
+.ach-name { margin: 0; min-width: 0; font: 700 0.9rem/1.2 var(--display); overflow-wrap: anywhere; }
+.ach-bar { display: block; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.ach-bar > i { display: block; height: 100%; background: var(--emerald); border-radius: 4px; }
+.ach-num { font: 700 0.8rem/1.2 var(--body); color: var(--text-dim); }
+.ach-reward { display: flex; align-items: center; gap: 4px; font: 600 0.75rem/1.2 var(--body); color: var(--gold); }
+.ach-reward > svg { flex: none; width: 18px; height: 18px; }
+.ach-done { border-color: var(--gold); }
+.ach-done .ach-bar > i { background: var(--gold); }
+.ach-status { display: flex; align-items: center; gap: 4px; font: 800 0.8rem/1.2 var(--body); color: var(--gold); }
+.ach-status > svg { flex: none; width: 18px; height: 18px; }
+@media (prefers-reduced-motion: no-preference) { .ach-bar > i { transition: width 0.3s ease-out; } }
