@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { isWindMaterial, WIND_ATTRS, WIND_ATTR_SIZES, windRootOf, writeWindAttributes } from './assets/wind.js';
 
 /**
  * Junta en una sola malla por material todo lo que cuelga de `root` y no se
@@ -19,26 +20,25 @@ export function bakeStatic(root, parent, { center = null, split = 20000 } = {}) 
     if (Array.isArray(mat)) return;
     let g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
     // todas las piezas deben tener los mismos atributos para poder juntarlas
-    // (el color por vértice se queda si el material lo usa: todas las piezas del mismo material lo llevan)
-    for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'normal' && !(name === 'color' && mat.vertexColors)) g.deleteAttribute(name);
-    if (!g.attributes.normal) g.computeVertexNormals();
-    // cuánto se mece cada vértice con el viento: su altura sobre la base del árbol
-    const sway = new Float32Array(g.attributes.position.count);
-    let tree = o;
-    while (tree && !tree.userData.swayRoot) tree = tree.parent;
-    if (tree) {
-      const rel = new THREE.Matrix4().copy(tree.matrixWorld).invert().multiply(o.matrixWorld);
-      const v = new THREE.Vector3();
-      for (let i = 0; i < sway.length; i++) sway[i] = Math.max(0, v.fromBufferAttribute(g.attributes.position, i).applyMatrix4(rel).y);
+    // (el color por vértice se queda si el material lo usa: todas las piezas del mismo material lo llevan;
+    // los de viento, si el material lleva viento: los que traiga la pieza se respetan y los que falten se calculan)
+    const wind = isWindMaterial(mat);
+    for (const name of Object.keys(g.attributes)) {
+      if (name === 'position' || name === 'normal' || (name === 'color' && mat.vertexColors)) continue;
+      if (wind && WIND_ATTRS.includes(name) && g.attributes[name].itemSize === WIND_ATTR_SIZES[name]) continue;
+      g.deleteAttribute(name);
     }
-    g.setAttribute('sway', new THREE.BufferAttribute(sway, 1));
+    if (!g.attributes.normal) g.computeVertexNormals();
+    // cuánto se mece cada vértice (altura sobre la base del árbol) y con qué fase: ver wind.js
+    const tree = windRootOf(o);
+    if (wind) writeWindAttributes(g, o, tree);
     g.applyMatrix4(o.matrixWorld);
     const key = mat.uuid + (o.castShadow ? 's' : '') + (o.receiveShadow ? 'r' : '');
     if (!buckets.has(key)) buckets.set(key, { mat, cast: o.castShadow, receive: o.receiveShadow, geos: [], at: [], tris: 0 });
     const b = buckets.get(key);
     b.geos.push(g);
     // sitio de la pieza (de su árbol entero si es parte de uno), para partir por cuadrantes
-    const e = (tree ?? o).matrixWorld.elements;
+    const e = tree.matrixWorld.elements;
     b.at.push([e[12], e[14]]);
     b.tris += g.attributes.position.count / 3;
   });
@@ -77,10 +77,11 @@ export function bakeStatic(root, parent, { center = null, split = 20000 } = {}) 
 }
 
 /**
- * Viento en el sombreador: las copas se mecen según la altura sobre el suelo,
- * sin mover mallas desde el procesador.
+ * Viento antiguo (un solo seno según la altura). Se mantiene por compatibilidad;
+ * lo nuevo usa applyWind de assets/wind.js (tres capas y ráfagas que viajan).
  */
 export function addWind(material, uniforms, amount = 0.05) {
+  material.userData.wind = { legacy: true, amount };
   material.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = uniforms.uTime;
     sh.vertexShader = sh.vertexShader

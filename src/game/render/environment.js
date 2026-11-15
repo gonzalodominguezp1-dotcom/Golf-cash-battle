@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { roughTone, softDotTexture } from './textures.js';
-import { addWind, bakeStatic } from './batch.js';
+import { bakeStatic } from './batch.js';
+import { applyWind, setWindField, updateWind } from './assets/wind.js';
 import { quality } from './quality.js';
 import { lavaMaterial } from './lava.js';
 import { CUP_R } from '../physics.js';
@@ -15,7 +16,7 @@ import {
 import { addGrassField, floraOf, groundDetailTexture, makeBush, makeLilyPad, makeReeds, makeRiver, TERRAIN_FOCUS, warpCoord } from './flora.js';
 import { lushMountains, makeGrassClump, makeLushCloud, makeLushBush, makeLushRock, makeLushTree, meadowGroundTexture } from './lushEnvironment.js';
 
-// tiempo compartido por los sombreadores animados (viento, agua)
+// tiempo compartido por los sombreadores animados del agua (el viento va en assets/wind.js)
 const windUniforms = { uTime: { value: 0 } };
 // altura del terreno junto a una pista a ras de suelo (el green está a 0)
 const GROUND_Y = -0.04;
@@ -66,7 +67,13 @@ function distToBounds(b, x, z) {
 
 export function buildEnvironment(scene, course, theme, rng) {
   const bounds = courseBounds(course);
-  const animated = [(t) => (windUniforms.uTime.value = t)];
+  // viento compartido: avanza una vez por fotograma; las ráfagas cruzan el hoyo y su decorado
+  const animated = [(t, dt) => ((windUniforms.uTime.value = t), updateWind(dt))];
+  setWindField({
+    x: (bounds.minX + bounds.maxX) / 2,
+    z: (bounds.minZ + bounds.maxZ) / 2,
+    radius: Math.hypot(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ) / 2 + 40,
+  });
   const q = quality();
   // todo lo que no se mueve va aquí y al final se junta en pocas mallas
   const decor = new THREE.Group();
@@ -314,8 +321,8 @@ export function buildEnvironment(scene, course, theme, rng) {
     if (theme.cyberCity) buildCyberCity(scene, decor, bounds, theme, rng, animated, q);
   } else if (lush) {
     // copas y rocas lisas, arbustos y matas de hierba curvas
-    const leaves = (theme.leaves ?? [0x3bb54a]).map((color) => addWind(new THREE.MeshStandardMaterial({ color, vertexColors: true, roughness: 0.8 }), windUniforms, WIND));
-    const grass = addWind(new THREE.MeshStandardMaterial({ color: new THREE.Color(theme.groundHigh).multiplyScalar(0.9), vertexColors: true, roughness: 0.9, side: THREE.DoubleSide }), windUniforms, WIND * 3);
+    const leaves = (theme.leaves ?? [0x3bb54a]).map((color) => applyWind(new THREE.MeshStandardMaterial({ color, vertexColors: true, roughness: 0.8 }), { layer: 'canopy' }));
+    const grass = applyWind(new THREE.MeshStandardMaterial({ color: new THREE.Color(theme.groundHigh).multiplyScalar(0.9), vertexColors: true, roughness: 0.9, side: THREE.DoubleSide }), { layer: 'grass' });
     const [tx, tz] = course.tee;
     const clear = (x, z) => !grounded || Math.hypot(x - tx, z - tz) > 9;
     place(grounded ? 4.5 : 2.2, 40, 140, (x, y, z, d) => {
@@ -329,14 +336,14 @@ export function buildEnvironment(scene, course, theme, rng) {
     if (theme.flowers) place(grounded ? 1.6 : 1.2, 12, 140, (x, y, z) => decor.add(makeFlower(rng, x, y, z)));
     place(grounded ? 1.6 : 1, 16, 220, (x, y, z) => decor.add(makeGrassClump(rng, x, y, z, grass)));
   } else {
-    const leaves = theme.leaves?.map((color) => addWind(new THREE.MeshLambertMaterial({ color, flatShading: true }), windUniforms, WIND));
+    const leaves = theme.leaves?.map((color) => applyWind(new THREE.MeshLambertMaterial({ color, flatShading: true }), { layer: 'canopy' }));
     // a ras de suelo nada pisa el antegreen, y detrás del tee queda un claro para la cámara
     const [tx, tz] = course.tee;
     const clear = (x, z) => !grounded || Math.hypot(x - tx, z - tz) > 9;
     place(grounded ? 4.5 : 2.2, 40, 140, (x, y, z) => {
       if (!clear(x, z)) return;
       const tree = makeTree(theme.trees[Math.floor(rng() * theme.trees.length)], rng, x, y, z, leaves);
-      // los árboles se mecen con el viento (en el sombreador, ver addWind)
+      // los árboles se mecen con el viento (en el sombreador, ver assets/wind.js)
       tree.userData.swayRoot = true;
       decor.add(tree);
     });
@@ -517,8 +524,6 @@ export function buildEnvironment(scene, course, theme, rng) {
   };
 }
 
-const WIND = 0.025;
-
 /**
  * Olas en el sombreador: el agua sube y baja con dos ondas cruzadas y una
  * franja de espuma clara donde toca la orilla (agua poco profunda = cerca de
@@ -550,11 +555,13 @@ function waterShader(material, theme) {
   material.customProgramCacheKey = () => 'water' + (theme.lava ? 'lava' : theme.neon ? 'neon' : '');
 }
 
-const leafMats = [0x2f9e44, 0x3bb54a, 0x25803a, 0x4cc25a].map((color) => addWind(new THREE.MeshLambertMaterial({ color, flatShading: true }), windUniforms, WIND));
-const trunkMat = new THREE.MeshLambertMaterial({ color: 0x8b5a2b, flatShading: true });
-const snowMat = addWind(new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }), windUniforms, WIND);
-const frondMat = addWind(new THREE.MeshLambertMaterial({ color: 0x3bb54a, side: THREE.DoubleSide, flatShading: true }), windUniforms, WIND * 1.6);
-const cocoMat = new THREE.MeshLambertMaterial({ color: 0x6b4423, flatShading: true });
+// viento (assets/wind.js): el tronco se dobla, la copa además se balancea y aletea;
+// los cocos van con el tronco (misma capa) para no despegarse de la palmera
+const leafMats = [0x2f9e44, 0x3bb54a, 0x25803a, 0x4cc25a].map((color) => applyWind(new THREE.MeshLambertMaterial({ color, flatShading: true }), { layer: 'canopy' }));
+const trunkMat = applyWind(new THREE.MeshLambertMaterial({ color: 0x8b5a2b, flatShading: true }), { layer: 'trunk' });
+const snowMat = applyWind(new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }), { layer: 'canopy' });
+const frondMat = applyWind(new THREE.MeshLambertMaterial({ color: 0x3bb54a, side: THREE.DoubleSide, flatShading: true }), { layer: 'leaf' });
+const cocoMat = applyWind(new THREE.MeshLambertMaterial({ color: 0x6b4423, flatShading: true }), { layer: 'trunk' });
 const cactusMat = new THREE.MeshLambertMaterial({ color: 0x4f9e3c, flatShading: true });
 const deadMat = new THREE.MeshLambertMaterial({ color: 0x3a2a26, flatShading: true });
 const mesaMat = new THREE.MeshLambertMaterial({ color: 0xb8653a, flatShading: true });
@@ -566,7 +573,7 @@ function shadowAll(g) {
   return g;
 }
 
-function makeTree(kind, rng, x, y, z, leaves = leafMats) {
+export function makeTree(kind, rng, x, y, z, leaves = leafMats) {
   const g = new THREE.Group();
   const s = 0.8 + rng() * 0.9;
   const leaf = leaves[Math.floor(rng() * leaves.length)];
@@ -680,7 +687,7 @@ function makeTree(kind, rng, x, y, z, leaves = leafMats) {
 }
 
 const rockMat = new THREE.MeshLambertMaterial({ color: 0x9aa3a0, flatShading: true });
-function makeRock(rng, x, y, z, size = 1) {
+export function makeRock(rng, x, y, z, size = 1) {
   const m = new THREE.Mesh(lumpy(new THREE.IcosahedronGeometry((0.3 + rng() * 0.6) * size, 1), rng, 0.22), rockMat);
   m.position.set(x, y + 0.1, z);
   m.scale.set(1, 0.6 + rng() * 0.4, 1 + rng() * 0.4);
@@ -689,10 +696,11 @@ function makeRock(rng, x, y, z, size = 1) {
   return m;
 }
 
-const petalMats = [0xff5e7e, 0xffd23f, 0xffffff, 0xb27cff, 0xff8a3d].map((color) => new THREE.MeshLambertMaterial({ color, flatShading: true }));
-const stemMat = new THREE.MeshLambertMaterial({ color: 0x2f8f3a });
-const heartMat = new THREE.MeshLambertMaterial({ color: 0xffc93d });
-function makeFlower(rng, x, y, z) {
+// la flor entera (tallo, pétalos y botón) se mece junta: capa 'flower'
+const petalMats = [0xff5e7e, 0xffd23f, 0xffffff, 0xb27cff, 0xff8a3d].map((color) => applyWind(new THREE.MeshLambertMaterial({ color, flatShading: true }), { layer: 'flower' }));
+const stemMat = applyWind(new THREE.MeshLambertMaterial({ color: 0x2f8f3a }), { layer: 'flower' });
+const heartMat = applyWind(new THREE.MeshLambertMaterial({ color: 0xffc93d }), { layer: 'flower' });
+export function makeFlower(rng, x, y, z) {
   const g = new THREE.Group();
   const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.3, 4), stemMat);
   stem.position.y = 0.15;
@@ -712,13 +720,14 @@ function makeFlower(rng, x, y, z) {
   g.add(heart);
   g.position.set(x, y, z);
   g.rotation.y = rng() * 6;
+  g.userData.swayRoot = true;
   return g;
 }
 
 // Matas de hierba alta alrededor de la pista: varias hojas finas
 const tuftMats = new Map();
 function makeTuft(rng, x, y, z, theme) {
-  if (!tuftMats.has(theme.groundHigh)) tuftMats.set(theme.groundHigh, addWind(new THREE.MeshLambertMaterial({ color: new THREE.Color(theme.groundHigh).multiplyScalar(0.85), flatShading: true }), windUniforms, WIND * 3));
+  if (!tuftMats.has(theme.groundHigh)) tuftMats.set(theme.groundHigh, applyWind(new THREE.MeshLambertMaterial({ color: new THREE.Color(theme.groundHigh).multiplyScalar(0.85), flatShading: true }), { layer: 'grass' }));
   const mat = tuftMats.get(theme.groundHigh);
   const g = new THREE.Group();
   const n = 4 + Math.floor(rng() * 4);
