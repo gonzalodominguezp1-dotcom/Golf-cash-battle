@@ -130,8 +130,8 @@ los entornos tras la aprobación.
 - `pnpm test` en verde. Recapturar previews (`pnpm previews:capture`).
 
 ## Checklist
-- [ ] Paso L — laboratorio (entregado, pendiente de visto bueno del usuario)
-- [ ] Paso 0 — viento compartido (entregado, pendiente de visto bueno del usuario)
+- [x] Paso L — laboratorio (visto bueno del usuario 2026-11-15; parpadeo en «Después» en arreglo)
+- [x] Paso 0 — viento compartido (visto bueno del usuario 2026-11-15)
 - [ ] Paso 1 — árbol redondo
 - [ ] Paso 2 — pino
 - [ ] Paso 3 — palmera
