@@ -257,7 +257,13 @@ const snap = () => ({ triangles: renderer.info.render.triangles, calls: renderer
 
 // coste del asset = lo dibujado con él menos lo dibujado sin él (suelo y cielo no cuentan)
 function measure(s, r, canvasH) {
-  if (!s.asset) return null;
+  if (!s.asset) {
+    // sin asset (p. ej. «Después» vacío) también hay que dibujar el panel: si no, ese
+    // fotograma sale sin pintar (el buffer se descarta tras presentarse) y parpadea
+    renderer.info.reset();
+    drawSide(s, r, canvasH);
+    return null;
+  }
   s.asset.visible = false;
   renderer.info.reset();
   drawSide(s, r, canvasH);
