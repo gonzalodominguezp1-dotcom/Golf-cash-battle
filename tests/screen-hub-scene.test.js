@@ -189,3 +189,52 @@ test('hub tapado: al destapar repinta badges, anillo y aria-label con los datos 
 
 // Mutación manual hecha a mano: quitando el `scope.on(doc, 'visibilitychange', ...)` de hub.js el test de 20 ciclos
 // falla (liveListeners > 0); se comprobó y se restauró.
+
+// ---------- recreación de la escena al llegar (ctx.actions.reviveHubScene) ----------
+function reviveSetup(env, over = {}) {
+  const calls = [];
+  const s = setup(env, { actions: { claimRewards() {}, reviveHubScene: () => calls.push('revive') }, ...over });
+  return { ...s, calls };
+}
+
+test('hub llegada: sin escena pide recrearla una vez al montar, no por repintado', async () => {
+  const env = fakeEnv();
+  const { mctx, calls } = reviveSetup(env, { hubScene: null });
+  const screen = await mount(fakeRoot(env), mctx, {});
+  assert.deepEqual(calls, ['revive']);
+  screen.onCover();
+  assert.deepEqual(calls, ['revive']); // tapado no dispara
+  screen.onUncover('skins');
+  assert.deepEqual(calls, ['revive', 'revive']); // destapar sin escena: una por llegada
+});
+
+test('hub llegada: con escena viva no pide nada, ni al montar ni al destapar', async () => {
+  const env = fakeEnv();
+  const { mctx, calls } = reviveSetup(env, { hubScene: fakeScene() });
+  const screen = await mount(fakeRoot(env), mctx, {});
+  screen.onCover(); screen.onUncover();
+  assert.deepEqual(calls, []);
+});
+
+test('hub llegada: pestaña oculta que vuelve a verse sin escena la pide; tapado no', async () => {
+  const env = fakeEnv();
+  const { mctx, calls } = reviveSetup(env, { hubScene: null });
+  env.doc.hidden = false;
+  const screen = await mount(fakeRoot(env), mctx, {});
+  calls.length = 0;
+  screen.onCover();
+  env.doc.emit('visibilitychange');
+  assert.deepEqual(calls, []);
+  screen.onUncover();
+  calls.length = 0;
+  env.doc.hidden = true; env.doc.emit('visibilitychange');
+  assert.deepEqual(calls, []);
+  env.doc.hidden = false; env.doc.emit('visibilitychange');
+  assert.deepEqual(calls, ['revive']);
+});
+
+test('hub llegada: una acción que lanza no tumba el hub', async () => {
+  const env = fakeEnv();
+  const { mctx } = setup(env, { hubScene: null, actions: { claimRewards() {}, reviveHubScene() { throw new Error('x'); } } });
+  await assert.doesNotReject(mount(fakeRoot(env), mctx, {}));
+});

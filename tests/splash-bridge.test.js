@@ -322,3 +322,150 @@ test('lobby sin pintar: el fallo se comunica con fail al splash', async () => {
   if (!(await painted)) boot.fail('lobby sin pintar');
   assert.deepEqual(names(splash), ['fail:lobby sin pintar']);
 });
+
+// ---------- recreación de la escena tras una partida (reload) ----------
+import { createGoHome } from '../src/screens/playLifecycle.js';
+
+function reloader(createHubScene, over = {}) {
+  const env = fakeEnv();
+  const doc = fakeDoc();
+  const released = [];
+  const pre = createHubPreloader({ boot: setup().boot, importScene: async () => ({ createHubScene }), doc, timers: env.timers, onReleased: (sc) => released.push(sc), ...over });
+  return { env, doc, pre, released };
+}
+
+test('reload tras release crea una escena nueva, pausada y con su contenedor', async () => {
+  const made = [];
+  const { pre, doc } = reloader(async () => { const sc = fakeHubScene(); made.push(sc); return sc; });
+  pre.release();
+  const sc = await pre.reload();
+  assert.equal(sc, made[0]);
+  assert.equal(sc.paused, true);
+  assert.equal(sc.holder, doc.body.kids[0]);
+  assert.equal(pre.current(), sc);
+});
+
+test('reload no crea escena si hay partida activa (canCreate false)', async () => {
+  let n = 0;
+  const { pre } = reloader(async () => { n++; return fakeHubScene(); });
+  assert.equal(await pre.reload({ canCreate: () => false }), null);
+  assert.equal(n, 0);
+  assert.equal(pre.current(), null);
+});
+
+test('reload no crea otra escena si ya hay una viva', async () => {
+  let n = 0;
+  const { pre } = reloader(async () => { n++; return fakeHubScene(); });
+  const a = await pre.reload();
+  const b = await pre.reload();
+  assert.equal(a, b);
+  assert.equal(n, 1);
+});
+
+test('dos vueltas rápidas al hub: una sola escena', async () => {
+  let n = 0;
+  const { pre } = reloader(async () => { n++; return fakeHubScene(); });
+  const [a, b] = await Promise.all([pre.reload(), pre.reload()]);
+  assert.equal(n, 1);
+  assert.ok(a && b === null);
+  assert.equal(pre.current(), a);
+});
+
+test('release durante la recreación descarta la escena tardía', async () => {
+  const sc = fakeHubScene();
+  let resolve;
+  const { pre, doc } = reloader(() => new Promise((r) => { resolve = r; }));
+  const p = pre.reload();
+  await tick(); await tick();
+  pre.release(); // empieza otra partida
+  resolve(sc);
+  assert.equal(await p, null);
+  assert.equal(sc.disposed, 1);
+  assert.equal(doc.body.kids[0].removed, true);
+  assert.equal(pre.current(), null);
+});
+
+test('createHubScene rechaza (sin WebGL): null sin error y sin reintentos en bucle', async () => {
+  let n = 0;
+  const { pre, doc } = reloader(async () => { n++; throw new Error('sin WebGL'); });
+  assert.equal(await pre.reload(), null);
+  assert.equal(await pre.reload(), null);
+  assert.equal(n, 1); // rechazo real: broken, sin reintentos
+  assert.equal(doc.body.kids[0].removed, true);
+  assert.equal(pre.current(), null);
+});
+
+test('reload fuera de margen (8 s): libera lo tardío UNA vez y NO queda roto: el siguiente reload crea', async () => {
+  const sc = fakeHubScene();
+  let resolve, n = 0;
+  const { pre, env } = reloader(() => { n++; return n === 1 ? new Promise((r) => { resolve = r; }) : Promise.resolve(fakeHubScene()); });
+  const p = pre.reload();
+  await tick(); await tick();
+  env.timers.advance(SCENE_MARGIN_MS);
+  assert.equal(await p, null);
+  resolve(sc);
+  await tick(); await tick();
+  assert.equal(sc.disposed, 1);
+  assert.equal(pre.current(), null);
+  const next = await pre.reload();
+  assert.ok(next);
+  assert.equal(n, 2);
+});
+
+test('timeout con la escena creada y firstFrame tardío: un solo dispose', async () => {
+  let ff;
+  const sc = fakeHubScene({ firstFrame: new Promise((r) => { ff = r; }) });
+  const { pre, env, doc } = reloader(async () => sc);
+  const p = pre.reload();
+  await tick(); await tick();
+  env.timers.advance(SCENE_MARGIN_MS);
+  assert.equal(await p, null);
+  ff();
+  await tick(); await tick();
+  assert.equal(sc.disposed, 1);
+  assert.equal(doc.body.kids[0].removed, true);
+  assert.equal(pre.current(), null);
+});
+
+test('reload con la pestaña oculta no arranca (y no marca roto); visible, crea', async () => {
+  let n = 0;
+  const doc = fakeDoc(); doc.hidden = true;
+  const { pre } = reloader(async () => { n++; return fakeHubScene(); }, { doc });
+  assert.equal(await pre.reload(), null);
+  assert.equal(n, 0);
+  doc.hidden = false;
+  assert.ok(await pre.reload());
+});
+
+test('reload no cancela ni pisa una preload() del arranque aún en vuelo', async () => {
+  const sc = fakeHubScene();
+  let resolve, n = 0;
+  const s = setup();
+  s.boot.session(); s.boot.progress();
+  const doc = fakeDoc();
+  const pre = createHubPreloader({ boot: s.boot, importScene: async () => ({ createHubScene: () => { n++; return new Promise((r) => { resolve = r; }); } }), doc, timers: s.env.timers });
+  const p = pre.preload();
+  await tick(); await tick();
+  assert.equal(await pre.reload(), null); // hay una en vuelo: nada
+  assert.equal(n, 1);
+  resolve(sc);
+  assert.equal(await p, sc); // la del arranque llega intacta
+  assert.equal(sc.disposed, 0);
+  assert.equal(await pre.reload(), sc); // y con escena viva, devuelve esa
+  assert.equal(n, 1);
+});
+
+test('orden: reload tras goHome (la hub lo pide al llegar) crea la escena DESPUÉS de game.dispose', async () => {
+  const order = [];
+  const { pre } = reloader(async () => { order.push('createScene'); return fakeHubScene(); });
+  let reloading = null;
+  const goHome = createGoHome({
+    leaveFinale: () => order.push('leaveFinale'),
+    stopLive: () => order.push('stopLive'),
+    releasePlay: () => order.push('game.dispose'),
+    go: () => { order.push('go'); reloading = pre.reload(); }, // el hub monta y pide reviveHubScene
+  });
+  goHome();
+  await reloading;
+  assert.deepEqual(order, ['leaveFinale', 'stopLive', 'game.dispose', 'go', 'createScene']);
+});

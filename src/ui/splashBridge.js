@@ -140,11 +140,12 @@ export function trackProgress(boot, request, { timers = globalThis, maxMs = 3000
  * (el hub llama a resume() al montarla). `release()` la libera en cualquier momento, también si aún se está creando:
  * la escena tardía se hace dispose al llegar y no se entrega.
  */
-export function createHubPreloader({ boot, importScene, doc = globalThis.document, quality = () => 'medium', reducedMotion = () => false, onReleased = () => {} }) {
-  let holder = null, scene = null, gen = 0;
+export function createHubPreloader({ boot, importScene, doc = globalThis.document, quality = () => 'medium', reducedMotion = () => false, onReleased = () => {}, timers = globalThis, marginMs = SCENE_MARGIN_MS }) {
+  let holder = null, scene = null, gen = 0, loading = false, broken = false, preloading = false;
 
   function release() {
     gen++; // cualquier creación en vuelo queda cancelada
+    loading = false;
     const sc = scene;
     scene = null;
     try { sc?.dispose?.(); } catch { /* ya liberada */ }
@@ -156,7 +157,8 @@ export function createHubPreloader({ boot, importScene, doc = globalThis.documen
   function preload() {
     const my = ++gen;
     const stale = () => my !== gen;
-    return boot.preloadScene({
+    preloading = true;
+    const p = boot.preloadScene({
       importScene,
       createScene: async (mod, signal) => {
         if (stale() || signal.cancelled) throw new Error('cancelada');
@@ -186,7 +188,68 @@ export function createHubPreloader({ boot, importScene, doc = globalThis.documen
       },
       onDiscard: () => { if (!stale()) release(); },
     });
+    p.then(() => { preloading = false; }, () => { preloading = false; });
+    return p;
   }
 
-  return { preload, release, current: () => scene };
+  /**
+   * Recrea la escena tras una partida (T026 la libera al empezarla). Perezosa y sin bloquear: quien llama NO la espera;
+   * al resolver, entrega la escena (pausada) o null. No hace nada (ni cancela nada) si ya hay escena viva, si hay una
+   * creándose (esta u otra del arranque), si `canCreate()` es false (partida/sala en curso) o si la pestaña está oculta
+   * (rAF no corre: el hub reintenta al volver a verse). `broken` solo se marca si createHubScene RECHAZA (sin WebGL);
+   * un timeout (8 s) libera lo creado y la siguiente llegada al hub reintenta. Llamar tras liberar el juego: así nunca
+   * coexisten dos contextos WebGL. `release()` la cancela y descarta la escena tardía.
+   */
+  function reload({ canCreate = () => true } = {}) {
+    if (scene) return Promise.resolve(scene);
+    if (loading || preloading || broken || doc?.hidden || !canCreate()) return Promise.resolve(null);
+    const my = ++gen;
+    const stale = () => my !== gen;
+    loading = true;
+    let box = null, sc = null, timer = null, scFreed = false, boxFreed = false;
+    const free = () => { // idempotente: dispose de la escena y su contenedor una sola vez
+      if (sc && !scFreed) { scFreed = true; try { sc.dispose?.(); } catch { /* ya liberada */ } }
+      if (box && !boxFreed) { boxFreed = true; box.remove(); }
+      if (holder === box) holder = null;
+      if (scene === sc) scene = null;
+    };
+    const abandon = (isBroken) => { // sale de la recreación liberando lo creado
+      if (!stale()) { loading = false; if (isBroken) broken = true; gen++; }
+      free();
+    };
+    return new Promise((resolve) => {
+      timer = timers.setTimeout(() => { abandon(false); resolve(null); }, marginMs);
+      (async () => {
+        let created = false;
+        try {
+          const mod = await importScene();
+          if (stale()) return resolve(null);
+          box = doc.createElement('div');
+          box.setAttribute('aria-hidden', 'true');
+          box.style.cssText = 'position:fixed;left:-99999px;top:0;width:100vw;height:100vh;visibility:hidden;pointer-events:none';
+          doc.body.appendChild(box);
+          holder = box;
+          sc = await mod.createHubScene(box, { quality: quality(), reducedMotion: reducedMotion() });
+          created = true;
+          if (stale()) throw new Error('cancelada');
+          scene = sc;
+          await sc.firstFrame;
+          if (stale()) throw new Error('cancelada');
+          sc.pause();
+          sc.holder = box;
+          loading = false;
+          timers.clearTimeout(timer);
+          resolve(sc);
+        } catch (err) {
+          timers.clearTimeout(timer);
+          // rechazo real de import/createHubScene (sin WebGL): no se reintenta; cancelación o firstFrame tardío: no
+          if (!stale() && !created) console.warn('hub: escena 3D no disponible, se queda la imagen fija:', err?.message ?? err);
+          abandon(!stale() && !created);
+          resolve(null);
+        }
+      })();
+    });
+  }
+
+  return { preload, release, reload, current: () => scene };
 }

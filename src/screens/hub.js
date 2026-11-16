@@ -226,13 +226,16 @@ export async function mount(root, ctx) {
     scene = sc || null;
     place();
   };
+  const reviveScene = () => { try { ctx.actions.reviveHubScene?.(); } catch (err) { console.warn('hubScene.revive', err?.message ?? err); } };
   adopt(ctx.getHubScene ? ctx.getHubScene() : ctx.hubScene);
   if (ctx.watchHubScene) scope.sub(ctx.watchHubScene(adopt));
-  scope.on(doc, 'visibilitychange', sync);
+  scope.on(doc, 'visibilitychange', () => { sync(); if (!doc?.hidden && !scene && !covered) reviveScene(); });
   scope.on(scope.win, 'resize', () => { if (!covered) scene?.resize?.(); });
   if (import.meta.env?.DEV && scope.win) scope.win.__gcbHub = { get stats() { return scene?.stats; } };
 
   ctx.actions.claimRewards();
+  // llegada al hub sin escena (tras una partida): se recrea en segundo plano; el hub ya está pintado con la imagen fija
+  if (!scene) reviveScene();
 
   return {
     title: t('hub.title'),
@@ -242,6 +245,7 @@ export async function mount(root, ctx) {
       repaintAll();
       const cur = ctx.getHubScene ? ctx.getHubScene() : ctx.hubScene;
       if (cur !== scene) adopt(cur); else place();
+      if (!cur) reviveScene();
       if (from) root.querySelector?.(`[data-focus-key="${from}"]`)?.focus?.();
       ctx.actions.claimRewards();
     },

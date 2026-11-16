@@ -111,6 +111,7 @@ function backGuard() {
     if (!confirm('¿Seguro que quieres salir de la partida en vivo? Cuenta como abandono.')) return true; // cancelar conserva la pila
     // aceptar = lo mismo que el botón de salir: abandona (stopLive -> leave) y vuelve a la raíz con la pila coherente
     stopLive();
+    releasePlay();
     router.reset(ROOT_SCREEN);
     return true;
   }
@@ -250,6 +251,17 @@ function toggleFullscreen() {
 // fachada sobre el router (src/screens/navigate.js): los `data-go` y los atajos 1-6 siguen igual
 let go = () => {};
 // fin de partida o salida: libera la partida (final, sala en vivo, renderer, guard) y vuelve al hub (la raíz)
+// tras una partida el hub recrea su escena 3D (T026 la libera al empezar). El disparador es la LLEGADA al hub
+// (hub.js llama a ctx.actions.reviveHubScene al montar y al destapar sin escena), así vale cualquier vía de vuelta.
+// Si el juego sigue vivo se libera primero (su contexto WebGL), así nunca coexisten dos; sin esperarla: el hub
+// se pinta con la imagen fija y la escena entra al llegar. Nada si hay sala en vivo sin acabar.
+function reviveHubScene() {
+  if (currentLive && !currentLive.finished) return;
+  if (game) releasePlay();
+  hubPreloader.reload().then((scene) => {
+    if (scene && hubPreloader.current() === scene && startCtx) startCtx.setHubScene(scene);
+  });
+}
 const goHome = createGoHome({ leaveFinale: () => leaveFinale(), stopLive: () => stopLive(), releasePlay, go: (to) => go(to) });
 
 // ---------- ajustes ----------
@@ -1928,6 +1940,7 @@ function startRouting(b) {
       claimRewards: () => claimRewards(),
       toggleFullscreen: () => toggleFullscreen(),
       toggleMute: () => toggleMute(),
+      reviveHubScene: () => reviveHubScene(),
     },
     legacy: {
       // Mesas (T028): lo que la pantalla necesita de main.js
