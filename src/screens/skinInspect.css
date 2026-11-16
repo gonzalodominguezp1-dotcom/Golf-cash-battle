@@ -48,10 +48,10 @@
   .sk-inspect .sk-view-lock .sk-lock-big { width: 44px; height: 44px; padding: 10px; }
   .sk-inspect .sk-view-poster { width: min(40vmin, 200px); }
 }
-/* escritorio: el visor ocupa toda la ventana. .screen (style.css) limita la pantalla a 1140px con márgenes y padding
-   en el rango min-width: 900px; aquí se anulan para esta pantalla (móvil no cambia). */
+/* pantalla completa, móvil y escritorio: .screen (style.css) pone tope de ancho y padding (520px en móvil, 1140px en
+   escritorio); aquí se anulan para que el visor ocupe todo el ancho y alto sin márgenes */
+.sk-inspect.screen { max-width: none; width: 100%; margin: 0; padding: 0; box-sizing: border-box; }
 @media (min-width: 900px) {
-  .sk-inspect.screen { max-width: none; width: 100%; margin: 0; padding: 0; box-sizing: border-box; }
   .sk-inspect .sk-view-canvas > .sk-insp { height: 100%; min-height: 0; }
 }
 /* «Probar efectos» en móvil: las 4 celdas caben en el visor; la etiqueta puede partirse en dos líneas y no se sale de su celda */
