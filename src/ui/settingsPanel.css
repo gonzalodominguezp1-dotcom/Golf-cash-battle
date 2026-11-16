@@ -27,10 +27,6 @@
 .sp-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
 .sp-head h2 { margin: 0; font-family: var(--display); font-size: 24px; font-weight: 900; color: #fff; letter-spacing: -0.02em; }
 .sp-head p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
-.sp-back {
-  flex: 0 0 auto; min-height: 36px; padding: 0 12px; border-radius: 999px; cursor: pointer;
-  background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line-light); color: var(--text-dim); font-weight: 700; font-size: 13px;
-}
 .sp-rows { display: flex; flex-direction: column; gap: 10px; }
 .sp-group { margin: 10px 2px 0; font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
 .sp-group:first-child { margin-top: 0; }
@@ -126,8 +122,7 @@
     border-radius: 20px; background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow-card);
   }
   .sp-screen .sp-nav button { width: 100%; padding: 12px 14px; border-radius: 12px; font-size: 15px; text-align: left; }
-  .sp-screen .sp-back { display: none; }
-}
+  }
 
 /* ---------- pantalla: móvil con barra de secciones abajo ---------- */
 @media (max-width: 899px) {

@@ -47,6 +47,8 @@ import { createThumbs } from './screens/skinThumbsHook.js';
 import { getQuality } from './game/render/quality.js';
 import { createBoot, createHubPreloader, trackProgress, waitPainted } from './ui/splashBridge.js';
 import { mountNetStats } from './ui/netStats.js';
+import { startVersionCheck } from './ui/versionCheck.js';
+import { lobbyButton } from './screens/components.js';
 
 // hitos del arranque hacia el splash (no-op si no hay #splash: ?skinlab=1)
 const boot = createBoot();
@@ -122,9 +124,8 @@ function backGuard() {
 }
 
 let game = null;
-let screen = 'lobby';
 
-// libera todo lo de la partida y de las pantallas heredadas (la usan shell() y goHome())
+// libera todo lo de la partida y de las pantallas heredadas (la usan paintApp() y goHome())
 function releasePlay() {
   game?.dispose();
   game = null;
@@ -134,70 +135,25 @@ function releasePlay() {
   partyWatch?.stop();
 }
 
-async function shell(content, { hideHeader = false, nav = true } = {}) {
+// pinta una pantalla de partida (juego, sala en vivo, resultados) a pantalla completa: sin cabecera ni barras del HUD anterior
+function paintApp(content) {
   releasePlay();
-  const balance = await wallet.getBalance();
   app.innerHTML = '';
   window.scrollTo(0, 0);
-  if (!hideHeader) {
-    const { level, into, need } = progress.level;
-    app.append(
-      h(`
-      <header class="topbar game-hud-topbar">
-        <div class="topbar-left">
-          <button class="brand-btn desktop-brand-btn" data-go="home" aria-label="Golf Cash Battle">
-            <img src="/logo-header.png" alt="Golf Cash Battle" class="brand-logo" />
-          </button>
-          <div class="m-stats">
-            <button class="m-stat m-level" data-go="skins" style="--p:${(into / need) * 100}%" title="Nivel ${level}" aria-label="Nivel ${level}">
-              <span class="level-ring"><b>${level}</b></span>
-            </button>
-            <button class="m-stat m-coins" data-go="wallet" title="Tu saldo" aria-label="Saldo">${coin(balance)}</button>
-          </div>
-          <button class="level" data-go="skins" style="--p:${(into / need) * 100}%" title="Nivel ${level} · ${(into / need * 100).toFixed(0)}%">
-            <span class="level-ring"><b>${level}</b></span>
-            <span class="level-text"><small>Nivel</small><span class="xpbar"><i></i></span></span>
-          </button>
-        </div>
-        <div class="topbar-center">
-          <button class="brand-btn mobile-brand-btn" data-go="home" aria-label="Golf Cash Battle">
-            <img src="/logo-header.png" alt="Golf Cash Battle" class="brand-logo" />
-          </button>
-          <nav class="desktop-nav">
-            <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}">${icon('flag')}Jugar <kbd>1</kbd></button>
-            <button data-go="freeplay" class="${screen === 'freeplay' ? 'on' : ''}">${icon('tee')}Juego Libre <kbd>2</kbd></button>
-            <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}">${icon('skins')}Skins <kbd>3</kbd></button>
-            <button data-go="ranking" class="${screen === 'ranking' ? 'on' : ''}">${icon('trophy')}Ranking <kbd>4</kbd></button>
-            <button data-go="account" class="${screen === 'account' ? 'on' : ''}">${icon('user')}Cuenta <kbd>5</kbd></button>
-            <button data-go="settings" class="${screen === 'settings' ? 'on' : ''}">${icon('gear')}Ajustes <kbd>6</kbd></button>
-          </nav>
-        </div>
-        <div class="topbar-right">
-          <button class="balance" data-go="wallet" title="Tu saldo: abre el wallet de tu cuenta">${coin(balance)}<span class="plus">${icon('plus')}</span></button>
-          <button class="pill mute topbar-sound-btn" aria-label="Sonido" title="Silenciar / Activar sonido (M)">${soundLabel()}</button>
-          <button class="icon-btn m-settings ${screen === 'settings' ? 'on' : ''}" data-go="settings" aria-label="Ajustes" title="Ajustes">${icon('gear')}</button>
-          ${document.fullscreenEnabled ? `<button class="icon-btn m-fullscreen" aria-label="Pantalla completa" title="Pantalla completa">${icon('fullscreen')}</button>` : ''}
-        </div>
-      </header>`),
-    );
-    app.querySelector('.topbar-sound-btn')?.addEventListener('click', toggleMute);
-    app.querySelector('.m-fullscreen')?.addEventListener('click', toggleFullscreen);
-  }
   app.append(content);
-  if (!hideHeader && nav) {
-    app.append(
-      h(`
-      <nav class="tabbar">
-        <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}">${icon('flag')}Jugar</button>
-        <button data-go="freeplay" class="${screen === 'freeplay' ? 'on' : ''}">${icon('tee')}Libre</button>
-        <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}">${icon('skins')}Skins</button>
-        <button data-go="ranking" class="${screen === 'ranking' ? 'on' : ''}">${icon('trophy')}Ranking</button>
-        <button data-go="account" class="${screen === 'account' ? 'on' : ''}">${icon('user')}Cuenta</button>
-      </nav>`),
-    );
-  }
-  app.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => go(b.dataset.go)));
   bindHolo(app);
+}
+
+// Lobby flotante de las pantallas de partida: sale igual que «atrás» (pide confirmación si la partida en vivo no ha acabado)
+function leaveToLobby() {
+  if (backGuard()) return;
+  goHome();
+}
+
+/** Sala en vivo y resultados: su volver es el botón Lobby flotante (lobbyButton) enlazado a leaveToLobby. */
+function paintLive(view) {
+  paintApp(view);
+  view.querySelector('[data-lobby]')?.addEventListener('click', leaveToLobby);
 }
 
 // Atajos globales de navegación por teclado en menús y modales
@@ -223,16 +179,6 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     unlockAudio();
     sfx.tap();
-    const navBtn = document.querySelector(`.desktop-nav button[data-go="${dest}"]`);
-    if (navBtn) {
-      navBtn.classList.add('nav-key-active');
-      setTimeout(() => navBtn.classList.remove('nav-key-active'), 220);
-    }
-    const tabBtn = document.querySelector(`.tabbar button[data-go="${dest}"]`);
-    if (tabBtn) {
-      tabBtn.classList.add('tab-key-active');
-      setTimeout(() => tabBtn.classList.remove('tab-key-active'), 220);
-    }
     go(dest);
   };
 
@@ -423,7 +369,8 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       <button class="map-btn" aria-label="Ver el hoyo completo">${icon('eye')}Ver mapa <kbd class="kbd-hint">Espacio</kbd></button>
     </main>`);
   const gameClass = loadGolfGame();
-  Promise.all([gameClass, shell(view, { hideHeader: true })]).then(([GolfGame]) => {
+  paintApp(view);
+  gameClass.then((GolfGame) => {
     if (!view.isConnected) return; // se salió de la pantalla mientras cargaba el motor
     playScope?.dispose();
     playScope = createScope();
@@ -864,7 +811,6 @@ async function showResults(match, tiebreak = {}) {
   const won = result.me.position === 1 || result.me.payout > 0;
   const tiebreakWon = won && tiebreak.me !== undefined;
   const gained = progress.recordMatch({ position: result.me.position, won, entryFee: match.tier.entryFee, holes: match.myHoles.filter(Boolean), tiebreakWon });
-  screen = 'lobby';
   showEndOverlay({
     onRematch: () => startMatch(match.tier),
     won,
@@ -1034,6 +980,7 @@ function showLiveRoom(live) {
       ${match.rematchOf ? '<p class="legal">Revancha: quienes pidan revancha como tú entrarán juntos en esta sala.</p>' : ''}
       <p class="legal">Empezáis todos a la vez y verás las bolas de los demás en directo. Los huecos libres los ocupan bots: juegan contigo, pero nunca cuentan para el premio (el bote es solo de los jugadores reales). Si no entra nadie más, juegas contra bots y se te devuelve la entrada.</p>
       <button class="ghost cancel">${icon('close')}Salir y recuperar entrada</button>
+      ${lobbyButton()}
     </main>`);
   const seats = view.querySelector('.seats');
   let launching = false;
@@ -1104,7 +1051,7 @@ function showLiveRoom(live) {
     goHome();
   });
   render();
-  shell(view, { nav: false });
+  paintLive(view);
 }
 
 async function beginLive(live) {
@@ -1349,7 +1296,6 @@ async function showLiveResults(live) {
     else await backend.tournaments.status(match);
   } catch { }
   if (live.stopped) return;
-  screen = 'lobby';
   const { me, tier } = match;
   const open = match.status === 'open';
   const cancelled = match.status === 'cancelled';
@@ -1397,14 +1343,12 @@ async function showLiveResults(live) {
       ${standingsTable(rows, !open)}
       ${match.status === 'settled' ? `<p class="legal">Bote ${fmt(match.pot)} · comisión ${fmt(match.commission)} · premio ${fmt(match.prize)} · los bots no cuentan</p>` : ''}
       ${open ? '<p class="legal">Si alguien se ha desconectado, en menos de un minuto se le da por terminado. Si sales, el premio te llega igual al saldo.</p>' : ''}
-      <div class="row">
-        ${open ? '' : `<button class="primary again">${icon('restart')}Revancha</button>`}
-        <button class="${open ? 'primary' : 'ghost'}" data-go="home">${icon('back')}Lobby</button>
-      </div>
+      ${open ? '' : `<div class="row"><button class="primary again">${icon('restart')}Revancha</button></div>`}
+      ${lobbyButton()}
     </main>`);
   view.querySelector('.again')?.addEventListener('click', () => startMatch(tier, match.id));
   const key = `${match.status}:${waiting.length}`;
-  await shell(view, { nav: false });
+  paintLive(view);
   if (!open) return stopLive();
   live.fast = true;
   live.onStatus = () => {
@@ -1450,7 +1394,6 @@ function alertMsg(text) {
 // ---------- juego libre en solitario ----------
 
 export function playFreePlay(courseIndex) {
-  screen = 'freeplay-game';
   const isTiebreak = courseIndex === 'tiebreak';
   const course = isTiebreak ? TIEBREAK_COURSE : COURSES[courseIndex];
   const holeNum = isTiebreak ? 'Extra' : courseIndex + 1;
@@ -1577,14 +1520,10 @@ if (skinLab) {
       // hitos de ranking y marco elegido: pueden desbloquear bolas, que se ofrecen al acabar la próxima partida
       b.account.myRanking().then((r) => progress.setServerStats(r)).catch(() => {});
     }
-    wallet.subscribe((n) => {
-      const el = app.querySelector('.balance');
-      if (el) el.innerHTML = `${coin(n)}<span class="plus">${icon('plus')}</span>`;
-      const m = app.querySelector('.m-coins');
-      if (m) m.innerHTML = coin(n);
-    });
     startNotices(b);
     startPartyWatch(b);
+    // aviso de versión nueva: una sola vez por carga (ver ui/versionCheck.js)
+    startVersionCheck();
     // el saldo no frena el arranque: `progress` se marca al llegar o a los 3 s
     trackProgress(boot, () => wallet.getBalance());
     const hubScene = hubPreloader.preload();
@@ -1637,9 +1576,9 @@ function startRouting(b) {
     },
     legacy: {
       // Mesas (T028): lo que la pantalla necesita de main.js
-      enterTables: () => { leaveFinale(); stopLive(); screen = 'lobby'; releasePlay(); },
-      enterSettings: () => { leaveFinale(); stopLive(); screen = 'settings'; releasePlay(); },
-      enterMaps: () => { leaveFinale(); stopLive(); screen = 'freeplay'; releasePlay(); },
+      enterTables: () => { leaveFinale(); stopLive(); releasePlay(); },
+      enterSettings: () => { leaveFinale(); stopLive(); releasePlay(); },
+      enterMaps: () => { leaveFinale(); stopLive(); releasePlay(); },
     },
   });
   screenHost = createHost({ router, routes, root: app, ctx, notify, win: window, doc: document });

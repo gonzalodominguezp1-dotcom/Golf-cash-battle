@@ -36,10 +36,10 @@ function fallbackModule(id) {
 }
 
 /**
- * `root` es la pantalla raíz: lleva el hash '#/'. En F1 es 'lobby'; en F3 pasará a 'hub'.
+ * `root` es la pantalla raíz: lleva el hash '#/'. Por defecto es 'hub' (la pantalla de inicio).
  * La otra de las dos conserva un hash propio para seguir siendo declarable.
  */
-export function createRoutes({ root = 'lobby', modules = screenModules() } = {}) {
+export function createRoutes({ root = 'hub', modules = screenModules() } = {}) {
   const loader = (id) => async () => {
     const file = FILES[id];
     const fromFile = file && modules[`./${file}.js`];
@@ -48,7 +48,6 @@ export function createRoutes({ root = 'lobby', modules = screenModules() } = {})
   const r = (id, hash, extra = {}) => ({ id, hash, parent: id === root ? undefined : root, restorable: true, load: loader(id), ...extra });
   return [
     r('hub', root === 'hub' ? '#/' : '#/inicio', { keepAlive: true }),
-    r('lobby', root === 'lobby' ? '#/' : '#/lobby'),
     r('tables', '#/mesas'),
     r('achievements', '#/logros'),
     r('friends', '#/amigos'),
@@ -60,6 +59,5 @@ export function createRoutes({ root = 'lobby', modules = screenModules() } = {})
     r('settings', '#/ajustes'),
     r('maps', '#/mapas'),
     r('matchmaking', '#/emparejar', { restorable: false }), // sin sesión abierta no tiene nada que mostrar al recargar
-    r('play', '#/jugar', { restorable: false }),
   ];
 }

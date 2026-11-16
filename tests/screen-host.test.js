@@ -48,14 +48,15 @@ function setup({ root = 'hub', modules = {}, legacy = {}, reduced = false, hash 
 }
 
 test('createRoutes declara todas las rutas y la raíz lleva #/', () => {
-  const rs = createRoutes({ root: 'lobby', modules: {} })
-  for (const id of ['hub', 'tables', 'achievements', 'friends', 'ranking', 'skins', 'skin', 'account', 'settings', 'maps', 'play', 'lobby']) {
+  const rs = createRoutes({ root: 'hub', modules: {} })
+  for (const id of ['hub', 'tables', 'achievements', 'friends', 'ranking', 'skins', 'skin', 'account', 'settings', 'maps', 'matchmaking']) {
     assert.ok(rs.find((r) => r.id === id), id)
   }
-  assert.equal(rs.find((r) => r.id === 'lobby').hash, '#/')
-  assert.notEqual(rs.find((r) => r.id === 'hub').hash, '#/')
-  assert.equal(createRoutes({ root: 'hub', modules: {} }).find((r) => r.id === 'hub').hash, '#/')
-  assert.equal(rs.find((r) => r.id === 'play').restorable, false)
+  assert.equal(rs.find((r) => r.id === 'hub').hash, '#/')
+  // lobby y play ya no son rutas: el lobby es el hub (raíz) y la partida no tiene pantalla propia
+  assert.equal(rs.find((r) => r.id === 'lobby'), undefined)
+  assert.equal(rs.find((r) => r.id === 'play'), undefined)
+  assert.equal(rs.find((r) => r.id === 'matchmaking').restorable, false)
 })
 
 test('un load() que rechaza avisa y vuelve a la raíz', async () => {
