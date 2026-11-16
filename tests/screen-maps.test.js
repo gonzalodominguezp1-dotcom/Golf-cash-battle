@@ -5,7 +5,7 @@ import { fakeEnv } from './helpers/fakeEnv.js';
 import { createScope } from '../src/screens/lifecycle.js';
 import { createRoutes } from '../src/screens/routes.js';
 import { COURSES, TIEBREAK_COURSE } from '../src/game/courses.js';
-import { mount, courseFeatureKeys } from '../src/screens/maps.js';
+import { mount } from '../src/screens/maps.js';
 
 // Raíz falsa: reconoce [data-x] sobre el HTML pintado y devuelve elementos estables.
 function fakeRoot(env) {
@@ -41,10 +41,16 @@ function makeCtx(env, extra = {}) {
 }
 const flush = () => new Promise((r) => setImmediate(r));
 const host = (root) => root.querySelector('[data-maps-host]');
-const click = (host, attr, value) => {
-  const el = { dataset: { [attr]: value }, closest: () => el };
-  host.emit('click', { target: el });
-};
+// Clic «real» sobre el botón de la tarjeta n: se toma su marcado del HTML pintado y se entrega
+// al listener de la cuadrícula como target, con closest() que resuelve el propio botón.
+function clickCardButton(root, n) {
+  const html = host(root).innerHTML;
+  const cards = html.split('<article class="map-card">').slice(1);
+  const card = cards[n];
+  const m = card.match(/<button[^>]*data-play="([^"]+)"[^>]*>/);
+  const el = { dataset: { play: m[1] }, closest: (sel) => (sel === '[data-play]' ? el : null) };
+  host(root).emit('click', { target: el });
+}
 
 test('mapas: mount devuelve al momento, pinta «Cargando» y luego los 17 hoyos y el desempate', async () => {
   const env = fakeEnv();
@@ -57,34 +63,54 @@ test('mapas: mount devuelve al momento, pinta «Cargando» y luego los 17 hoyos 
   await flush();
   assert.equal(host(root).dataset.state, 'ready');
   const html = host(root).innerHTML;
-  assert.equal((html.match(/class="course-card /g) || []).length, COURSES.length + 1);
-  assert.match(html, /Hoyo 17/);
+  assert.equal((html.match(/<article class="map-card">/g) || []).length, COURSES.length + 1);
   assert.match(html, /Desempate: Diana/);
-  assert.match(html, /Elige cualquier hoyo/);
-  assert.match(html, /sin logros ni misiones/);
+  assert.match(root.innerHTML, /Selector de Mapas/);
 });
 
-test('mapas: elegir un hoyo o el desempate llama a playFreePlay', async () => {
+test('mapas: cada tarjeta tiene imagen, nombre y botón «Practicar hoyo»; no hay badges, chips ni pie', async () => {
+  const env = fakeEnv();
+  const root = fakeRoot(env);
+  const { ctx } = makeCtx(env);
+  mount(root, ctx, {});
+  await flush();
+  const html = host(root).innerHTML;
+  const cards = html.split('<article class="map-card">').slice(1);
+  assert.equal(cards.length, COURSES.length + 1);
+  for (const c of cards) {
+    assert.match(c, /<h2 class="map-name">/);
+    assert.match(c, /<img class="map-img" src=/);
+    assert.match(c, />Practicar hoyo<\/button>/);
+    assert.match(c, /<button[^>]*class="primary map-play"/);
+  }
+  assert.doesNotMatch(html, /course-num-badge|course-theme-tag|course-par-badge|preview-badge|spec-chip|feat-tag|course-tip|course-feats|Volver al Men/);
+  assert.doesNotMatch(html, /data-home|back-to-lobby|rarity-pill|hero-level|Hoyo \d/);
+  assert.equal(/desaf|liga/i.test(html), false);
+});
+
+test('mapas: el botón practicar de cada tarjeta arranca su mapa (índice o desempate)', async () => {
   const env = fakeEnv();
   const root = fakeRoot(env);
   const { ctx, played } = makeCtx(env);
   mount(root, ctx, {});
   await flush();
-  click(host(root), 'play', '3');
-  click(host(root), 'play', 'tiebreak');
+  clickCardButton(root, 3);
+  clickCardButton(root, COURSES.length);
   assert.deepEqual(played, [3, 'tiebreak']);
 });
 
-test('mapas: «Volver al Menú Principal» va al lobby (router.reset), no atrás', async () => {
+test('mapas: el lobby flotante existe y lleva al hub (router.reset), no atrás', async () => {
   const env = fakeEnv();
   const root = fakeRoot(env);
-  const { ctx, back, played } = makeCtx(env);
+  const { ctx, back } = makeCtx(env);
   mount(root, ctx, {});
   await flush();
-  click(host(root), 'home', '');
+  assert.match(root.innerHTML, /class="scr-lobby" data-lobby/);
+  const lobby = root.querySelector('[data-lobby]');
+  assert.ok(lobby, 'hay botón lobby');
+  lobby.emit('click');
   assert.equal(back.reset, 1);
   assert.equal(back.n, 0);
-  assert.deepEqual(played, []);
 });
 
 test('mapas: al entrar avisa al legado (cierra final y sala en vivo)', () => {
@@ -158,9 +184,7 @@ test('mapas: destruir mientras carga cancela el tope y no pinta después', async
   assert.equal(host(root).dataset.state, 'loading');
 });
 
-test('mapas: particularidades de un mapa y ruta cargable', () => {
-  assert.deepEqual(courseFeatureKeys({ loops: [1], portals: [{ tube: true }], sand: [1] }), ['loop', 'tubes', 'sand']);
-  assert.deepEqual(courseFeatureKeys(TIEBREAK_COURSE).includes('loop'), false);
+test('mapas: ruta cargable', () => {
   const routes = createRoutes({ root: 'hub', modules: { './maps.js': () => 'ok' } });
   assert.equal(routes.find((r) => r.id === 'maps').hash, '#/mapas');
 });
@@ -168,7 +192,7 @@ test('mapas: particularidades de un mapa y ruta cargable', () => {
 test('mapas: «desafíos» ya no aparece y los textos viven en texts/maps.js', () => {
   const dir = new URL('../src/screens/', import.meta.url);
   const text = readFileSync(new URL('texts/maps.js', dir), 'utf8');
-  assert.match(text, /Elige cualquier hoyo/);
+  assert.match(text, /Practicar hoyo/);
   for (const f of ['maps.js', 'maps.css', 'texts/maps.js']) assert.doesNotMatch(readFileSync(new URL(f, dir), 'utf8'), /desaf.{1,2}o/i);
   const main = readFileSync(new URL('../main.js', dir), 'utf8');
   assert.doesNotMatch(main, /function showFreePlayCourseSelect/);

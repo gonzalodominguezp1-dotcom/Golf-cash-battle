@@ -1,2 +1,62 @@
-/* Mapas (T038): el título de la cabecera es el h1; el del bloque de bienvenida es h2 con el mismo aspecto de siempre. */
-.freeplay-select .section-title-row h2 { margin: 0; font-size: 26px; letter-spacing: -0.02em; }
+/* Mapas (T038): título (h1 de la cabecera) y rejilla de tarjetas. Una columna en móvil, 3 o 4 en escritorio.
+   Sin :hover: el foco se marca con :focus-visible. Sin animaciones. */
+.freeplay-select .maps-host { min-width: 0; }
+
+.maps-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  box-sizing: border-box;
+  max-width: 100%;
+}
+@media (min-width: 640px) { .maps-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1024px) { .maps-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+.map-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  box-sizing: border-box;
+  border-radius: 14px;
+  background: var(--panel-card, #121924);
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.12));
+}
+
+.map-name {
+  margin: 0;
+  font: 700 1rem/1.25 var(--display, inherit);
+  color: var(--text, inherit);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.map-preview {
+  aspect-ratio: 16 / 10;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #0b1119;
+}
+
+.map-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.map-play {
+  width: 100%;
+  min-height: 44px;
+  margin-top: auto;
+}
+
+.map-play:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-card, .map-play { transition: none !important; animation: none !important; }
+}

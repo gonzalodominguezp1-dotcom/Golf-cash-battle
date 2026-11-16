@@ -100,7 +100,8 @@ test('skins: lista con todas las skins con las desbloqueadas primero y estado en
   assert.match(cardOf(locked.id), / locked/);
   assert.match(cardOf(locked.id), /data-icon="lock"/);
   assert.match(root.innerHTML, /3\/37 desbloqueadas|3\/\d+ desbloqueadas/);
-  assert.match(root.innerHTML, /data-back/);
+  assert.doesNotMatch(root.innerHTML, /data-back|scr-back/); // sin volver en cabecera: lo hace el lobby
+  assert.match(root.innerHTML, /data-lobby/);
 });
 
 test('skins: filtros por rareza, solo desbloqueadas y colección; vacío con mensaje', async () => {
@@ -167,13 +168,12 @@ test('skins: las desbloqueadas van primero aunque tengan menos rareza; dentro de
   assert.deepEqual(idsIn(list(root).innerHTML).sort(), [low.id, 'classic'].sort());
 });
 
-test('skins: el botón Volver llama al router', async () => {
+test('skins: sin botón Volver en la cabecera', async () => {
   const env = fakeEnv();
   const root = fakeNode(env);
-  const { ctx, calls } = makeCtx(env);
+  const { ctx } = makeCtx(env);
   await mount(root, ctx, {});
-  root.querySelector('[data-back]').emit('click');
-  assert.equal(calls.back, 1);
+  assert.doesNotMatch(root.innerHTML, /data-back|scr-back/);
 });
 
 test('skins: una caché que no responde nunca → la rejilla se pinta igualmente sin caché y mount no espera', async () => {

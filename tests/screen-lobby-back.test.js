@@ -118,6 +118,7 @@ for (const s of SCREENS) {
     await settle();
     const btn = root.querySelector('[data-lobby]');
     assert.ok(btn, `${s.id}: falta [data-lobby] al montar`);
+    assert.doesNotMatch(root.innerHTML, /data-back|scr-back/, `${s.id}: no debe haber botón volver en la cabecera`);
     const html = root.innerHTML;
     const m = html.match(/<button[^>]*data-lobby[^>]*>([\s\S]*?)<\/button>/);
     assert.ok(m, `${s.id}: no se encuentra el botón lobby en el HTML`);
@@ -137,8 +138,14 @@ test('lobby: el hub NO lleva botón lobby (es la raíz)', () => {
   assert.equal(src.includes('data-lobby'), false);
 });
 
-test('lobby: Mapas manda su pie «Volver al Menú Principal» al lobby (reset), no a back', () => {
+test('lobby: Mapas usa el botón flotante Lobby (reset), sin pie de volver', () => {
   const src = readFileSync(new URL('../src/screens/maps.js', import.meta.url), 'utf8');
-  assert.match(src, /class="ghost back-to-lobby" data-home data-lobby/);
-  assert.match(src, /if \(el\.dataset\.home !== undefined\) \{ ctx\.router\.reset\(\); return; \}/);
+  assert.match(src, /\$\{lobbyButton\(\)\}/);
+  assert.match(src, /bindLobby\(root, \{ \.\.\.ctx, scope \}\)/);
+  assert.doesNotMatch(src, /back-to-lobby|data-home/);
+});
+
+test("lobby: el panel de Ajustes no pinta su botón Volver (en pantalla lo hace el lobby)", () => {
+  const src = readFileSync(new URL("../src/ui/settingsPanel.js", import.meta.url), "utf8");
+  assert.equal(src.includes("sp-back"), false);
 });

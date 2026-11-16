@@ -79,13 +79,12 @@ test('ajustes: synced solo con cuenta que no sea de invitado', async () => {
   }
 });
 
-test('ajustes: el botón Volver del panel llama al router', async () => {
+test('ajustes: la pantalla no pasa onBack al panel (el volver es el lobby flotante)', async () => {
   const env = fakeEnv();
-  const { ctx, panel, back } = makeCtx(env);
+  const { ctx, panel } = makeCtx(env);
   mount(fakeRoot(env), ctx, {});
   await flush();
-  panel.st.opts.onBack();
-  assert.equal(back.n, 1);
+  assert.equal(panel.st.opts.onBack, undefined);
 });
 
 test('ajustes: la carga del panel tiene tope de 8 s y Reintentar la repite', async () => {

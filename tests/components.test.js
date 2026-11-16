@@ -22,11 +22,12 @@ test('badge: sin label usa texto por defecto accesible', () => {
   assert.match(badge({ count: 2 }), /sr-only[^>]*>2 novedades</);
 });
 
-test('header: botón volver con aria-label, h1 y saldo', () => {
+test('header: sin botón volver por defecto, h1 y saldo', () => {
   const html = header({ title: 'Mesas', balanceHtml: '<b>5</b>' });
-  assert.match(html, /<button[^>]*data-back[^>]*aria-label="Volver"/);
+  assert.doesNotMatch(html, /data-back|scr-back/); // por defecto no hay volver: lo hace el lobby flotante
   assert.match(html, /<h1[^>]*>Mesas<\/h1>/);
   assert.match(html, /<b>5<\/b>/);
+  assert.match(header({ title: 'X', back: true }), /<button[^>]*data-back[^>]*aria-label="Volver"/);
   assert.doesNotMatch(header({ title: 'X', back: false }), /data-back/);
 });
 

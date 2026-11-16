@@ -72,7 +72,8 @@ test('tables: cabecera con saldo, lista de mesas y textos en español', async ()
   const { ctx, calls } = makeCtx(env);
   await mount(root, ctx, {}); await settle();
   assert.match(root.innerHTML, /Mesas de Torneo/);
-  assert.match(root.innerHTML, /data-back/);
+  assert.doesNotMatch(root.innerHTML, /data-back|scr-back/); // sin volver en cabecera: lo hace el lobby
+  assert.match(root.innerHTML, /data-lobby/);
   assert.match(root.innerHTML, /data-tables-balance[\s\S]*?100/);
   for (const tier of TIERS) assert.match(root.innerHTML, new RegExp(`data-tier="${tier.id}"`), tier.id);
   assert.ok(root.innerHTML.includes('Practicar'));
@@ -99,8 +100,6 @@ test('tables: pulsar una mesa arranca la partida, recuerda la última y volver u
   await settle();
   assert.deepEqual(calls.start, [paidTier().id]);
   assert.equal(store.get('gcb.lastTier.v1'), paidTier().id);
-  root.querySelector('[data-back]').emit('click');
-  assert.equal(calls.back, 1);
 });
 
 test('tables: en grupo, las mesas de pago confirman la mesa del grupo; la práctica no', async () => {

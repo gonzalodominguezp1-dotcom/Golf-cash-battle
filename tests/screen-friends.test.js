@@ -97,7 +97,8 @@ test('friends: monta amigos, solicitudes y la caja de grupo con textos en españ
   const { ctx, calls, partyWatch, subs } = makeCtx(env);
   await mount(root, ctx, {}); await settle();
   assert.match(root.innerHTML, /Amigos y grupo/);
-  assert.match(root.innerHTML, /data-back/);
+  assert.doesNotMatch(root.innerHTML, /data-back|scr-back/); // sin volver en cabecera: lo hace el lobby
+  assert.match(root.innerHTML, /data-lobby/);
   assert.doesNotMatch(root.innerHTML, /desaf[ií]os/i);
   const box = root.querySelector('[data-friends-body]').querySelector('[data-friends-box]');
   assert.match(box.innerHTML, /Ana/);
@@ -114,8 +115,6 @@ test('friends: monta amigos, solicitudes y la caja de grupo con textos en españ
   for (const fn of [...subs]) fn(state, { msg: '' });
   assert.match(party.innerHTML, /te invita a su grupo/);
   assert.match(party.innerHTML, /data-join="p1"/);
-  root.querySelector('[data-back]').emit('click');
-  assert.equal(calls.back, 1);
 });
 
 test('friends: aceptar, rechazar y quitar usan la cuenta y muestran el mensaje de siempre', async () => {

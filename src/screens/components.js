@@ -6,8 +6,8 @@ import './texts/common.js';
 
 const BACK_ICON = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
-/** Cabecera con botón volver (≥44 px), título y saldo opcional. */
-export function header({ title, back = true, balanceHtml = null, actionsHtml = '' }) {
+/** Cabecera con título y saldo opcional. El volver de las pantallas del HUD es el botón «Lobby» flotante (lobbyButton); back solo para pantallas sin él. */
+export function header({ title, back = false, balanceHtml = null, actionsHtml = '' }) {
   const backBtn = back
     ? `<button type="button" class="scr-back" data-back aria-label="${esc(t('common.back'))}">${BACK_ICON}</button>`
     : '';

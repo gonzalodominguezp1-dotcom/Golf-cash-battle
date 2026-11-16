@@ -75,7 +75,8 @@ test('skin-inspect: Equipada / Obtenida / Bloqueada con texto y botón acorde', 
     assert.equal(root.querySelector('[data-sk-equip]').innerHTML.includes(label), true, id);
     assert.equal(root.querySelector('[data-sk-equip]').disabled, disabled, id);
     assert.equal(root.querySelector('[data-sk-lock]').hidden, id !== LOCKED.id);
-    assert.match(root.innerHTML, /data-back/);
+    assert.doesNotMatch(root.innerHTML, /data-back|scr-back/); // sin volver en cabecera: lo hace el lobby
+    assert.match(root.innerHTML, /data-lobby/);
     h.destroy();
   }
 });
@@ -302,13 +303,13 @@ test('skin-inspect: escritorio (min-width 900px) quita el límite de 1140px de .
   assert.ok(narrow.includes('.sk-inspect .sk-fx-cap { top: 8px'), 'etiquetas reducidas en pantallas estrechas');
 });
 
-test('skin-inspect: el botón Volver llama al router', async () => {
+test('skin-inspect: sin botón Volver en la cabecera; sí lobby flotante', async () => {
   const env = fakeEnv();
   const root = fakeRoot(env);
   const { ctx, calls } = makeCtx(env);
   const h = await mount(root, ctx, { id: 'mint' });
-  root.querySelector('[data-back]').emit('click');
-  assert.equal(calls.back, 1);
+  assert.doesNotMatch(root.innerHTML, /data-back|scr-back/);
+  assert.ok(root.querySelector('[data-lobby]'));
   h.destroy();
 });
 

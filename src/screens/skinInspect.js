@@ -73,7 +73,7 @@ export async function mount(root, ctx, params = {}) {
     root.querySelector('[data-sk-live]').textContent = t('skins.inspectEquipped', { name: skin.name });
   });
   if (logro) scope.on(root.querySelector('[data-go="achievements"]'), 'click', () => ctx.router.push('achievements'));
-  root.querySelector('[data-back]')?.focus?.({ preventScroll: true });
+  root.querySelector('[data-lobby]')?.focus?.({ preventScroll: true });
 
   // navegación: la skin anterior/siguiente en el orden de SKINS, dando la vuelta al final; cambia la ruta (replace)
   // «target» avanza con cada pulsación aunque la pantalla nueva aún esté montando: dos flechas seguidas = dos skins

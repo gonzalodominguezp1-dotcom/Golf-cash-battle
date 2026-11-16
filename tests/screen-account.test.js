@@ -728,13 +728,12 @@ test('account: cabecera con Volver, pestañas y Perfil por defecto; las claves r
     const screen = await mountAccount(root, ctx, params, { modules: MODS });
     await settle();
     assert.match(root.innerHTML, /Cuenta/);
-    assert.match(root.innerHTML, /data-back/);
+    assert.doesNotMatch(root.innerHTML, /data-back|scr-back/); // sin volver en cabecera: lo hace el lobby
+    assert.match(root.innerHTML, /data-lobby/);
     assert.match(root.innerHTML, /data-acc-tab="perfil" class="on"/);
     assert.doesNotMatch(root.innerHTML, /Monedero/);
     assert.match(root.innerHTML, /Progreso/);
     assert.match(root.querySelector('[data-acc-body]').innerHTML, /Ana_1/);
-    root.querySelector('[data-back]').emit('click');
-    assert.equal(calls.back, 1);
     screen.destroy();
     assert.deepEqual(ctx.scope.live(), { listeners: 0, timers: 0, subs: 0 });
   }

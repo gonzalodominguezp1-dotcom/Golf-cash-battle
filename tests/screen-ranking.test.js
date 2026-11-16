@@ -78,7 +78,8 @@ test('ranking: lista con medallas con texto alternativo, tu puesto destacado y c
   const { ctx, calls } = makeCtx(env);
   await mount(root, ctx, {}); await settle();
   assert.match(root.innerHTML, /Ranking/);
-  assert.match(root.innerHTML, /data-back/);
+  assert.doesNotMatch(root.innerHTML, /data-back|scr-back/); // sin volver en cabecera: lo hace el lobby
+  assert.match(root.innerHTML, /data-lobby/);
   assert.deepEqual(calls.tabs, ['weekly']);
   const html = list(root).innerHTML;
   assert.match(html, /<ol class="rank-list"/);
@@ -93,8 +94,6 @@ test('ranking: lista con medallas con texto alternativo, tu puesto destacado y c
   assert.deepEqual(medals.map(([, o]) => [o.tone, o.label]), [['gold', 'Puesto 1'], ['silver', 'Puesto 2']]);
   assert.match(html, /rank-pos">4</);
   assert.match(root.querySelector('[data-ranking-period]').textContent, /–/);
-  root.querySelector('[data-back]').emit('click');
-  assert.equal(calls.back, 1);
 });
 
 test('ranking: tu posición fuera del top y sin victorias', async () => {
@@ -136,7 +135,7 @@ test('ranking: sin conexión muestra el mensaje real del hub y no falla', async 
   const handle = await mount(root, ctx, {}); await settle();
   assert.match(root.innerHTML, /El ranking de victorias necesita conexión con el servidor\./);
   assert.equal(t('ranking.offline'), t('hub.lock.rankingOffline'));
-  assert.match(root.innerHTML, /data-back/);
+  assert.doesNotMatch(root.innerHTML, /data-back|scr-back/);
   handle.destroy();
   const { ctx: c2 } = makeCtx(env, { backend: null });
   await mount(fakeNode(env), c2, {}); // sin backend tampoco falla

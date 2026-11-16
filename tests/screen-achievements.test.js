@@ -122,15 +122,13 @@ test('logros: destroy deja el scope en 0 y 20 montajes no dejan fugas', async ()
   assert.equal(env.liveTimers(), 0);
 });
 
-test('logros: el botón Volver llama al router', async () => {
+test('logros: sin botón Volver en la cabecera; el lobby flotante sí', async () => {
   const env = fakeEnv();
   const root = fakeRoot(env);
   const ctx = makeCtx(env);
-  let backs = 0;
-  ctx.router = { back: () => { backs++; } };
   await mount(root, ctx, {});
-  root.querySelector('[data-back]').emit('click');
-  assert.equal(backs, 1);
+  assert.doesNotMatch(root.innerHTML, /data-back|scr-back/);
+  assert.match(root.innerHTML, /data-lobby/);
 });
 
 test('logros: routes resuelve la ruta achievements a esta pantalla y no al marcador', async () => {

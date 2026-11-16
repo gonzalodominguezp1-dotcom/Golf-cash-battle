@@ -13,7 +13,7 @@ const defaultLoadPanel = () => import('../ui/settingsPanel.js');
 
 export function mount(root, ctx) {
   const scope = ctx.scope.child();
-  const { backend, router } = ctx;
+  const { backend } = ctx;
   let gone = false, run = 0, sc = null, panel = null;
 
   ctx.legacy?.enterSettings?.(); // lo que showSettings hacía al entrar: cerrar final y sala en vivo
@@ -44,7 +44,7 @@ export function mount(root, ctx) {
     fresh();
     listState(host, { state: 'ready' });
     try {
-      panel = mod.mountSettingsPanel(host, { layout: 'screen', section: mod.lastSection(), synced: synced(), onBack: () => router.back() });
+      panel = mod.mountSettingsPanel(host, { layout: 'screen', section: mod.lastSection(), synced: synced() });
     } catch { paintState('error'); return; }
     const p = panel;
     sc.sub(() => p.destroy?.());
