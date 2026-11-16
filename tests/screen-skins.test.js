@@ -79,9 +79,9 @@ const list = (root) => root.querySelector('[data-sk-list]');
 const idsIn = (html) => [...html.matchAll(/data-skin-id="([^"]+)"/g)].map((m) => m[1]);
 const clickCard = (root, id) => list(root).emit('click', { target: { closest: (s) => (s === '[data-skin-id]' ? { dataset: { skinId: id }, focus() {} } : null) } });
 const tierBtn = (root, id) => root.querySelector(`[data-tier="${id}"]`);
-const orderOf = (progress) => [...SKINS].sort((a, b) => (TIERS[b.tier]?.order ?? 0) - (TIERS[a.tier]?.order ?? 0) || progress.isUnlocked(b) - progress.isUnlocked(a) || a.name.localeCompare(b.name, 'es')).map((s) => s.id);
+const orderOf = (progress) => [...SKINS].sort((a, b) => progress.isUnlocked(b) - progress.isUnlocked(a) || (TIERS[b.tier]?.order ?? 0) - (TIERS[a.tier]?.order ?? 0) || a.name.localeCompare(b.name, 'es')).map((s) => s.id);
 
-test('skins: lista con todas las skins en el orden de siempre y estado en texto (Equipada/Obtenida/Bloqueada)', async () => {
+test('skins: lista con todas las skins con las desbloqueadas primero y estado en texto (Equipada/Obtenida/Bloqueada)', async () => {
   const env = fakeEnv();
   const root = fakeNode(env);
   const { ctx, progress } = makeCtx(env);
@@ -100,7 +100,6 @@ test('skins: lista con todas las skins en el orden de siempre y estado en texto 
   assert.match(cardOf(locked.id), / locked/);
   assert.match(cardOf(locked.id), /data-icon="lock"/);
   assert.match(root.innerHTML, /3\/37 desbloqueadas|3\/\d+ desbloqueadas/);
-  assert.match(root.innerHTML, /10 \/ 100 XP/);
   assert.match(root.innerHTML, /data-back/);
 });
 
@@ -138,16 +137,34 @@ test('skins: pulsar una skin apila el inspector con router.push(skin, { id }) y 
   assert.deepEqual(calls.push, [['skin', { id: 'mint' }]]);
 });
 
-test('skins: la lista de retos se sustituye por un enlace a Logros', async () => {
+test('skins: la pantalla solo tiene skins: sin tarjeta de nivel, XP ni bloque de logros; conserva el contador', async () => {
   const env = fakeEnv();
   const root = fakeNode(env);
-  const { ctx, calls } = makeCtx(env);
+  const { ctx } = makeCtx(env);
   await mount(root, ctx, {}); await settle();
-  assert.match(root.innerHTML, /data-go="achievements"/);
-  assert.match(root.innerHTML, /Ver logros/);
-  assert.doesNotMatch(root.innerHTML, /class="challenges"/);
-  root.querySelector('[data-go="achievements"]').emit('click');
-  assert.deepEqual(calls.push, [['achievements']]);
+  assert.doesNotMatch(root.innerHTML, /level-card|level-progress|XP|Nivel|sk-logros|Ver logros|data-go=/);
+  assert.match(root.innerHTML, /<p class="sub">3\/\d+ desbloqueadas/);
+});
+
+test('skins: las desbloqueadas van primero aunque tengan menos rareza; dentro de cada grupo, rareza desc y nombre', async () => {
+  const env = fakeEnv();
+  const root = fakeNode(env);
+  const { ctx, progress } = makeCtx(env);
+  const byRank = [...SKINS].sort((a, b) => (TIERS[b.tier]?.order ?? 0) - (TIERS[a.tier]?.order ?? 0));
+  const high = byRank[0], low = byRank.at(-1);
+  assert.ok((TIERS[high.tier].order) > (TIERS[low.tier].order));
+  progress.st.open = new Set([low.id, 'classic']);
+  await mount(root, ctx, {}); await settle();
+  const ids = idsIn(list(root).innerHTML);
+  assert.ok(ids.indexOf(low.id) < ids.indexOf(high.id), 'la desbloqueada de rareza baja antes que la bloqueada de rareza alta');
+  const open = ids.filter((id) => progress.isUnlocked(skinById(id)));
+  assert.deepEqual(ids.slice(0, open.length), open, 'todas las desbloqueadas forman el bloque inicial');
+  for (const grp of [open, ids.slice(open.length)]) {
+    const exp = [...grp].sort((a, b) => (TIERS[skinById(b).tier]?.order ?? 0) - (TIERS[skinById(a).tier]?.order ?? 0) || skinById(a).name.localeCompare(skinById(b).name, 'es'));
+    assert.deepEqual(grp, exp);
+  }
+  root.querySelector('[data-sk-owned="1"]').emit('click'); // «Solo desbloqueadas» sigue igual
+  assert.deepEqual(idsIn(list(root).innerHTML).sort(), [low.id, 'classic'].sort());
 });
 
 test('skins: el botón Volver llama al router', async () => {

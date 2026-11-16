@@ -4,7 +4,7 @@
 import { SKINS, TIERS as SKIN_TIERS } from '../progress/skins.js';
 import { rarePatternOf } from '../progress/inventory.js';
 import { tierIcon } from '../ui/icons.js';
-import { bindHeader, button, header, listState } from './components.js';
+import { bindHeader, header, listState } from './components.js';
 import { esc } from './shared.js';
 import { t } from './texts/index.js';
 import './texts/common.js';
@@ -35,16 +35,11 @@ export async function mount(root, ctx) {
   pendingScroll = null;
   let gone = false, sc = null, binding = null, items = [];
 
-  const { level, into, need } = progress.level;
   const unlocked = SKINS.filter((s) => progress.isUnlocked(s)).length;
   root.innerHTML = `<main class="screen skins" aria-label="${esc(t('skins.title'))}">
     ${header({ title: t('skins.title') })}
     <div class="skins-body">
       <p class="sub">${esc(t('skins.sub', { unlocked, total: SKINS.length }))}</p>
-      <div class="level-card">
-        <div><small>${esc(t('skins.level'))}</small><strong>${level}</strong></div>
-        <div class="level-progress"><span><i style="width:${(into / need) * 100}%"></i></span><small>${esc(t('skins.xp', { into, need }))}</small></div>
-      </div>
       <div class="sk-filters" role="group" aria-label="${esc(t('skins.filtersLabel'))}">
         <div class="sk-filter-row">
           <button type="button" class="sk-fchip${filter.tier === 'all' ? ' on' : ''}" data-tier="all" aria-pressed="${filter.tier === 'all'}">${esc(t('skins.all'))}</button>
@@ -56,7 +51,6 @@ export async function mount(root, ctx) {
         </div>
       </div>
       <div class="sk-list" data-sk-list="1"></div>
-      <p class="sk-logros">${esc(t('skins.logrosText'))} ${button({ label: t('skins.logrosLink'), attrs: 'data-go="achievements"' })}</p>
     </div>
   </main>`;
   bindHeader(root, { ...ctx, scope });
@@ -96,7 +90,7 @@ export async function mount(root, ctx) {
     binding = null;
     const open = (s) => progress.isUnlocked(s);
     const shown = [...SKINS]
-      .sort((a, b) => tierOrder(b) - tierOrder(a) || open(b) - open(a) || a.name.localeCompare(b.name, 'es'))
+      .sort((a, b) => open(b) - open(a) || tierOrder(b) - tierOrder(a) || a.name.localeCompare(b.name, 'es'))
       .filter((s) => (filter.tier === 'all' || s.tier === filter.tier) && (filter.collection === 'all' || s.collection === filter.collection) && (!filter.owned || open(s)));
     if (!shown.length) {
       listState(list, { state: 'empty', emptyText: t('skins.empty') });
@@ -156,7 +150,6 @@ export async function mount(root, ctx) {
       if (list.dataset.state === 'ready' || list.dataset.state === 'empty') render();
     });
   }
-  for (const b of root.querySelectorAll('[data-go]')) scope.on(b, 'click', () => ctx.router.push(b.dataset.go));
 
   // pulsar una skin abre el inspector (#/skins/:id); al volver, el host remonta Skins y devuelve el foco a la tarjeta (data-focus-key)
   scope.on(list, 'click', (e) => {

@@ -792,18 +792,8 @@ h2 { margin: 24px 0 12px; font-size: 21px; letter-spacing: -0.01em; }
 .tag { font-size: 11px; padding: 2px 7px; border-radius: 6px; background: rgba(255, 210, 63, 0.2); color: #ffe48a; vertical-align: middle; font-family: system-ui, sans-serif; }
 
 /* ---------- skins ---------- */
-.level-card {
-  display: flex; align-items: center; gap: 18px; padding: 16px 20px; border-radius: var(--radius-lg);
-  background: rgba(18, 25, 36, 0.85);
-  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--line);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
-}
-.level-card small { color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.14em; }
-.level-card strong { display: block; font-family: var(--display); font-weight: 800; font-size: 36px; line-height: 1; color: var(--yellow); letter-spacing: -0.02em; }
-.level-progress { flex: 1; display: grid; gap: 6px; }
-.level-progress span, .bar { display: block; height: 8px; border-radius: 9px; background: rgba(255, 255, 255, 0.08); overflow: hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,0.4); }
-.level-progress i, .bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--yellow), #10b981); border-radius: 9px; box-shadow: 0 0 8px rgba(16, 185, 129, 0.4); }
+.bar { display: block; height: 8px; border-radius: 9px; background: rgba(255, 255, 255, 0.08); overflow: hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,0.4); }
+.bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--yellow), #10b981); border-radius: 9px; box-shadow: 0 0 8px rgba(16, 185, 129, 0.4); }
 
 .challenges { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .challenges li {
