@@ -79,6 +79,14 @@ test('tables: cabecera con saldo, lista de mesas y textos en español', async ()
   assert.ok(root.innerHTML.includes('Jugar Torneo'));
   assert.equal(calls.claim, 1);
   assert.equal(calls.enter, 1);
+  // solo las mesas: sin etiquetas de información ni texto de demostración
+  assert.doesNotMatch(root.innerHTML, /live-pill|spec-chip|pulse-dot|lobby-specs/);
+  { const m = root.innerHTML.replace(/<p class="legal">[\s\S]*?<\/p>/, '').replace(/<svg[\s\S]*?<\/svg>/g, '').match(/.{30}(EN VIVO|Jugadores|hoyos|determinista).{30}/si); assert.equal(m, null, m && m[0]); }
+  assert.doesNotMatch(root.innerHTML, /Créditos de demostración|demostración/i);
+  assert.equal([...root.innerHTML.matchAll(/class="tier /g)].length, TIERS.length);
+  const legal = root.innerHTML.match(/<p class="legal">([\s\S]*?)<\/p>/);
+  assert.ok(legal && legal[1].trim().length > 0, 'el párrafo legal no se pinta vacío');
+  assert.match(legal[1], /Comisión de la plataforma: \d+% del bote/);
   assert.match(root.querySelector('[data-party-box]').innerHTML, /Juega con amigos/); // el panel de grupo (partyPanel.js) se monta en su caja
 });
 

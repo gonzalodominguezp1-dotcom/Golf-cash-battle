@@ -2,11 +2,7 @@ import { register } from './index.js';
 
 register('tables', {
   title: 'Mesas de Torneo',
-  live: 'EN VIVO',
   balance: 'Saldo',
-  players: '{n} Jugadores',
-  holes: '{n} Hoyos',
-  deterministic: 'Determinista',
   offline: 'Modo sin conexión: el saldo se guarda solo en este {device}',
   deviceMobile: 'móvil',
   deviceComputer: 'equipo',
@@ -32,7 +28,6 @@ register('tables', {
 });
 
 register('tables', {
-  legalBase: 'Créditos de demostración sin valor real. ',
   legalLive: 'Las mesas de pago son partidas en vivo contra jugadores reales: todos jugáis los mismos hoyos a la vez y el servidor repite cada golpe para validarlo. Los huecos libres los ocupan bots, que nunca cuentan para el premio. La práctica es contra rivales simulados. ',
   legalRules: 'El resultado depende solo de la habilidad: mismo campo para todos y sin elementos aleatorios. En empate, tiro de desempate: gana quien deje la bola más cerca. Comisión de la plataforma: {pct}% del bote.',
 });

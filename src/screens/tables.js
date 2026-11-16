@@ -1,7 +1,7 @@
 // Mesas (T028): la lista de mesas del lobby de siempre, ahora como pantalla del router. Saldo en la cabecera, última mesa
 // destacada y acceso al grupo. El panel de grupo vive en partyPanel.js (T030).
 // El CSS (tables.css) lo importa el arranque, no este módulo, para poder probarlo en Node.
-import { HOLES_PER_MATCH, PLATFORM_COMMISSION, PLAYERS_PER_MATCH, TIERS, potFor, prizeFor } from '../config.js';
+import { PLATFORM_COMMISSION, TIERS, potFor, prizeFor } from '../config.js';
 import { bindHeader, header, listState } from './components.js';
 import { lastTier, rememberTier } from './hubRules.js';
 import { mountPartyPanel } from './partyPanel.js';
@@ -62,18 +62,8 @@ export async function mount(root, ctx) {
       ${backend?.mode === 'local' ? `<p class="offline">${esc(t('tables.offline', { device }))}</p>` : ''}
       ${paidBlock ? `<button type="button" class="notice account-hint" data-go="account">${esc(t(`tables.paid_block_${paidBlock}`))} ${icon('next')}</button>` : ''}
       ${backend?.parties ? '<section class="party-box" data-party-box="1"></section>' : ''}
-      <div class="section-head">
-        <div class="section-title-row">
-          <span class="live-pill"><i class="pulse-dot"></i> ${esc(t('tables.live'))}</span>
-        </div>
-        <div class="lobby-specs">
-          <span class="spec-chip">${esc(t('tables.players', { n: PLAYERS_PER_MATCH }))}</span>
-          <span class="spec-chip">${esc(t('tables.holes', { n: HOLES_PER_MATCH }))}</span>
-          <span class="spec-chip">${esc(t('tables.deterministic'))}</span>
-        </div>
-      </div>
       <div class="tiers" data-tier-list="1">${TIERS.map((tier) => tierCard(tier, balance, last)).join('')}</div>
-      <p class="legal">${esc(t('tables.legalBase'))}${backend?.tournaments ? esc(t('tables.legalLive')) : ''}${esc(t('tables.legalRules', { pct: Math.round(PLATFORM_COMMISSION * 100) }))}</p>` : ''}</div>
+      <p class="legal">${backend?.tournaments ? esc(t('tables.legalLive')) : ''}${esc(t('tables.legalRules', { pct: Math.round(PLATFORM_COMMISSION * 100) }))}</p>` : ''}</div>
     </main>`;
     bindHeader(root, { ...ctx, scope: sc });
     const body = root.querySelector('[data-tables-body]');
