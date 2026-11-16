@@ -6,6 +6,7 @@ import './screens/friends.css';
 import './screens/ranking.css';
 import './screens/skins.css';
 import './screens/skinInspect.css';
+import './screens/account.css';
 import { HOLE_TIME_LIMIT, PLAYERS_PER_MATCH, TIERS, maxStrokesOf, potFor } from './config.js';
 import { LocalWallet } from './wallet/LocalWallet.js';
 import { InsufficientFundsError } from './wallet/WalletService.js';
@@ -18,29 +19,27 @@ import { enterFinale, isMuted, leaveFinale, setAmbientVolume, setMuted, setVolum
 import { settings } from './settings/settings.js';
 import { lastSection, mountSettingsPanel } from './ui/settingsPanel.js';
 import { Progress } from './progress/Progress.js';
-import { AVATAR_ICONS, AvatarStore, checkAvatarFile, imageToAvatar, toWire } from './progress/avatar.js';
-import { FRAMES, framesUnlocked, frameStyle } from './progress/prestige.js';
-import { CHALLENGES, SKINS } from './progress/skins.js';
+import { AvatarStore, toWire } from './progress/avatar.js';
+import { framesUnlocked, frameStyle } from './progress/prestige.js';
 import { ballPreview } from './game/render/ballPaint.js';
 import { showSkinReveal } from './ui/skinReveal.js';
 import { installThumbObserver, thumbCached, upgradeImg, warmThumbs } from './ui/skinThumbs.js';
 import { getCourseDistance, staticCoursePreview } from './game/render/coursePreviewStatic.js';
 import { mountAuth } from './ui/authScreen.js';
-import { validatePassword, authMessage } from './account/authRules.js';
 import { LiveRoom } from './match/LiveRoom.js';
 import { buildRoster, humanLeaders, liveStandings, seededRng } from './match/liveRules.js';
 import { notify } from './ui/notifyPopup.js';
 import { createNotifier } from './ui/notifier.js';
 import { createPartyWatch } from './match/partyWatch.js';
 import { createScope } from './screens/lifecycle.js';
-import { avatarIcon, icon, iconUrl } from './ui/icons.js';
+import { icon, iconUrl } from './ui/icons.js';
 import { errorRef } from './backend/rpcError.js';
-import { avatarHtml, coin, createBall, esc, fmt, h } from './screens/shared.js';
+import { coin, createBall, esc, fmt, h } from './screens/shared.js';
 import { createRouter } from './screens/router.js';
 import { createRoutes } from './screens/routes.js';
 import { createHost } from './screens/host.js';
 import { createContext } from './screens/context.js';
-import { ACCOUNT_TABS, createNavigator } from './screens/navigate.js';
+import { createNavigator } from './screens/navigate.js';
 import { createGoHome } from './screens/playLifecycle.js';
 import { createThumbs } from './screens/skinThumbsHook.js';
 import { getQuality } from './game/render/quality.js';
@@ -93,7 +92,6 @@ settings.subscribe(applySound);
 const { ball } = { ball: createBall(progress) };
 
 let avatar = new AvatarStore(null);
-let accountTab = 'profile';
 
 // router de pila (src/screens): la raíz es el lobby hasta que llegue el hub (F3)
 const ROOT_SCREEN = 'hub'; // el hub es la raíz; el lobby de hoy es la ruta «Mesas» (tables)
@@ -302,20 +300,6 @@ const BLOCK_TEXT = {
   account_review: 'Tu cuenta está en revisión por el sistema antitrampas. Mientras tanto puedes jugar en Práctica.',
 };
 
-const KYC_TEXT = {
-  none: 'Sin verificar',
-  pending: 'En curso',
-  verified: 'Verificada',
-  rejected: 'Rechazada',
-};
-
-const KYC_REASON = {
-  underage: 'Hay que ser mayor de 18 años.',
-  duplicate_identity: 'Ese documento ya está en otra cuenta. Solo se permite una cuenta por persona.',
-  provider_declined: 'No se ha podido comprobar el documento. Prueba otra vez con buena luz.',
-  missing_data: 'Faltan datos del documento. Prueba otra vez.',
-};
-
 function showBlocked(code) {
   app.querySelector('.overlay')?.remove();
   const overlay = h(`
@@ -327,7 +311,7 @@ function showBlocked(code) {
         <button class="ghost back">Volver</button>
       </div>
     </div>`);
-  overlay.querySelector('.go')?.addEventListener('click', () => showAccount());
+  overlay.querySelector('.go')?.addEventListener('click', () => go('account'));
   overlay.querySelector('.back').addEventListener('click', () => overlay.remove());
   app.append(overlay);
 }
@@ -341,310 +325,6 @@ const prestigeNote = (gained) => {
   const f = now.at(-1);
   return `<p class="reward-note prestige-note" style="${frameStyle(f)}"><i></i>¡Marco de prestigio ${esc(f.name)} desbloqueado!</p>`;
 };
-
-const accountTabs = (balance) => `
-  <div class="rank-tabs acc-tabs">
-    <button data-acc="profile">${icon('user')}Perfil</button>
-    <button data-acc="wallet">${icon('wallet')}Wallet <small>${coin(balance)}</small></button>
-  </div>`;
-
-/** Muestra una sola pestaña de la cuenta (Perfil o Wallet) sin volver a pintar. */
-function bindAccountTabs(view) {
-  const apply = (tab) => {
-    accountTab = tab;
-    view.querySelectorAll('[data-acc]').forEach((b) => b.classList.toggle('on', b.dataset.acc === tab));
-    view.querySelectorAll('[data-pane]').forEach((el) => { el.hidden = el.dataset.pane !== tab; });
-  };
-  view.querySelectorAll('[data-acc]').forEach((b) => b.addEventListener('click', () => { sfx.tap(); apply(b.dataset.acc); }));
-  apply(accountTab);
-}
-
-async function showAccount(note = '', tab = 'profile') {
-  screen = 'account';
-  accountTab = tab;
-  const account = backend.account;
-  const [balance, txs] = await Promise.all([wallet.getBalance(), wallet.getTransactions()]);
-  if (!account) {
-    const offline = h(`<main class="screen account"><div class="section-head"><h1>Cuenta</h1></div>
-      ${accountTabs(balance)}
-      <div data-pane="profile" class="acc-pane"><p class="offline">Sin conexión con el servidor: el perfil no está disponible en este modo.</p></div>
-      <div data-pane="wallet" class="acc-pane wallet-pane">${walletPane(balance, txs)}</div></main>`);
-    bindAccountTabs(offline);
-    bindWallet(offline);
-    await shell(offline);
-    return;
-  }
-  const p = await account.load().catch(() => account.profile);
-  const confirmed = Boolean(p.email) && p.email_confirmed && !p.is_anonymous;
-  const kyc = p.kyc_status;
-  const name = p.username ?? 'Sin nombre';
-  const lvl = progress.level;
-  const prestige = progress.prestige;
-  const unlockedSkins = SKINS.filter((s) => progress.isUnlocked(s)).length;
-  const completedChallenges = CHALLENGES.filter((c) => progress.challenge(c.id).done).length;
-  const view = h(`
-    <main class="screen account">
-      <div class="profile-card passport-card holo">
-        <div class="shine"></div>
-        <div class="passport-header">
-          <button class="avatar-wrap edit-avatar" title="Cambiar avatar" aria-label="Cambiar avatar">
-            ${avatarHtml({ size: 'lg', frame: prestige.frame, av: avatar.get(), initial: p.username ? name : '?' })}
-            <span class="avatar-lvl-badge">Nv.${lvl.level}</span>
-            <span class="avatar-edit-tag">Editar</span>
-          </button>
-          <div class="passport-info">
-            <div class="passport-tag-row">
-              <span class="passport-status ${confirmed ? 'vip' : 'guest'}">${confirmed ? 'Jugador Oficial' : 'Email sin confirmar'}</span>
-              <span class="kyc-mini-pill ${kyc === 'verified' ? 'verified' : ''}">${KYC_TEXT[kyc]}</span>
-            </div>
-            <strong class="passport-name">${esc(name)}</strong>
-            <div class="chip-row"><button class="chip-btn rename">${icon('pencil')}Cambiar nombre</button><button class="chip-btn edit-avatar">${icon('upload')}Cambiar avatar</button></div>
-          </div>
-        </div>
-
-        <div class="career-stats-row">
-          <div class="stat-pill">
-            <span class="stat-pill-label">Nivel</span>
-            <span class="stat-pill-val">Nv. ${lvl.level}</span>
-            <small class="stat-pill-sub">${lvl.into}/${lvl.need} XP</small>
-          </div>
-          <div class="stat-pill">
-            <span class="stat-pill-label">Victorias</span>
-            <span class="stat-pill-val">${progress.state.wins}</span>
-            <small class="stat-pill-sub">${progress.state.matches} partidas</small>
-          </div>
-          <div class="stat-pill">
-            <span class="stat-pill-label">Skins</span>
-            <span class="stat-pill-val">${unlockedSkins}/${SKINS.length}</span>
-            <small class="stat-pill-sub">colección</small>
-          </div>
-          <div class="stat-pill">
-            <span class="stat-pill-label">Desafíos</span>
-            <span class="stat-pill-val">${completedChallenges}/${CHALLENGES.length}</span>
-            <small class="stat-pill-sub">completados</small>
-          </div>
-        </div>
-      </div>
-      ${accountTabs(balance)}
-      <div data-pane="profile" class="acc-pane">
-      <div class="account-card-panel frames-panel">
-        <div class="panel-head">
-          <h2>Marco de prestigio</h2>
-          <span class="panel-badge ${prestige.frame ? 'verified' : 'pending'}">${prestige.frame ? esc(prestige.frame.name) : 'Sin marco'}</span>
-        </div>
-        <div class="frames">
-          ${FRAMES.map((f) => {
-            const open = lvl.level >= f.level;
-            return `<button class="frame-opt ${open ? '' : 'locked'} ${prestige.frame?.id === f.id ? 'on' : ''}" data-frame="${f.id}" ${open ? '' : 'disabled'} style="${frameStyle(f)}" title="${open ? f.name : `Nivel ${f.level}`}">
-              ${avatarHtml({ size: 'xs', frame: f, av: avatar.get(), initial: name })}<b>${f.name}</b><small>${open ? 'Nv. ' + f.level : icon('lock') + ' Nv. ' + f.level}</small>
-            </button>`;
-          }).join('')}
-        </div>
-        <p class="sub">Se muestra en tu perfil y en el ranking. Siguiente marco: ${(() => { const n = FRAMES.find((f) => f.level > lvl.level); return n ? `${n.name} en el nivel ${n.level}` : 'ya los tienes todos'; })()}.</p>
-      </div>
-      <div class="account-card-panel friends-panel">
-        <div class="panel-head">
-          <h2>Amigos</h2>
-        </div>
-        <button class="chip-btn friends-open">${icon('users')}Amigos y grupo</button>
-      </div>
-      ${note ? `<p class="notice">${note}</p>` : ''}
-      ${p.in_review ? `<p class="offline">Tu cuenta está en revisión por el sistema antitrampas.${p.held > 0 ? ` Tienes ${coin(Number(p.held))} en premios retenidos hasta que termine.` : ''}</p>` : ''}
-
-      <div class="account-card-panel">
-        <div class="panel-head">
-          <h2>Email</h2>
-          <span class="panel-badge ${confirmed ? 'verified' : 'pending'}">${confirmed ? 'Confirmado' : 'Sin confirmar'}</span>
-        </div>
-        <div class="email-box"></div>
-      </div>
-
-      <div class="account-card-panel">
-        <div class="panel-head">
-          <h2>Edad e identidad</h2>
-          <span class="panel-badge ${kyc === 'verified' ? 'verified' : ''}">${KYC_TEXT[kyc]}</span>
-        </div>
-        <div class="kyc-box"></div>
-      </div>
-
-      <p class="legal">Para jugar mesas con entrada hace falta cuenta con email, ser mayor de 18 años y verificar tu identidad (una cuenta por persona). La práctica es libre.</p>
-      <button class="ghost logout">${icon('logout')}Cerrar sesión</button>
-      </div>
-      <div data-pane="wallet" class="acc-pane wallet-pane">${walletPane(balance, txs)}</div>
-    </main>`);
-  bindAccountTabs(view);
-  bindWallet(view);
-  view.querySelectorAll('.edit-avatar').forEach((b) => b.addEventListener('click', () => avatarEditor(() => showAccount(note))));
-
-  view.querySelector('.rename').addEventListener('click', () => renameForm(view, name));
-  view.querySelectorAll('.frame-opt:not(.locked)').forEach((b) => b.addEventListener('click', () => {
-    if (progress.equipFrame(b.dataset.frame)) showAccount(note);
-  }));
-
-  view.querySelector('.friends-open').addEventListener('click', () => go('friends'));
-
-  const emailBox = view.querySelector('.email-box');
-  emailBox.innerHTML = `<p class="field-ok">${esc(p.email ?? '')}</p>${confirmed ? '' : '<p class="sub">Abre el enlace que te enviamos al registrarte para confirmar el email.</p>'}`;
-  const changePw = h('<button class="link">Cambiar contraseña</button>');
-  changePw.addEventListener('click', () => changePw.replaceWith(passwordForm()));
-  emailBox.append(changePw);
-
-  const kycBox = view.querySelector('.kyc-box');
-  // TEMPORAL: verificación de identidad desactivada (ver migración 20261106120000)
-  if (true) {
-    kycBox.innerHTML = '<p class="sub">La verificación de identidad está desactivada temporalmente.</p>';
-  } else if (!confirmed) {
-    kycBox.innerHTML = '<p class="sub">Primero confirma tu email.</p>';
-  } else if (kyc === 'verified') {
-    kycBox.innerHTML = `<p class="field-ok">Identidad verificada${p.adult ? ' · mayor de 18' : ''}</p>`;
-  } else {
-    kycBox.innerHTML = `
-      ${kyc === 'rejected' ? `<p class="sub">${KYC_REASON[p.kyc_reason] ?? KYC_REASON.provider_declined}</p>` : ''}
-      ${kyc === 'pending' ? '<p class="sub">Estamos esperando el resultado. Si no terminaste, vuelve a empezar.</p>' : ''}
-      <button class="primary kyc-start">${icon('shield')}${kyc === 'none' ? 'Verificar identidad' : 'Volver a verificar'}</button>
-      <p class="legal">Necesitarás tu DNI o pasaporte y la cámara del móvil. Los datos los comprueba un proveedor externo; aquí solo guardamos tu fecha de nacimiento.</p>`;
-    kycBox.querySelector('.kyc-start').addEventListener('click', async (e) => {
-      e.target.disabled = true;
-      try {
-        const r = await account.startKyc();
-        if (r.url) return (location.href = r.url);
-        if (r.status === 'verified') return showAccount();
-        kycStubForm(kycBox);
-      } catch (err) {
-        e.target.disabled = false;
-        alertMsg(err.code === 'account_required' ? 'Primero confirma tu email.' : 'No se ha podido abrir la verificación. Prueba otra vez.');
-      }
-    });
-  }
-
-  view.querySelector('.logout')?.addEventListener('click', async (e) => {
-    e.target.disabled = true;
-    await account.signOut();
-  });
-  await shell(view);
-}
-
-// cambio de contraseña desde la cuenta: pide la actual antes de aceptar la nueva
-function passwordForm() {
-  const pw = (label, name, ac) => `<label>${label}<input type="password" name="${name}" required autocomplete="${ac}" maxlength="72" autocapitalize="off" spellcheck="false"></label>`;
-  const form = h(`
-    <form class="form">
-      ${pw('Contraseña actual', 'current', 'current-password')}
-      ${pw('Contraseña nueva', 'next', 'new-password')}
-      ${pw('Repite la contraseña nueva', 'again', 'new-password')}
-      <p class="sub">Mínimo 8 caracteres, con letras y números.</p>
-      <p class="auth-error" role="alert"></p>
-      <button class="primary">Guardar contraseña</button>
-    </form>`);
-  const error = form.querySelector('.auth-error');
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const btn = form.querySelector('button');
-    error.textContent = '';
-    const bad = validatePassword(form.next.value) ?? (form.next.value !== form.again.value ? 'password_mismatch' : null);
-    if (bad) return void (error.textContent = authMessage(bad));
-    btn.disabled = true;
-    try {
-      await backend.account.changePassword(form.current.value, form.next.value);
-      showAccount('Contraseña cambiada');
-    } catch (err) {
-      btn.disabled = false;
-      error.textContent = authMessage(err.code);
-    }
-  });
-  return form;
-}
-
-// elegir icono o subir imagen propia (máx. 2,5 MB); se guarda en este dispositivo
-function avatarEditor(done) {
-  app.querySelector('.overlay')?.remove();
-  const overlay = h(`
-    <div class="overlay">
-      <div class="card avatar-editor">
-        <h2>Tu avatar</h2>
-        <div class="ae-preview"></div>
-        <div class="ae-icons">${AVATAR_ICONS.map((i) => `<button data-icon="${i.id}" title="${i.name}" aria-label="${i.name}">${avatarIcon(i.id)}</button>`).join('')}</div>
-        <div class="row">
-          <button class="secondary ae-upload">${icon('upload')}Subir imagen</button>
-          <button class="secondary ae-clear">${icon('trash')}Quitar</button>
-        </div>
-        <input type="file" class="ae-file" accept="image/png,image/jpeg,image/webp" hidden>
-        <p class="ae-msg legal">PNG, JPG o WebP, máximo 2,5 MB. Se recorta en cuadrado y solo se guarda en este dispositivo.</p>
-        <button class="primary ae-done">${icon('check')}Listo</button>
-      </div>
-    </div>`);
-  const msg = overlay.querySelector('.ae-msg');
-  const paint = () => {
-    const av = avatar.get();
-    overlay.querySelector('.ae-preview').innerHTML = avatarHtml({ size: 'lg', frame: progress.prestige.frame, av, initial: backend.account?.profile?.username ?? '?' });
-    overlay.querySelectorAll('[data-icon]').forEach((b) => b.classList.toggle('on', b.dataset.icon === av.icon));
-  };
-  overlay.querySelectorAll('[data-icon]').forEach((b) => b.addEventListener('click', () => { avatar.setIcon(b.dataset.icon); paint(); }));
-  overlay.querySelector('.ae-clear').addEventListener('click', () => { avatar.clear(); paint(); });
-  const file = overlay.querySelector('.ae-file');
-  overlay.querySelector('.ae-upload').addEventListener('click', () => file.click());
-  file.addEventListener('change', async () => {
-    const f = file.files[0];
-    file.value = '';
-    if (!f) return;
-    const bad = checkAvatarFile(f);
-    if (bad) { msg.textContent = bad === 'size' ? 'La imagen pesa más de 2,5 MB.' : 'Usa una imagen PNG, JPG o WebP.'; msg.classList.add('err'); return; }
-    try {
-      avatar.setImage(await imageToAvatar(f));
-      msg.classList.remove('err');
-      paint();
-    } catch {
-      msg.textContent = 'No se ha podido leer esa imagen.';
-      msg.classList.add('err');
-    }
-  });
-  overlay.querySelector('.ae-done').addEventListener('click', () => { overlay.remove(); done(); });
-  paint();
-  app.append(overlay);
-}
-
-function renameForm(view, current) {
-  const card = view.querySelector('.profile-card');
-  const form = h(`
-    <form class="form">
-      <input name="name" maxlength="16" autocomplete="nickname" value="${esc(current === 'Sin nombre' ? '' : current)}" placeholder="Nombre (3-16 letras, números o _)">
-      <button class="primary">Guardar nombre</button>
-    </form>`);
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    try {
-      await backend.account.setUsername(form.name.value.trim());
-      showAccount('Nombre guardado');
-    } catch (err) {
-      alertMsg(err.code === 'username_taken' ? 'Ese nombre ya está cogido.' : 'Usa de 3 a 16 letras, números o _.');
-    }
-  });
-  card.after(form);
-  form.name.focus();
-}
-
-// modo pruebas: sin proveedor configurado, se pide fecha y documento a mano
-function kycStubForm(box) {
-  box.innerHTML = `
-    <form class="form">
-      <p class="sub"><small class="tag">pruebas</small> Verificación simulada: aún no hay proveedor conectado.</p>
-      <label>Fecha de nacimiento<input type="date" name="birthdate" required></label>
-      <label>Número de documento<input name="document" required minlength="5" maxlength="32" autocomplete="off"></label>
-      <button class="primary">Verificar</button>
-    </form>`;
-  const form = box.querySelector('form');
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    form.querySelector('button').disabled = true;
-    try {
-      await backend.account.stubKyc(form.birthdate.value, form.document.value);
-      showAccount();
-    } catch {
-      form.querySelector('button').disabled = false;
-      alertMsg('Revisa la fecha y el número de documento.');
-    }
-  });
-}
 
 // ---------- wallet ----------
 
@@ -737,7 +417,7 @@ function bindWallet(view) {
         throw e;
       }
       sfx.coins();
-      showAccount('', 'wallet');
+      go('wallet');
     }),
   );
   view.querySelectorAll('[data-crypto]').forEach((b) =>
@@ -768,7 +448,7 @@ async function startMatch(tier, rematchOf = null) {
   try {
     match = await service.join(tier);
   } catch (e) {
-    if (e instanceof InsufficientFundsError) return showAccount('', 'wallet');
+    if (e instanceof InsufficientFundsError) return go('wallet');
     return alertMsg('No se ha podido crear la partida. Prueba otra vez.');
   }
   match.service = service;
@@ -1419,7 +1099,7 @@ async function startTournament(tier, rematchOf = null) {
       throw e;
     });
   } catch (e) {
-    if (e instanceof InsufficientFundsError) return showAccount('', 'wallet');
+    if (e instanceof InsufficientFundsError) return go('wallet');
     if (e.blocked) {
       backend.account?.load().catch(() => { });
       return showBlocked(e.code);
@@ -2252,7 +1932,14 @@ function startRouting(b) {
     legacy: {
       // Mesas (T028): lo que la pantalla necesita de main.js
       enterTables: () => { leaveFinale(); stopLive(); screen = 'lobby'; releasePlay(); },
-      account: (p) => showAccount('', ACCOUNT_TABS[p?.tab] ?? 'profile'),
+      // TEMPORAL (hasta T035): Monedero de Cuenta sigue siendo el de main.js; Cuenta (account.js) lo pinta en su pestaña
+      'account.monedero': async (el, alive) => {
+        const [balance, txs] = await Promise.all([wallet.getBalance(), wallet.getTransactions()]);
+        if (!alive()) return;
+        el.innerHTML = `<div class="wallet-pane">${walletPane(balance, txs)}</div>`;
+        el.dataset.state = 'ready';
+        bindWallet(el);
+      },
       settings: () => showSettings(),
       maps: () => showFreePlayCourseSelect(),
     },

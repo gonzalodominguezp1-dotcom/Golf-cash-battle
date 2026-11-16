@@ -1,0 +1,10 @@
+/* Cuenta (T034). Las clases .passport-card, .account-card-panel, .frames, .rank-tabs y el resto vienen de style.css; aquí lo propio de la pantalla. */
+.screen.account.acct-screen { display: block; }
+.account .acct-body { display: grid; gap: 14px; padding: 0 calc(env(safe-area-inset-right, 0px) + 12px) calc(env(safe-area-inset-bottom, 0px) + 16px) calc(env(safe-area-inset-left, 0px) + 12px); }
+.account .acc-tabs { margin: 8px calc(env(safe-area-inset-right, 0px) + 12px) 8px calc(env(safe-area-inset-left, 0px) + 12px); }
+.account .acc-tabs button { min-height: 44px; }
+.account .account-card-panel { margin-top: 0; }
+.account .chip-btn, .account .link, .account .logout, .account .frame-opt { min-height: 44px; }
+.account .friends-open[disabled] { opacity: 0.5; }
+.account .auth-error:empty { display: none; }
+.account .acc-tabs button:focus-visible, .account .chip-btn:focus-visible, .account .link:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
