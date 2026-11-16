@@ -487,10 +487,13 @@ export function createSkinInspector(container, opts = {}) {
   }
 
   /** Dibuja los 4 paneles en una rejilla 2×2 con viewport y scissor (un solo renderer). */
+  const fxSize = new THREE.Vector2();
   function renderFxGrid(dt) {
-    const W = renderer.domElement.width, H = renderer.domElement.height;
-    const pr = renderer.getPixelRatio();
-    const top = Math.round(FX_TOP * pr), bottom = Math.round(FX_BOTTOM * pr), gap = Math.round(FX_GAP * pr);
+    // three.js (setViewport/setScissor) recibe píxeles CSS y multiplica por el pixelRatio: aquí no se escala a mano
+    // (escalar dos veces dejaba las celdas de abajo fuera del canvas en pantallas de alta densidad)
+    const size = renderer.getSize(fxSize);
+    const W = size.x, H = size.y;
+    const top = FX_TOP, bottom = FX_BOTTOM, gap = FX_GAP;
     const cw = Math.max(1, Math.floor(W / 2)), ch = Math.max(1, Math.floor((H - top - bottom) / 2));
     const t = Math.tan((36 * Math.PI) / 360);
     renderer.setScissorTest(true);

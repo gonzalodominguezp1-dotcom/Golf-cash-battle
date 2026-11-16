@@ -94,9 +94,9 @@ test('skin-inspect: cómo conseguirla (requisito o logro, nunca la palabra vieja
   const root2 = fakeRoot(env);
   const h2 = await mount(root2, ctx, { id: LOGRO.id });
   assert.equal(text(root2, '[data-sk-how]'), 'Se consigue con un logro: Reto X');
-  assert.match(root2.innerHTML, /data-go="achievements"/);
-  root2.querySelector('[data-go="achievements"]').emit('click');
-  assert.deepEqual(calls.push, [['achievements']]);
+  // sin enlace visible «Ver logros»: el texto de cómo conseguirla queda solo para lectores de pantalla
+  assert.doesNotMatch(root2.innerHTML, /data-go="achievements"/);
+  assert.deepEqual(calls.push, []);
   h2.destroy();
   assert.doesNotMatch(root2.innerHTML + text(root2, '[data-sk-how]'), new RegExp(['de', 'saf'].join(''), 'i'));
 });

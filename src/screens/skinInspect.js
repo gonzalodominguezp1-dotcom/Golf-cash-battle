@@ -2,8 +2,7 @@
 // El visor 3D (three.js) llega con ctx.loadViewer() -> import() dinámico; sin él (o sin WebGL) queda el marcador 2D.
 // Las flechas pasan a la skin anterior/siguiente en el orden de SKINS (da la vuelta al final) con router.replace.
 import { SKINS, TIERS as SKIN_TIERS } from '../progress/skins.js';
-import { tierIcon } from '../ui/icons.js';
-import { backFloatButton, bindBackFloat, bindHeader, button, header } from './components.js';
+import { backFloatButton, bindBackFloat, bindHeader, header } from './components.js';
 import { esc } from './shared.js';
 import { t } from './texts/index.js';
 import './texts/common.js';
@@ -28,7 +27,6 @@ export async function mount(root, ctx, params = {}) {
   const logro = !!skin.unlock?.challenge;
   const multi = SKINS.length > 1;
   root.innerHTML = `<main class="screen sk-inspect rarity-${esc(skin.tier)}" style="--tier:${esc(tierColor)}" aria-label="${esc(t('skins.inspectLabel', { name: skin.name }))}">
-    ${header({ title: t('skins.title') })}
     <div class="sk-view-stage">
       <div class="sk-view-title"><b>${esc(skin.name)}</b><small>${esc(SKIN_TIERS[skin.tier]?.name ?? '')}</small></div>
       <button type="button" class="sk-view-nav prev" aria-label="${esc(t('skins.navPrev'))}"${multi ? '' : ' hidden'}>${icon('back')}</button>
@@ -38,14 +36,11 @@ export async function mount(root, ctx, params = {}) {
       <p class="sk-view-loading" role="status" data-sk-loading>${esc(t('skins.inspectViewer'))}</p>
       <div class="sk-view-actions"><button type="button" class="primary sk-equip" data-sk-equip></button></div>
     </div>
-    <section class="sk-view-info">
-      <p><small>${esc(t('skins.inspectState'))}</small><b data-sk-state></b><span class="sk-view-tier">${tierIcon(skin.tier)} ${esc(SKIN_TIERS[skin.tier]?.name ?? '')}</span></p>
-      <p><small>${esc(t('skins.inspectHow'))}</small><span data-sk-how></span>${logro ? button({ label: t('skins.logrosLink'), attrs: 'data-go="achievements"' }) : ''}</p>
-      <p class="sr-only" role="status" data-sk-live></p>
-    </section>
+    <p class="sr-only" data-sk-state></p>
+    <p class="sr-only" data-sk-how></p>
+    <p class="sr-only" role="status" data-sk-live></p>
     ${backFloatButton()}
   </main>`;
-  bindHeader(root, { ...ctx, scope });
   bindBackFloat(root, { ...ctx, scope });
   const box = root.querySelector('[data-sk-canvas]');
   const lockBox = root.querySelector('[data-sk-lock]');
@@ -72,7 +67,6 @@ export async function mount(root, ctx, params = {}) {
     sync();
     root.querySelector('[data-sk-live]').textContent = t('skins.inspectEquipped', { name: skin.name });
   });
-  if (logro) scope.on(root.querySelector('[data-go="achievements"]'), 'click', () => ctx.router.push('achievements'));
   root.querySelector('[data-lobby]')?.focus?.({ preventScroll: true });
 
   // navegación: la skin anterior/siguiente en el orden de SKINS, dando la vuelta al final; cambia la ruta (replace)

@@ -36,13 +36,12 @@
 /* acciones flotando sobre la bola, sin fondo */
 .sk-inspect .sk-view-actions { position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; display: flex; justify-content: center; align-items: center; padding: 10px calc(env(safe-area-inset-right, 0px) + 14px) calc(10px + env(safe-area-inset-bottom, 0px)) calc(env(safe-area-inset-left, 0px) + 14px); pointer-events: none; }
 .sk-inspect .sk-view-actions .primary { pointer-events: auto; min-width: 150px; min-height: 44px; }
-.sk-inspect .sk-view-info { flex: none; display: grid; gap: 6px; padding: 10px calc(env(safe-area-inset-right, 0px) + 14px) 4px calc(env(safe-area-inset-left, 0px) + 14px); border-top: 1px solid var(--line); background: rgba(14, 19, 28, 0.97); }
-.sk-inspect .sk-view-info p { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font: 600 14px var(--body); color: var(--text); }
-.sk-inspect .sk-view-info small { color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
-.sk-inspect .sk-view-tier { margin-left: auto; color: var(--muted); font-weight: 700; }
-.sk-inspect .sk-view-info .scr-btn { min-height: 44px; }
-/* el botón «Lobby» va fijo abajo a la izquierda: la info deja su hueco para no quedar debajo */
-.sk-inspect .sk-view-info { padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
+/* sin bloque de estado ni de «cómo conseguirla»: el visor ocupa toda la pantalla; el texto de estado queda solo para lectores de pantalla */
+.sk-inspect .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* el botón de atrás va fijo abajo a la izquierda: los botones de abajo dejan ese hueco para no solaparse */
+.sk-inspect .sk-view-actions { padding-left: calc(env(safe-area-inset-left, 0px) + 76px); padding-right: calc(env(safe-area-inset-right, 0px) + 76px); }
+/* con «Probar efectos» las flechas caerían sobre las celdas: se ocultan */
+.sk-inspect .sk-view-stage:has(.sk-fxon) .sk-view-nav { display: none; }
 .sk-inspect .scr-back:focus-visible, .sk-inspect .primary:focus-visible, .sk-inspect .scr-btn:focus-visible, .sk-inspect .sk-view-nav:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
 @media (max-height: 520px) {
   .sk-inspect .sk-view-lock { padding-bottom: 64px; }
