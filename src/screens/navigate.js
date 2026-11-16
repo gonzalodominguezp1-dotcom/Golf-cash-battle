@@ -3,6 +3,7 @@
 export const GO_ROUTES = {
   wallet: ['wallet'], skins: ['skins'], account: ['account'],
   tables: ['tables'], ranking: ['ranking'], freeplay: ['maps'], settings: ['settings'],
+  matchmaking: ['matchmaking'],
 };
 // pestañas de la ruta de cuenta -> nombres que usaba la Cuenta heredada (solo lo usa su test; T039 lo limpia)
 export const ACCOUNT_TABS = { perfil: 'profile', progreso: 'profile' };

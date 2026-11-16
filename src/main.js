@@ -9,7 +9,7 @@ import './screens/skinInspect.css';
 import './screens/account.css';
 import './screens/maps.css';
 import './screens/achievements.css';
-import { HOLE_TIME_LIMIT, PLAYERS_PER_MATCH, TIERS, maxStrokesOf, potFor } from './config.js';
+import { HOLE_TIME_LIMIT, PLAYERS_PER_MATCH, TIERS, maxStrokesOf } from './config.js';
 import { LocalWallet } from './wallet/LocalWallet.js';
 import { InsufficientFundsError } from './wallet/WalletService.js';
 import { MatchService, leaders } from './match/MatchService.js';
@@ -38,6 +38,7 @@ import { errorRef } from './backend/rpcError.js';
 import { coin, createBall, esc, fmt, h } from './screens/shared.js';
 import { createRouter } from './screens/router.js';
 import { createRoutes } from './screens/routes.js';
+import { createMatchmaking } from './screens/matchmaking.js';
 import { createHost } from './screens/host.js';
 import { createContext } from './screens/context.js';
 import { createNavigator } from './screens/navigate.js';
@@ -347,31 +348,18 @@ async function startMatch(tier, rematchOf = null) {
   match.service = service;
   match.myHoles = [];
   if (forced) Object.assign(match, { courses: [forced.hole - 1], holes: 1, forceTie: forced.tie });
-  const view = h(`
-    <main class="screen matchmaking tier--${tier.id}">
-      <div class="radar"><span></span><span></span><span></span>${ball(progress.skin, 64)}</div>
-      <h1>${icon('hourglass')} Buscando rivales…</h1>
-      <p class="sub">${tier.entryFee ? `${tier.name} · bote ${coin(potFor(tier))}` : 'Práctica contra rivales simulados'}</p>
-      <div class="seats"></div>
-      <button class="ghost cancel">${icon('close')}Cancelar y recuperar entrada</button>
-    </main>`);
-  const seats = view.querySelector('.seats');
-  for (let i = 0; i < PLAYERS_PER_MATCH; i++) seats.append(h(`<div class="seat"><span>…</span></div>`));
   let cancelled = false;
-  view.querySelector('.cancel').addEventListener('click', async () => {
-    cancelled = true;
-    await match.service.cancel(match);
-    goHome();
+  // la pantalla de emparejamiento (src/screens/matchmaking.js) pinta la sesión; aquí solo se va rellenando
+  const session = createMatchmaking({
+    tier,
+    abandon: async () => { cancelled = true; await match.service.cancel(match); },
+    cancel: async () => { cancelled = true; await match.service.cancel(match); goHome(); },
   });
-  await shell(view, { nav: false });
+  go('matchmaking');
   for (let i = 0; i < match.players.length; i++) {
     await wait(i === 0 ? 200 : 250 + Math.random() * 350);
     if (cancelled) return;
-    const p = match.players[i];
-    const s = seats.children[i];
-    s.classList.add('filled', ...(p.id === 'me' ? ['me'] : []));
-    s.style.setProperty('--c', p.color);
-    s.innerHTML = `<span class="avatar">${p.name[0]}</span><span>${p.name}</span>`;
+    session.fill(i, match.players[i]);
     sfx.tick();
   }
   await wait(600);
