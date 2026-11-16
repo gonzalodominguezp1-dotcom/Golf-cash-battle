@@ -132,7 +132,7 @@ los entornos tras la aprobación.
 ## Checklist
 - [x] Paso L — laboratorio (visto bueno del usuario 2026-11-15; parpadeo en «Después» en arreglo)
 - [x] Paso 0 — viento compartido (visto bueno del usuario 2026-11-15)
-- [ ] Paso 1 — árbol redondo
+- [ ] Paso 1 — árbol redondo (entregado en el laboratorio, pendiente de visto bueno del usuario)
 - [ ] Paso 2 — pino
 - [ ] Paso 3 — palmera
 - [ ] Paso 4 — arbustos
@@ -157,5 +157,12 @@ los entornos tras la aprobación.
 - `pnpm test`: 314 tests, 309 pasan. Los 5 fallos están en `vfx-runtime`/`vfx-packs`, trabajo VFX ajeno sin commitear. `pnpm build` ok.
 - Sin verificar: el GLSL no se ha compilado en GPU real ni se ha visto el laboratorio en pantalla (lo comprueba el usuario).
 
+(2026-11-16) **Paso 1 — árbol redondo entregado, pendiente de visto bueno visual.**
+- `src/game/render/assets/roundTree.js` (`makeRoundTree`, 4 variantes, 3 materiales compartidos, luz de borde en el Lambert, tarjetas de hojas en Alto) y `tests/round-tree.test.js` (12/12). `bakeStatic` conserva `uv` solo con `userData.keepUv`; quitar esa línea pone el test en rojo.
+- Triángulos máximos medidos (30 semillas x 4 variantes): Bajo 249, Medio 599, Alto 1199; presupuesto 250/600/1200. Bosque entero = 3 llamadas de dibujo tras `bakeStatic`.
+- Revisión de contexto limpio: sin bloqueantes. Nits anotados: el laboratorio no pasa el tema a `makeNew` (paleta fija); la luz de borde usa `directionalLights[0]` (revisar al sustituir en entornos con varias luces); halo oscuro posible en las tarjetas lejanas; el test del shader solo comprueba texto.
+- `pnpm test`: 326 tests, 321 pasan (5 VFX ajenos). `pnpm build` ok. Sin verificar: GLSL de luz de borde y textura de tarjetas en GPU real.
+- Aún NO sustituido en `environment.js` (va tras el visto bueno). Al sustituir: decidir escala (nuevo 1,9–3,3 m; viejo x0,8–1,7) y el resto del decorado cambiará por otro consumo del rng.
+
 ## Next step
-Usuario revisa el laboratorio (`pnpm dev` → `/assets-lab.html`). Con su visto bueno, marcar L y 0 y seguir con el Paso 1 (árbol redondo).
+Usuario revisa el laboratorio (`pnpm dev` → `/assets-lab.html`). Usuario revisa el árbol redondo en el laboratorio. Con su visto bueno: sustituir en `environment.js` y seguir con el Paso 2 (pino).
