@@ -143,20 +143,6 @@ test('logros: routes resuelve la ruta achievements a esta pantalla y no al marca
   assert.match(readFileSync(new URL('../src/screens/routes.js', import.meta.url), 'utf8'), /'\.\/achievements\.js'/); // el glob la incluye
 });
 
-test('logros: mount espera al css antes de pintar', async () => {
-  const env = fakeEnv();
-  const root = fakeRoot(env);
-  const ctx = makeCtx(env);
-  let release;
-  ctx.loadCss = () => new Promise((r) => { release = r; });
-  const p = mount(root, ctx, {});
-  await Promise.resolve();
-  assert.equal(root.innerHTML, '');
-  release();
-  await p;
-  assert.match(root.innerHTML, /data-ach-list/);
-});
-
 test('logros: sin usuario usa la clave local y apaga el badge igual', async () => {
   const env = fakeEnv();
   const ctx = makeCtx(env, { states: { ace: { value: 1, goal: 1, done: true } } });

@@ -8,6 +8,7 @@ import './screens/skins.css';
 import './screens/skinInspect.css';
 import './screens/account.css';
 import './screens/maps.css';
+import './screens/achievements.css';
 import { HOLE_TIME_LIMIT, PLAYERS_PER_MATCH, TIERS, maxStrokesOf, potFor } from './config.js';
 import { LocalWallet } from './wallet/LocalWallet.js';
 import { InsufficientFundsError } from './wallet/WalletService.js';

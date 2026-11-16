@@ -9,9 +9,6 @@ import './texts/common.js';
 import './texts/achievements.js';
 
 export async function mount(root, ctx) {
-  // convención provisional: la pantalla espera a su css; el import estático en main.js lo unifica T039.
-  // En Vite resuelve cuando el <link> carga; en Node rechaza al instante y se ignora.
-  await (ctx.loadCss ?? (() => import('./achievements.css')))().catch(() => {});
   const scope = ctx.scope.child();
   const { progress } = ctx;
   const challenges = ctx.challenges ?? CHALLENGES;
