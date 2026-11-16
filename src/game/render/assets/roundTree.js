@@ -592,13 +592,16 @@ function fit(plan, level, palette) {
  * - rng: generador con semilla (todas las formas salen de él)
  * - quality: 'low' | 'medium' | 'high', el preset del laboratorio ({ level }), { lod } o 0/1/2
  * - opts: { variant?: 0..3, leaves?: [hex], bark?: hex, theme?: { leaves, bark } }
- *   (sin paleta: ROUND_TREE_DEFAULTS)
+ *   (sin paleta en opts se lee quality.theme = { leaves, bark } si quality es un objeto;
+ *   si tampoco, ROUND_TREE_DEFAULTS)
  */
 export function makeRoundTree(rng, quality = 'medium', opts = {}) {
   const level = roundTreeLevel(quality);
+  // paleta: opts.leaves/bark, luego opts.theme, luego quality.theme (el laboratorio la mete ahí) y, al final, los valores por defecto
+  const qt = quality && typeof quality === 'object' ? quality.theme : undefined;
   const palette = {
-    leaves: opts.leaves ?? opts.theme?.leaves ?? ROUND_TREE_DEFAULTS.leaves,
-    bark: opts.bark ?? opts.theme?.bark ?? ROUND_TREE_DEFAULTS.bark,
+    leaves: opts.leaves ?? opts.theme?.leaves ?? qt?.leaves ?? ROUND_TREE_DEFAULTS.leaves,
+    bark: opts.bark ?? opts.theme?.bark ?? qt?.bark ?? ROUND_TREE_DEFAULTS.bark,
   };
   const plan = planTree(rng, opts);
   const { built, state } = fit(plan, level, palette);

@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { THEMES } from '../game/themes.js';
 import { QUALITY_LEVELS, QUALITY_NAMES, qualityPreset } from '../game/render/quality.js';
 import { getAssets, getAsset, seededRng, diffStats, formatStats } from './assetRegistry.js';
+import { roundTreePalette } from '../game/render/environment.js';
 import * as wind from '../game/render/assets/wind.js';
 import './assets/examples.js';
 
@@ -125,7 +126,8 @@ function disposeScene(scene) {
 
 function rebuild() {
   const theme = THEMES[state.themeId];
-  const preset = { level: state.level, ...qualityPreset(state.level) };
+  // la paleta del tema llega a los assets por el preset (preset.theme; la lee roundTree.js)
+  const preset = { level: state.level, ...qualityPreset(state.level), theme: roundTreePalette(theme) };
   const asset = getAsset(state.assetId);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, preset.pixelRatio));
   renderer.shadowMap.enabled = preset.shadows;

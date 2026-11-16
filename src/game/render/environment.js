@@ -4,6 +4,7 @@ import { roughTone, softDotTexture } from './textures.js';
 import { bakeStatic } from './batch.js';
 import { applyWind, setWindField, updateWind } from './assets/wind.js';
 import { quality } from './quality.js';
+import { makeRoundTree } from './assets/roundTree.js';
 import { lavaMaterial } from './lava.js';
 import { CUP_R } from '../physics.js';
 import {
@@ -327,7 +328,8 @@ export function buildEnvironment(scene, course, theme, rng) {
     const clear = (x, z) => !grounded || Math.hypot(x - tx, z - tz) > 9;
     place(grounded ? 4.5 : 2.2, 40, 140, (x, y, z, d) => {
       if (!clear(x, z)) return;
-      const tree = makeLushTree(theme.trees[Math.floor(rng() * theme.trees.length)], rng, x, y, z, leaves, detail(d));
+      const kind = theme.trees[Math.floor(rng() * theme.trees.length)];
+      const tree = kind === 'round' ? makeNatureRoundTree(rng, x, y, z, theme, detail(d)) : makeLushTree(kind, rng, x, y, z, leaves, detail(d));
       tree.userData.swayRoot = true;
       decor.add(tree);
     });
@@ -340,9 +342,10 @@ export function buildEnvironment(scene, course, theme, rng) {
     // a ras de suelo nada pisa el antegreen, y detrás del tee queda un claro para la cámara
     const [tx, tz] = course.tee;
     const clear = (x, z) => !grounded || Math.hypot(x - tx, z - tz) > 9;
-    place(grounded ? 4.5 : 2.2, 40, 140, (x, y, z) => {
+    place(grounded ? 4.5 : 2.2, 40, 140, (x, y, z, d) => {
       if (!clear(x, z)) return;
-      const tree = makeTree(theme.trees[Math.floor(rng() * theme.trees.length)], rng, x, y, z, leaves);
+      const kind = theme.trees[Math.floor(rng() * theme.trees.length)];
+      const tree = kind === 'round' ? makeNatureRoundTree(rng, x, y, z, theme, detail(d)) : makeTree(kind, rng, x, y, z, leaves);
       // los árboles se mecen con el viento (en el sombreador, ver assets/wind.js)
       tree.userData.swayRoot = true;
       decor.add(tree);
@@ -570,6 +573,48 @@ function shadowAll(g) {
   g.traverse((o) => {
     if (o.isMesh) o.castShadow = true;
   });
+  return g;
+}
+
+// Árbol redondo del decorado natural (assets/roundTree.js). Medido sobre 100 semillas:
+// el viejo (makeTree 'round', ya con su escala x0,8-1,7) mide de media 2,2 m de alto y 2,2 m
+// de ancho; el nuevo sin escalar mide ~2,4 m de alto (1,9-3,3 según variante) y ~2,2 m de ancho.
+// ROUND_TREE_SCALE x (0,8..1,25) lo deja en ~2,2 m de alto de media (1,5-4,1 m): el mismo
+// peso visual en el paisaje, con menos dispersión (las variantes ya varían la altura).
+export const ROUND_TREE_SCALE = 0.95;
+const NATURE_LEAVES = [0x2f9e44, 0x3bb54a, 0x25803a, 0x4cc25a]; // hojas del decorado viejo cuando el tema no trae paleta
+
+/** Paleta del árbol redondo para un tema: sus hojas (o las verdes de siempre) y la corteza por defecto. */
+export function roundTreePalette(theme) {
+  return { leaves: theme?.leaves?.length ? theme.leaves : NATURE_LEAVES, bark: theme?.bark };
+}
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Coloca un árbol redondo. Gasta SIEMPRE tres tiradas del rng del hoyo (escala, giro y semilla)
+ * y la forma sale de un generador propio: el resto del decorado no depende de la calidad ni de la variante.
+ * level: 0/1/2 (quality().lod; de lejos un punto menos) o 'low'|'medium'|'high'.
+ */
+export function makeNatureRoundTree(rng, x, y, z, theme, level = quality().lod) {
+  const s = ROUND_TREE_SCALE * (0.8 + rng() * 0.45);
+  const rot = rng() * Math.PI * 2;
+  const seed = Math.floor(rng() * 4294967296);
+  const { leaves, bark } = roundTreePalette(theme);
+  const g = makeRoundTree(mulberry32(seed), level, bark === undefined ? { leaves } : { leaves, bark });
+  g.position.set(x, y - 0.05, z);
+  g.scale.setScalar(s);
+  g.rotation.y = rot;
+  g.userData.swayRoot = true;
   return g;
 }
 
