@@ -21,13 +21,13 @@ function fake(rootId = 'lobby') {
   return { go, log, router, setBusy: (b) => { busy = b }, flush: () => { busy = false; const c = idle; idle = []; c.forEach((f) => f()) } }
 }
 
-test('wallet -> cuenta con la pestaña monedero, que mapea a wallet', () => {
-  assert.deepEqual(GO_ROUTES.wallet, ['account', { tab: 'monedero' }])
-  assert.equal(ACCOUNT_TABS.monedero, 'wallet')
+test('wallet -> pantalla propia #/monedero (ya no es pestaña de cuenta)', () => {
+  assert.deepEqual(GO_ROUTES.wallet, ['wallet'])
+  assert.equal(ACCOUNT_TABS.monedero, undefined)
   assert.equal(ACCOUNT_TABS.perfil, 'profile')
   const { go, log } = fake()
   go('wallet')
-  assert.deepEqual(log, [['push', 'account', { tab: 'monedero' }]])
+  assert.deepEqual(log, [['push', 'wallet', {}]])
 })
 
 test('desde la raíz apila; entre secciones reemplaza; a la raíz hace reset; mismo sitio repinta', () => {

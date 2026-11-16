@@ -173,7 +173,7 @@ export async function mount(root, ctx) {
   };
 
   const go = (id) => { ctx.sfx?.tap?.(); router.push(id); };
-  const ACTIONS = { play: () => go('tables'), account: () => go('account'), wallet: () => { ctx.sfx?.tap?.(); router.push('account', { tab: 'monedero' }); }, settings: () => go('settings'), fullscreen: () => ctx.actions.toggleFullscreen() };
+  const ACTIONS = { play: () => go('tables'), account: () => go('account'), wallet: () => { ctx.sfx?.tap?.(); router.push('wallet'); }, settings: () => go('settings'), fullscreen: () => ctx.actions.toggleFullscreen() };
   for (const [key, n] of Object.entries(NAV)) ACTIONS[key] = n.go ? () => go(n.go) : () => { ctx.sfx?.tap?.(); ctx.actions[n.act](); };
   // Popup con el requisito de un acceso bloqueado; solo uno a la vez y se cierra con el hub.
   let dlg = null;

@@ -482,14 +482,14 @@ test('hub: el saldo sigue a la suscripción, también tapado y al destapar', asy
   assert.equal(bal(root).textContent, '9');
 });
 
-test('hub: pulsar la píldora abre Cuenta › Monedero', async () => {
+test('hub: pulsar la píldora abre la pantalla Monedero (#/monedero)', async () => {
   const env = fakeEnv();
   const root = fakeRoot(env);
   const { ctx, calls } = makeCtx(env, { wallet: fakeWallet() });
   await mount(root, ctx, {});
   click(root, 'wallet');
-  assert.deepEqual(calls.push, ['account']);
-  assert.deepEqual(calls.params, [{ tab: 'monedero' }]);
+  assert.deepEqual(calls.push, ['wallet']);
+  assert.equal(calls.params[0], undefined);
 });
 
 test('hub: getBalance que no resuelve o falla no bloquea el montaje; sin wallet no hay píldora', async () => {

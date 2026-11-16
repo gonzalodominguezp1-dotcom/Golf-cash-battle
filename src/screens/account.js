@@ -1,7 +1,7 @@
-// Cuenta (T034): cabecera con Volver y pestañas Perfil, Monedero y Progreso. Cada pestaña es ./account/<archivo>.js,
-// que se encuentra por convención (glob con nombres literales: Vite tolera los que aún no existen). T035 (Monedero) y
-// T036 (Progreso) solo añaden su archivo. Mientras no exista: Monedero usa el hueco heredado ctx.legacy['account.monedero']
-// (el monedero de main.js, para no perder depósitos ni historial) y Progreso muestra «En construcción».
+// Cuenta (T034): cabecera con Volver y pestañas Perfil y Progreso. Cada pestaña es ./account/<archivo>.js,
+// que se encuentra por convención (glob con nombres literales: Vite tolera los que aún no existen). El Monedero
+// ya no es pestaña: es la pantalla #/monedero (src/screens/monedero.js). Un #/cuenta/monedero antiguo muestra Perfil.
+// Mientras no exista el archivo de una pestaña (Progreso), muestra «En construcción».
 import { bindHeader, bindLobby, header, listState, lobbyButton } from './components.js';
 import { esc } from './shared.js';
 import { t } from './texts/index.js';
@@ -10,10 +10,10 @@ import './texts/account.js';
 
 const NET_TIMEOUT_MS = 8000; // una pestaña que no carga no deja la pantalla colgada: error con Reintentar
 // clave de la ruta (#/cuenta/<clave>) -> archivo de la pestaña y texto de su botón
-export const ACCOUNT_TAB_FILES = { perfil: 'profile', monedero: 'wallet', progreso: 'progress' };
-const TAB_LABELS = { perfil: 'account.tabProfile', monedero: 'account.tabWallet', progreso: 'account.tabProgress' };
+export const ACCOUNT_TAB_FILES = { perfil: 'profile', progreso: 'progress' };
+const TAB_LABELS = { perfil: 'account.tabProfile', progreso: 'account.tabProgress' };
 
-export const tabModules = () => import.meta.glob(['./account/profile.js', './account/wallet.js', './account/progress.js']);
+export const tabModules = () => import.meta.glob(['./account/profile.js', './account/progress.js']);
 
 export async function mount(root, ctx, params = {}, { modules = tabModules() } = {}) {
   const { router } = ctx;
@@ -56,7 +56,6 @@ export async function mount(root, ctx, params = {}, { modules = tabModules() } =
     try {
       const file = ACCOUNT_TAB_FILES[tab];
       const loader = modules[`./account/${file}.js`];
-      const legacy = ctx.legacy?.[`account.${tab}`];
       if (loader) {
         const mod = await timed(loader());
         if (my !== run || gone) return;
@@ -64,8 +63,6 @@ export async function mount(root, ctx, params = {}, { modules = tabModules() } =
         const made = await mod.mount(body, { ...ctx, scope: tabScope }, params);
         if (my !== run || gone) { made?.destroy?.(); return; }
         inner = made;
-      } else if (typeof legacy === 'function') {
-        await timed(legacy(body, () => my === run && !gone));
       } else {
         body.innerHTML = `<p class="scr-state" data-acc-pending="1">${esc(t('common.underConstructionText'))}</p>`;
         body.dataset.state = 'ready';

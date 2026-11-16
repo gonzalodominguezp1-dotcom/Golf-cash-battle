@@ -1,8 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fakeEnv } from './helpers/fakeEnv.js';
+import { readFileSync } from 'node:fs';
 import { createScope } from '../src/screens/lifecycle.js';
-import { mount, isValidAmount, isSafeInvoiceUrl } from '../src/screens/account/wallet.js';
+import { createRoutes } from '../src/screens/routes.js';
+import { mount, isValidAmount, isSafeInvoiceUrl } from '../src/screens/monedero.js';
+
+test('monedero: la ruta wallet es #/monedero, carga src/screens/monedero.js y el glob la incluye', async () => {
+  const modules = { './monedero.js': () => import('../src/screens/monedero.js') };
+  const route = createRoutes({ modules }).find((r) => r.id === 'wallet');
+  assert.equal(route.hash, '#/monedero');
+  const mod = await route.load();
+  assert.equal(mod.mount, mount);
+  assert.match(readFileSync(new URL('../src/screens/routes.js', import.meta.url), 'utf8'), /'\.\/monedero\.js'/);
+});
 
 // DOM falso mínimo: parsea los elementos con data-* del HTML que escribe el módulo y expone querySelector(All),
 // dataset, disabled, textContent y addEventListener/removeEventListener. Todo elemento creado se registra en `all`

@@ -1,22 +1,22 @@
-// Cuenta › Monedero (T035): saldo, historial y recarga demo que vivían en main.js (walletPane / bindWallet).
+// Pantalla Monedero (ruta #/monedero; antes Cuenta › Monedero, T035): saldo, historial y recarga demo que vivían en main.js.
 // Movido casi tal cual; la economía no cambia (el servidor cobra, premia y recarga). Seguridad (tier 2):
 // - el saldo sale solo de wallet.getBalance(), sin caché entre sesiones (S5.7); el aviso de saldo solo repinta el DOM;
 // - el importe de la recarga se valida como número positivo finito antes de enviar;
 // - las descripciones del historial pasan por esc() (XSS);
 // - la redirección de pago en cripto solo acepta https;
 // - nada de esto va a consola, URL ni storage.
-import { listState } from '../components.js';
-import { coin, esc, fmt } from '../shared.js';
-import { t } from '../texts/index.js';
-import '../texts/common.js';
-import '../texts/account.js';
+import { bindHeader, bindLobby, button, header, lobbyButton } from './components.js';
+import { coin, esc, fmt } from './shared.js';
+import { t } from './texts/index.js';
+import './texts/common.js';
+import './texts/monedero.js';
 
-const NET_TIMEOUT_MS = 8000; // una red que no responde no deja la pestaña colgada: error con Reintentar
+const NET_TIMEOUT_MS = 8000; // una red que no responde no deja la pantalla colgada: error con Reintentar
 const DEPOSIT_AMOUNTS = [50, 200];
 const CRYPTO_AMOUNTS = [10, 25, 50];
 const TX_KEYS = {
-  bonus: 'account.walletTxBonus', withdrawal: 'account.walletTxWithdrawal', deposit: 'account.walletTxDeposit',
-  entry: 'account.walletTxEntry', prize: 'account.walletTxPrize', refund: 'account.walletTxRefund',
+  bonus: 'wallet.walletTxBonus', withdrawal: 'wallet.walletTxWithdrawal', deposit: 'wallet.walletTxDeposit',
+  entry: 'wallet.walletTxEntry', prize: 'wallet.walletTxPrize', refund: 'wallet.walletTxRefund',
 };
 
 /** Importe válido para una recarga: número finito y mayor que cero. */
@@ -39,44 +39,44 @@ function walletHtml({ balance, txs, crypto, icon }) {
             <div class="card-chip-badge"><span class="card-chip"></span><span class="card-contactless">)))</span></div>
           </div>
           <div class="card-balance">
-            <small>${esc(t('account.walletBalance'))}</small>
+            <small>${esc(t('wallet.walletBalance'))}</small>
             <strong data-wallet-balance="1">${coin(balance)}</strong>
           </div>
           <div class="card-footer">
             <div class="card-number">•••• •••• •••• ${String(Math.abs(Math.round(balance * 100)) % 9000 + 1000)}</div>
-            <div class="card-holder"><small>${esc(t('account.walletHolder'))}</small><span>${esc(t('account.walletHolderName'))}</span></div>
+            <div class="card-holder"><small>${esc(t('wallet.walletHolder'))}</small><span>${esc(t('wallet.walletHolderName'))}</span></div>
           </div>
         </div>
         <div class="wallet-metrics">
           <div class="metric-card">
-            <small>${esc(t('account.walletPrizes'))}</small>
+            <small>${esc(t('wallet.walletPrizes'))}</small>
             <b>${coin(prizeTotal)}</b>
           </div>
           <div class="metric-card">
-            <small>${esc(t('account.walletMatches'))}</small>
+            <small>${esc(t('wallet.walletMatches'))}</small>
             <b>${esc(matchesPlayed)}</b>
           </div>
         </div>
         <div class="deposit-section">
-          <h3>${esc(t('account.walletDepositTitle'))}</h3>
+          <h3>${esc(t('wallet.walletDepositTitle'))}</h3>
           <div class="row deposit-row">
-            ${DEPOSIT_AMOUNTS.map((n) => `<button type="button" class="primary deposit-btn" data-add="${n}">${icon('coins')}<span>${esc(t('account.walletAdd', { n }))}</span> ${esc(t('account.walletCredits'))}</button>`).join('')}
+            ${DEPOSIT_AMOUNTS.map((n) => `<button type="button" class="primary deposit-btn" data-add="${n}">${icon('coins')}<span>${esc(t('wallet.walletAdd', { n }))}</span> ${esc(t('wallet.walletCredits'))}</button>`).join('')}
           </div>
           <p class="sub" role="alert" data-wallet-error="1"></p>
         </div>
         ${crypto
       ? `<div class="crypto-section">
-          <h3>${esc(t('account.walletCryptoTitle'))} <small class="tag">${esc(t('account.walletCryptoTag'))}</small></h3>
+          <h3>${esc(t('wallet.walletCryptoTitle'))} <small class="tag">${esc(t('wallet.walletCryptoTag'))}</small></h3>
           <div class="row">
-            ${CRYPTO_AMOUNTS.map((n) => `<button type="button" class="secondary" data-crypto="${n}">${icon('coins')}${esc(t('account.walletCryptoAmount', { n }))}</button>`).join('')}
+            ${CRYPTO_AMOUNTS.map((n) => `<button type="button" class="secondary" data-crypto="${n}">${icon('coins')}${esc(t('wallet.walletCryptoAmount', { n }))}</button>`).join('')}
           </div>
-          <p class="legal">${esc(t('account.walletCryptoLegal'))}</p>
+          <p class="legal">${esc(t('wallet.walletCryptoLegal'))}</p>
         </div>`
       : ''
     }
       </div>
       <div class="txs-container">
-        <h3>${esc(t('account.walletHistory'))}</h3>
+        <h3>${esc(t('wallet.walletHistory'))}</h3>
         <ul class="txs">
           ${txs.length
       ? txs.map((x) => `<li>
@@ -88,14 +88,15 @@ function walletHtml({ balance, txs, crypto, icon }) {
                         </div>
                         <span class="${x.amount >= 0 ? 'pos' : 'neg'}">${x.amount >= 0 ? '+' : ''}${esc(fmt(x.amount))}</span>
                       </li>`).join('')
-      : `<li class="empty"><p>${esc(t('account.walletEmpty'))}</p></li>`
+      : `<li class="empty"><p>${esc(t('wallet.walletEmpty'))}</p></li>`
     }
         </ul>
       </div>
     </div>`;
 }
 
-export function mount(el, ctx) {
+// Forma de pantalla: mount(root, ctx) no bloquea, devuelve { title, destroy }.
+export function mount(root, ctx) {
   const { wallet } = ctx;
   const scope = ctx.scope.child(); // todo lo del monedero cuelga de aquí
   const icon = (n, o = {}) => ctx.icon(n, o);
@@ -107,14 +108,32 @@ export function mount(el, ctx) {
   });
 
   const showError = (msg) => {
-    const box = el.querySelector('[data-wallet-error]');
+    const box = root.querySelector('[data-wallet-error]');
     if (box) box.textContent = msg;
   };
 
-  function paintState(state) {
+  // Cada repintado suelta lo del anterior (listeners e hijos) y escribe la pantalla entera: cabecera, cuerpo y Lobby.
+  function render(state, inner) {
     sc?.dispose();
     sc = scope.child();
-    listState(el, { state, errorText: t('account.walletLoadError'), onRetry: () => load(), scope: sc });
+    root.dataset.state = state;
+    root.innerHTML = `<main class="screen wallet-screen" aria-label="${esc(t('wallet.title'))}">
+      ${header({ title: t('wallet.title') })}
+      <div class="wallet-body">${inner}</div>
+      ${lobbyButton()}
+    </main>`;
+    bindHeader(root, { ...ctx, scope: sc });
+    bindLobby(root, { ...ctx, scope: sc });
+  }
+
+  function paintState(state) {
+    if (state === 'loading') {
+      render('loading', `<p class="scr-state" role="status">${esc(t('common.loading'))}</p>`);
+      return;
+    }
+    render('error', `<div class="scr-state scr-state-error" role="alert"><p>${esc(t('wallet.walletLoadError'))}</p>${button({ label: t('common.retry'), kind: 'secondary', attrs: 'data-retry' })}</div>`);
+    const retry = root.querySelector('[data-retry]');
+    if (retry) sc.on(retry, 'click', () => load());
   }
 
   // Cada lectura tiene su número: una respuesta vieja (red lenta) nunca pisa a la última pedida.
@@ -133,25 +152,22 @@ export function mount(el, ctx) {
   }
 
   function paint(balance, txs) {
-    sc?.dispose();
-    sc = scope.child();
-    listState(el, { state: 'ready' });
-    el.innerHTML = `<div class="wallet-pane">${walletHtml({ balance, txs, crypto: Boolean(wallet.depositCrypto), icon })}</div>`;
-    for (const b of el.querySelectorAll('[data-add]')) sc.on(b, 'click', () => deposit(b));
-    for (const b of el.querySelectorAll('[data-crypto]')) sc.on(b, 'click', () => crypto(b));
+    render('ready', `<div class="wallet-pane">${walletHtml({ balance, txs, crypto: Boolean(wallet.depositCrypto), icon })}</div>`);
+    for (const b of root.querySelectorAll('[data-add]')) sc.on(b, 'click', () => deposit(b));
+    for (const b of root.querySelectorAll('[data-crypto]')) sc.on(b, 'click', () => crypto(b));
   }
 
   async function deposit(b) {
     const amount = Number(b.dataset.add); // se lee al pulsar: el importe se valida justo antes de enviarlo
     showError('');
-    if (!isValidAmount(amount)) return showError(t('account.walletBadAmount'));
+    if (!isValidAmount(amount)) return showError(t('wallet.walletBadAmount'));
     b.disabled = true;
     try {
-      await wallet.deposit(amount, t('account.walletDepositNote'));
+      await wallet.deposit(amount, t('wallet.walletDepositNote'));
     } catch (e) {
       if (gone) return;
       b.disabled = false;
-      return showError(e?.code === 'daily_cap' ? t('account.walletDailyCap') : t('account.walletDepositError'));
+      return showError(e?.code === 'daily_cap' ? t('wallet.walletDailyCap') : t('wallet.walletDepositError'));
     }
     if (gone) return;
     ctx.sfx?.coins?.();
@@ -161,7 +177,7 @@ export function mount(el, ctx) {
   async function crypto(b) {
     const amount = Number(b.dataset.crypto);
     showError('');
-    if (!isValidAmount(amount)) return showError(t('account.walletBadAmount'));
+    if (!isValidAmount(amount)) return showError(t('wallet.walletBadAmount'));
     b.disabled = true;
     try {
       const { invoiceUrl } = await wallet.depositCrypto(amount);
@@ -170,20 +186,21 @@ export function mount(el, ctx) {
     } catch (e) {
       if (gone) return;
       b.disabled = false;
-      showError(e?.code === 'not_configured' ? t('account.walletCryptoOff') : t('account.walletCryptoError'));
+      showError(e?.code === 'not_configured' ? t('wallet.walletCryptoOff') : t('wallet.walletCryptoError'));
     }
   }
 
   // saldo en vivo: solo repinta el número que ya está en pantalla (no se guarda en ninguna variable)
   scope.sub(wallet?.subscribe?.((n) => {
     if (gone) return;
-    const box = el.querySelector('[data-wallet-balance]');
+    const box = root.querySelector('[data-wallet-balance]');
     if (box) box.innerHTML = coin(n);
   }));
 
-  listState(el, { state: 'loading' });
+  render('loading', `<p class="scr-state" role="status">${esc(t('common.loading'))}</p>`);
   load(); // sin esperar: el host serializa los montajes y una red lenta no debe bloquear «Atrás»
   return {
+    title: t('wallet.title'),
     destroy() {
       gone = true;
       run++;

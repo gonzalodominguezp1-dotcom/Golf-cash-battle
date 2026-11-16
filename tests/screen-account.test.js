@@ -730,7 +730,7 @@ test('account: cabecera con Volver, pestañas y Perfil por defecto; las claves r
     assert.match(root.innerHTML, /Cuenta/);
     assert.match(root.innerHTML, /data-back/);
     assert.match(root.innerHTML, /data-acc-tab="perfil" class="on"/);
-    assert.match(root.innerHTML, /Monedero/);
+    assert.doesNotMatch(root.innerHTML, /Monedero/);
     assert.match(root.innerHTML, /Progreso/);
     assert.match(root.querySelector('[data-acc-body]').innerHTML, /Ana_1/);
     root.querySelector('[data-back]').emit('click');
@@ -747,32 +747,29 @@ test('account: las pestañas cambian la ruta con replace; la actual no hace nada
   const screen = await mountAccount(root, ctx, {}, { modules: MODS });
   await settle();
   root.querySelector('[data-acc-tab="perfil"]').emit('click');
-  root.querySelector('[data-acc-tab="monedero"]').emit('click');
   root.querySelector('[data-acc-tab="progreso"]').emit('click');
-  assert.deepEqual(calls.replace, [['account', { tab: 'monedero' }], ['account', { tab: 'progreso' }]]);
+  assert.deepEqual(calls.replace, [['account', { tab: 'progreso' }]]);
   screen.destroy();
 });
 
-test('account: Monedero y Progreso sin archivo muestran «En construcción»; Monedero usa el hueco heredado si existe', async () => {
-  for (const tab of ['monedero', 'progreso']) {
+test('account: Progreso sin archivo muestra «En construcción»; #/cuenta/monedero antiguo muestra Perfil (sin pestaña Monedero)', async () => {
+  {
     const env = fakeEnv();
     const root = fakeNode(env);
     const { ctx } = makeCtx(env);
-    const screen = await mountAccount(root, ctx, { tab }, { modules: MODS });
+    const screen = await mountAccount(root, ctx, { tab: 'progreso' }, { modules: MODS });
     await settle();
-    assert.match(root.innerHTML, new RegExp(`data-acc-tab="${tab}" class="on"`));
+    assert.match(root.innerHTML, /data-acc-tab="progreso" class="on"/);
     assert.match(root.querySelector('[data-acc-body]').innerHTML, /Esta pantalla llegará pronto\./);
     screen.destroy();
   }
   const env = fakeEnv();
   const root = fakeNode(env);
-  const seen = [];
   const { ctx } = makeCtx(env);
-  ctx.legacy = { 'account.monedero': async (el, alive) => { seen.push(alive()); el.innerHTML = '<p>saldo heredado</p>'; } };
   const screen = await mountAccount(root, ctx, { tab: 'monedero' }, { modules: MODS });
   await settle();
-  assert.deepEqual(seen, [true]);
-  assert.match(root.querySelector('[data-acc-body]').innerHTML, /saldo heredado/);
+  assert.doesNotMatch(root.innerHTML, /data-acc-tab="monedero"/);
+  assert.match(root.innerHTML, /data-acc-tab="perfil" class="on"/);
   screen.destroy();
 });
 
@@ -781,10 +778,10 @@ test('account: una pestaña que existe se carga por convención y recibe un scop
   const root = fakeNode(env);
   const { ctx } = makeCtx(env);
   let destroyed = 0, got = null;
-  const modules = { './account/wallet.js': async () => ({ mount: (el, c, p) => { got = { el, c, p }; c.scope.on(env.win, 'resize', () => {}); return { destroy() { destroyed++; } }; } }) };
-  const screen = await mountAccount(root, ctx, { tab: 'monedero' }, { modules });
+  const modules = { './account/progress.js': async () => ({ mount: (el, c, p) => { got = { el, c, p }; c.scope.on(env.win, 'resize', () => {}); return { destroy() { destroyed++; } }; } }) };
+  const screen = await mountAccount(root, ctx, { tab: 'progreso' }, { modules });
   await settle();
-  assert.equal(got.p.tab, 'monedero');
+  assert.equal(got.p.tab, 'progreso');
   assert.ok(ctx.scope.live().listeners > 0, 'había algo vivo antes de destruir');
   screen.destroy();
   assert.equal(destroyed, 1);
@@ -826,7 +823,7 @@ test('account: 20 montajes y destroy sin fugas', async () => {
 test('account: sin Vite el glob no existe; en el build lo resuelve con nombres literales', () => {
   assert.throws(() => tabModules());
   const src = readFileSync(new URL('../src/screens/account.js', import.meta.url), 'utf8');
-  assert.match(src, /import\.meta\.glob\(\['\.\/account\/profile\.js', '\.\/account\/wallet\.js', '\.\/account\/progress\.js'\]\)/);
+  assert.match(src, /import\.meta\.glob\(\['\.\/account\/profile\.js', '\.\/account\/progress\.js'\]\)/);
 });
 
 test('account: Reintentar de la pestaña tras un fallo de carga, y un mount que lanza deja error sin fugas', async () => {

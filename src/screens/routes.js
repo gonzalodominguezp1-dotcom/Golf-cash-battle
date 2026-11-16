@@ -7,13 +7,13 @@ import './texts/common.js';
 // id de ruta -> archivo de la pantalla en src/screens/ (sin extensión)
 const FILES = {
   hub: 'hub', tables: 'tables', achievements: 'achievements', friends: 'friends', ranking: 'ranking',
-  skins: 'skins', skin: 'skinInspect', account: 'account', settings: 'settings', maps: 'maps',
+  skins: 'skins', skin: 'skinInspect', account: 'account', wallet: 'monedero', settings: 'settings', maps: 'maps',
 };
 
 // Glob por nombres literales: Vite tolera los que aún no existen (un import() literal fallaría).
 export const screenModules = () => import.meta.glob([
   './hub.js', './tables.js', './achievements.js', './friends.js', './ranking.js',
-  './skins.js', './skinInspect.js', './account.js', './settings.js', './maps.js',
+  './skins.js', './skinInspect.js', './account.js', './monedero.js', './settings.js', './maps.js',
 ]);
 
 // Adaptador de legado o marcador «en construcción». `manages`: la pantalla pinta #app por su cuenta.
@@ -54,6 +54,7 @@ export function createRoutes({ root = 'lobby', modules = screenModules() } = {})
     r('skins', '#/skins'),
     r('skin', '#/skins/:id', { parent: 'skins' }),
     r('account', '#/cuenta/:tab?'),
+    r('wallet', '#/monedero'),
     r('settings', '#/ajustes'),
     r('maps', '#/mapas'),
     r('play', '#/jugar', { restorable: false }),

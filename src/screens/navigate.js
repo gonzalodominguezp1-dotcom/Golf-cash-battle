@@ -1,11 +1,11 @@
 // Navegación de las secciones heredadas: traduce los destinos de main.js (`data-go`, atajos 1-6) a rutas.
 // Si el host está ocupado (carga + transición), recuerda solo el último destino y lo aplica al quedar libre.
 export const GO_ROUTES = {
-  wallet: ['account', { tab: 'monedero' }], skins: ['skins'], account: ['account'],
+  wallet: ['wallet'], skins: ['skins'], account: ['account'],
   tables: ['tables'], ranking: ['ranking'], freeplay: ['maps'], settings: ['settings'],
 };
 // pestañas de la ruta de cuenta -> nombres que usaba la Cuenta heredada (solo lo usa su test; T039 lo limpia)
-export const ACCOUNT_TABS = { perfil: 'profile', progreso: 'profile', monedero: 'wallet' };
+export const ACCOUNT_TABS = { perfil: 'profile', progreso: 'profile' };
 
 const same = (a, b) => a.id === b.id && JSON.stringify(a.params) === JSON.stringify(b.params);
 
