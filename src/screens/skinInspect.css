@@ -1,25 +1,52 @@
-/* Inspector de skin (T033): pantalla completa apilada; el visor 3D lo pinta src/ui/skinInspector.js dentro de .sk-view-canvas. */
+/* Inspector de skin (T033): pantalla apilada. El visor 3D lo pinta src/ui/skinInspector.js dentro de .sk-view-canvas.
+   Diseño del visor: sin marcos; título, flechas, candado y acciones flotan sobre la bola, transparentes. */
 .sk-inspect { display: flex; flex-direction: column; height: 100dvh; max-height: 100dvh; overflow-x: hidden; overflow-y: auto; background: #080b10; }
-.sk-inspect .sk-view-stage { position: relative; flex: 1 1 auto; min-height: 220px; display: flex; }
+.sk-inspect .sk-view-stage { position: relative; flex: 1 1 auto; min-height: 260px; display: flex; overflow: hidden; }
 .sk-inspect .sk-view-canvas { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; }
 .sk-inspect .sk-view-canvas > .sk-insp { flex: 1 1 auto; min-width: 0; border-radius: 0; }
+/* nombre de la skin en el centro, con su categoría debajo */
+.sk-inspect .sk-view-title { position: absolute; top: 12px; left: 64px; right: 64px; z-index: 4; display: flex; flex-direction: column; align-items: center; min-width: 0; text-align: center; pointer-events: none; }
+.sk-inspect .sk-view-title b { font: 900 clamp(26px, 6vw, 34px)/1.05 var(--display); color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; text-shadow: 0 2px 16px rgba(0, 0, 0, 0.6); }
+/* categoría: degradado en el color del tier que recorre el texto en bucle */
+.sk-inspect .sk-view-title small {
+  margin-top: 6px; font: 900 clamp(14px, 3.4vw, 18px)/1.2 var(--body); letter-spacing: 0.2em; text-transform: uppercase;
+  background: linear-gradient(90deg, var(--tier, #fff) 0%, #ffffff 30%, var(--tier, #fff) 60%, var(--tier, #fff) 100%);
+  background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--tier, #fff) 60%, transparent));
+  animation: sk-tier-shine 2.4s linear infinite;
+}
+@keyframes sk-tier-shine { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+/* flechas anterior/siguiente: ocultas si solo hay una skin; foco visible con teclado */
+.sk-inspect .sk-view-nav { position: absolute; top: 50%; transform: translateY(-50%); z-index: 5; width: 44px; height: 44px; border-radius: 999px; display: grid; place-items: center; padding: 0; border: 1px solid var(--edge, #fff); background: rgba(8, 10, 16, 0.8); color: var(--edge, #fff); cursor: pointer; }
+.sk-inspect .sk-view-nav svg { width: 22px; height: 22px; }
+.sk-inspect .sk-view-nav.prev { left: 10px; }
+.sk-inspect .sk-view-nav.next { right: 10px; }
+.sk-inspect .sk-view-nav[hidden] { display: none; }
+/* imagen estática mientras se descarga el visor 3D */
 .sk-inspect .sk-view-poster { margin: auto; width: min(56vmin, 300px); aspect-ratio: 1; object-fit: contain; border-radius: 50%; filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.55)); }
-.sk-inspect .sk-view-loading { position: absolute; left: 0; right: 0; bottom: 12px; margin: 0; text-align: center; color: var(--muted); font: 700 13px var(--body); pointer-events: none; }
+.sk-inspect .sk-view-loading { position: absolute; left: 0; right: 0; bottom: 72px; z-index: 3; margin: 0; text-align: center; color: var(--muted); font: 700 13px var(--body); pointer-events: none; }
 .sk-inspect .sk-view-loading[hidden] { display: none; }
-.sk-inspect .sk-view-lock { position: absolute; inset: 0; z-index: 3; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding: 16px 16px 64px; box-sizing: border-box; gap: 10px; }
+/* bloqueada: candado sobre la bola y el progreso para desbloquearla */
+.sk-inspect .sk-view-lock { position: absolute; inset: 0; z-index: 3; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding: 16px 16px 120px; box-sizing: border-box; gap: 10px; }
 .sk-inspect .sk-view-lock[hidden] { display: none; }
 .sk-inspect .sk-view-lock .sk-lock-big { position: static; transform: none; width: 64px; height: 64px; padding: 16px; }
-.sk-inspect .sk-view-lock .bar { width: min(360px, 100%); height: 6px; }
+.sk-inspect .sk-view-req { display: grid; gap: 6px; width: min(360px, 100%); }
+.sk-inspect .sk-view-req small { font: 700 13px var(--body); color: #fff; text-align: center; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8); }
+.sk-inspect .sk-view-req .bar { height: 6px; }
+/* acciones flotando sobre la bola, sin fondo */
+.sk-inspect .sk-view-actions { position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; display: flex; justify-content: center; align-items: center; padding: 10px calc(env(safe-area-inset-right, 0px) + 14px) calc(10px + env(safe-area-inset-bottom, 0px)) calc(env(safe-area-inset-left, 0px) + 14px); pointer-events: none; }
+.sk-inspect .sk-view-actions .primary { pointer-events: auto; min-width: 150px; min-height: 44px; }
 .sk-inspect .sk-view-info { flex: none; display: grid; gap: 6px; padding: 10px calc(env(safe-area-inset-right, 0px) + 14px) 4px calc(env(safe-area-inset-left, 0px) + 14px); border-top: 1px solid var(--line); background: rgba(14, 19, 28, 0.97); }
 .sk-inspect .sk-view-info p { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font: 600 14px var(--body); color: var(--text); }
 .sk-inspect .sk-view-info small { color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
 .sk-inspect .sk-view-tier { margin-left: auto; color: var(--muted); font-weight: 700; }
 .sk-inspect .sk-view-info .scr-btn { min-height: 44px; }
-.sk-inspect .sk-view-actions { flex: none; display: flex; padding: 10px calc(env(safe-area-inset-right, 0px) + 14px) calc(10px + env(safe-area-inset-bottom, 0px)) calc(env(safe-area-inset-left, 0px) + 14px); background: rgba(14, 19, 28, 0.97); }
-.sk-inspect .sk-view-actions .primary { margin-left: auto; min-width: 150px; min-height: 44px; }
-.sk-inspect .scr-back:focus-visible, .sk-inspect .primary:focus-visible, .sk-inspect .scr-btn:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.sk-inspect .scr-back:focus-visible, .sk-inspect .primary:focus-visible, .sk-inspect .scr-btn:focus-visible, .sk-inspect .sk-view-nav:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
 @media (max-height: 520px) {
-  .sk-inspect .sk-view-lock { padding-bottom: 12px; }
+  .sk-inspect .sk-view-lock { padding-bottom: 64px; }
   .sk-inspect .sk-view-lock .sk-lock-big { width: 44px; height: 44px; padding: 10px; }
   .sk-inspect .sk-view-poster { width: min(40vmin, 200px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk-inspect .sk-view-title small { animation: none; -webkit-background-clip: border-box; background-clip: border-box; color: var(--tier, #fff); background: none; }
 }

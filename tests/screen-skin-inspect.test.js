@@ -48,10 +48,10 @@ function fakeViewer(over = {}) {
 }
 
 function makeCtx(env, over = {}) {
-  const calls = { back: 0, push: [], notify: [] };
+  const calls = { back: 0, push: [], replace: [], notify: [] };
   const viewer = fakeViewer();
   const ctx = {
-    router: { push: (...a) => calls.push.push(a), back: () => { calls.back++; } },
+    router: { push: (...a) => calls.push.push(a), replace: (...a) => calls.replace.push(a), back: () => { calls.back++; } },
     scope: createScope({ win: env.win, doc: env.doc, timers: env.timers }),
     progress: makeProgress(),
     thumbs: { cached: () => null, preview: (s) => `data:preview/${s.id}` },
@@ -221,22 +221,75 @@ test('skin-inspect: destroy antes de que llegue three no crea el visor', async (
   assert.equal(viewer.created.length, 0);
 });
 
-test('skin-inspect: 20 montajes y destroy sin fugas y con todos los visores liberados', async () => {
+test('skin-inspect: 20 ciclos mount/destroy sin fugas (medido tras destroy y SIN dispose)', async () => {
   const env = fakeEnv();
   const { ctx, viewer } = makeCtx(env);
   for (let i = 0; i < 20; i++) {
     const root = fakeRoot(env);
     const h = await mount(root, ctx, { id: i % 2 ? 'mint' : LOCKED.id });
     await settle();
-    if (i === 0) assert.ok(ctx.scope.live().listeners > 0, 'el bucle no pasa en vacío');
+    const alive = ctx.scope.live();
+    assert.ok(alive.listeners > 0, `el ciclo ${i} no tenía nada vivo: ${JSON.stringify(alive)}`);
+    assert.equal(viewer.created.length, i + 1, `el visor ${i} no se creó`);
     h.destroy();
+    assert.deepEqual(ctx.scope.live(), { listeners: 0, timers: 0, subs: 0 }, `fuga en el ciclo ${i}`);
+    assert.equal(env.liveListeners(), 0, `listeners del DOM vivos en el ciclo ${i}`);
+    assert.equal(env.liveTimers(), 0, `timers vivos en el ciclo ${i}`);
   }
-  assert.deepEqual(ctx.scope.live(), { listeners: 0, timers: 0, subs: 0 });
   assert.equal(viewer.created.length, 20);
   assert.equal(viewer.destroyed, 20);
-  ctx.scope.dispose();
-  assert.equal(env.liveListeners(), 0);
-  assert.equal(env.liveTimers(), 0);
+});
+
+test('skin-inspect: flechas pasan a la skin anterior/siguiente con replace y dan la vuelta', async () => {
+  const env = fakeEnv();
+  const first = SKINS[0].id, last = SKINS[SKINS.length - 1].id;
+  let root = fakeRoot(env);
+  let { ctx, calls } = makeCtx(env);
+  let h = await mount(root, ctx, { id: first });
+  root.querySelector('.sk-view-nav.prev').emit('click');
+  assert.deepEqual(calls.replace, [['skin', { id: last }]], 'anterior desde la primera da la vuelta a la última');
+  h.destroy();
+  root = fakeRoot(env);
+  ({ ctx, calls } = makeCtx(env));
+  h = await mount(root, ctx, { id: last });
+  root.querySelector('.sk-view-nav.next').emit('click');
+  assert.deepEqual(calls.replace, [['skin', { id: first }]], 'siguiente desde la última da la vuelta a la primera');
+  assert.equal(calls.push.length, 0);
+  h.destroy();
+});
+
+test('skin-inspect: flechas del teclado cambian de skin mientras la pantalla vive y dejan de escucharse al destruir', async () => {
+  const env = fakeEnv();
+  const root = fakeRoot(env);
+  const { ctx, calls } = makeCtx(env);
+  const mid = SKINS[1].id;
+  const h = await mount(root, ctx, { id: mid });
+  env.doc.emit('keydown', { key: 'ArrowRight' });
+  assert.deepEqual(calls.replace, [['skin', { id: SKINS[2].id }]]);
+  // dos flechas seguidas (la pantalla nueva aún no ha montado) = dos skins, no una
+  env.doc.emit('keydown', { key: 'ArrowRight' });
+  assert.deepEqual(calls.replace.at(-1), ['skin', { id: SKINS[3].id }]);
+  env.doc.emit('keydown', { key: 'a' });
+  env.doc.emit('keydown', { key: 'ArrowLeft', altKey: true }); // Alt+flecha es atrás del navegador
+  env.doc.emit('keydown', { key: 'ArrowRight', repeat: true }); // tecla mantenida no navega
+  assert.equal(calls.replace.length, 2);
+  h.destroy();
+  env.doc.emit('keydown', { key: 'ArrowRight' });
+  assert.equal(calls.replace.length, 2, 'tras destroy no responde');
+});
+
+test('skin-inspect: título con la categoría del tier, texto de flechas por t() y animación de categoría anulada con reduced-motion', async () => {
+  const env = fakeEnv();
+  const root = fakeRoot(env);
+  const { ctx } = makeCtx(env);
+  const h = await mount(root, ctx, { id: 'mint' });
+  assert.match(root.innerHTML, /sk-view-title/);
+  assert.match(root.innerHTML, /aria-label="Skin anterior"/);
+  assert.match(root.innerHTML, /aria-label="Skin siguiente"/);
+  h.destroy();
+  const css = readFileSync(new URL('../src/screens/skinInspect.css', import.meta.url), 'utf8');
+  const rm = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'));
+  assert.ok(rm.includes('.sk-view-title small { animation: none'), 'la categoría deja de animarse con reduced-motion');
 });
 
 test('skin-inspect: el botón Volver llama al router', async () => {
@@ -281,6 +334,9 @@ test('skin-inspect: sin la palabra vieja de los logros; CSS sin :hover; three no
     assert.doesNotMatch(readFileSync(new URL(`../src/screens/${f}`, import.meta.url), 'utf8'), old, f);
   }
   assert.doesNotMatch(readFileSync(new URL('../src/screens/skinInspect.css', import.meta.url), 'utf8'), /:hover/);
+  for (const f of ['skinInspect.js', 'skinInspect.css', '../ui/skinInspector.js', '../ui/skinInspector.css']) {
+    assert.doesNotMatch(readFileSync(new URL('../src/screens/' + f, import.meta.url), 'utf8'), /desaf.{1,2}o/i, f);
+  }
   const src = readFileSync(new URL('../src/screens/skinInspect.js', import.meta.url), 'utf8');
   assert.doesNotMatch(src, /from 'three'|skinInspector\.js/);
 });

@@ -25,5 +25,7 @@ register('skins', {
   inspectEquip: 'Equipar',
   inspectEquipped: 'Skin equipada: {name}',
   inspectViewer: 'Cargando visor 3D…',
+  navPrev: 'Skin anterior',
+  navNext: 'Skin siguiente',
   inspectUnknown: 'Esa skin no existe o no está disponible. Volvemos a Skins.',
 });

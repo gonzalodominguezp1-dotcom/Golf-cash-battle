@@ -1,5 +1,6 @@
 // Inspector de skin (T033): pantalla apilada #/skins/:id. Sustituye al modal heredado de main.js.
 // El visor 3D (three.js) llega con ctx.loadViewer() -> import() dinámico; sin él (o sin WebGL) queda el marcador 2D.
+// Las flechas pasan a la skin anterior/siguiente en el orden de SKINS (da la vuelta al final) con router.replace.
 import { SKINS, TIERS as SKIN_TIERS } from '../progress/skins.js';
 import { tierIcon } from '../ui/icons.js';
 import { bindHeader, button, header } from './components.js';
@@ -22,21 +23,26 @@ export async function mount(root, ctx, params = {}) {
   }
   const icon = (n, o = {}) => ctx.icon(n, o);
   const inst = progress.instance(skin.id);
+  const tierColor = SKIN_TIERS[skin.tier]?.color ?? '#ffffff';
   const poster = `<img class="sk-view-poster" src="${esc(thumbs.cached(skin, inst) || thumbs.preview(skin, 288))}" alt="" draggable="false">`;
   const logro = !!skin.unlock?.challenge;
-  root.innerHTML = `<main class="screen sk-inspect rarity-${esc(skin.tier)}" aria-label="${esc(t('skins.inspectLabel', { name: skin.name }))}">
-    ${header({ title: skin.name })}
+  const multi = SKINS.length > 1;
+  root.innerHTML = `<main class="screen sk-inspect rarity-${esc(skin.tier)}" style="--tier:${esc(tierColor)}" aria-label="${esc(t('skins.inspectLabel', { name: skin.name }))}">
+    ${header({ title: t('skins.title') })}
     <div class="sk-view-stage">
+      <div class="sk-view-title"><b>${esc(skin.name)}</b><small>${esc(SKIN_TIERS[skin.tier]?.name ?? '')}</small></div>
+      <button type="button" class="sk-view-nav prev" aria-label="${esc(t('skins.navPrev'))}"${multi ? '' : ' hidden'}>${icon('back')}</button>
+      <button type="button" class="sk-view-nav next" aria-label="${esc(t('skins.navNext'))}"${multi ? '' : ' hidden'}>${icon('next')}</button>
       <div class="sk-view-canvas" data-sk-canvas>${poster}</div>
-      <div class="sk-view-lock" data-sk-lock hidden><span class="sk-lock sk-lock-big" aria-hidden="true">${icon('lock')}</span><span class="bar"><i data-sk-bar></i></span></div>
+      <div class="sk-view-lock" data-sk-lock hidden><span class="sk-lock sk-lock-big" aria-hidden="true">${icon('lock')}</span><div class="sk-view-req"><small data-sk-req></small><span class="bar"><i data-sk-bar></i></span></div></div>
       <p class="sk-view-loading" role="status" data-sk-loading>${esc(t('skins.inspectViewer'))}</p>
+      <div class="sk-view-actions"><button type="button" class="primary sk-equip" data-sk-equip></button></div>
     </div>
     <section class="sk-view-info">
       <p><small>${esc(t('skins.inspectState'))}</small><b data-sk-state></b><span class="sk-view-tier">${tierIcon(skin.tier)} ${esc(SKIN_TIERS[skin.tier]?.name ?? '')}</span></p>
       <p><small>${esc(t('skins.inspectHow'))}</small><span data-sk-how></span>${logro ? button({ label: t('skins.logrosLink'), attrs: 'data-go="achievements"' }) : ''}</p>
       <p class="sr-only" role="status" data-sk-live></p>
     </section>
-    <div class="sk-view-actions"><button type="button" class="primary sk-equip" data-sk-equip></button></div>
   </main>`;
   bindHeader(root, { ...ctx, scope });
   const box = root.querySelector('[data-sk-canvas]');
@@ -54,6 +60,7 @@ export async function mount(root, ctx, params = {}) {
     equipBtn.disabled = eq || !open;
     equipBtn.innerHTML = eq ? `${icon('check')}${esc(t('skins.stateEquipped'))}` : esc(t(open ? 'skins.inspectEquip' : 'skins.stateLocked'));
     lockBox.hidden = open;
+    root.querySelector('[data-sk-req]').textContent = req.text;
     root.querySelector('[data-sk-how]').textContent = t(logro ? 'skins.inspectHowLogro' : 'skins.inspectHowReq', { text: req.text });
     root.querySelector('[data-sk-bar]').style.width = `${req.ratio * 100}%`;
   };
@@ -66,11 +73,29 @@ export async function mount(root, ctx, params = {}) {
   if (logro) scope.on(root.querySelector('[data-go="achievements"]'), 'click', () => ctx.router.push('achievements'));
   root.querySelector('[data-back]')?.focus?.({ preventScroll: true });
 
+  // navegación: la skin anterior/siguiente en el orden de SKINS, dando la vuelta al final; cambia la ruta (replace)
+  // «target» avanza con cada pulsación aunque la pantalla nueva aún esté montando: dos flechas seguidas = dos skins
+  let target = SKINS.findIndex((s) => s.id === skin.id);
+  const go = (delta) => {
+    if (!multi) return;
+    target = (target + delta + SKINS.length) % SKINS.length;
+    const next = SKINS[target];
+    if (next && next.id !== skin.id) ctx.router.replace('skin', { id: next.id });
+  };
+  scope.on(root.querySelector('.sk-view-nav.prev'), 'click', () => go(-1));
+  scope.on(root.querySelector('.sk-view-nav.next'), 'click', () => go(1));
+  if (multi && scope.doc) scope.on(scope.doc, 'keydown', (e) => {
+    // Alt+flechas es atrás/adelante del navegador; con modificadores o tecla mantenida no se navega
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.repeat) return;
+    if (e.key === 'ArrowLeft') go(-1);
+    else if (e.key === 'ArrowRight') go(1);
+  });
+
   // el visor 3D (three.js + materiales) se descarga solo ahora; mount no lo espera
   const stop = () => { if (loading) loading.hidden = true; };
   Promise.resolve().then(() => ctx.loadViewer()).then((create) => {
     if (gone) return;
-    viewer = create(box, { skin, instance: inst ?? undefined, mode: 'fullscreen' });
+    viewer = create(box, { skin, instance: inst ?? undefined, mode: 'fullscreen', autoSpin: true, noEnv: true });
     if (viewer?.stats?.().webgl === false) { // sin WebGL: se libera el visor y vuelve el marcador 2D
       try { viewer.destroy(); } catch { /* ya no se usa */ }
       viewer = null;
