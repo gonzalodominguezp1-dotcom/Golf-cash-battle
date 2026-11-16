@@ -1,0 +1,2 @@
+/* Mapas (T038): el título de la cabecera es el h1; el del bloque de bienvenida es h2 con el mismo aspecto de siempre. */
+.freeplay-select .section-title-row h2 { margin: 0; font-size: 26px; letter-spacing: -0.02em; }

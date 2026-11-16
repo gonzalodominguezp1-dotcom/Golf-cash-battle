@@ -7,6 +7,7 @@ import './screens/ranking.css';
 import './screens/skins.css';
 import './screens/skinInspect.css';
 import './screens/account.css';
+import './screens/maps.css';
 import { HOLE_TIME_LIMIT, PLAYERS_PER_MATCH, TIERS, maxStrokesOf, potFor } from './config.js';
 import { LocalWallet } from './wallet/LocalWallet.js';
 import { InsufficientFundsError } from './wallet/WalletService.js';
@@ -24,7 +25,6 @@ import { framesUnlocked, frameStyle } from './progress/prestige.js';
 import { ballPreview } from './game/render/ballPaint.js';
 import { showSkinReveal } from './ui/skinReveal.js';
 import { installThumbObserver, thumbCached, upgradeImg, warmThumbs } from './ui/skinThumbs.js';
-import { getCourseDistance, staticCoursePreview } from './game/render/coursePreviewStatic.js';
 import { mountAuth } from './ui/authScreen.js';
 import { LiveRoom } from './match/LiveRoom.js';
 import { buildRoster, humanLeaders, liveStandings, seededRng } from './match/liveRules.js';
@@ -577,7 +577,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
           game.setPaused?.(false);
           game.dispose();
           if (onSelectMap) onSelectMap();
-          else showFreePlayCourseSelect();
+          else go('freeplay');
         });
       }
 
@@ -674,7 +674,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         game.exitPointerLock?.();
         game.dispose();
         if (onSelectMap) onSelectMap();
-        else showFreePlayCourseSelect();
+        else go('freeplay');
       });
       const onKeyR = (e) => {
         if (e.code === 'KeyR' && !game?.paused && !view.querySelector('.in-game-settings-overlay')) {
@@ -1473,169 +1473,6 @@ function alertMsg(text) {
 
 // ---------- juego libre en solitario ----------
 
-const THEME_INFO = {
-  meadow: { name: 'Pradera', icon: '', color: '#5cc24a' },
-  meadowDay: { name: 'Pradera de Día', icon: '', color: '#6fd24f' },
-  beach: { name: 'Playa', icon: '', color: '#2fe0ff' },
-  sunset: { name: 'Atardecer', icon: '', color: '#ff9a5c' },
-  snow: { name: 'Nieve', icon: '', color: '#90d7ff' },
-  glacier: { name: 'Glaciar', icon: '', color: '#9fd6ee' },
-  canyon: { name: 'Cañón', icon: '', color: '#e58f4a' },
-  autumn: { name: 'Otoño', icon: '', color: '#e06b3a' },
-  night: { name: 'Noche', icon: '', color: '#7a8bff' },
-  gardenNight: { name: 'Jardín Nocturno', icon: '', color: '#da70d6' },
-  volcano: { name: 'Volcán', icon: '', color: '#ff4d2e' },
-  beachNight: { name: 'Playa Nocturna', icon: '', color: '#00d2be' },
-  neon: { name: 'Neón Cyberpunk', icon: '', color: '#00e5ff' },
-  neonPink: { name: 'Neón Magenta', icon: '', color: '#ff2e93' },
-};
-
-function getCourseFeatures(c) {
-  const feats = [];
-  if (c.loops?.length) feats.push('Looping');
-  if (c.windmills?.length) feats.push('Molino');
-  if (c.portals?.length) {
-    if (c.portals.some((p) => p.tube)) feats.push('Tubos');
-    else feats.push('Portales');
-  }
-  if (c.tunnels?.length) feats.push('Pasadizo');
-  if (c.boosts?.length) feats.push('Acelerador');
-  if (c.mounds?.length) feats.push('Volcán');
-  if (c.slopes?.length) feats.push('Pendiente');
-  if (c.movers?.length) feats.push('Bloques');
-  if (c.spinners?.length) feats.push('Aspas');
-  if (c.bumpers?.length) feats.push('Setas');
-  if (c.ice?.length) feats.push('Hielo');
-  if (c.sand?.length) feats.push('Arena');
-  return feats;
-}
-
-export async function showFreePlayCourseSelect() {
-  screen = 'freeplay';
-  const view = h(`
-    <main class="screen freeplay-select">
-      <div class="freeplay-select-hero">
-        <div class="freeplay-select-badge-row">
-          <span class="rarity-pill rarity-epic">Modo Práctica Libre</span>
-          <span class="hero-level-tag">${COURSES.length} Hoyos</span>
-        </div>
-        <div class="section-title-row">
-          <h1>Selector de Mapas</h1>
-          <span class="live-pill solo-live-pill"><i class="pulse-dot"></i> EN SOLITARIO</span>
-        </div>
-        <p class="freeplay-desc">Elige cualquier hoyo para entrenar a tu propio ritmo. Sin límite de tiempo, sin desafíos ni misiones y sin oponentes.</p>
-        <div class="freeplay-features-bar">
-          <span class="spec-chip">Sin límite de tiempo</span>
-          <span class="spec-chip">Sin rivales</span>
-          <span class="spec-chip">Tiros ilimitados</span>
-          <span class="spec-chip">Reinicio rápido [R]</span>
-        </div>
-      </div>
-
-      <div class="courses-grid"></div>
-
-      <div class="freeplay-footer-actions">
-        <button class="ghost back-to-lobby" data-go="home">${icon('back')}Volver al Menú Principal</button>
-      </div>
-    </main>
-  `);
-
-  const grid = view.querySelector('.courses-grid');
-  COURSES.forEach((course, idx) => {
-    const theme = THEME_INFO[course.theme] || { name: course.theme, icon: '', color: '#00f076' };
-    const feats = getCourseFeatures(course);
-    const dist = getCourseDistance(course);
-    const card = h(`
-      <div class="course-card holo theme--${course.theme}">
-        <div class="course-card-top">
-          <span class="course-num-badge">Hoyo ${idx + 1}</span>
-          <span class="course-theme-tag" style="--accent:${theme.color}">
-            ${theme.name}
-          </span>
-          <span class="course-par-badge">Par ${course.par}</span>
-        </div>
-        <div class="course-card-preview-wrap" style="--accent:${theme.color}" title="Haga clic para jugar el Hoyo ${idx + 1}">
-          <div class="course-preview-media">
-            <img class="course-preview-img" src="${staticCoursePreview(course) ?? ''}" alt="Vista previa de ${course.name}" loading="lazy" />
-            <div class="course-preview-glow"></div>
-            <div class="course-preview-badges">
-              <span class="preview-badge dist-badge">~${dist}m</span>
-              ${feats[0] ? `<span class="preview-badge feat-badge">${feats[0]}</span>` : ''}
-            </div>
-            <div class="course-preview-action-overlay">
-              <span class="preview-play-icon">${icon('play')}</span>
-              <span class="preview-play-text">Entrenar Hoyo ${idx + 1}</span>
-            </div>
-          </div>
-        </div>
-        <div class="course-card-body">
-          <h3 class="course-name">${course.name}</h3>
-          ${course.tip ? `<p class="course-tip">${course.tip}</p>` : ''}
-          ${feats.length ? `<div class="course-feats">${feats.map((f) => `<span class="feat-tag">${f}</span>`).join('')}</div>` : ''}
-        </div>
-        <button class="primary play-course-btn">${icon('play')}Jugar Hoyo ${idx + 1}</button>
-      </div>
-    `);
-    const launchPlay = () => playFreePlay(idx);
-    card.querySelector('.play-course-btn').addEventListener('click', launchPlay);
-    card.querySelector('.course-card-preview-wrap').addEventListener('click', launchPlay);
-    grid.append(card);
-  });
-
-  const tbTheme = THEME_INFO[TIEBREAK_COURSE.theme] || { name: 'Atardecer', icon: '', color: '#ff9a5c' };
-  const tbDist = getCourseDistance(TIEBREAK_COURSE);
-  const tbCard = h(`
-    <div class="course-card holo course-card-extra theme--${TIEBREAK_COURSE.theme}">
-      <div class="course-card-top">
-        <span class="course-num-badge extra">Extra</span>
-        <span class="course-theme-tag" style="--accent:${tbTheme.color}">
-          ${tbTheme.name}
-        </span>
-        <span class="course-par-badge">Diana</span>
-      </div>
-      <div class="course-card-preview-wrap" style="--accent:${tbTheme.color}" title="Haga clic para jugar el Desempate">
-        <div class="course-preview-media">
-          <img class="course-preview-img" src="${staticCoursePreview(TIEBREAK_COURSE) ?? ''}" alt="Vista previa de Desempate" loading="lazy" />
-          <div class="course-preview-glow"></div>
-          <div class="course-preview-badges">
-            <span class="preview-badge dist-badge">~${tbDist}m</span>
-            <span class="preview-badge feat-badge">Diana</span>
-          </div>
-          <div class="course-preview-action-overlay">
-            <span class="preview-play-icon">${icon('play')}</span>
-            <span class="preview-play-text">Entrenar Desempate</span>
-          </div>
-        </div>
-      </div>
-      <div class="course-card-body">
-        <h3 class="course-name">Desempate: Diana</h3>
-        <p class="course-tip">Un solo tiro al objetivo: afina la precisión al centro de la diana sin agujero.</p>
-        <div class="course-feats">
-          <span class="feat-tag">Diana de precisión</span>
-          <span class="feat-tag">Muerte súbita</span>
-        </div>
-      </div>
-      <button class="primary play-course-btn">${icon('play')}Jugar Desempate</button>
-    </div>
-  `);
-  const launchTbPlay = () => playFreePlay('tiebreak');
-  tbCard.querySelector('.play-course-btn').addEventListener('click', launchTbPlay);
-  tbCard.querySelector('.course-card-preview-wrap').addEventListener('click', launchTbPlay);
-  grid.append(tbCard);
-  // mapas sin WebP pre-renderizado: se renderizan con three.js (import() solo si hace falta)
-  const missing = [...COURSES, TIEBREAK_COURSE].filter((c) => !staticCoursePreview(c));
-  if (missing.length) {
-    import('./game/render/coursePreview.js').then(({ getCoursePreview }) => {
-      const imgs = view.querySelectorAll('.course-preview-img');
-      [...COURSES, TIEBREAK_COURSE].forEach((c, i) => {
-        if (!staticCoursePreview(c) && imgs[i]) imgs[i].src = getCoursePreview(c);
-      });
-    });
-  }
-
-  await shell(view);
-}
-
 export function playFreePlay(courseIndex) {
   screen = 'freeplay-game';
   const isTiebreak = courseIndex === 'tiebreak';
@@ -1651,7 +1488,7 @@ export function playFreePlay(courseIndex) {
     players: [{ id: 'me', name: 'Tú', color: '#00f076', isBot: false }],
     timeLimit: null,
     onRestartHole: () => playFreePlay(courseIndex),
-    onSelectMap: () => showFreePlayCourseSelect(),
+    onSelectMap: () => go('freeplay'),
     onDone: (_g, strokes, _banner) => {
       showFreePlayHoleResult(courseIndex, course, strokes);
     },
@@ -1709,7 +1546,7 @@ export function showFreePlayHoleResult(courseIndex, course, strokes) {
   }
   overlay.querySelector('.select-map-btn').addEventListener('click', () => {
     overlay.remove();
-    showFreePlayCourseSelect();
+    go('freeplay');
   });
   overlay.querySelector('.to-lobby-btn').addEventListener('click', () => {
     overlay.remove();
@@ -1820,12 +1657,13 @@ function startRouting(b) {
       toggleFullscreen: () => toggleFullscreen(),
       toggleMute: () => toggleMute(),
       reviveHubScene: () => reviveHubScene(),
+      playFreePlay: (i) => playFreePlay(i),
     },
     legacy: {
       // Mesas (T028): lo que la pantalla necesita de main.js
       enterTables: () => { leaveFinale(); stopLive(); screen = 'lobby'; releasePlay(); },
       enterSettings: () => { leaveFinale(); stopLive(); screen = 'settings'; releasePlay(); },
-      maps: () => showFreePlayCourseSelect(),
+      enterMaps: () => { leaveFinale(); stopLive(); screen = 'freeplay'; releasePlay(); },
     },
   });
   screenHost = createHost({ router, routes, root: app, ctx, notify, win: window, doc: document });
