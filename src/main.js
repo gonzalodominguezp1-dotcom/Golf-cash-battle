@@ -338,113 +338,6 @@ const prestigeNote = (gained) => {
   return `<p class="reward-note prestige-note" style="${frameStyle(f)}"><i></i>¡Marco de prestigio ${esc(f.name)} desbloqueado!</p>`;
 };
 
-// ---------- wallet ----------
-
-const TX_LABEL = { bonus: 'Bienvenida', withdrawal: 'Retirada', deposit: 'Recarga', entry: 'Entrada', prize: 'Premio', refund: 'Devolución' };
-
-function walletPane(balance, txs) {
-  const prizeTotal = txs.filter((t) => t.type === 'prize' && t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
-  const matchesPlayed = txs.filter((t) => t.type === 'entry').length;
-  return `
-    <div class="wallet-pane-inner">
-      <div class="wallet-dashboard-col">
-        <div class="wallet-card holo">
-          <div class="shine"></div>
-          <div class="card-ambient"></div>
-          <div class="card-header">
-            <div class="card-chip-badge"><span class="card-chip"></span><span class="card-contactless">)))</span></div>
-            <span class="card-league">DIAMOND VIP</span>
-          </div>
-          <div class="card-balance">
-            <small>Saldo Disponible</small>
-            <strong>${coin(balance)}</strong>
-          </div>
-          <div class="card-footer">
-            <div class="card-number">•••• •••• •••• ${String(Math.abs(Math.round(balance * 100)) % 9000 + 1000)}</div>
-            <div class="card-holder"><small>TITULAR</small><span>GOLF CASH PRO</span></div>
-          </div>
-        </div>
-        <div class="wallet-metrics">
-          <div class="metric-card">
-            <small>Premios Ganados</small>
-            <b>${coin(prizeTotal)}</b>
-          </div>
-          <div class="metric-card">
-            <small>Torneos Jugados</small>
-            <b>${matchesPlayed}</b>
-          </div>
-        </div>
-        <div class="deposit-section">
-          <h3>Recarga Rápida de Créditos Demo</h3>
-          <div class="row deposit-row">
-            <button class="primary deposit-btn" data-add="50">${icon('coins')}<span>+50</span> Créditos</button>
-            <button class="primary deposit-btn" data-add="200">${icon('coins')}<span>+200</span> Créditos</button>
-          </div>
-        </div>
-        ${wallet.depositCrypto
-      ? `<div class="crypto-section">
-          <h3>Depositar en Cripto <small class="tag">pruebas</small></h3>
-          <div class="row">
-            <button class="secondary" data-crypto="10">${icon('coins')}10 USD</button>
-            <button class="secondary" data-crypto="25">${icon('coins')}25 USD</button>
-            <button class="secondary" data-crypto="50">${icon('coins')}50 USD</button>
-          </div>
-          <p class="legal">Pago con NOWPayments (USDT, BTC, ETH…). Modo de pruebas: no se cobra dinero real.</p>
-        </div>`
-      : ''
-    }
-      </div>
-      <div class="txs-container">
-        <h3>Historial de Movimientos</h3>
-        <ul class="txs">
-          ${txs.length
-      ? txs
-        .map(
-          (t) => `<li>
-                        <div class="tx-info">
-                          <div class="tx-text">
-                            <b>${TX_LABEL[t.type] ?? t.type}</b>
-                            <small>${t.note} · ${new Date(t.at).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}</small>
-                          </div>
-                        </div>
-                        <span class="${t.amount >= 0 ? 'pos' : 'neg'}">${t.amount >= 0 ? '+' : ''}${fmt(t.amount)}</span>
-                      </li>`,
-        )
-        .join('')
-      : '<li class="empty"><p>Sin movimientos todavía</p></li>'
-    }
-        </ul>
-      </div>
-    </div>`;
-}
-
-function bindWallet(view) {
-  view.querySelectorAll('[data-add]').forEach((b) =>
-    b.addEventListener('click', async () => {
-      b.disabled = true;
-      try {
-        await wallet.deposit(Number(b.dataset.add), 'Recarga demo');
-      } catch (e) {
-        if (e.code === 'daily_cap') return alertMsg('Has llegado al límite de recargas demo de hoy');
-        throw e;
-      }
-      sfx.coins();
-      go('wallet');
-    }),
-  );
-  view.querySelectorAll('[data-crypto]').forEach((b) =>
-    b.addEventListener('click', async () => {
-      b.disabled = true;
-      try {
-        const { invoiceUrl } = await wallet.depositCrypto(Number(b.dataset.crypto));
-        location.href = invoiceUrl;
-      } catch (e) {
-        alertMsg(e.code === 'not_configured' ? 'Los depósitos en cripto todavía no están activados.' : 'No se ha podido crear el pago. Prueba otra vez.');
-      }
-    }),
-  );
-}
-
 // ---------- matchmaking ----------
 
 async function startMatch(tier, rematchOf = null) {
@@ -1945,14 +1838,6 @@ function startRouting(b) {
     legacy: {
       // Mesas (T028): lo que la pantalla necesita de main.js
       enterTables: () => { leaveFinale(); stopLive(); screen = 'lobby'; releasePlay(); },
-      // TEMPORAL (hasta T035): Monedero de Cuenta sigue siendo el de main.js; Cuenta (account.js) lo pinta en su pestaña
-      'account.monedero': async (el, alive) => {
-        const [balance, txs] = await Promise.all([wallet.getBalance(), wallet.getTransactions()]);
-        if (!alive()) return;
-        el.innerHTML = `<div class="wallet-pane">${walletPane(balance, txs)}</div>`;
-        el.dataset.state = 'ready';
-        bindWallet(el);
-      },
       settings: () => showSettings(),
       maps: () => showFreePlayCourseSelect(),
     },
