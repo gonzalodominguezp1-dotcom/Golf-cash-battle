@@ -32,6 +32,7 @@ import { buildRoster, humanLeaders, liveStandings, seededRng } from './match/liv
 import { notify } from './ui/notifyPopup.js';
 import { createNotifier } from './ui/notifier.js';
 import { createPartyWatch } from './match/partyWatch.js';
+import { startPresence } from './account/presence.js';
 import { createScope } from './screens/lifecycle.js';
 import { icon, iconUrl } from './ui/icons.js';
 import { errorRef } from './backend/rpcError.js';
@@ -1598,6 +1599,7 @@ function startRouting(b) {
 // y se enseña un aviso de 5 s. (notify() sirve para cualquier otro aviso.)
 
 // TODO(F3): notifier y partyWatch sondean ambos parties.mine() con el lobby abierto; compartir el resultado cuando el hub unifique el sondeo.
+let stopPresence = null; // latido de conexión: lo usa Mesas para invitar solo a amigos conectados
 function startNotices(b) {
   if (!b.account) return;
   notifier = createNotifier({
@@ -1614,6 +1616,8 @@ function startNotices(b) {
     },
   });
   notifier.start();
+  stopPresence?.();
+  stopPresence = startPresence(b.account);
 }
 
 function startPartyWatch(b) {

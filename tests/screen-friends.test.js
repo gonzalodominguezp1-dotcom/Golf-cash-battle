@@ -42,7 +42,7 @@ function fakeNode(env, parent = null) {
 
 const settle = () => new Promise((r) => setImmediate(r));
 const FRIENDS = () => ({
-  friends: [{ name: 'Ana', level: 3, frame: null, avatar: null }],
+  friends: [{ name: 'Ana', level: 3, frame: null, avatar: null, online: true }],
   incoming: [{ name: 'Bo' }],
   outgoing: [{ name: 'Cy' }],
 });
@@ -110,8 +110,8 @@ test('friends: monta amigos, solicitudes y la caja de grupo con textos en españ
   // sin caja de grupo: la pantalla de amigos ya no monta el panel «Juega con amigos»
   assert.equal(root.querySelector('[data-friends-body]').querySelector('[data-party-box]'), null);
   assert.doesNotMatch(root.innerHTML, /Juega con amigos/);
-  assert.equal(calls.start, 0);
-  assert.equal(subs.size, 1); // solo el aviso de invitar al grupo
+  assert.equal(calls.start, 1); // amigos sondea las invitaciones de grupo mientras está abierta
+  assert.equal(subs.size, 1); // el aviso de grupo de la pantalla
 });
 
 test('friends: invitar al grupo va a la izquierda de quitar', async () => {
@@ -232,7 +232,7 @@ test('friends: destroy deja el scope a cero (comprobado que había algo vivo ant
   assert.ok(live.listeners > 0 && live.subs > 0, 'había algo vivo');
   screen.destroy();
   assert.deepEqual(ctx.scope.live(), { listeners: 0, timers: 0, subs: 0 });
-  assert.equal(calls.stop, 0); // la pantalla ya no arranca el sondeo de grupo
+  assert.equal(calls.stop, 1); // al salir para el sondeo de grupo
 });
 
 test('friends: destroy durante la carga no pinta después ni deja timers', async () => {
@@ -248,7 +248,8 @@ test('friends: destroy durante la carga no pinta después ni deja timers', async
   env.timers.advance(20000);
   await settle();
   assert.doesNotMatch(root.innerHTML, /data-friends-box/);
-  assert.equal(calls.start, 0);
+  assert.equal(calls.start, 1);
+  assert.equal(calls.stop, 1);
 });
 
 test('friends: 20 montajes y destroy sin fugas', async () => {
@@ -260,7 +261,7 @@ test('friends: 20 montajes y destroy sin fugas', async () => {
     assert.ok(scope.live().listeners > 0, 'había algo vivo');
     screen.destroy();
     assert.deepEqual(scope.live(), { listeners: 0, timers: 0, subs: 0 });
-    assert.equal(calls.stop, 0);
+    assert.equal(calls.stop, 1);
     scope.dispose();
   }
   assert.equal(env.liveListeners(), 0);
@@ -337,4 +338,54 @@ test('partyPanel: sin amigos, en Amigos remite al formulario de arriba y en Mesa
     assert.equal(box.innerHTML.includes('data-go="account"'), goes);
     panel.destroy();
   }
+});
+
+test('amigos: invitaciones de grupo con Aceptar (borde verde) y Rechazar (borde rojo); responder usa el grupo', async () => {
+  const env = fakeEnv();
+  const root = fakeNode(env);
+  const { ctx, partyWatch } = makeCtx(env);
+  const answers = [];
+  // responder quita esa invitación y deja las demás pendientes, como el servidor
+  ctx.backend.parties.respond = async (id, ok) => {
+    answers.push([id, ok]);
+    return { party: null, invites: partyWatch.state.invites.filter((i) => i.party !== id) };
+  };
+  partyWatch.state = { party: null, invites: [{ from: 'Dan', party: 'p1' }, { from: 'Eva', party: 'p2' }] };
+  await mount(root, ctx, {}); await settle();
+  const box = root.querySelector('[data-friends-body]').querySelector('[data-friends-box]');
+  assert.match(box.innerHTML, /Invitaciones a grupo/);
+  assert.match(box.innerHTML, /class="chip-btn btn-accept" data-join="p1"><svg[^>]*><\/svg>Aceptar<\/button>/);
+  assert.match(box.innerHTML, /class="chip-btn btn-decline" data-no="p1"><svg[^>]*><\/svg>Rechazar<\/button>/);
+  assert.doesNotMatch(box.innerHTML, /Unirme/);
+  box.querySelector('[data-join="p1"]').emit('click'); await settle();
+  box.querySelector('[data-no="p2"]').emit('click'); await settle();
+  assert.deepEqual(answers, [['p1', true], ['p2', false]]);
+});
+
+test('mesas: solo invita y forma grupo con los amigos conectados', async () => {
+  const env = fakeEnv();
+  const { ctx } = makeCtx(env);
+  const box = fakeNode(env);
+  const friends = [
+    { name: 'Ana', level: 3, frame: null, avatar: null, online: true },
+    { name: 'Bo', level: 1, frame: null, avatar: null, online: false },
+  ];
+  const panel = mountPartyPanel(box, fakeNode(env), 0, ctx, { friends });
+  await settle();
+  assert.match(box.innerHTML, /data-invite="Ana"/);
+  assert.doesNotMatch(box.innerHTML, /data-invite="Bo"/);
+  panel.destroy();
+});
+
+test('mesas: si ningún amigo está conectado lo dice y no ofrece invitar', async () => {
+  const env = fakeEnv();
+  const { ctx } = makeCtx(env);
+  const box = fakeNode(env);
+  const friends = [{ name: 'Bo', level: 1, frame: null, avatar: null, online: false }];
+  const panel = mountPartyPanel(box, fakeNode(env), 0, ctx, { friends });
+  await settle();
+  assert.match(box.innerHTML, /data-no-online="1"/);
+  assert.match(box.innerHTML, /Ninguno de tus amigos está conectado ahora/);
+  assert.doesNotMatch(box.innerHTML, /data-invite/);
+  panel.destroy();
 });

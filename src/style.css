@@ -346,6 +346,11 @@ h2 { margin: 24px 0 12px; font-size: 21px; letter-spacing: -0.01em; }
   background: rgba(255, 255, 255, 0.14);
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25) inset;
 }
+/* aceptar (verde) y rechazar (rojo) invitaciones de grupo */
+.chip-btn.btn-accept { box-shadow: 0 0 0 2px #22c55e inset; }
+.chip-btn.btn-accept:hover { box-shadow: 0 0 0 2px #4ade80 inset; }
+.chip-btn.btn-decline { box-shadow: 0 0 0 2px #ef4444 inset; }
+.chip-btn.btn-decline:hover { box-shadow: 0 0 0 2px #f87171 inset; }
 
 /* ---------- brillo holográfico (cartas) ---------- */
 
