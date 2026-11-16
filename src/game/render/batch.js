@@ -21,10 +21,12 @@ export function bakeStatic(root, parent, { center = null, split = 20000 } = {}) 
     let g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
     // todas las piezas deben tener los mismos atributos para poder juntarlas
     // (el color por vértice se queda si el material lo usa: todas las piezas del mismo material lo llevan;
-    // los de viento, si el material lleva viento: los que traiga la pieza se respetan y los que falten se calculan)
+    // los de viento, si el material lleva viento: los que traiga la pieza se respetan y los que falten se calculan;
+    // las uv solo si el material lo pide con userData.keepUv: todas sus piezas las llevan, p. ej. las tarjetas de hojas)
     const wind = isWindMaterial(mat);
     for (const name of Object.keys(g.attributes)) {
       if (name === 'position' || name === 'normal' || (name === 'color' && mat.vertexColors)) continue;
+      if (name === 'uv' && mat.userData.keepUv) continue;
       if (wind && WIND_ATTRS.includes(name) && g.attributes[name].itemSize === WIND_ATTR_SIZES[name]) continue;
       g.deleteAttribute(name);
     }

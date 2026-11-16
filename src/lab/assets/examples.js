@@ -3,12 +3,14 @@
 // de makeNew por el diseño nuevo.
 import { registerAsset } from '../assetRegistry.js';
 import { makeTree, makeRock, makeFlower } from '../../game/render/environment.js';
+import { makeRoundTree } from '../../game/render/assets/roundTree.js';
 
 registerAsset({
   id: 'tree-round',
   label: 'Árbol redondo',
   makeOld: (rng) => makeTree('round', rng, 0, 0, 0),
-  makeNew: () => null,
+  // Paso 1: tronco curvo con ramas, copa de racimos lisos; tarjetas de hojas en Alto
+  makeNew: (rng, preset) => makeRoundTree(rng, preset),
 });
 registerAsset({
   id: 'pine',
