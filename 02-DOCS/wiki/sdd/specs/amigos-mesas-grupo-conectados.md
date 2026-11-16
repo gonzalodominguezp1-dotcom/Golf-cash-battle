@@ -6,13 +6,13 @@ tags: [sdd, spec, amigos, mesas, grupo, presencia]
 timestamp: 2026-11-16T20:00:00Z
 topic: sdd
 slug: amigos-mesas-grupo-conectados
-status: pendiente de revisión humana
+status: approved
 branch: amigos-ui-main
 ---
 
 # Spec — Amigos y Mesas: invitaciones de grupo y solo amigos conectados
 
-> Slug: `amigos-mesas-grupo-conectados` · Status: pendiente de revisión humana · Created: 2026-11-16
+> Slug: `amigos-mesas-grupo-conectados` · Status: approved (2026-11-16, aprobada por el humano: «Apruebo la spec») · Created: 2026-11-16
 > Inherits: [constitution](../constitution.md) · Rama: `amigos-ui-main` (trabajo subido a `main`).
 > **Nota de proceso:** esta spec se escribe *después* de implementar el cambio, porque el gate de tier 2 bloqueó el push de la migración. Las decisiones de abajo son las tomadas en la sesión; el humano debe revisarlas antes de darlas por aprobadas.
 
@@ -117,4 +117,5 @@ Dejar las invitaciones solo en Mesas y avisar con un texto «Invita solo a quien
 
 ## Revisions
 
+- 2026-11-16 — Aprobada por el humano tras revisarla («Apruebo la spec»).
 - 2026-11-16 — Escrita después de implementar. Commit `7fa2247` (cliente) y migración `20261116120000` aplicada en producción.
