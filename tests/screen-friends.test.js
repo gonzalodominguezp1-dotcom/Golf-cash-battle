@@ -107,14 +107,22 @@ test('friends: monta amigos, solicitudes y la caja de grupo con textos en españ
   assert.match(box.innerHTML, /data-accept="Bo"/);
   assert.match(box.innerHTML, /data-remove="Cy"/);
   assert.match(box.innerHTML, /Nv\. 3/);
-  const party = root.querySelector('[data-friends-body]').querySelector('[data-party-box]');
-  assert.match(party.innerHTML, /Juega con amigos/);
-  assert.equal(calls.start, 1);
-  const state = { party: null, invites: [{ from: 'Dan', party: 'p1' }] };
-  partyWatch.state = state;
-  for (const fn of [...subs]) fn(state, { msg: '' });
-  assert.match(party.innerHTML, /te invita a su grupo/);
-  assert.match(party.innerHTML, /data-join="p1"/);
+  // sin caja de grupo: la pantalla de amigos ya no monta el panel «Juega con amigos»
+  assert.equal(root.querySelector('[data-friends-body]').querySelector('[data-party-box]'), null);
+  assert.doesNotMatch(root.innerHTML, /Juega con amigos/);
+  assert.equal(calls.start, 0);
+  assert.equal(subs.size, 1); // solo el aviso de invitar al grupo
+});
+
+test('friends: invitar al grupo va a la izquierda de quitar', async () => {
+  const env = fakeEnv();
+  const root = fakeNode(env);
+  const { ctx, calls } = makeCtx(env);
+  await mount(root, ctx, {}); await settle();
+  const box = root.querySelector('[data-friends-body]').querySelector('[data-friends-box]');
+  assert.ok(box.innerHTML.indexOf('data-invite="Ana"') < box.innerHTML.indexOf('data-remove="Ana"'));
+  box.querySelector('[data-invite="Ana"]').emit('click'); await settle();
+  assert.deepEqual(calls.invite, ['Ana']);
 });
 
 test('friends: aceptar, rechazar y quitar usan la cuenta y muestran el mensaje de siempre', async () => {
@@ -216,7 +224,7 @@ test('friends: un error al refrescar tras una acción muestra el mensaje con Rei
   assert.match(box().innerHTML, /Reintentar/);
 });
 
-test('friends: destroy deja el scope a cero y para el sondeo (comprobado que había algo vivo antes)', async () => {
+test('friends: destroy deja el scope a cero (comprobado que había algo vivo antes)', async () => {
   const env = fakeEnv();
   const { ctx, calls } = makeCtx(env);
   const screen = await mount(fakeNode(env), ctx, {}); await settle();
@@ -224,7 +232,7 @@ test('friends: destroy deja el scope a cero y para el sondeo (comprobado que hab
   assert.ok(live.listeners > 0 && live.subs > 0, 'había algo vivo');
   screen.destroy();
   assert.deepEqual(ctx.scope.live(), { listeners: 0, timers: 0, subs: 0 });
-  assert.equal(calls.stop, 1);
+  assert.equal(calls.stop, 0); // la pantalla ya no arranca el sondeo de grupo
 });
 
 test('friends: destroy durante la carga no pinta después ni deja timers', async () => {
@@ -252,7 +260,7 @@ test('friends: 20 montajes y destroy sin fugas', async () => {
     assert.ok(scope.live().listeners > 0, 'había algo vivo');
     screen.destroy();
     assert.deepEqual(scope.live(), { listeners: 0, timers: 0, subs: 0 });
-    assert.equal(calls.stop, 1);
+    assert.equal(calls.stop, 0);
     scope.dispose();
   }
   assert.equal(env.liveListeners(), 0);
@@ -287,18 +295,18 @@ test('partyPanel: grupo con miembros, listo, invitar y salir; destroy lo libera 
   assert.equal(calls.stop, 1);
 });
 
-test('friends: al montar se lee la lista una sola vez y tras aceptar el panel de grupo ofrece al nuevo amigo', async () => {
+test('friends: al montar se lee la lista una sola vez y tras aceptar aparece el nuevo amigo con Invitar', async () => {
   const env = fakeEnv();
   const root = fakeNode(env);
   const { ctx, calls, account } = makeCtx(env);
   await mount(root, ctx, {}); await settle();
-  assert.equal(calls.friends, 1); // friends.js y partyPanel.js comparten la lectura
-  const party = () => root.querySelector('[data-friends-body]').querySelector('[data-party-box]');
-  assert.doesNotMatch(party().innerHTML, /data-invite="Bo"/);
+  assert.equal(calls.friends, 1);
+  const box = () => root.querySelector('[data-friends-body]').querySelector('[data-friends-box]');
+  assert.doesNotMatch(box().innerHTML, /data-invite="Bo"/);
   account.friends = async () => ({ friends: [...FRIENDS().friends, { name: 'Bo', level: 1, frame: null, avatar: null }], incoming: [], outgoing: [] });
-  root.querySelector('[data-friends-body]').querySelector('[data-friends-box]').querySelector('[data-accept="Bo"]').emit('click');
+  box().querySelector('[data-accept="Bo"]').emit('click');
   await settle();
-  assert.match(party().innerHTML, /data-invite="Bo"/);
+  assert.match(box().innerHTML, /data-invite="Bo"/);
 });
 
 test('friends: una lectura vieja tardía no pisa a la nueva', async () => {

@@ -5,7 +5,6 @@ import { frameById } from '../progress/prestige.js';
 import { fromWire } from '../progress/avatar.js';
 import { bindHeader, bindLobby, header, listState, lobbyButton } from './components.js';
 import { computeLocks } from './hubRules.js';
-import { mountPartyPanel } from './partyPanel.js';
 import { avatarHtml, esc } from './shared.js';
 import { t } from './texts/index.js';
 import './texts/common.js';
@@ -19,7 +18,7 @@ export async function mount(root, ctx) {
   const scope = ctx.scope.child(); // todo lo de la pantalla cuelga de aquí: destroy lo libera entero
   const icon = (n, o = {}) => ctx.icon(n, o);
   const account = backend?.account;
-  let gone = false, run = 0, sc = null, party = null; // sc: scope de lo pintado; party: panel de grupo montado
+  let gone = false, run = 0, sc = null, onGroupMsg = null; // sc: scope de lo pintado; onGroupMsg: muestra el aviso de grupo en la lista
 
   // mismos requisitos y mensajes que el hub (accesos bloqueados): invitado, sin nombre de usuario o sin conexión
   const locked = computeLocks({
@@ -34,8 +33,6 @@ export async function mount(root, ctx) {
   });
 
   function shell(innerHtml) {
-    party?.destroy();
-    party = null;
     sc?.dispose();
     sc = scope.child();
     root.innerHTML = `<main class="screen friends">${header({ title: t('friends.title') })}<div class="friends-body" data-friends-body="1">${innerHtml}</div>${lobbyButton()}</main>`;
@@ -64,7 +61,7 @@ export async function mount(root, ctx) {
       const row = (f) => `<li class="friend">
         ${avatarHtml({ size: 'sm', frame: frameById(f.frame), av: fromWire(f.avatar), initial: f.name })}
         <span class="friend-name"><b>${esc(f.name)}</b><small>${esc(t('friends.level', { n: f.level }))}</small></span>
-        <button class="chip-btn" data-remove="${esc(f.name)}">${icon('trash')}${esc(t('friends.remove'))}</button>
+        <span class="friend-actions"><button class="chip-btn" data-invite="${esc(f.name)}">${icon('user-plus')}${esc(t('friends.invite'))}</button><button class="chip-btn" data-remove="${esc(f.name)}">${icon('trash')}${esc(t('friends.remove'))}</button></span>
       </li>`;
       const asks = (list, buttons) => list.map((r) => `<li class="friend">
         <span class="friend-name"><b>${esc(r.name)}</b></span>${buttons(esc(r.name))}
@@ -88,6 +85,12 @@ export async function mount(root, ctx) {
       for (const b of box.querySelectorAll('[data-accept]')) psc.on(b, 'click', act(b.dataset.accept, (n) => account.respondFriend(n, true), t('friends.becameFriend', { name: b.dataset.accept })));
       for (const b of box.querySelectorAll('[data-decline]')) psc.on(b, 'click', act(b.dataset.decline, (n) => account.respondFriend(n, false), t('friends.declined')));
       for (const b of box.querySelectorAll('[data-remove]')) psc.on(b, 'click', act(b.dataset.remove, (n) => account.removeFriend(n), t('friends.done')));
+      // invitar al grupo: el aviso llega por partyWatch (onGroupMsg) y se pinta en esta lista
+      for (const b of box.querySelectorAll('[data-invite]')) psc.on(b, 'click', () => {
+        const name = b.dataset.invite;
+        ctx.partyWatch?.apply(() => backend.parties.invite(name), t('friends.inviteSent', { name }));
+      });
+      onGroupMsg = (m) => refresh(m);
       const input = box.querySelector('[data-friend-input]');
       psc.on(box.querySelector('[data-friend-form]'), 'submit', async (e) => {
         e.preventDefault?.();
@@ -115,7 +118,6 @@ export async function mount(root, ctx) {
       }
       if (gone || my !== reads) return;
       paint(data, msg, isErr);
-      party?.setFriends(data.friends); // el panel de grupo ofrece la lista nueva sin pedirla otra vez
       if (keep) box.querySelector('[data-friend-input]').value = keep;
     }
     paint(data0);
@@ -129,10 +131,8 @@ export async function mount(root, ctx) {
           <span class="panel-badge friends-count" data-friends-count="1"></span>
         </div>
         <div class="friends-box" data-friends-box="1"></div>
-      </section>
-      <section class="party-box" data-party-box="1"></section>`);
+      </section>`);
     friendsPanel(body.querySelector('[data-friends-box]'), body.querySelector('[data-friends-count]'), data);
-    party = mountPartyPanel(body.querySelector('[data-party-box]'), null, 0, { ...ctx, scope: sc }, { friends: data.friends });
   }
 
   async function load() {
@@ -146,6 +146,9 @@ export async function mount(root, ctx) {
     paintReady(data);
   }
 
+  // avisos de invitar al grupo (partyWatch): solo se pintan si la lista de amigos está en pantalla
+  if (ctx.partyWatch) scope.sub(ctx.partyWatch.subscribe((_, info) => { if (!gone && info?.msg) onGroupMsg?.(info.msg); }));
+
   if (locked) paintLocked();
   else load(); // sin esperar: el host serializa los montajes y una red lenta no debe bloquear «Atrás»
   return {
@@ -153,8 +156,6 @@ export async function mount(root, ctx) {
     destroy() {
       gone = true;
       run++;
-      party?.destroy();
-      party = null;
       scope.dispose();
     },
   };
