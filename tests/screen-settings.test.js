@@ -101,7 +101,7 @@ test('ajustes: la carga del panel tiene tope de 8 s y Reintentar la repite', asy
   await flush();
   assert.equal(host(root).dataset.state, 'error');
   assert.match(host(root).innerHTML, /No se pudieron cargar los ajustes/);
-  assert.equal(ctx.scope.live().listeners, 1); // el botón Reintentar
+  assert.equal(ctx.scope.live().listeners, 2); // el botón Reintentar y el botón Lobby
   ctx.loadPanel = () => Promise.resolve(panel.mod);
   host(root).querySelector('[data-retry]').emit('click');
   assert.equal(host(root).dataset.state, 'loading');
@@ -109,7 +109,7 @@ test('ajustes: la carga del panel tiene tope de 8 s y Reintentar la repite', asy
   assert.equal(host(root).dataset.state, 'ready');
   assert.equal(panel.st.mounts, 1);
   // el repintado soltó el scope del estado anterior: solo queda la baja del panel
-  assert.deepEqual(ctx.scope.live(), { listeners: 0, timers: 0, subs: 1 });
+  assert.deepEqual(ctx.scope.live(), { listeners: 1, timers: 0, subs: 1 }); // solo el botón Lobby (de la raíz de la pantalla) y la baja del panel
 });
 
 test('ajustes: un fallo al cargar o al montar el panel da error, no pantalla vacía', async () => {

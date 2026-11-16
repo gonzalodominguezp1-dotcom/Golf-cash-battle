@@ -41,6 +41,8 @@
 .sk-inspect .sk-view-info small { color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
 .sk-inspect .sk-view-tier { margin-left: auto; color: var(--muted); font-weight: 700; }
 .sk-inspect .sk-view-info .scr-btn { min-height: 44px; }
+/* el botón «Lobby» va fijo abajo a la izquierda: la info deja su hueco para no quedar debajo */
+.sk-inspect .sk-view-info { padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px)); }
 .sk-inspect .scr-back:focus-visible, .sk-inspect .primary:focus-visible, .sk-inspect .scr-btn:focus-visible, .sk-inspect .sk-view-nav:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
 @media (max-height: 520px) {
   .sk-inspect .sk-view-lock { padding-bottom: 64px; }

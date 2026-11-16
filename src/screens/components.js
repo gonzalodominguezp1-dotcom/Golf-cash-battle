@@ -57,6 +57,20 @@ export function bindHeader(root, ctx) {
   else btn.addEventListener('click', go);
 }
 
+/** Botón «Lobby» fijo abajo a la izquierda (screens.css): lleva a la raíz (hub) con router.reset(). */
+export function lobbyButton() {
+  return `<button type="button" class="scr-lobby" data-lobby aria-label="${esc(t('common.lobbyLabel'))}">${esc(t('common.lobby'))}</button>`;
+}
+
+/** Conecta el botón «Lobby» con el router: vuelve a la raíz (hub). */
+export function bindLobby(root, ctx) {
+  const btn = root.querySelector('[data-lobby]');
+  if (!btn) return;
+  const go = () => ctx.router.reset();
+  if (ctx.scope) ctx.scope.on(btn, 'click', go);
+  else btn.addEventListener('click', go);
+}
+
 // ---------- diálogo de motivo (accesos bloqueados y requisitos) ----------
 const openDialogs = new WeakMap(); // doc -> manejador del diálogo abierto (solo uno a la vez)
 let dialogSeq = 0;

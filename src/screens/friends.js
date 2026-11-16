@@ -3,7 +3,7 @@
 import { addedMessage, cleanFriendName, friendMessage } from '../account/friendRules.js';
 import { frameById } from '../progress/prestige.js';
 import { fromWire } from '../progress/avatar.js';
-import { bindHeader, header, listState } from './components.js';
+import { bindHeader, bindLobby, header, listState, lobbyButton } from './components.js';
 import { computeLocks } from './hubRules.js';
 import { mountPartyPanel } from './partyPanel.js';
 import { avatarHtml, esc } from './shared.js';
@@ -38,8 +38,9 @@ export async function mount(root, ctx) {
     party = null;
     sc?.dispose();
     sc = scope.child();
-    root.innerHTML = `<main class="screen friends">${header({ title: t('friends.title') })}<div class="friends-body" data-friends-body="1">${innerHtml}</div></main>`;
+    root.innerHTML = `<main class="screen friends">${header({ title: t('friends.title') })}<div class="friends-body" data-friends-body="1">${innerHtml}</div>${lobbyButton()}</main>`;
     bindHeader(root, { ...ctx, scope: sc });
+    bindLobby(root, { ...ctx, scope: sc });
     return root.querySelector('[data-friends-body]');
   }
 

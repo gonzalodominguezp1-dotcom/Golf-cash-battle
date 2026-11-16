@@ -144,12 +144,12 @@ export function mount(root, ctx) {
       </div>
       <div class="courses-grid">${cards(previews)}</div>
       <div class="freeplay-footer-actions">
-        <button type="button" class="ghost back-to-lobby" data-home>${icon('back')}${esc(t('maps.backToMenu'))}</button>
+        <button type="button" class="ghost back-to-lobby" data-home data-lobby>${icon('back')}${esc(t('maps.backToMenu'))}</button>
       </div>`;
     sc.on(host, 'click', (ev) => {
       const el = ev.target?.closest?.('[data-play],[data-home]');
       if (!el || gone) return;
-      if (el.dataset.home !== undefined) { ctx.router.back(); return; }
+      if (el.dataset.home !== undefined) { ctx.router.reset(); return; }
       const v = el.dataset.play;
       ctx.actions.playFreePlay(v === 'tiebreak' ? 'tiebreak' : Number(v));
     });

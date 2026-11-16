@@ -4,7 +4,7 @@
 import { SKINS, TIERS as SKIN_TIERS } from '../progress/skins.js';
 import { rarePatternOf } from '../progress/inventory.js';
 import { tierIcon } from '../ui/icons.js';
-import { bindHeader, header, listState } from './components.js';
+import { bindHeader, bindLobby, header, listState, lobbyButton } from './components.js';
 import { esc } from './shared.js';
 import { t } from './texts/index.js';
 import './texts/common.js';
@@ -52,8 +52,10 @@ export async function mount(root, ctx) {
       </div>
       <div class="sk-list" data-sk-list="1"></div>
     </div>
+    ${lobbyButton()}
   </main>`;
   bindHeader(root, { ...ctx, scope });
+  bindLobby(root, { ...ctx, scope });
   const list = root.querySelector('[data-sk-list]');
   const tierBtns = [...root.querySelectorAll('[data-tier]')];
   const ownedBtn = root.querySelector('[data-sk-owned="1"]');

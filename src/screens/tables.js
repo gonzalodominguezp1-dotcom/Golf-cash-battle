@@ -2,7 +2,7 @@
 // destacada y acceso al grupo. El panel de grupo vive en partyPanel.js (T030).
 // El CSS (tables.css) lo importa el arranque, no este módulo, para poder probarlo en Node.
 import { PLATFORM_COMMISSION, TIERS, potFor, prizeFor } from '../config.js';
-import { bindHeader, header, listState } from './components.js';
+import { bindHeader, bindLobby, header, listState, lobbyButton } from './components.js';
 import { lastTier, rememberTier } from './hubRules.js';
 import { mountPartyPanel } from './partyPanel.js';
 import { coin, esc, fmt } from './shared.js';
@@ -64,8 +64,10 @@ export async function mount(root, ctx) {
       ${backend?.parties ? '<section class="party-box" data-party-box="1"></section>' : ''}
       <div class="tiers" data-tier-list="1">${TIERS.map((tier) => tierCard(tier, balance, last)).join('')}</div>
       <p class="legal">${backend?.tournaments ? esc(t('tables.legalLive')) : ''}${esc(t('tables.legalRules', { pct: Math.round(PLATFORM_COMMISSION * 100) }))}</p>` : ''}</div>
+      ${lobbyButton()}
     </main>`;
     bindHeader(root, { ...ctx, scope: sc });
+    bindLobby(root, { ...ctx, scope: sc });
     const body = root.querySelector('[data-tables-body]');
     if (!ready) {
       listState(body, { state, errorText: t('tables.loadError'), onRetry: load, scope: sc });

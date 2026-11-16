@@ -1,7 +1,7 @@
 // Ranking de victorias (T031): lo que showRanking hacía en main.js, ahora como pantalla del router.
 // El CSS (ranking.css) lo importa el arranque, no este módulo, para poder probarlo en Node.
 import { frameById } from '../progress/prestige.js';
-import { bindHeader, header, listState } from './components.js';
+import { bindHeader, bindLobby, header, listState, lobbyButton } from './components.js';
 import { avatarHtml, esc } from './shared.js';
 import { t } from './texts/index.js';
 import './texts/common.js';
@@ -26,8 +26,9 @@ export async function mount(root, ctx) {
   let gone = false, reads = 0, sc = null, cancelRead = () => {};
 
   if (!account) { // sin servidor: el hub ya lo avisa; aquí el mismo mensaje y volver
-    root.innerHTML = `<main class="screen ranking">${header({ title: t('ranking.title') })}<div class="ranking-body"><p class="offline" role="status">${esc(t('ranking.offline'))}</p></div></main>`;
+    root.innerHTML = `<main class="screen ranking">${header({ title: t('ranking.title') })}<div class="ranking-body"><p class="offline" role="status">${esc(t('ranking.offline'))}</p></div>${lobbyButton()}</main>`;
     bindHeader(root, { ...ctx, scope });
+    bindLobby(root, { ...ctx, scope });
     return { title: t('ranking.title'), destroy() { gone = true; scope.dispose(); } };
   }
 
@@ -41,8 +42,10 @@ export async function mount(root, ctx) {
       <div class="rank-me" data-ranking-me="1"></div>
       <p class="legal">${esc(t('ranking.legal'))}</p>
     </div>
+    ${lobbyButton()}
   </main>`;
   bindHeader(root, { ...ctx, scope });
+  bindLobby(root, { ...ctx, scope });
   const list = root.querySelector('[data-ranking-list]');
   const me = root.querySelector('[data-ranking-me]');
   const period = root.querySelector('[data-ranking-period]');

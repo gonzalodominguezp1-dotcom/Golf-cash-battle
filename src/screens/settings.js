@@ -1,7 +1,7 @@
 // Pantalla Ajustes (T037): lo que showSettings pintaba en main.js. El panel (controles, calidad, sonido) es el de siempre,
 // src/ui/settingsPanel.js: aquí solo se monta, con carga no bloqueante, tope de red y ciclo de vida. El silencio (sonido)
 // sigue en la sección Sonido y en la tecla M; nada de eso cambia. Todas las secciones guardan como hoy.
-import { listState } from './components.js';
+import { bindLobby, listState, lobbyButton } from './components.js';
 import { esc } from './shared.js';
 import { t } from './texts/index.js';
 import './texts/common.js';
@@ -17,7 +17,8 @@ export function mount(root, ctx) {
   let gone = false, run = 0, sc = null, panel = null;
 
   ctx.legacy?.enterSettings?.(); // lo que showSettings hacía al entrar: cerrar final y sala en vivo
-  root.innerHTML = `<main class="screen settings-screen" aria-label="${esc(t('settings.title'))}"><div class="settings-host" data-settings-host></div></main>`;
+  root.innerHTML = `<main class="screen settings-screen" aria-label="${esc(t('settings.title'))}"><div class="settings-host" data-settings-host></div>${lobbyButton()}</main>`;
+  bindLobby(root, { ...ctx, scope });
   const host = root.querySelector('[data-settings-host]');
 
   const synced = () => !!backend?.account && !backend.account.profile?.is_anonymous;

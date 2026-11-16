@@ -28,9 +28,9 @@ function fakeRoot(env) {
 
 function makeCtx(env, extra = {}) {
   const played = [];
-  const back = { n: 0 };
+  const back = { n: 0, reset: 0 };
   const ctx = {
-    router: { back: () => { back.n++; } },
+    router: { back: () => { back.n++; }, reset: () => { back.reset++; } },
     scope: createScope({ win: env.win, doc: env.doc, timers: env.timers }),
     icon: () => '<i></i>',
     actions: { playFreePlay: (i) => played.push(i) },
@@ -75,14 +75,15 @@ test('mapas: elegir un hoyo o el desempate llama a playFreePlay', async () => {
   assert.deepEqual(played, [3, 'tiebreak']);
 });
 
-test('mapas: «Volver al Menú Principal» vuelve atrás por el router', async () => {
+test('mapas: «Volver al Menú Principal» va al lobby (router.reset), no atrás', async () => {
   const env = fakeEnv();
   const root = fakeRoot(env);
   const { ctx, back, played } = makeCtx(env);
   mount(root, ctx, {});
   await flush();
   click(host(root), 'home', '');
-  assert.equal(back.n, 1);
+  assert.equal(back.reset, 1);
+  assert.equal(back.n, 0);
   assert.deepEqual(played, []);
 });
 

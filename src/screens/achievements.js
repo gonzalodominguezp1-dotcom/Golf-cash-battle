@@ -2,7 +2,7 @@
 // Al abrirla marca como vistos los completados: el hub repinta su punto en onUncover.
 import { CHALLENGES, SKINS } from '../progress/skins.js';
 import { esc } from './shared.js';
-import { header, card, listState, bindHeader } from './components.js';
+import { header, card, listState, bindHeader, bindLobby, lobbyButton } from './components.js';
 import { orderAchievements, markSeen } from './achievementsRules.js';
 import { t } from './texts/index.js';
 import './texts/common.js';
@@ -37,8 +37,9 @@ export async function mount(root, ctx) {
     ? `<h2 class="ach-h">${esc(t(`achievements.${key}`))} (${rows.length})</h2><ul class="ach-grid">${rows.map(cardHtml).join('')}</ul>`
     : '');
 
-  root.innerHTML = `<main class="screen ach" aria-label="${esc(t('achievements.title'))}">${header({ title: t('achievements.title') })}<div class="ach-body" data-ach-list></div></main>`;
+  root.innerHTML = `<main class="screen ach" aria-label="${esc(t('achievements.title'))}">${header({ title: t('achievements.title') })}<div class="ach-body" data-ach-list></div>${lobbyButton()}</main>`;
   bindHeader(root, { ...ctx, scope });
+  bindLobby(root, { ...ctx, scope });
   const el = root.querySelector('[data-ach-list]');
 
   const render = () => {

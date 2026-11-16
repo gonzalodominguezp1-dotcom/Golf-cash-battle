@@ -7,6 +7,8 @@ register('common', {
   news: '{n} novedades',
   empty: 'Todavía no hay nada aquí.',
   error: 'No se pudo cargar. Inténtalo de nuevo.',
+  lobby: 'Lobby',
+  lobbyLabel: 'Volver al lobby',
 });
 
 register('common', {

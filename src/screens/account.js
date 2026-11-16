@@ -2,7 +2,7 @@
 // que se encuentra por convención (glob con nombres literales: Vite tolera los que aún no existen). T035 (Monedero) y
 // T036 (Progreso) solo añaden su archivo. Mientras no exista: Monedero usa el hueco heredado ctx.legacy['account.monedero']
 // (el monedero de main.js, para no perder depósitos ni historial) y Progreso muestra «En construcción».
-import { bindHeader, header, listState } from './components.js';
+import { bindHeader, bindLobby, header, listState, lobbyButton } from './components.js';
 import { esc } from './shared.js';
 import { t } from './texts/index.js';
 import './texts/common.js';
@@ -27,8 +27,10 @@ export async function mount(root, ctx, params = {}, { modules = tabModules() } =
       ${Object.keys(ACCOUNT_TAB_FILES).map((k) => `<button type="button" data-acc-tab="${k}" class="${k === tab ? 'on' : ''}" aria-current="${k === tab ? 'page' : 'false'}">${esc(t(TAB_LABELS[k]))}</button>`).join('')}
     </nav>
     <div class="acct-body" data-acc-body="1"></div>
+    ${lobbyButton()}
   </main>`;
   bindHeader(root, { ...ctx, scope });
+  bindLobby(root, { ...ctx, scope });
   for (const b of root.querySelectorAll('[data-acc-tab]')) {
     scope.on(b, 'click', () => {
       if (b.dataset.accTab === tab) return;
