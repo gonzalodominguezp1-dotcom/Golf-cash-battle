@@ -1,0 +1,25 @@
+import { register } from './index.js';
+
+register('progress', {
+  title: 'Tu progreso',
+  levelLine: 'Nv {level} · {frame}',
+  noFrame: 'Sin marco',
+  xpLabel: 'XP al siguiente nivel',
+  xpValue: '{into} / {need} XP',
+  xpBarLabel: 'Experiencia del nivel actual',
+  currentFrame: 'Marco actual',
+  nextFrameTitle: 'Siguiente marco',
+  nextFrameLine: '{name}: te faltan {missing} niveles (Nv {level})',
+  nextFrameLineOne: '{name}: te falta 1 nivel (Nv {level})',
+  allFrames: 'Ya tienes todos los marcos.',
+  statsTitle: 'Estadísticas',
+  matches: 'Partidas',
+  wins: 'Victorias',
+  streak: 'Racha',
+  bestStreak: 'Mejor racha',
+  birdies: 'Birdies',
+  aces: 'Aces',
+  emptyStats: 'Todavía no hay estadísticas que mostrar.',
+  noMatches: 'Juega tu primera partida para empezar a sumar estadísticas.',
+  loadError: 'No se pudo cargar tu progreso. Inténtalo de nuevo.',
+});
