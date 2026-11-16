@@ -4,6 +4,7 @@
 import { registerAsset } from '../assetRegistry.js';
 import { makeTree, makeRock, makeFlower } from '../../game/render/environment.js';
 import { makeRoundTree } from '../../game/render/assets/roundTree.js';
+import { makePine } from '../../game/render/assets/pine.js';
 
 registerAsset({
   id: 'tree-round',
@@ -16,7 +17,8 @@ registerAsset({
   id: 'pine',
   label: 'Pino',
   makeOld: (rng) => makeTree('pine', rng, 0, 0, 0),
-  makeNew: () => null,
+  // Paso 2: pisos lisos con borde ondulado, tronco a la vista, punta fina (paleta: preset.theme si viene)
+  makeNew: (rng, preset) => makePine(rng, preset),
 });
 registerAsset({
   id: 'rock',
