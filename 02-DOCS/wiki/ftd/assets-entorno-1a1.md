@@ -129,11 +129,30 @@ los entornos tras la aprobación.
   duplicada) cuando nada lo use.
 - `pnpm test` en verde. Recapturar previews (`pnpm previews:capture`).
 
+## ESTADO PARA RETOMAR (actualizado 2026-11-16)
+**Siguiente acción, en este orden:**
+1. Sustituir el pino viejo (`makeTree('pine')`) por `makePine` en los entornos naturales de `environment.js` (el Paso 2 está aprobado pero solo vive en el laboratorio). Repetir los chequeos del árbol redondo: escala medida frente al viejo (constante nombrada), rng del hoyo con tiradas fijas, `place`/`clear`/`heightAt` intactos, sol = primera luz direccional, test de entorno (modelo: `tests/round-tree-env.test.js`). Paleta: oscurecer los verdes del tema también cuando lleguen por `opts.leaves`.
+2. Paso 3 — palmera (Sonnet), y seguir el orden del plan. Cada asset: laboratorio → visto bueno del usuario → sustituir en entornos.
+
+**Hecho y aprobado por el usuario:** L (laboratorio), 0 (viento), 1 (árbol redondo, ya sustituido en entornos), 2 (pino, solo laboratorio).
+
+**Dónde se trabaja:** worktree `C:\Users\DEV\Desktop\golfito\.worktrees\la-chaqueta-bionica`, rama `la-chaqueta-bionica` (la rama NO se puede sacar en la carpeta de main: ya está en ese worktree). Commits y push solo ahí, nunca a `main` ni a la rama del otro. pnpm siempre.
+
+**Cómo se ejecuta (decidido con el usuario):** el principal coordina y habla; cada asset es una tarea para un subagente `developer`. Opus (`model: opus`) para lo complejo: césped (Paso 5) y agua (Paso 8). Sonnet para lo mecánico: palmera, arbustos, flores, rocas, especiales, sustituciones en `environment.js`, tests y previews. Tras cada tarea, revisión de contexto limpio (`refuter-correctness`, solo lectura; `rsc risk` ha dado siempre 1 revisor). El usuario hace las comprobaciones visuales: NO abrir navegador ni dev server. Ningún asset avanza sin su visto bueno. Los subagentes no hacen commit: lo hace el coordinador tras revisar, con rutas explícitas (hay trabajo VFX ajeno sin commitear en `src/game/render/skins/*`, `vfx/*`, tests `vfx-*`, y un `assets 3d.txt` suelto: no tocarlos ni commitearlos). Dos agentes en paralelo solo si no comparten ficheros.
+
+**Técnica fijada (reutilizar en los siguientes):** `src/game/render/assets/` con `wind.js` (viento compartido: `applyWind`, `prepareWind`, `setWindField`, `updateWind` UNA vez por fotograma; capas trunk/canopy/leaf/grass/flower), `roundTree.js` y `pine.js` como modelo (materiales Lambert compartidos con color en vértice, normales suavizadas, oclusión en color de vértice, luz de borde en el Lambert, rng que NO depende de la calidad, ajuste al presupuesto sin tiradas extra, compatible con `bakeStatic`; `userData.keepUv` si hay textura). `treeKit.js` tiene helpers copiados de roundTree. Laboratorio: `assets-lab.html` + `src/lab/` (registro en `src/lab/assets/examples.js`; el tema llega por `preset.theme`).
+
+**Estado de tests:** `pnpm test` 342/347; los 5 fallos son VFX ajenos (`vfx-runtime` x4, `vfx-packs` golden). `pnpm build` ok; `assets-lab.html` no entra en `dist`.
+
+**Pendientes anotados para el cierre (Paso F):** unificar `treeKit.js` y `roundTree.js` (código duplicado `withRim`/`treeLevel`); GLSL (viento, luz de borde) y texturas de tarjetas nunca compilados en GPU real: el usuario lo valida a ojo; posible halo oscuro en tarjetas lejanas; `previews:capture` sin recapturar; el «Antes» del laboratorio usa `makeTree`/`makeRock`/`makeFlower` exportados de `environment.js` (no borrar hasta el cierre); las sombras no se mecen con el viento; pino nevado, cactus y árbol seco son del Paso 9; la luz de borde usa `directionalLights[0]`.
+
+**Aviso de sincronización:** el hook `rsc/knowledge` no pudo subir este documento (choca con un cambio ya existente allí). La versión buena es la de esta rama; hay que juntarlas a mano cuando el usuario lo pida.
+
 ## Checklist
 - [x] Paso L — laboratorio (visto bueno del usuario 2026-11-15; parpadeo en «Después» en arreglo)
 - [x] Paso 0 — viento compartido (visto bueno del usuario 2026-11-15)
 - [x] Paso 1 — árbol redondo (visto bueno del usuario 2026-11-16; sustituido en entornos naturales)
-- [ ] Paso 2 — pino (entregado en el laboratorio, pendiente de visto bueno del usuario)
+- [x] Paso 2 — pino (visto bueno del usuario 2026-11-16; AÚN NO sustituido en `environment.js`)
 - [ ] Paso 3 — palmera
 - [ ] Paso 4 — arbustos
 - [ ] Paso 5 — césped
@@ -169,4 +188,4 @@ los entornos tras la aprobación.
 (2026-11-16) **Paso 2 — pino entregado en el laboratorio, pendiente de visto bueno.** `src/game/render/assets/pine.js` + `treeKit.js`, `tests/pine.test.js` (14/14, 5 mutaciones manuales detectadas). 4 variantes; triángulos máx. 218/500/998 (presupuesto 220/500/1000); 2 llamadas de dibujo por bosque; opción `snow` solo en color de vértice (pino nevado completo en Paso 9). Revisión limpia: sin bloqueantes; nit: `treeKit.js` duplica `withRim/treeLevel` de `roundTree.js` (unificar en el cierre); `pinePalette` solo oscurece verdes del tema si llegan por `theme`. `pnpm test` 342/347 (5 VFX ajenos), `pnpm build` ok. Aún NO sustituido en `environment.js`.
 
 ## Next step
-Usuario revisa el pino en el laboratorio. Con su visto bueno: sustituir el pino en `environment.js` (repetir chequeos de rng/escala/`place`) y seguir con el Paso 3 (palmera).
+Ver «ESTADO PARA RETOMAR» arriba: sustituir el pino en `environment.js` y seguir con el Paso 3 (palmera).
