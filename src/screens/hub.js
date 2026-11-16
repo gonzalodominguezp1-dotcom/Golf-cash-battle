@@ -202,8 +202,11 @@ export async function mount(root, ctx) {
   const box = root.querySelector('[data-hub-scene="1"]');
   const doc = scope.doc;
   let scene = null, attached = false, covered = false;
+  // dueño de la escena: el host monta el hub nuevo antes de destruir el viejo y ambos comparten la misma escena.
+  // Solo el dueño actual la pausa o reanuda; si no, el viejo la pausaría justo después de que el nuevo la reanudara.
+  const owner = {};
   const sync = () => {
-    if (!scene) return;
+    if (!scene || scene.hubOwner !== owner) return;
     try { (!covered && !doc?.hidden) ? scene.resume() : scene.pause(); } catch { /* una escena rota no tumba el hub */ }
   };
   const place = () => {
@@ -216,7 +219,10 @@ export async function mount(root, ctx) {
     sync();
   };
   const drop = () => {
-    try { scene?.pause(); } catch { /* ya liberada */ }
+    if (scene && scene.hubOwner === owner) {
+      try { scene.pause(); } catch { /* ya liberada */ }
+      scene.hubOwner = null;
+    }
     scene = null; attached = false;
     if (box) box.innerHTML = '';
   };
@@ -224,6 +230,7 @@ export async function mount(root, ctx) {
     if (sc === scene) return;
     if (scene) drop();
     scene = sc || null;
+    if (scene) scene.hubOwner = owner;
     place();
   };
   const reviveScene = () => { try { ctx.actions.reviveHubScene?.(); } catch (err) { console.warn('hubScene.revive', err?.message ?? err); } };
