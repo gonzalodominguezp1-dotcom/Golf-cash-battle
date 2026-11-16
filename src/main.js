@@ -264,20 +264,6 @@ function reviveHubScene() {
 }
 const goHome = createGoHome({ leaveFinale: () => leaveFinale(), stopLive: () => stopLive(), releasePlay, go: (to) => go(to) });
 
-// ---------- ajustes ----------
-
-/** true si los ajustes viajan con la cuenta (no en modo local ni en cuenta de invitado). */
-const settingsSynced = () => !!backend?.account && !backend.account.profile?.is_anonymous;
-
-async function showSettings(section = lastSection()) {
-  leaveFinale();
-  stopLive();
-  screen = 'settings';
-  const view = h('<main class="screen settings-screen"><div class="settings-host"></div></main>');
-  await shell(view, { nav: false });
-  mountSettingsPanel(view.querySelector('.settings-host'), { layout: 'screen', section, synced: settingsSynced(), onBack: () => goHome() });
-}
-
 // cartas holográficas: se inclinan y el brillo sigue al dedo
 function bindHolo(root) {
   // en móvil/táctil no hay inclinación ni brillo que siga al dedo: cada pointermove forzaba layout + estilos
@@ -1838,7 +1824,7 @@ function startRouting(b) {
     legacy: {
       // Mesas (T028): lo que la pantalla necesita de main.js
       enterTables: () => { leaveFinale(); stopLive(); screen = 'lobby'; releasePlay(); },
-      settings: () => showSettings(),
+      enterSettings: () => { leaveFinale(); stopLive(); screen = 'settings'; releasePlay(); },
       maps: () => showFreePlayCourseSelect(),
     },
   });
