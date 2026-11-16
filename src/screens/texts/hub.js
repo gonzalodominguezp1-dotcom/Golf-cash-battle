@@ -1,0 +1,42 @@
+import { register } from './index.js';
+
+register('hub', {
+  level: 'Nivel {level}, {pct} % al siguiente',
+  badge: '{n} novedades',
+  badgeOne: '1 novedad',
+  title: 'Inicio',
+  logoAlt: 'Golf Cash Battle',
+  account: 'Cuenta',
+  accountLabel: 'Mi cuenta. {level}',
+  accountGuestLabel: 'Mi cuenta (invitado). {level}',
+  needsAccount: 'Requiere cuenta',
+  settings: 'Ajustes',
+  fullscreen: 'Pantalla',
+  fullscreenLabel: 'Pantalla completa',
+  ranking: 'Ranking',
+  achievements: 'Logros',
+  skins: 'Skins',
+  friends: 'Amigos',
+  maps: 'Mapas',
+  practice: 'Práctica',
+  play: 'JUGAR',
+  wallet: 'Monedero',
+  walletLabel: 'Monedero: {n} monedas',
+  walletLabelOne: 'Monedero: 1 moneda',
+  walletEmpty: '—',
+});
+
+register('hub', {
+  lockedLabel: '{name}, bloqueado: {reason}',
+  understood: 'Entendido',
+  goAccount: 'Ir a Cuenta',
+  'lock.name.friends': 'Amigos y grupo',
+  'lock.name.ranking': 'Ranking',
+  'lock.needsAccountShort': 'requiere cuenta',
+  'lock.offlineShort': 'requiere conexión con el servidor',
+  'lock.friendsNeedsAccount': 'Necesitas una cuenta para usar Amigos y grupo. Con una partida de invitado no se pueden añadir amigos ni formar grupos. Crea tu cuenta con email y vuelve.',
+  'lock.needsNameShort': 'requiere nombre de usuario',
+  'lock.friendsNeedsName': 'Ponte primero un nombre de usuario para añadir amigos.',
+  'lock.friendsOffline': 'Amigos y grupo necesita conexión con el servidor. Ahora mismo juegas sin conexión.',
+  'lock.rankingOffline': 'El ranking de victorias necesita conexión con el servidor.',
+});

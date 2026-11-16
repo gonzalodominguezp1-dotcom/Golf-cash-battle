@@ -1,6 +1,6 @@
 // Pintado 2D de las bolas (sin three.js): textura equirrectangular de cada skin y la
 // imagen sombreada `ballPreview` que usa la interfaz como marcador de posición. Vive aparte
-// de ballSkins.js para que lobby, desafíos y pantalla de skins no carguen three.js.
+// de ballSkins.js para que lobby, logros y pantalla de skins no carguen three.js.
 
 // Colores como THREE.Color: el hex (sRGB) pasa a lineal; `mix` mezcla en lineal y vuelve a sRGB.
 const s2l = (c) => (c < 0.04045 ? c * 0.0773993808 : Math.pow(c * 0.9478672986 + 0.0521327014, 2.4));

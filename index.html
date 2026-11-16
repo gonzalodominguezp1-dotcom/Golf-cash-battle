@@ -31,9 +31,84 @@
     <meta name="twitter:title" content="Golf Cash Battle ⛳ Minigolf 3D contra tus colegas" />
     <meta name="twitter:description" content="Partidas de 8 jugadores, mismos hoyos para todos y gana el que menos golpes da." />
     <meta name="twitter:image" content="%SITE_URL%/og-image.jpg" />
+    <style>
+      /* Fuera de #splash a propósito: evita el blanco del navegador en el primer pintado y tras el fundido. */
+      /* AC25 (pregunta abierta): el CSS de Vite (render-blocking, ~123 KB) se descarga antes del primer pintado; este <style> inline no lo evita. */
+      html, body { margin: 0; background: #0b0f15; }
+      #splash { --lh: 60vh; --gold: #d4af37; --emerald: #10b981; --dim: #cbd5e1; position: fixed; inset: 0; z-index: 9999; overflow: hidden; background: #5594c5; color: #f1f5f9; font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; transition: opacity 0.5s ease; }
+      #splash[hidden] { display: none; }
+      #splash.is-hiding { opacity: 0; pointer-events: none; }
+      #splash .layer { position: absolute; inset: 0 -48px; background-repeat: no-repeat; background-position: center bottom; background-size: auto var(--lh); pointer-events: none; }
+      #splash .sky { background-image: url('/splash/sky.webp'); transform: translateX(-6px); }
+      #splash .forest { background-image: url('/splash/forest.webp'); transform: translateX(10px) scale(1.04); transform-origin: 50% 100%; }
+      #splash .green { background-image: url('/splash/green.webp'); transform: translateX(22px) scale(1.08); transform-origin: 50% 100%; }
+      #splash .shade { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(8, 14, 24, 0.38) 0%, rgba(8, 14, 24, 0) 34%), linear-gradient(0deg, rgba(8, 14, 24, 0.82) 0%, rgba(8, 14, 24, 0.5) 22%, rgba(8, 14, 24, 0) 46%); }
+      #splash .brand { position: absolute; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 7vh); transform: translateX(-50%); }
+      #splash .brand img { display: block; width: min(46vw, 190px); height: auto; filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.45)) drop-shadow(0 0 22px rgba(212, 175, 55, 0.35)); animation: gcb-glint 2.4s ease-in-out infinite; }
+      @keyframes gcb-glint { 0%, 70%, 100% { filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.45)) drop-shadow(0 0 18px rgba(212, 175, 55, 0.3)); } 80% { filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.45)) drop-shadow(0 0 34px rgba(255, 214, 102, 0.8)); } }
+      #splash .ball-wrap { position: absolute; left: 50%; bottom: 24vh; width: 0; height: 0; transform: translateX(-4vw); }
+      /* Bola de fuego: 2 fotogramas (180x100, bola de 44 px) que se funden despacio (ciclo 1,8 s); el vaivén lo pone splash.js en .ball. */
+      #splash .ball { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+      #splash .fire { position: absolute; left: -138px; top: -50px; width: 180px; height: 100px; transform-origin: 138px 50px; transform: rotate(-24deg); filter: drop-shadow(0 0 10px rgba(255, 140, 40, 0.55)); }
+      #splash .fire img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+      #splash .fire .fa { animation: gcb-fire-out 0.9s ease-in-out infinite alternate; }
+      #splash .fire .fb { opacity: 0; animation: gcb-fire-in 0.9s ease-in-out infinite alternate; }
+      @keyframes gcb-fire-in { from { opacity: 0; } to { opacity: 1; } }
+      @keyframes gcb-fire-out { from { opacity: 1; } to { opacity: 0.15; } }
+      #splash .ball-shadow { position: absolute; left: -26px; top: 30px; width: 52px; height: 12px; border-radius: 50%; background: rgba(0, 0, 0, 0.34); filter: blur(3px); }
+      #splash .loader { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 5vh); box-sizing: border-box; width: min(100% - 40px, 520px); display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; text-align: center; }
+      #splash .row { display: flex; justify-content: space-between; align-items: baseline; font-size: 17px; font-weight: 600; color: #f1f5f9; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.75); }
+      #splash .row .label { flex: 1 1 auto; min-width: 0; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      #splash .pct { flex: none; margin-left: 12px; white-space: nowrap; font-family: 'Outfit', system-ui, sans-serif; font-weight: 700; font-size: 30px; color: #f5c542; font-variant-numeric: tabular-nums; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7); }
+      #splash .bar { height: 14px; border-radius: 999px; background: rgba(0, 0, 0, 0.38); box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2); overflow: hidden; }
+      #splash .bar > i { display: block; height: 100%; width: 5%; border-radius: inherit; background: linear-gradient(90deg, #d9a82e, #ffe08a 50%, #d9a82e); box-shadow: 0 0 14px rgba(245, 197, 66, 0.55); background-size: 200% 100%; animation: gcb-sheen 1.6s linear infinite; transition: width 0.3s ease; }
+      @keyframes gcb-sheen { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+      #splash .tip { margin: 0; min-height: 2.8em; font-size: 18px; line-height: 1.4; font-weight: 500; color: #f1f5f9; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85); }
+      #splash .tip b { color: #f5c542; letter-spacing: 0.08em; margin-right: 6px; }
+      #splash .err { display: none; gap: 12px; justify-items: center; }
+      #splash .err h1 { margin: 0; font: 700 18px/1.25 'Outfit', system-ui, sans-serif; }
+      #splash .err p { margin: 0; font-size: 14px; line-height: 1.4; color: var(--dim); }
+      #splash .err button { min-height: 48px; min-width: 180px; padding: 0 28px; border: 0; border-radius: 12px; cursor: pointer; font: 700 16px 'Outfit', system-ui, sans-serif; color: #04251a; background: linear-gradient(180deg, #34d399, var(--emerald)); box-shadow: 0 6px 18px rgba(16, 185, 129, 0.3); }
+      #splash .err button:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+      #splash[data-state="error"] .err { display: grid; }
+      #splash[data-state="error"] .prog, #splash[data-state="error"] .tip { display: none; }
+      #splash[data-state="error"] .fire { opacity: 0.12; }
+      #splash[data-state="error"] .fire img { animation: none; }
+      #splash[data-state="error"] .brand img, #splash[data-state="error"] .bar > i { animation: none; }
+      @media (prefers-reduced-motion: reduce) { #splash, #splash *, #splash *::before, #splash *::after { animation: none !important; transition: none !important; } }
+      @media (min-aspect-ratio: 1/1) {
+        #splash { --lh: 100vh; }
+        #splash .layer { background-size: cover; background-position: center; }
+        #splash .brand { top: 6vh; }
+        #splash .brand img { width: min(18vw, 230px); }
+        #splash .ball-wrap { bottom: 36vh; transform: translateX(-2vw); }
+        #splash .loader { width: 560px; }
+      }
+    </style>
   </head>
   <body>
+    <div id="splash" data-max-ms="15000" role="region" aria-label="Golf Cash Battle">
+      <div class="layer sky"></div>
+      <div class="layer green"></div>
+      <div class="layer forest"></div>
+      <div class="shade"></div>
+      <div class="brand"><img src="/logo-header.png" alt="Golf Cash Battle" /></div>
+      <div class="ball-wrap" aria-hidden="true"><span class="ball-shadow"></span><span class="ball"><span class="fire"><img class="fa" src="/splash/fireball-a.webp" alt="" width="180" height="100" /><img class="fb" src="/splash/fireball-b.webp" alt="" width="180" height="100" /></span></span></div>
+      <section class="loader">
+        <div class="prog">
+          <div class="row"><span class="label" role="status">Preparando el campo…</span><span class="pct">5 %</span></div>
+          <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="5" aria-label="Cargando"><i></i></div>
+        </div>
+        <p class="tip"><b>TIP</b><span class="tip-text">Un golpe suave en el green vale más que uno fuerte.</span></p>
+        <div class="err" role="alert">
+          <h1>No hemos podido conectar</h1>
+          <p>La carga está tardando demasiado. Revisa tu conexión e inténtalo de nuevo.</p>
+          <button type="button" class="retry">Reintentar</button>
+        </div>
+      </section>
+    </div>
     <div id="app"></div>
+    <script src="/splash.js"></script>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

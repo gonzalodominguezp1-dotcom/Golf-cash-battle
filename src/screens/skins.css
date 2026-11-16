@@ -1,0 +1,14 @@
+/* Skins (T032). Las clases .sk-* (tarjetas, filtros, inspector heredado) vienen de style.css; aquí lo propio de la pantalla. */
+.skins .skins-body { display: grid; gap: 8px; padding: 0 calc(env(safe-area-inset-right, 0px) + 12px) calc(env(safe-area-inset-bottom, 0px) + 16px) calc(env(safe-area-inset-left, 0px) + 12px); }
+.skins .sub { margin: 0; }
+.skins .sk-fchip { min-height: 44px; }
+.skins .sk-fcoll { min-height: 44px; }
+.skins .sk-fchip:focus-visible, .skins .sk-fcoll:focus-visible, .skins .scr-btn:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.skins .sk-grid { list-style: none; margin: 14px 0 0; padding: 0; }
+.skins .sk-grid > li { display: grid; min-width: 0; }
+.skins .sk-card { width: 100%; min-height: 44px; }
+.skins .sk-state { font-weight: 800; letter-spacing: 0.04em; }
+.skins .sk-card.equipped .sk-state { color: var(--yellow, #ffd23f); }
+.skins .sk-card.locked .sk-state { color: var(--muted); }
+.skins .scr-state { margin: 8px 0; }
+.skins .scr-btn { min-height: 44px; }

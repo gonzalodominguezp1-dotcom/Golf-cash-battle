@@ -6,7 +6,7 @@ tags: [sdd, constitution]
 timestamp: 2026-10-27T12:00:00Z
 topic: sdd
 status: ratified
-version: 1.1.0
+version: 1.1.1
 ---
 
 # golfito — Constitution
@@ -123,3 +123,4 @@ Estas reglas son el objetivo. Hoy no todas se cumplen. Cada brecha tiene que cer
 | 2026-10-27 | draft | Borrador generado por `rsc onboard`. | La fase SDD necesita una constitución. |
 | 2026-10-27 | 1.0.0 | Constitución redactada y ratificada con las reglas de stack, calidad, seguridad (OWASP, CVE, RLS, claves), UX, rendimiento y definición de terminado. | Primera versión aprobada por el equipo. El uso de `VITE_BACKEND=local` no cambia y no se regula aquí. |
 | 2026-10-27 | 1.1.0 | Añadida K3.5: autoría de commits (Chakets o La Yuinta) y sin trailers de IA. | Resuelve el conflicto con la skill `ship`, que pedía otra autoría y prohibía los trailers de IA. Se actualiza la brecha de auditoría de CVE (ahora en CI, con las devDependencies pendientes). |
+| 2026-11-12 | 1.1.1 | Excepción a U6.6 en el hub: el botón de silencio no se muestra en el hub; sigue en Ajustes y con la tecla M. Resto de U6.6 intacto. | C11 (decisión del humano en la spec ui-pantallas). Responsable: Chakets. |

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 
@@ -16,9 +17,28 @@ const siteUrlPlugin = {
   transformIndexHtml: { order: 'pre', handler: (html) => html.replaceAll('%SITE_URL%', siteUrl) },
 };
 
+// Id de build: el commit de Vercel si existe; si no, una marca de tiempo (cada build cambia).
+const buildId = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) || Date.now().toString(36);
+const pkgVersion = JSON.parse(readFileSync(resolve(import.meta.dirname, 'package.json'), 'utf8')).version;
+
+// Publica dist/version.json para que la página detecte una build nueva (ver src/ui/versionCheck.js).
+const versionJsonPlugin = {
+  name: 'version-json',
+  generateBundle() {
+    this.emitFile({
+      type: 'asset',
+      fileName: 'version.json',
+      source: `${JSON.stringify({ version: pkgVersion, build: buildId })}\n`,
+    });
+  },
+};
+
 // Dos páginas: el juego (index.html) y el panel de administración (admin.html).
 export default defineConfig({
-  plugins: [siteUrlPlugin],
+  plugins: [siteUrlPlugin, versionJsonPlugin],
+  define: {
+    __APP_BUILD__: JSON.stringify(buildId),
+  },
   build: {
     rollupOptions: {
       input: {
