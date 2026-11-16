@@ -59,19 +59,22 @@
 
 /* píldora de saldo: UN botón (monedas · cantidad · monedero), centrado en vertical con el avatar */
 .hub-wallet {
-  height: var(--pill); min-height: 44px; min-width: 96px; box-sizing: border-box; padding: 0 14px 0 10px; margin-top: calc((var(--face) - var(--pill)) / 2);
-  /* la caja crece con las cifras (1.000 → 10.000 → 100.000 …): no se encoge (flex: none) y mide lo que mide su contenido */
-  display: flex; align-items: center; gap: 6px; flex: none; width: max-content; border-radius: 999px;
+  height: var(--pill); min-height: 44px; min-width: 96px; box-sizing: border-box; padding: 0 14px; margin-top: calc((var(--face) - var(--pill)) / 2);
+  /* la caja crece con las cifras (1.000 → 10.000 → 100.000 …): no se encoge (flex: none) y mide lo que mide su contenido.
+     Padding simétrico a ambos lados; el icono se separa del número con gap, y ambos van centrados en vertical */
+  display: flex; align-items: center; justify-content: center; gap: 8px; flex: none; width: max-content; border-radius: 999px;
   background: linear-gradient(180deg, rgba(30, 41, 59, 0.92), rgba(11, 15, 21, 0.92)); color: #fff;
   border: 1.5px solid rgba(212, 175, 55, 0.75); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 .hub-wallet-ico { flex: none; display: grid; place-items: center; }
 .hub-wallet-ico > svg { width: 24px; height: 24px; }
 .hub-wallet-n {
-  white-space: nowrap; text-align: center; flex: none; /* nunca se trunca: un número cortado engaña (hasta 10 M va completo, luego «12,3 M») */
-  font: 800 16px/1 var(--body); font-variant-numeric: tabular-nums; color: #fff;
+  white-space: nowrap; text-align: right; flex: none; /* nunca se trunca: un número cortado engaña (hasta 10 M va completo, luego «12,3 M») */
+  font: 800 16px/1 var(--body); font-variant-numeric: tabular-nums lining-nums; color: #fff; line-height: 1; padding-bottom: 1px;
 }
+/* feedback solo al pulsar o con foco de teclado (sin estado de ratón) */
 .hub-wallet:active { transform: scale(0.97); }
+.hub-wallet:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
 
 /* columnas laterales y accesos */
 .hub-mid { display: flex; justify-content: space-between; align-items: center; padding: 0 var(--pad); min-height: 0; }
@@ -173,6 +176,7 @@
 @media (prefers-reduced-motion: reduce) {
   .hub-play { animation: none; }
   .hub-shine { animation: none; display: none; }
+  .hub-wallet:active { transform: none; }
 }
 
 @media (max-width: 420px) {
@@ -182,7 +186,7 @@
 }
 
 @media (max-width: 380px) {
-  .hub-wallet { padding: 0 10px 0 8px; }
+  .hub-wallet { padding: 0 10px; gap: 6px; }
   .hub-wallet-n { font-size: 14px; }
   .hub-wallet-ico > svg { width: 22px; height: 22px; }
 }
