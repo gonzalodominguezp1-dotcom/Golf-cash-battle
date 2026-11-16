@@ -21,11 +21,11 @@
 .scr-back:focus-visible, .scr-btn:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
 /* Botón «Lobby»: fijo abajo a la izquierda, móvil y escritorio. Por debajo de los diálogos (40) y de los avisos (1000). */
 .scr-lobby {
-  position: fixed; left: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 20;
+  position: fixed; left: calc(12px + env(safe-area-inset-left, 0px)); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 20;
   display: inline-flex; align-items: center; justify-content: center;
-  min-width: 44px; min-height: 44px; padding: 0 16px; box-sizing: border-box;
-  border-radius: var(--radius-sm); border: 1px solid var(--line-light); background: var(--panel); color: var(--text);
-  font: 700 0.95rem/1 var(--body); cursor: pointer; box-shadow: var(--shadow-card);
+  width: 52px; height: 52px; min-width: 44px; min-height: 44px; padding: 0; box-sizing: border-box;
+  border-radius: 50%; border: 1px solid var(--line-light); background: rgba(10, 16, 14, 0.78); color: var(--text);
+  cursor: pointer; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
 }
 .scr-lobby:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
 .scr-lobby:active { transform: scale(0.97); }

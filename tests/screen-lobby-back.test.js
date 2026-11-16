@@ -118,6 +118,12 @@ for (const s of SCREENS) {
     await settle();
     const btn = root.querySelector('[data-lobby]');
     assert.ok(btn, `${s.id}: falta [data-lobby] al montar`);
+    const html = root.innerHTML;
+    const m = html.match(/<button[^>]*data-lobby[^>]*>([\s\S]*?)<\/button>/);
+    assert.ok(m, `${s.id}: no se encuentra el botón lobby en el HTML`);
+    assert.match(m[0], /aria-label="[^"]+"/, `${s.id}: el lobby necesita aria-label`);
+    assert.match(m[1], /<svg[\s>]/, `${s.id}: el lobby lleva un icono svg`);
+    assert.equal(m[1].replace(/<svg[\s\S]*?<\/svg>/g, '').trim(), '', `${s.id}: el lobby no lleva texto visible`);
     btn.emit('click');
     assert.equal(router.calls.reset, 1, `${s.id}: el lobby debe llamar a router.reset`);
     assert.equal(router.calls.back, 0, `${s.id}: el lobby no debe llamar a router.back`);

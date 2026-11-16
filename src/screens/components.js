@@ -57,9 +57,10 @@ export function bindHeader(root, ctx) {
   else btn.addEventListener('click', go);
 }
 
-/** Botón «Lobby» fijo abajo a la izquierda (screens.css): lleva a la raíz (hub) con router.reset(). */
+/** Botón flotante sin texto (flecha atrás) fijo abajo a la izquierda (screens.css): lleva a la raíz (hub) con router.reset(). */
 export function lobbyButton() {
-  return `<button type="button" class="scr-lobby" data-lobby aria-label="${esc(t('common.lobbyLabel'))}">${esc(t('common.lobby'))}</button>`;
+  const label = esc(t('common.lobbyLabel'));
+  return `<button type="button" class="scr-lobby" data-lobby aria-label="${label}" title="${label}">${BACK_ICON}</button>`;
 }
 
 /** Conecta el botón «Lobby» con el router: vuelve a la raíz (hub). */
