@@ -213,12 +213,13 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   margin: 0 auto;
   padding: 16px 16px calc(env(safe-area-inset-bottom) + 100px);
   position: relative;
-  animation: screenEnter 0.34s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: screenEnter 0.34s cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
-/* Stagger suave de secciones en pantalla */
+/* Stagger suave de secciones en pantalla. «backwards» (no «both»): al acabar no queda transform/filter puesto,
+   que crearía un bloque contenedor y anclaría el botón Lobby (position: fixed) a la pantalla y no a la ventana. */
 .screen > * {
-  animation: staggerSlideUp 0.36s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: staggerSlideUp 0.36s cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 .screen > *:nth-child(1) { animation-delay: 0.02s; }
 .screen > *:nth-child(2) { animation-delay: 0.05s; }

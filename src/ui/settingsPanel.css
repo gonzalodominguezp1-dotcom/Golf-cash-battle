@@ -112,7 +112,7 @@
 /* ---------- pantalla: ordenador con menú lateral ---------- */
 /* la entrada de .screen deja un transform puesto, y con él la barra fija del móvil se iría con el
    contenido en vez de quedarse pegada abajo: aquí la entrada es solo de opacidad */
-.screen.settings-screen, .screen.settings-screen > * { animation: sp-fade 0.3s ease both; }
+.screen.settings-screen, .screen.settings-screen > * { animation: sp-fade 0.3s ease backwards; }
 @keyframes sp-fade { from { opacity: 0; } to { opacity: 1; } }
 .settings-screen { padding-bottom: 40px; }
 @media (min-width: 900px) {
