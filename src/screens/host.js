@@ -34,14 +34,30 @@ export function createHost({ router, routes, root, ctx, notify, win, doc, timers
     k.scope.dispose();
   };
 
-  // Tapar sin destruir: el DOM se saca de la raíz (las pantallas de encima, también las heredadas, la vacían y repintan).
-  const cover = () => {
+  // Deja en la raíz solo `keep` (el escenario nuevo) o nada. Se llama en el mismo turno que el relevo: nunca hay un frame vacío.
+  const clearRoot = (keep = null) => {
+    if (!keep) {
+      if (root.replaceChildren) root.replaceChildren(); else root.innerHTML = '';
+      return;
+    }
+    for (const n of root.childNodes ? [...root.childNodes] : []) if (n !== keep) root.removeChild?.(n);
+  };
+
+  // Tapar sin destruir: el DOM de la saliente sale de la raíz (el escenario `keep` se queda).
+  const cover = (keep = null) => {
     const c = current;
     current = null;
     try { c.screen?.onCover?.(); } catch { /* idem */ }
-    c.nodes = root.childNodes ? [...root.childNodes] : [];
-    if (root.replaceChildren) root.replaceChildren(); else root.innerHTML = '';
+    c.nodes = root.childNodes ? [...root.childNodes].filter((n) => n !== keep) : [];
+    clearRoot(keep);
     kept = c;
+  };
+
+  // Retira la saliente: se tapa (keepAlive) o se destruye, y se quita su DOM de la raíz salvo `keep`.
+  const swapOut = (tapa, keep = null) => {
+    if (tapa && current) cover(keep);
+    else destroyCurrent();
+    clearRoot(keep);
   };
 
   const setIdle = () => {
@@ -90,10 +106,11 @@ export function createHost({ router, routes, root, ctx, notify, win, doc, timers
     // NOTA: `router.reset` siempre deja una pila de una sola entrada ([id]), así que no puede dar [hub, X] con el hub montado:
     // reset(hub) destapa el hub guardado (arriba) o, si el hub es la pantalla actual, lo remonta a propósito.
     if (kept && !router.stack.some((s) => s.id === kept.id)) destroyKept();
-    if (current && ev.action === 'push' && byId.get(current.id)?.keepAlive && typeof current.screen?.onUncover === 'function' && current.id !== top.id) cover();
-    else destroyCurrent();
+    // La saliente NO se toca hasta que la entrante está montada: así no hay frame vacío ni pantalla muerta a la vista.
+    const tapa = !!(current && ev.action === 'push' && byId.get(current.id)?.keepAlive && typeof current.screen?.onUncover === 'function' && current.id !== top.id);
     const scope = createScope({ win, doc, timers });
     let screen = null;
+    let stage = null; // escenario aislado de la pantalla nueva (oculto hasta el relevo)
     const prev = inflight;
     let release;
     inflight = new Promise((r) => { release = r; });
@@ -101,19 +118,34 @@ export function createHost({ router, routes, root, ctx, notify, win, doc, timers
       const mod = await byId.get(top.id).load();
       await prev; // espera al montaje anterior (acaba o falla) para que no pinte después del nuestro
       if (my !== token) { scope.dispose(); return; } // caducado antes de empezar: no pinta nada
-      if (!mod.manages) root.innerHTML = '';
-      screen = await mod.mount(root, { ...ctx, scope }, top.params);
-      if (my !== token) { try { screen?.destroy?.(); } catch { /* ya no se usa */ } scope.dispose(); return; }
+      if (!mod.manages && doc?.createElement && root.appendChild) {
+        stage = doc.createElement('div');
+        stage.className = 'scr-stage scr-stage-wait';
+        root.appendChild(stage);
+        screen = await mod.mount(stage, { ...ctx, scope }, top.params);
+      } else {
+        swapOut(tapa); // legado (manages) o sin escenario: se retira la saliente antes de montar
+        if (!mod.manages) root.innerHTML = '';
+        screen = await mod.mount(root, { ...ctx, scope }, top.params);
+      }
+      if (my !== token) { try { screen?.destroy?.(); } catch { /* ya no se usa */ } stage?.remove?.(); scope.dispose(); return; }
     } catch {
       scope.dispose();
+      stage?.remove?.();
       if (my !== token) return;
       notify({ kind: 'info', title: t('common.screenError') });
-      if (top.id !== rootId) router.reset();
-      else showRootError();
+      // el hub tapado vuelve a destaparse, no se destruye. En legado, swapOut(tapa) ya lo tapó y current es null: no se vuelve a tapar
+      if (top.id !== rootId) { if (tapa && current) cover(); router.reset(); }
+      else { destroyCurrent(); showRootError(); }
       setIdle();
       return;
     } finally {
       release();
+    }
+    // Relevo: en el mismo turno sale la saliente y el escenario nuevo se hace visible (sin frame vacío).
+    if (stage) {
+      swapOut(tapa, stage);
+      stage.classList?.remove?.('scr-stage-wait');
     }
     current = { id: top.id, screen, scope };
     if (ev.action === 'pop' || ev.action === 'reset') restoreFocus(depth);
@@ -122,7 +154,6 @@ export function createHost({ router, routes, root, ctx, notify, win, doc, timers
 
   // Vuelta a una pantalla keepAlive: se destruye lo de encima y se devuelve el DOM guardado, sin remontar.
   async function uncover(ev, my, depth) {
-    destroyCurrent();
     const prev = inflight;
     let release;
     inflight = new Promise((r) => { release = r; });
