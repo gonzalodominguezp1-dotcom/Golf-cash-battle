@@ -3,7 +3,7 @@
 // Las flechas pasan a la skin anterior/siguiente en el orden de SKINS (da la vuelta al final) con router.replace.
 import { SKINS, TIERS as SKIN_TIERS } from '../progress/skins.js';
 import { tierIcon } from '../ui/icons.js';
-import { bindHeader, bindLobby, button, header, lobbyButton } from './components.js';
+import { backFloatButton, bindBackFloat, bindHeader, button, header } from './components.js';
 import { esc } from './shared.js';
 import { t } from './texts/index.js';
 import './texts/common.js';
@@ -43,10 +43,10 @@ export async function mount(root, ctx, params = {}) {
       <p><small>${esc(t('skins.inspectHow'))}</small><span data-sk-how></span>${logro ? button({ label: t('skins.logrosLink'), attrs: 'data-go="achievements"' }) : ''}</p>
       <p class="sr-only" role="status" data-sk-live></p>
     </section>
-    ${lobbyButton()}
+    ${backFloatButton()}
   </main>`;
   bindHeader(root, { ...ctx, scope });
-  bindLobby(root, { ...ctx, scope });
+  bindBackFloat(root, { ...ctx, scope });
   const box = root.querySelector('[data-sk-canvas]');
   const lockBox = root.querySelector('[data-sk-lock]');
   const loading = root.querySelector('[data-sk-loading]');

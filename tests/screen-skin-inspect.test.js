@@ -75,8 +75,9 @@ test('skin-inspect: Equipada / Obtenida / Bloqueada con texto y botón acorde', 
     assert.equal(root.querySelector('[data-sk-equip]').innerHTML.includes(label), true, id);
     assert.equal(root.querySelector('[data-sk-equip]').disabled, disabled, id);
     assert.equal(root.querySelector('[data-sk-lock]').hidden, id !== LOCKED.id);
-    assert.doesNotMatch(root.innerHTML, /data-back|scr-back/); // sin volver en cabecera: lo hace el lobby
-    assert.match(root.innerHTML, /data-lobby/);
+    assert.doesNotMatch(root.innerHTML, /data-back|scr-back/); // sin volver en cabecera: lo hace el botón flotante
+    assert.match(root.innerHTML, /data-prev/);
+    assert.doesNotMatch(root.innerHTML, /data-lobby/); // ya no vuelve al lobby sino una pantalla atrás
     h.destroy();
   }
 });
@@ -303,13 +304,16 @@ test('skin-inspect: escritorio (min-width 900px) quita el límite de 1140px de .
   assert.ok(narrow.includes('.sk-inspect .sk-fx-cap { top: 8px'), 'etiquetas reducidas en pantallas estrechas');
 });
 
-test('skin-inspect: sin botón Volver en la cabecera; sí lobby flotante', async () => {
+test('skin-inspect: sin botón Volver en la cabecera; sí botón flotante atrás (una pantalla)', async () => {
   const env = fakeEnv();
   const root = fakeRoot(env);
   const { ctx, calls } = makeCtx(env);
   const h = await mount(root, ctx, { id: 'mint' });
   assert.doesNotMatch(root.innerHTML, /data-back|scr-back/);
-  assert.ok(root.querySelector('[data-lobby]'));
+  const btn = root.querySelector('[data-prev]');
+  assert.ok(btn);
+  btn.emit('click');
+  assert.equal(calls.back, 1);
   h.destroy();
 });
 

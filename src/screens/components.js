@@ -72,6 +72,21 @@ export function bindLobby(root, ctx) {
   else btn.addEventListener('click', go);
 }
 
+/** Botón flotante «atrás» de una pantalla apilada (mismo sitio que lobbyButton): vuelve una pantalla con router.back(). */
+export function backFloatButton() {
+  const label = esc(t('common.back'));
+  return `<button type="button" class="scr-lobby" data-prev aria-label="${label}" title="${label}">${BACK_ICON}</button>`;
+}
+
+/** Conecta el botón «atrás» con el router. Si no hay pantalla anterior en la pila, vuelve a la raíz. */
+export function bindBackFloat(root, ctx) {
+  const btn = root.querySelector('[data-prev]');
+  if (!btn) return;
+  const go = () => { if (ctx.router.back() === 'root') ctx.router.reset(); };
+  if (ctx.scope) ctx.scope.on(btn, 'click', go);
+  else btn.addEventListener('click', go);
+}
+
 // ---------- diálogo de motivo (accesos bloqueados y requisitos) ----------
 const openDialogs = new WeakMap(); // doc -> manejador del diálogo abierto (solo uno a la vez)
 let dialogSeq = 0;

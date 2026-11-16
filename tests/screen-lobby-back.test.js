@@ -91,15 +91,6 @@ const SCREENS = [
     }),
   },
   {
-    id: 'skin',
-    mount: (env, router, root) => mountSkinInspect(root, {
-      ...baseCtx(env, router),
-      progress: { instance: () => null, requirement: () => ({ text: '', ratio: 0 }), skin: SKIN, equip: () => false },
-      thumbs: { cached: () => null, preview: () => '' },
-      loadViewer: () => new Promise(() => {}),
-    }, { id: SKIN.id }),
-  },
-  {
     id: 'account',
     mount: (env, router, root) => mountAccount(root, baseCtx(env, router), {}, { modules: {} }),
   },
@@ -131,6 +122,27 @@ for (const s of SCREENS) {
     made?.destroy?.();
   });
 }
+
+// el visor de skin (#/skins/x) no vuelve al lobby: su botón flotante vuelve una pantalla atrás (router.back)
+test('skin-inspect: el botón flotante vuelve una pantalla (router.back), no al lobby', async () => {
+  const env = fakeEnv();
+  const router = fakeRouter();
+  const root = fakeRoot(env);
+  const made = await mountSkinInspect(root, {
+    ...baseCtx(env, router),
+    progress: { instance: () => null, requirement: () => ({ text: '', ratio: 0 }), skin: SKIN, equip: () => false },
+    thumbs: { cached: () => null, preview: () => '' },
+    loadViewer: () => new Promise(() => {}),
+  }, { id: SKIN.id });
+  await settle();
+  assert.equal(root.querySelector('[data-lobby]'), null, 'no debe haber botón lobby');
+  const btn = root.querySelector('[data-prev]');
+  assert.ok(btn, 'falta el botón atrás');
+  btn.emit('click');
+  assert.equal(router.calls.back, 1);
+  assert.equal(router.calls.reset, 0);
+  made?.destroy?.();
+});
 
 test('lobby: el hub NO lleva botón lobby (es la raíz)', () => {
   const src = readFileSync(new URL('../src/screens/hub.js', import.meta.url), 'utf8');
