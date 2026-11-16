@@ -7,6 +7,8 @@ import { CHALLENGES } from '../src/progress/skins.js';
 import { seenSet, markSeen } from '../src/screens/achievementsRules.js';
 import { computeLocks } from '../src/screens/hubRules.js';
 import { icon, ICON_NAMES } from '../src/ui/icons.js';
+import { WHATS_NEW_KEY } from '../src/ui/whatsNewRules.js';
+import { CURRENT_VERSION } from '../src/ui/releaseNotes.js';
 
 // Raíz falsa: reconoce [data-x] y [data-x="v"] sobre el HTML pintado y devuelve elementos estables.
 function fakeRoot(env) {
@@ -69,7 +71,7 @@ function makeCtx(env, over = {}) {
     subscribe(fn) { subs.add(fn); return () => subs.delete(fn); },
     emit(c) { this.counts = c; for (const f of [...subs]) f(c); },
   };
-  const store = new Map();
+  const store = new Map([[WHATS_NEW_KEY, CURRENT_VERSION]]); // novedades ya vistas: no sale el modal en el montaje
   const ctx = {
     router: { push: (id, p) => { calls.push.push(id); calls.params.push(p); return true; } },
     scope: createScope({ win: env.win, doc: env.doc, timers: env.timers }),

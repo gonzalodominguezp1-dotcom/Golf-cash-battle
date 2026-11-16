@@ -7,6 +7,7 @@ import { esc } from './shared.js';
 import { badge, reasonDialog } from './components.js';
 import { levelRing, badgeFor, achievementsBadge, computeLocks, nudgeVars } from './hubRules.js';
 import { seenSet } from './achievementsRules.js';
+import { maybeShowWhatsNew, whatsNewDue } from '../ui/whatsNew.js';
 import { t } from './texts/index.js';
 import './texts/common.js';
 import './texts/hub.js';
@@ -236,6 +237,7 @@ export async function mount(root, ctx) {
   ctx.actions.claimRewards();
   // llegada al hub sin escena (tras una partida): se recrea en segundo plano; el hub ya está pintado con la imagen fija
   if (!scene) reviveScene();
+  if (whatsNewDue({ storage })) scope.timeout(() => { try { maybeShowWhatsNew({ scope, storage, returnTo: root.querySelector?.('[data-focus-key="play"]') }); } catch (err) { console.warn('whatsNew', err?.message ?? err); } }, 0); // tras el primer render; no bloquea el hub
 
   return {
     title: t('hub.title'),
