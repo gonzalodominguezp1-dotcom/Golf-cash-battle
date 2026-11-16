@@ -132,8 +132,8 @@ los entornos tras la aprobación.
 ## Checklist
 - [x] Paso L — laboratorio (visto bueno del usuario 2026-11-15; parpadeo en «Después» en arreglo)
 - [x] Paso 0 — viento compartido (visto bueno del usuario 2026-11-15)
-- [ ] Paso 1 — árbol redondo (entregado en el laboratorio, pendiente de visto bueno del usuario)
-- [ ] Paso 2 — pino
+- [x] Paso 1 — árbol redondo (visto bueno del usuario 2026-11-16; sustituido en entornos naturales)
+- [ ] Paso 2 — pino (entregado en el laboratorio, pendiente de visto bueno del usuario)
 - [ ] Paso 3 — palmera
 - [ ] Paso 4 — arbustos
 - [ ] Paso 5 — césped
@@ -164,5 +164,9 @@ los entornos tras la aprobación.
 - `pnpm test`: 326 tests, 321 pasan (5 VFX ajenos). `pnpm build` ok. Sin verificar: GLSL de luz de borde y textura de tarjetas en GPU real.
 - Aún NO sustituido en `environment.js` (va tras el visto bueno). Al sustituir: decidir escala (nuevo 1,9–3,3 m; viejo x0,8–1,7) y el resto del decorado cambiará por otro consumo del rng.
 
+(2026-11-16) **Paso 1: sustitución en entornos.** `makeRoundTree` sustituye al árbol redondo viejo en pradera (`lushEnv`) y rama natural normal de `environment.js`; neón y temas sin árbol redondo no cambian. `ROUND_TREE_SCALE = 0.95` (medido: viejo 2,2 m, nuevo 2,4 m sin escalar). Consume 3 tiradas fijas del rng del hoyo: el resto del decorado de esos temas cambia de sitio, sigue determinista; colisiones/`place`/`clear`/`heightAt` intactos. Sol = primera luz direccional en todos los hoyos (test). Laboratorio pasa el tema al árbol. `tests/round-tree-env.test.js` (7). Sin ver en pantalla.
+
+(2026-11-16) **Paso 2 — pino entregado en el laboratorio, pendiente de visto bueno.** `src/game/render/assets/pine.js` + `treeKit.js`, `tests/pine.test.js` (14/14, 5 mutaciones manuales detectadas). 4 variantes; triángulos máx. 218/500/998 (presupuesto 220/500/1000); 2 llamadas de dibujo por bosque; opción `snow` solo en color de vértice (pino nevado completo en Paso 9). Revisión limpia: sin bloqueantes; nit: `treeKit.js` duplica `withRim/treeLevel` de `roundTree.js` (unificar en el cierre); `pinePalette` solo oscurece verdes del tema si llegan por `theme`. `pnpm test` 342/347 (5 VFX ajenos), `pnpm build` ok. Aún NO sustituido en `environment.js`.
+
 ## Next step
-Usuario revisa el laboratorio (`pnpm dev` → `/assets-lab.html`). Usuario revisa el árbol redondo en el laboratorio. Con su visto bueno: sustituir en `environment.js` y seguir con el Paso 2 (pino).
+Usuario revisa el pino en el laboratorio. Con su visto bueno: sustituir el pino en `environment.js` (repetir chequeos de rng/escala/`place`) y seguir con el Paso 3 (palmera).
