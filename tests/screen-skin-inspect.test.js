@@ -290,6 +290,16 @@ test('skin-inspect: título con la categoría del tier, texto de flechas por t()
   const css = readFileSync(new URL('../src/screens/skinInspect.css', import.meta.url), 'utf8');
   const rm = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'));
   assert.ok(rm.includes('.sk-view-title small { animation: none'), 'la categoría deja de animarse con reduced-motion');
+  assert.ok(rm.includes('.sk-inspect .sk-fx-grid, .sk-inspect .sk-fx-cap { transition: none'), 'la rejilla de efectos no anima con reduced-motion');
+});
+
+test('skin-inspect: escritorio (min-width 900px) quita el límite de 1140px de .screen; móvil tiene la rejilla 2×2 con etiquetas que caben', () => {
+  const css = readFileSync(new URL('../src/screens/skinInspect.css', import.meta.url), 'utf8');
+  const desk = css.slice(css.indexOf('@media (min-width: 900px)'));
+  assert.ok(desk.includes('.sk-inspect.screen { max-width: none; width: 100%'), 'pantalla completa en desktop');
+  assert.ok(css.includes('.sk-inspect .sk-fx-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)'), 'rejilla 2×2 con celdas que no desbordan');
+  const narrow = css.slice(css.indexOf('@media (max-width: 480px)'));
+  assert.ok(narrow.includes('.sk-inspect .sk-fx-cap { top: 8px'), 'etiquetas reducidas en pantallas estrechas');
 });
 
 test('skin-inspect: el botón Volver llama al router', async () => {
