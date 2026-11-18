@@ -16,7 +16,7 @@ Pantalla de matchmaking mucho más dinámica y llamativa que motive a entrar a l
 
 ## Checklist
 - [x] Migración 15 → 10 escrita. Prueba: archivo en `supabase/migrations/`.
-- [ ] Nueva UI implementada (Opus 5.5, medium). Prueba: diff + `pnpm test` verde.
+- [x] Nueva UI implementada (Opus 5.5, medium). Prueba: `pnpm test` 229/229 verde (observado), sin 15 fijo en `matchmakingView.js`/`matchmakingRules.js`.
 - [ ] Migración aplicada en producción. Requiere permiso explícito del usuario.
 - [ ] Revisión visual por el usuario (móvil y escritorio).
 
