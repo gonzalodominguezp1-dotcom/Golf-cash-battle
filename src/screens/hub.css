@@ -51,11 +51,6 @@
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
 }
 .hub-face::before { content: ''; position: absolute; inset: 4px; border-radius: 50%; background: #15202e; }
-/* foto y marco: ocupan el interior del anillo, que sigue visible alrededor (progreso de XP) */
-.hub-pic { position: absolute; inset: 0; display: grid; place-items: center; }
-.hub-pic > svg { width: var(--face-svg); height: var(--face-svg); position: relative; }
-.hub-pic .pf { --s: calc(var(--face) - 12px); margin: 0; }
-.hub-pic .pf-illustrated { --s: calc(var(--face) * 0.5); }
 .hub-face > svg { position: relative; } /* centrado exacto: el chip de nivel (abajo) queda libre porque el dibujo mide ~31 de 72 px */
 .hub-lv {
   position: absolute; bottom: -3px; left: 50%; transform: translateX(-50%); min-width: 24px; height: 20px; padding: 0 6px;
@@ -115,7 +110,7 @@
 .hub-nav:active .hub-ico { transform: scale(0.96); }
 /* centrado óptico: --nx/--ny (unidades del viewBox de 51, ver ICON_NUDGE en hubRules.js) mueven el DIBUJO al centro exacto de su caja;
    el porcentaje de translate es el del propio svg, así escala con cualquier tamaño de pantalla */
-.hub-ico > svg, .hub-face > svg, .hub-pic > svg, .hub-wallet-ico > svg, .hub-padlock > svg, .hub-chains > svg {
+.hub-ico > svg, .hub-face > svg, .hub-wallet-ico > svg, .hub-padlock > svg, .hub-chains > svg {
   transform: translate(calc(var(--nx, 0) * 100% / 51), calc(var(--ny, 0) * 100% / 51));
 }
 /* acceso bloqueado: mismo tile, mismo borde y misma opacidad que los demás; solo se apaga un poco el icono y encima van las cadenas y el candado */
