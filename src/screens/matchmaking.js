@@ -1,119 +1,106 @@
-// Emparejamiento (buscar rivales antes de la partida): solo el contenido de la pantalla, sin cabecera ni barras del HUD anterior.
-// main.js abre la sesión (createMatchmaking) y va rellenando los asientos; esta pantalla solo la pinta y reacciona.
-// El diseño (radar, bote, tarjetas, salida animada) es src/ui/matchmakingView.js, compartido con la sala en vivo.
-// No lee el servidor: el join lo hace main.js (startMatch), así que no necesita tope de red propio.
-import { PLAYERS_PER_MATCH, prizeFor } from '../config.js';
+// Emparejamiento (buscar rivales antes de la partida): solo el contenido de la pantalla, sin cabecera ni barras del HUD.
+// La búsqueda vive fuera (src/match/matchmakingController.js): main.js la crea y la va rellenando; esta pantalla la pinta
+// en su estado actual y reacciona a sus eventos. Si se desmonta (Volver al lobby), la búsqueda sigue y la enseña el
+// aviso flotante (src/ui/matchmakingBanner.js). El diseño (radar, bote, tarjetas) es src/ui/matchmakingView.js.
+// No lee el servidor: el join, el sondeo y el arranque los hace main.js, así que no necesita tope de red propio.
+import { prizeFor } from '../config.js';
 import { createMatchmakingView } from '../ui/matchmakingView.js';
-import { bindLobby, lobbyButton } from './components.js';
+import { activeSearch } from '../match/matchmakingController.js';
 import { coin, esc } from './shared.js';
 import { t } from './texts/index.js';
 import './texts/common.js';
 import './texts/matchmaking.js';
 
-let current = null; // sesión abierta por main.js (la que muestra esta pantalla)
-
-const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-
-/**
- * Abre la sesión de emparejamiento. `cancel()` sale y recupera la entrada (navega al hub); `abandon()` deja la búsqueda
- * sin navegar (lo usa el botón de lobby, que ya navega por su cuenta).
- */
-export function createMatchmaking({ tier, cancel, abandon }) {
-  const subs = new Set();
-  const notify = () => { for (const fn of [...subs]) fn(); };
-  const session = {
-    tier,
-    seats: PLAYERS_PER_MATCH,
-    players: [],
-    phase: 'search', // 'search' → 'go' (mesa llena) → 'leaving' (salida animada)
-    leaving: null, // la pantalla registra aquí su animación de salida
-    cancel: () => cancel?.(),
-    abandon: () => abandon?.(),
-    fill(i, p) {
-      session.players[i] = { name: p.name, color: p.color, me: p.id === 'me' };
-      notify();
-    },
-    /** Mesa llena: «¡YA!» y salida animada. Resuelve cuando la pantalla ha terminado. */
-    async finish() {
-      session.phase = 'go';
-      notify();
-      await wait(650);
-      if (current !== session) return;
-      session.phase = 'leaving';
-      notify();
-      await session.leaving?.();
-    },
-    subscribe(fn) {
-      subs.add(fn);
-      return () => subs.delete(fn);
-    },
-  };
-  current = session;
-  return session;
-}
-
-/** La sesión que se está mostrando (o null). */
-export function currentMatchmaking() {
-  return current;
-}
-
-/** Cierra la sesión: la próxima vez que se monte la pantalla no habrá nada que mostrar. */
-export function closeMatchmaking() {
-  current = null;
-}
-
-export function mount(root, ctx) {
-  const scope = ctx.scope.child(); // todo cuelga de aquí: destroy lo libera entero
-  const session = currentMatchmaking();
-
-  if (!session) {
-    root.innerHTML = `<main class="screen matchmaking"><p class="scr-state">${esc(t('matchmaking.none'))}</p>${lobbyButton()}</main>`;
-    bindLobby(root, { ...ctx, scope });
-    return { destroy() { scope.dispose(); } };
-  }
-
-  const { tier } = session;
-  const room = (ctx.matchmakingView ?? createMatchmakingView)({
-    tier,
-    mode: tier.entryFee ? 'local' : 'practice',
-    seats: session.seats,
-    ballHtml: ctx.ball ? ctx.ball(ctx.progress?.skin, 72) : '',
-    coin,
+/** Textos por defecto de la sala de práctica / mesa local (la sala en vivo trae los suyos en search.info). */
+export function defaultInfo(tier) {
+  return {
     kicker: tier.entryFee ? `${esc(tier.name)} · ${esc(t('matchmaking.table'))}` : esc(t('matchmaking.practiceKicker')),
     title: esc(t('matchmaking.title')),
     potNote: tier.entryFee ? `${esc(t('matchmaking.prize'))} ${coin(prizeFor(tier))}` : esc(t('matchmaking.practiceNote')),
+    infoHtml: '',
+  };
+}
+
+// el bote solo cuenta a los jugadores (los bots de la sala en vivo nunca suman)
+const potOf = (search) => search.tier.entryFee * search.players.filter((p) => p && !p.isBot).length;
+
+export function mount(root, ctx) {
+  const scope = ctx.scope.child(); // todo cuelga de aquí: destroy lo libera entero
+  const search = activeSearch();
+  const home = () => ctx.router.reset();
+
+  if (!search) {
+    root.innerHTML = `<main class="screen matchmaking mm tier--practice rarity-uncommon"><p class="scr-state">${esc(t('matchmaking.none'))}</p><div class="mm-actions"><button type="button" class="mm-btn mm-btn-lobby" data-mm-lobby>${esc(t('matchmaking.lobby'))}</button></div></main>`;
+    const btn = root.querySelector('[data-mm-lobby]');
+    if (btn) scope.on(btn, 'click', home);
+    return { destroy() { scope.dispose(); } };
+  }
+
+  const { tier } = search;
+  const info = { ...defaultInfo(tier), ...search.info };
+  const fresh = !search.seen; // al volver desde el aviso no se repiten las entradas animadas
+  const room = (ctx.matchmakingView ?? createMatchmakingView)({
+    tier,
+    mode: search.mode,
+    seats: search.seats,
+    ballHtml: ctx.ball ? ctx.ball(ctx.progress?.skin, 72) : '',
+    coin,
+    kicker: info.kicker,
+    title: info.title,
+    potNote: info.potNote,
+    infoHtml: info.infoHtml,
+    infoLabel: esc(t('matchmaking.info')),
     cancelLabel: esc(t('matchmaking.cancel')),
-    footHtml: lobbyButton(),
+    lobbyLabel: esc(t('matchmaking.lobby')),
+    fresh,
   });
   root.replaceChildren(room.view);
 
-  // los asientos y el bote salen de la sesión; setSeat solo toca el DOM si algo cambia
-  const sync = () => {
-    let filled = 0;
-    for (let i = 0; i < session.seats; i++) {
-      const p = session.players[i];
-      if (p) filled++;
-      room.setSeat(i, p ?? null);
-    }
-    room.setPot(tier.entryFee * filled);
-    if (session.phase !== 'search') room.cancelButton.disabled = true;
-    if (session.phase === 'go' && !room.view.classList.contains('is-go')) room.go();
+  const countdown = () => {
+    const c = search.countdown();
+    if (c) room.setCountdown(c.msLeft, c.total);
   };
-  session.leaving = () => room.leave();
-  sync();
+  const phase = () => {
+    room.lock?.(search.phase !== 'search' && search.phase !== 'error');
+    if (['go', 'leaving'].includes(search.phase)) room.go({ quiet: !live });
+  };
 
+  // estado actual, sin animar lo que ya estaba (al volver a la sala) y escalonado la primera vez
+  let live = false;
+  for (let i = 0; i < search.seats; i++) room.setSeat(i, search.players[i] ?? null, { sound: false, animate: fresh });
+  room.settle?.();
+  room.setPot(potOf(search), { instant: !fresh });
+  countdown();
+  if (search.status) room.setStatus(search.status);
+  phase();
+  live = true;
+
+  const leaving = () => room.leave();
+  search.leaving = leaving;
+  scope.sub(search.attachView());
+  scope.sub(search.subscribe((ev) => {
+    if (ev.type === 'seat') {
+      room.setSeat(ev.i, search.players[ev.i] ?? null);
+      room.setPot(potOf(search));
+    } else if (ev.type === 'second' || ev.type === 'count') countdown();
+    else if (ev.type === 'status') room.setStatus(search.status);
+    else if (ev.type === 'phase') phase();
+  }));
+
+  // Cancelar: sale de la mesa, recupera la entrada y vuelve al lobby. Volver al lobby: la búsqueda sigue.
   const cancelBtn = room.cancelButton;
-  scope.on(cancelBtn, 'click', () => { cancelBtn.disabled = true; session.cancel(); });
-  const lobbyBtn = root.querySelector('[data-lobby]');
-  // el lobby navega (bindLobby) y además deja la búsqueda, para que la partida no arranque debajo del hub
-  if (lobbyBtn) scope.on(lobbyBtn, 'click', () => session.abandon());
-  bindLobby(root, { ...ctx, scope });
-  scope.sub(session.subscribe(sync));
+  scope.on(cancelBtn, 'click', async () => {
+    room.lock?.(true);
+    cancelBtn.disabled = true;
+    await search.cancel();
+    home();
+  });
+  if (room.lobbyButton) scope.on(room.lobbyButton, 'click', home);
 
   return {
     destroy() {
       room.stop();
-      if (session.leaving) session.leaving = null;
+      if (search.leaving === leaving) search.leaving = null;
       scope.dispose();
     },
   };

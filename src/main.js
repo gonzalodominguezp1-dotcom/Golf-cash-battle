@@ -34,12 +34,16 @@ import { createNotifier } from './ui/notifier.js';
 import { createPartyWatch } from './match/partyWatch.js';
 import { createScope } from './screens/lifecycle.js';
 import { icon, iconUrl } from './ui/icons.js';
-import { createMatchmakingView } from './ui/matchmakingView.js';
+import { mountMatchmakingBanner } from './ui/matchmakingBanner.js';
+import { installDocHidden } from './ui/matchmakingView.js';
+import { activeSearch, createSearch } from './match/matchmakingController.js';
 import { errorRef } from './backend/rpcError.js';
 import { coin, createBall, esc, fmt, h } from './screens/shared.js';
 import { createRouter } from './screens/router.js';
 import { createRoutes } from './screens/routes.js';
-import { createMatchmaking } from './screens/matchmaking.js';
+import { defaultInfo } from './screens/matchmaking.js';
+import { t } from './screens/texts/index.js';
+import './screens/texts/matchmaking.js';
 import { createHost } from './screens/host.js';
 import { createContext } from './screens/context.js';
 import { createNavigator } from './screens/navigate.js';
@@ -113,7 +117,8 @@ let partyWatch = null;
 
 function backGuard() {
   if (gameGuard) return gameGuard();
-  if (currentLive && !currentLive.finished) {
+  // en la sala de espera «atrás» es como «Volver al lobby»: la búsqueda sigue (aviso flotante)
+  if (currentLive && !currentLive.finished && !currentLive.searching) {
     if (!confirm('¿Seguro que quieres salir de la partida en vivo? Cuenta como abandono.')) return true; // cancelar conserva la pila
     // aceptar = lo mismo que el botón de salir: abandona (stopLive -> leave) y vuelve a la raíz con la pila coherente
     stopLive();
@@ -151,7 +156,7 @@ function leaveToLobby() {
   goHome();
 }
 
-/** Sala en vivo y resultados: su volver es el botón Lobby flotante (lobbyButton) enlazado a leaveToLobby. */
+/** Resultados en vivo: su volver es el botón Lobby flotante (lobbyButton) enlazado a leaveToLobby. (La sala de espera es la pantalla 'matchmaking'.) */
 function paintLive(view) {
   paintApp(view);
   view.querySelector('[data-lobby]')?.addEventListener('click', leaveToLobby);
@@ -206,7 +211,7 @@ let go = () => {};
 // Si el juego sigue vivo se libera primero (su contexto WebGL), así nunca coexisten dos; sin esperarla: el hub
 // se pinta con la imagen fija y la escena entra al llegar. Nada si hay sala en vivo sin acabar.
 function reviveHubScene() {
-  if (currentLive && !currentLive.finished) return;
+  if (currentLive && !currentLive.finished && !currentLive.searching) return;
   if (game) releasePlay();
   hubPreloader.reload().then((scene) => {
     if (scene && hubPreloader.current() === scene && startCtx) startCtx.setHubScene(scene);
@@ -276,7 +281,26 @@ const prestigeNote = (gained) => {
 
 // ---------- matchmaking ----------
 
+/**
+ * Con una búsqueda ya en marcha no se empieza otra: se vuelve a su sala (la búsqueda es única, ver
+ * src/match/matchmakingController.js). Devuelve true si había una.
+ */
+function resumeSearch() {
+  const s = activeSearch();
+  if (!s) return false;
+  notify({ kind: 'info', icon: 'hourglass', title: t('matchmaking.already'), text: t('matchmaking.alreadyText') });
+  showSearch();
+  return true;
+}
+
+// lleva a la sala de emparejamiento desde donde esté el usuario (si estaba jugando en libre, esa partida se libera)
+function showSearch() {
+  if (game) releasePlay();
+  go('matchmaking');
+}
+
 async function startMatch(tier, rematchOf = null) {
+  if (resumeSearch()) return;
   leaveFinale();
   // #hoyo3 en la URL: la práctica empieza por ese hoyo (útil para probar);
   // #hoyo3-empate además fuerza el desempate al final
@@ -292,26 +316,39 @@ async function startMatch(tier, rematchOf = null) {
     if (e instanceof InsufficientFundsError) return go('wallet');
     return alertMsg('No se ha podido crear la partida. Prueba otra vez.');
   }
+  if (resumeSearch()) return service.cancel(match).catch(() => { }); // doble toque mientras se unía
   match.service = service;
   match.myHoles = [];
   if (forced) Object.assign(match, { courses: [forced.hole - 1], holes: 1, forceTie: forced.tie });
-  let cancelled = false;
-  // la pantalla de emparejamiento (src/screens/matchmaking.js) pinta la sesión; aquí solo se va rellenando
-  const session = createMatchmaking({
+  // la búsqueda vive fuera de la pantalla: la sala (src/screens/matchmaking.js) y el aviso flotante la pintan,
+  // y sigue aunque se vuelva al lobby; aquí solo se van rellenando los asientos
+  const search = createSearch({
     tier,
-    abandon: async () => { cancelled = true; await match.service.cancel(match); },
-    cancel: async () => { cancelled = true; await match.service.cancel(match); goHome(); },
+    mode: tier.entryFee ? 'local' : 'practice',
+    seats: Math.max(PLAYERS_PER_MATCH, match.players.length),
+    info: defaultInfo(tier),
+    show: showSearch,
+    onCancel: () => match.service.cancel(match),
   });
   go('matchmaking');
   for (let i = 0; i < match.players.length; i++) {
     await wait(i === 0 ? 200 : 250 + Math.random() * 350);
-    if (cancelled) return;
-    session.fill(i, match.players[i]); // el tic suena al pintar el asiento
+    if (search.ended) return;
+    const p = match.players[i];
+    search.setSeat(i, { name: p.name, color: p.color, me: p.id === 'me' }); // el tic suena al pintar el asiento
   }
   await wait(250);
-  if (cancelled) return;
-  await session.finish(); // «¡YA!» y salida animada (la pinta src/screens/matchmaking.js)
-  if (!cancelled) playHole(match, 0);
+  if (search.ended) return;
+  search.setPhase('launching');
+  await search.present(); // desde otra pantalla: vuelve a la sala para la salida
+  if (search.ended) return;
+  search.go(); // «¡YA!» y salida animada (la pinta la sala)
+  await wait(650);
+  if (search.ended) return;
+  await search.leave();
+  if (search.ended) return;
+  search.finish();
+  playHole(match, 0);
 }
 
 // ---------- juego ----------
@@ -909,16 +946,28 @@ const LIVE_HOLE_CAP_MS = 150000; // como mucho se espera esto a los demás en un
 
 let currentLive = null;
 
-function stopLive() {
+/**
+ * Para la partida en vivo (latido, canal, temporizadores) y, si no ha acabado, la abandona en el servidor.
+ * Mientras se espera en la sala (live.searching) NO hace nada salvo con force: «Volver al lobby», goHome() y las
+ * entradas a Mesas/Ajustes/Mapas no deben matar la búsqueda en segundo plano; cancelarla sí (force).
+ * Devuelve la promesa del abandono (o undefined).
+ */
+function stopLive({ force = false } = {}) {
   const live = currentLive;
   if (!live) return;
+  if (live.searching && !force) return;
+  app.querySelector('.overlay')?.remove();
   currentLive = null;
   live.stopped = true;
   clearTimeout(live.beat);
   clearInterval(live.timer);
   live.room?.close();
+  live.search?.abort(); // sin efecto si ya se canceló o empezó
   // salir a mitad de partida cuenta como abandono (lo que falte, con el máximo)
-  if (!live.finished) backend.tournaments.leave(live.match).catch(() => { });
+  if (!live.finished) {
+    live.finished = true; // una sola llamada a leave, venga de donde venga
+    return backend.tournaments.leave(live.match).catch(() => { });
+  }
 }
 
 const liveNow = (match) => Date.now() + (match.clockOffset ?? 0);
@@ -946,7 +995,13 @@ async function startTournament(tier, rematchOf = null) {
 
 /** Entra en una partida: a la sala si aún no ha empezado, o al hoyo por el que vas. */
 function enterLive(match) {
-  stopLive();
+  // la misma mesa en la que ya esperas (doble toque, o el aviso del grupo de una partida que ya tienes): a su sala
+  if (currentLive?.searching && currentLive.match.id === match.id) return showSearch();
+  // otra búsqueda en marcha (p. ej. el grupo entra en un torneo mientras buscabas solo): se cancela
+  // (recupera esa entrada) antes de entrar en esta
+  const prev = activeSearch();
+  if (prev && currentLive?.search !== prev) prev.cancel();
+  stopLive({ force: true });
   const live = { match, botScores: [], finished: false, hole: -1 };
   currentLive = live;
   const beat = async () => {
@@ -964,101 +1019,102 @@ function enterLive(match) {
   showLiveRoom(live);
 }
 
+/**
+ * Sala de espera en vivo. La búsqueda (src/match/matchmakingController.js) sigue aunque se salga de la sala:
+ * el latido (enterLive) le pasa jugadores y hora de arranque, y al llegar a 0 lanza la partida desde donde esté.
+ */
 function showLiveRoom(live) {
   const { match } = live;
   const { tier } = match;
   live.fast = true;
-  const room = createMatchmakingView({
+  live.searching = true;
+  const legal = `${match.rematchOf ? `<p>${esc(t('matchmaking.rematchLegal'))}</p>` : ''}<p>${esc(t('matchmaking.liveLegal'))}</p>`;
+  const search = createSearch({
     tier,
     mode: 'live',
     seats: match.seats,
-    ballHtml: ball(progress.skin, 72),
-    coin,
-    kicker: `${esc(tier.name)} · En vivo`,
-    title: match.rematchOf ? 'Revancha' : 'Sala en vivo',
-    potNote: 'Solo cuentan los jugadores reales',
-    legalHtml: `${match.rematchOf ? '<p class="legal">Revancha: quienes pidan revancha como tú entrarán juntos en esta sala.</p>' : ''}
-      <p class="legal">Empezáis todos a la vez y verás las bolas de los demás en directo. Los huecos libres los ocupan bots: juegan contigo, pero nunca cuentan para el premio (el bote es solo de los jugadores reales). Si no entra nadie más, juegas contra bots y se te devuelve la entrada.</p>`,
-    cancelLabel: 'Salir y recuperar entrada',
-    footHtml: lobbyButton(),
+    now: () => liveNow(match),
+    info: {
+      kicker: `${esc(tier.name)} · ${esc(t('matchmaking.liveKicker'))}`,
+      title: esc(t(match.rematchOf ? 'matchmaking.rematchTitle' : 'matchmaking.liveTitle')),
+      potNote: esc(t('matchmaking.livePotNote')),
+      infoHtml: legal,
+    },
+    show: showSearch,
+    // cancelar (sala o aviso): sale de la mesa y recupera la entrada; stopLive llama a leave una sola vez
+    onCancel: () => stopLive({ force: true }),
+    onLaunch: () => launchLive(live),
   });
-  const { view } = room;
-  let launching = false;
-  const render = () => {
-    if (launching) return;
-    const n = match.players.length;
-    if (match.startsAt) room.setCountdown(match.startsAt - liveNow(match));
-    room.setPot(tier.entryFee * n);
+  live.search = search;
+  const sync = () => {
     for (let i = 0; i < match.seats; i++) {
       const p = match.players.find((q) => q.seat === i);
-      room.setSeat(i, p ? { name: p.id === 'me' ? 'Tú' : p.name, color: p.color, me: p.id === 'me' } : null, { sound: false });
+      search.setSeat(i, p ? { name: p.id === 'me' ? 'Tú' : p.name, color: p.color, me: p.id === 'me' } : null);
     }
+    if (match.startsAt) search.setStartsAt(match.startsAt);
   };
-  let count = match.players.length;
   live.onStatus = () => {
-    if (!view.isConnected || launching) return;
-    if (match.players.length > count) sfx.tick();
-    count = match.players.length;
-    render();
+    if (search.phase === 'search') sync();
   };
-  const launch = async () => {
-    launching = true;
-    clearInterval(live.timer);
-    room.cancelButton.disabled = true;
-    room.setStatus('Rellenando los huecos con bots…');
-    try {
-      await backend.tournaments.status(match);
-    } catch { }
+  sync();
+  go('matchmaking');
+}
+
+/** Cuenta atrás a 0: bots en los huecos, arranque en el servidor, salida animada y primer hoyo. */
+async function launchLive(live) {
+  const { match } = live;
+  const { search } = live;
+  if (live.stopped || search.ended) return;
+  search.setPhase('launching');
+  const shown = search.present(); // desde otra pantalla: vuelve a la sala para ver el arranque
+  search.setStatus(t('matchmaking.fillingBots'));
+  try {
+    await backend.tournaments.status(match);
+  } catch { }
+  await shown;
+  if (live.stopped) return;
+  live.roster = buildRoster(match);
+  for (const r of live.roster) {
+    if (r.isBot) continue;
+    search.setSeat(r.seat, { name: r.name, color: r.color, me: r.id === 'me' });
+  }
+  for (const r of live.roster) {
+    if (!r.isBot) continue;
+    await wait(140);
     if (live.stopped) return;
-    live.roster = buildRoster(match);
-    room.setPot(tier.entryFee * match.players.length);
-    for (const r of live.roster) {
-      if (r.isBot) continue;
-      room.setSeat(r.seat, { name: r.name, color: r.color, me: r.id === 'me' }, { sound: false });
-    }
-    for (const r of live.roster) {
-      if (!r.isBot) continue;
-      await wait(140);
-      if (live.stopped) return;
-      room.setSeat(r.seat, { name: r.name, color: r.color, isBot: true });
-    }
-    try {
-      await backend.tournaments.start(match);
-    } catch {
-      if (live.stopped) return;
-      return retryMsg('No se ha podido empezar la partida.', launch);
-    }
+    search.setSeat(r.seat, { name: r.name, color: r.color, isBot: true });
+  }
+  try {
+    await backend.tournaments.start(match);
+  } catch {
     if (live.stopped) return;
-    room.go();
-    await wait(380);
-    if (live.stopped) return;
-    await room.leave();
-    if (!live.stopped) beginLive(live);
-  };
-  live.timer = setInterval(() => {
-    if (!view.isConnected) {
-      room.stop();
-      return clearInterval(live.timer);
-    }
-    render();
-    if (!launching && match.startsAt && liveNow(match) >= match.startsAt) launch();
-  }, 250);
-  room.cancelButton.addEventListener('click', async (e) => {
-    e.currentTarget.disabled = true;
-    clearInterval(live.timer);
-    room.stop();
-    live.finished = true;
-    await backend.tournaments.leave(match).catch(() => { });
-    goHome();
-  });
-  render();
-  paintLive(view);
+    search.setPhase('error');
+    search.setStatus('No se ha podido empezar la partida.');
+    return retryMsg('No se ha podido empezar la partida.', () => {
+      search.setPhase('launching');
+      return launchLive(live);
+    }, {
+      cancelLabel: 'Cancelar y salir',
+      onCancel: () => {
+        search.cancel();
+        goHome();
+      },
+    });
+  }
+  if (live.stopped) return;
+  search.go();
+  await wait(380);
+  if (live.stopped) return;
+  await search.leave();
+  if (!live.stopped) beginLive(live);
 }
 
 async function beginLive(live) {
   const { match } = live;
   live.fast = false;
   live.onStatus = null;
+  live.searching = false; // ya en partida: salir cuenta como abandono (stopLive vuelve a actuar)
+  live.search?.finish();
   // volviendo a una partida que ya arrancó sin haber pulsado nada
   if (!match.me.started) await backend.tournaments.start(match).catch(() => { });
   if (live.stopped) return;
@@ -1359,20 +1415,30 @@ async function showLiveResults(live) {
   };
 }
 
-function retryMsg(text, retry) {
+function retryMsg(text, retry, { onCancel, cancelLabel = 'Cancelar y salir' } = {}) {
   app.querySelector('.overlay')?.remove();
+  const cancelBtnHtml = onCancel
+    ? `<button type="button" class="ghost cancel">${icon('close')}${esc(cancelLabel)}</button>`
+    : '';
   const overlay = h(`
     <div class="overlay">
       <div class="card">
         <h2>Sin conexión</h2>
         <p class="sub">${text}</p>
-        <button class="primary">${icon('restart')}Reintentar</button>
+        <button type="button" class="primary">${icon('restart')}Reintentar</button>
+        ${cancelBtnHtml}
       </div>
     </div>`);
-  overlay.querySelector('button').addEventListener('click', () => {
+  overlay.querySelector('button.primary').addEventListener('click', () => {
     overlay.remove();
     retry();
   });
+  if (onCancel) {
+    overlay.querySelector('button.cancel')?.addEventListener('click', () => {
+      overlay.remove();
+      onCancel();
+    });
+  }
   app.append(overlay);
 }
 
@@ -1592,6 +1658,9 @@ function startRouting(b) {
   ctx.notifier = notifier;
   ctx.partyWatch = partyWatch;
   router.setBackGuard(backGuard);
+  // aviso flotante de la búsqueda en segundo plano: tocarlo vuelve a la sala; su X cancela (como en la sala)
+  installDocHidden();
+  mountMatchmakingBanner({ onOpen: () => showSearch(), sound: () => sfx.tick() });
 }
 
 // ---------- avisos emergentes ----------
