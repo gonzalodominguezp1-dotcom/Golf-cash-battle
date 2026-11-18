@@ -111,10 +111,10 @@ const SECTION_OF = {
  * - section: sección inicial.
  * - synced: true si se guarda en la cuenta; false si solo en este dispositivo (invitado).
  * - onQuality(level): aviso tras cambiar la calidad (la partida la aplica en caliente).
- * - onBack: botón Volver (solo layout 'screen').
+ * Sin botón Volver: en la pantalla de Ajustes lo hace el lobby flotante; el modal de pausa usa el suyo propio (main.js).
  * Devuelve { destroy, show(section) }.
  */
-export function mountSettingsPanel(root, { layout = 'screen', section = 'controls', synced = false, onQuality = null, onBack = null } = {}) {
+export function mountSettingsPanel(root, { layout = 'screen', section = 'controls', synced = false, onQuality = null } = {}) {
   const device = deviceKind();
   const desktop = device === 'desktop';
   let current = SECTIONS.some((s) => s.id === section) ? section : 'controls';
@@ -141,9 +141,7 @@ export function mountSettingsPanel(root, { layout = 'screen', section = 'control
       else b.removeAttribute('aria-current');
     });
     body.innerHTML = `
-      ${layout === 'screen' ? `<p class="sp-sync sp-sync-m ${synced ? 'on' : ''}">${synced ? '☁️ Se guarda en tu cuenta: vale en el móvil y en el ordenador.' : '📱 Se guarda en este dispositivo. Entra con tu cuenta para llevarlo a otros.'}</p>` : ''}
       <header class="sp-head">
-        ${layout === 'screen' && onBack ? '<button class="sp-back" aria-label="Volver">‹ Volver</button>' : ''}
         <div><h2>${meta.icon} ${meta.name}</h2><p>${esc(meta.blurb)}</p></div>
       </header>
       <div class="sp-rows">
@@ -185,7 +183,6 @@ export function mountSettingsPanel(root, { layout = 'screen', section = 'control
   };
 
   function bind() {
-    body.querySelector('.sp-back')?.addEventListener('click', () => onBack?.());
     body.querySelectorAll('[data-toggle]').forEach((b) =>
       b.addEventListener('click', () => {
         const key = b.dataset.toggle;

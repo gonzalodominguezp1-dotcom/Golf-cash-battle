@@ -1,5 +1,15 @@
 import './style.css';
-import { HOLES_PER_MATCH, HOLE_TIME_LIMIT, PLATFORM_COMMISSION, PLAYERS_PER_MATCH, TIERS, maxStrokesOf, potFor, prizeFor } from './config.js';
+import './screens/screens.css';
+import './screens/hub.css';
+import './screens/tables.css';
+import './screens/friends.css';
+import './screens/ranking.css';
+import './screens/skins.css';
+import './screens/skinInspect.css';
+import './screens/account.css';
+import './screens/maps.css';
+import './screens/achievements.css';
+import { HOLE_TIME_LIMIT, PLAYERS_PER_MATCH, TIERS, maxStrokesOf } from './config.js';
 import { LocalWallet } from './wallet/LocalWallet.js';
 import { InsufficientFundsError } from './wallet/WalletService.js';
 import { MatchService, leaders } from './match/MatchService.js';
@@ -11,26 +21,39 @@ import { enterFinale, isMuted, leaveFinale, setAmbientVolume, setMuted, setVolum
 import { settings } from './settings/settings.js';
 import { lastSection, mountSettingsPanel } from './ui/settingsPanel.js';
 import { Progress } from './progress/Progress.js';
-import { AVATAR_ICONS, AvatarStore, checkAvatarFile, fromWire, iconById, imageToAvatar, toWire } from './progress/avatar.js';
-import { FRAMES, frameById, framesUnlocked, frameStyle } from './progress/prestige.js';
-import { CHALLENGES, TIERS as SKIN_TIERS, SKINS } from './progress/skins.js';
+import { AvatarStore, toWire } from './progress/avatar.js';
+import { framesUnlocked, frameStyle } from './progress/prestige.js';
 import { ballPreview } from './game/render/ballPaint.js';
 import { showSkinReveal } from './ui/skinReveal.js';
 import { installThumbObserver, thumbCached, upgradeImg, warmThumbs } from './ui/skinThumbs.js';
-import { rarePatternOf } from './progress/inventory.js';
-import { getCourseDistance, staticCoursePreview } from './game/render/coursePreviewStatic.js';
 import { mountAuth } from './ui/authScreen.js';
-import { validatePassword, authMessage } from './account/authRules.js';
-import { addedMessage, cleanFriendName, friendMessage } from './account/friendRules.js';
-import { newPartyMatch, partyErrorText, partyMessage, readyLabel } from './match/partyRules.js';
 import { LiveRoom } from './match/LiveRoom.js';
 import { buildRoster, humanLeaders, liveStandings, seededRng } from './match/liveRules.js';
 import { notify } from './ui/notifyPopup.js';
-import { NOTIFY_POLL_MS, newNotices } from './ui/notifyRules.js';
-import { avatarIcon, icon, iconUrl, tierIcon } from './ui/icons.js';
+import { createNotifier } from './ui/notifier.js';
+import { createPartyWatch } from './match/partyWatch.js';
+import { createScope } from './screens/lifecycle.js';
+import { icon, iconUrl } from './ui/icons.js';
 import { createMatchmakingView } from './ui/matchmakingView.js';
 import { errorRef } from './backend/rpcError.js';
+import { coin, createBall, esc, fmt, h } from './screens/shared.js';
+import { createRouter } from './screens/router.js';
+import { createRoutes } from './screens/routes.js';
+import { createMatchmaking } from './screens/matchmaking.js';
+import { createHost } from './screens/host.js';
+import { createContext } from './screens/context.js';
+import { createNavigator } from './screens/navigate.js';
+import { createGoHome } from './screens/playLifecycle.js';
+import { createThumbs } from './screens/skinThumbsHook.js';
+import { getQuality } from './game/render/quality.js';
+import { createBoot, createHubPreloader, trackProgress, waitPainted } from './ui/splashBridge.js';
+import { mountNetStats } from './ui/netStats.js';
+import { startVersionCheck } from './ui/versionCheck.js';
+import { lobbyButton } from './screens/components.js';
 
+// hitos del arranque hacia el splash (no-op si no hay #splash: ?skinlab=1)
+const boot = createBoot();
+boot.bundle();
 let backend, wallet, matches;
 // práctica forzada con #hoyoN: siempre local, no toca el servidor
 const practice = new MatchService(new LocalWallet(), Math.random, COURSES.length);
@@ -38,7 +61,8 @@ const progress = new Progress();
 // miniaturas de skins guardadas (IndexedDB) a memoria cuanto antes: las <img> salen ya con su imagen
 warmThumbs();
 // three.js (partida, inspector 3D) se carga solo cuando hace falta: lobby y pantalla de skins no lo pagan
-const loadGolfGame = () => import('./game/GolfGame.js').then((m) => m.GolfGame);
+// la partida usa su propio renderer: se libera la escena del hub precargada (T026 la recreará si la necesita)
+const loadGolfGame = () => { hubPreloader.release(); return import('./game/GolfGame.js').then((m) => m.GolfGame); };
 const loadSkinInspector = () => import('./ui/skinInspector.js');
 
 // "móvil" en pantallas táctiles, "equipo" en PC
@@ -67,108 +91,70 @@ const app = document.getElementById('app');
 document.documentElement.style.setProperty('--gi-check', `url("${iconUrl('check')}")`);
 document.documentElement.style.setProperty('--gi-dot', `url("${iconUrl('dot', { tone: 'gray' })}")`);
 
-const fmt = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
-const coin = (n) => `${icon('coin', { cls: 'coin' })}${fmt(n)}`;
 const soundLabel = () => `${icon(isMuted() ? 'mute' : 'sound')}${isMuted() ? 'Mudo' : 'Sonido'}`;
 applySound(settings.get());
 settings.subscribe(applySound);
-const h = (html) => {
-  const t = document.createElement('template');
-  t.innerHTML = html.trim();
-  return t.content.firstElementChild;
-};
-// miniatura estática si ya está en caché; si no, marcador 2D que installThumbObserver cambia por ella (data-skin-id)
-const ball = (skin, size = 96, cls = '') => {
-  const cached = thumbCached(skin, progress.instance(skin.id));
-  return `<img class="ball-img ${cls}" src="${cached ?? ballPreview(skin, size * 2)}" data-skin-id="${skin.id}"${cached ? ' data-hd="1"' : ''} width="${size}" height="${size}" alt="">`;
-};
+// miniatura estática en caché o marcador 2D (ver screens/shared.js)
+const { ball } = { ball: createBall(progress) };
 
 let avatar = new AvatarStore(null);
-let accountTab = 'profile';
 
-/** Cara del avatar: imagen propia, icono elegido o la inicial del nombre. */
-const avatarFace = (av, initial) =>
-  av?.image ? `<img src="${av.image}" alt="">`
-    : av?.icon ? `<span class="pf-glyph">${avatarIcon(iconById(av.icon).id)}</span>`
-      : `<b class="pf-initial">${esc(String(initial || '?')[0])}</b>`;
+// router de pila (src/screens): la raíz es el lobby hasta que llegue el hub (F3)
+const ROOT_SCREEN = 'hub'; // el hub es la raíz; el lobby de hoy es la ruta «Mesas» (tables)
+let router = null;
+let screenHost = null;
+let testHole = null; // #hoyoN / #hoyoN-empate capturado al arrancar (el router reescribe el hash)
 
-/** Avatar con marco de prestigio. size: xs | sm | lg. */
-const avatarHtml = ({ size = 'sm', frame = null, av = null, initial = '?' }) =>
-  `<span class="pf pf-${size} ${frame ? `pf-framed pf-${frame.id}` : ''}" style="${frameStyle(frame)}"><i class="pf-halo"></i><i class="pf-wing l"></i><i class="pf-wing r"></i><i class="pf-ring"></i><span class="pf-face">${avatarFace(av, initial)}</span><i class="pf-gem"></i></span>`;
+// guarda de «atrás»: en partida abre la pausa; en una mesa en vivo pide confirmación (T011)
+let gameGuard = null;
+let playScope = null; // listeners y timers de la partida en curso; se libera al salir o cambiar de hoyo
+let notifier = null;
+let partyWatch = null;
+
+function backGuard() {
+  if (gameGuard) return gameGuard();
+  if (currentLive && !currentLive.finished) {
+    if (!confirm('¿Seguro que quieres salir de la partida en vivo? Cuenta como abandono.')) return true; // cancelar conserva la pila
+    // aceptar = lo mismo que el botón de salir: abandona (stopLive -> leave) y vuelve a la raíz con la pila coherente
+    stopLive();
+    releasePlay();
+    router.reset(ROOT_SCREEN);
+    return true;
+  }
+  return false;
+}
 
 let game = null;
-let screen = 'lobby';
-let activeSkinInspector = null;
 
-async function shell(content, { hideHeader = false, nav = true } = {}) {
+// libera todo lo de la partida y de las pantallas heredadas (la usan paintApp() y goHome())
+function releasePlay() {
   game?.dispose();
   game = null;
-  if (activeSkinInspector) {
-    try { activeSkinInspector.destroy(); } catch { }
-    activeSkinInspector = null;
-  }
-  const balance = await wallet.getBalance();
+  playScope?.dispose();
+  playScope = null;
+  gameGuard = null;
+  partyWatch?.stop();
+}
+
+// pinta una pantalla de partida (juego, sala en vivo, resultados) a pantalla completa: sin cabecera ni barras del HUD anterior
+function paintApp(content) {
+  releasePlay();
   app.innerHTML = '';
   window.scrollTo(0, 0);
-  if (!hideHeader) {
-    const { level, into, need } = progress.level;
-    app.append(
-      h(`
-      <header class="topbar game-hud-topbar">
-        <div class="topbar-left">
-          <button class="brand-btn desktop-brand-btn" data-go="lobby" aria-label="Golf Cash Battle">
-            <img src="/logo-header.png" alt="Golf Cash Battle" class="brand-logo" />
-          </button>
-          <div class="m-stats">
-            <button class="m-stat m-level" data-go="skins" style="--p:${(into / need) * 100}%" title="Nivel ${level}" aria-label="Nivel ${level}">
-              <span class="level-ring"><b>${level}</b></span>
-            </button>
-            <button class="m-stat m-coins" data-go="wallet" title="Tu saldo" aria-label="Saldo">${coin(balance)}</button>
-          </div>
-          <button class="level" data-go="skins" style="--p:${(into / need) * 100}%" title="Nivel ${level} · ${(into / need * 100).toFixed(0)}%">
-            <span class="level-ring"><b>${level}</b></span>
-            <span class="level-text"><small>Nivel</small><span class="xpbar"><i></i></span></span>
-          </button>
-        </div>
-        <div class="topbar-center">
-          <button class="brand-btn mobile-brand-btn" data-go="lobby" aria-label="Golf Cash Battle">
-            <img src="/logo-header.png" alt="Golf Cash Battle" class="brand-logo" />
-          </button>
-          <nav class="desktop-nav">
-            <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}">${icon('flag')}Jugar <kbd>1</kbd></button>
-            <button data-go="freeplay" class="${screen === 'freeplay' ? 'on' : ''}">${icon('tee')}Juego Libre <kbd>2</kbd></button>
-            <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}">${icon('skins')}Skins <kbd>3</kbd></button>
-            <button data-go="ranking" class="${screen === 'ranking' ? 'on' : ''}">${icon('trophy')}Ranking <kbd>4</kbd></button>
-            <button data-go="account" class="${screen === 'account' ? 'on' : ''}">${icon('user')}Cuenta <kbd>5</kbd></button>
-            <button data-go="settings" class="${screen === 'settings' ? 'on' : ''}">${icon('gear')}Ajustes <kbd>6</kbd></button>
-          </nav>
-        </div>
-        <div class="topbar-right">
-          <button class="balance" data-go="wallet" title="Tu saldo: abre el wallet de tu cuenta">${coin(balance)}<span class="plus">${icon('plus')}</span></button>
-          <button class="pill mute topbar-sound-btn" aria-label="Sonido" title="Silenciar / Activar sonido (M)">${soundLabel()}</button>
-          <button class="icon-btn m-settings ${screen === 'settings' ? 'on' : ''}" data-go="settings" aria-label="Ajustes" title="Ajustes">${icon('gear')}</button>
-          ${document.fullscreenEnabled ? `<button class="icon-btn m-fullscreen" aria-label="Pantalla completa" title="Pantalla completa">${icon('fullscreen')}</button>` : ''}
-        </div>
-      </header>`),
-    );
-    app.querySelector('.topbar-sound-btn')?.addEventListener('click', toggleMute);
-    app.querySelector('.m-fullscreen')?.addEventListener('click', toggleFullscreen);
-  }
   app.append(content);
-  if (!hideHeader && nav) {
-    app.append(
-      h(`
-      <nav class="tabbar">
-        <button data-go="lobby" class="${screen === 'lobby' ? 'on' : ''}">${icon('flag')}Jugar</button>
-        <button data-go="freeplay" class="${screen === 'freeplay' ? 'on' : ''}">${icon('tee')}Libre</button>
-        <button data-go="skins" class="${screen === 'skins' ? 'on' : ''}">${icon('skins')}Skins</button>
-        <button data-go="ranking" class="${screen === 'ranking' ? 'on' : ''}">${icon('trophy')}Ranking</button>
-        <button data-go="account" class="${screen === 'account' ? 'on' : ''}">${icon('user')}Cuenta</button>
-      </nav>`),
-    );
-  }
-  app.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => go(b.dataset.go)));
   bindHolo(app);
+}
+
+// Lobby flotante de las pantallas de partida: sale igual que «atrás» (pide confirmación si la partida en vivo no ha acabado)
+function leaveToLobby() {
+  if (backGuard()) return;
+  goHome();
+}
+
+/** Sala en vivo y resultados: su volver es el botón Lobby flotante (lobbyButton) enlazado a leaveToLobby. */
+function paintLive(view) {
+  paintApp(view);
+  view.querySelector('[data-lobby]')?.addEventListener('click', leaveToLobby);
 }
 
 // Atajos globales de navegación por teclado en menús y modales
@@ -194,16 +180,6 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     unlockAudio();
     sfx.tap();
-    const navBtn = document.querySelector(`.desktop-nav button[data-go="${dest}"]`);
-    if (navBtn) {
-      navBtn.classList.add('nav-key-active');
-      setTimeout(() => navBtn.classList.remove('nav-key-active'), 220);
-    }
-    const tabBtn = document.querySelector(`.tabbar button[data-go="${dest}"]`);
-    if (tabBtn) {
-      tabBtn.classList.add('tab-key-active');
-      setTimeout(() => tabBtn.classList.remove('tab-key-active'), 220);
-    }
     go(dest);
   };
 
@@ -214,6 +190,7 @@ window.addEventListener('keydown', (e) => {
   else if (isNum(5)) triggerNav('account');
   else if (isNum(6)) triggerNav('settings');
   else if (e.code === 'KeyM') toggleMute();
+  else if (e.code === 'Escape') router?.back();
 });
 
 function toggleFullscreen() {
@@ -221,29 +198,21 @@ function toggleFullscreen() {
   else document.documentElement.requestFullscreen().catch(() => { });
 }
 
-function go(to) {
-  if (to === 'wallet') return showAccount('', 'wallet');
-  if (to === 'skins') return showSkins();
-  if (to === 'account') return showAccount();
-  if (to === 'ranking') return showRanking();
-  if (to === 'freeplay') return showFreePlayCourseSelect();
-  if (to === 'settings') return showSettings();
-  return showLobby();
+// fachada sobre el router (src/screens/navigate.js): los `data-go` y los atajos 1-6 siguen igual
+let go = () => {};
+// fin de partida o salida: libera la partida (final, sala en vivo, renderer, guard) y vuelve al hub (la raíz)
+// tras una partida el hub recrea su escena 3D (T026 la libera al empezar). El disparador es la LLEGADA al hub
+// (hub.js llama a ctx.actions.reviveHubScene al montar y al destapar sin escena), así vale cualquier vía de vuelta.
+// Si el juego sigue vivo se libera primero (su contexto WebGL), así nunca coexisten dos; sin esperarla: el hub
+// se pinta con la imagen fija y la escena entra al llegar. Nada si hay sala en vivo sin acabar.
+function reviveHubScene() {
+  if (currentLive && !currentLive.finished) return;
+  if (game) releasePlay();
+  hubPreloader.reload().then((scene) => {
+    if (scene && hubPreloader.current() === scene && startCtx) startCtx.setHubScene(scene);
+  });
 }
-
-// ---------- ajustes ----------
-
-/** true si los ajustes viajan con la cuenta (no en modo local ni en cuenta de invitado). */
-const settingsSynced = () => !!backend?.account && !backend.account.profile?.is_anonymous;
-
-async function showSettings(section = lastSection()) {
-  leaveFinale();
-  stopLive();
-  screen = 'settings';
-  const view = h('<main class="screen settings-screen"><div class="settings-host"></div></main>');
-  await shell(view, { nav: false });
-  mountSettingsPanel(view.querySelector('.settings-host'), { layout: 'screen', section, synced: settingsSynced(), onBack: () => go('lobby') });
-}
+const goHome = createGoHome({ leaveFinale: () => leaveFinale(), stopLive: () => stopLive(), releasePlay, go: (to) => go(to) });
 
 // cartas holográficas: se inclinan y el brillo sigue al dedo
 function bindHolo(root) {
@@ -270,484 +239,13 @@ function bindHolo(root) {
   });
 }
 
-// ---------- lobby ----------
-
-async function showLobby() {
-  leaveFinale();
-  stopLive();
-  screen = 'lobby';
-  const balance = await wallet.getBalance();
-  const skin = progress.skin;
-  const view = h(`
-    <main class="screen lobby">
-      <section class="hero rarity-${skin.rarity}">
-        <div class="hero-ball">
-          <div class="hero-ball-aura"></div>
-          ${ball(skin, 110, 'spin')}
-          <div class="hero-shadow"></div>
-        </div>
-        <div class="hero-text">
-          <div class="hero-badge-row">
-            <span class="rarity-pill rarity-${skin.rarity}">${SKIN_TIERS[skin.rarity].name}</span>
-            <span class="hero-level-tag">Nivel ${progress.level.level}</span>
-          </div>
-          <strong>${skin.name}</strong>
-          <button class="chip-btn" data-go="skins">Personalizar skin</button>
-        </div>
-      </section>
-      ${backend.mode === 'local' ? `<p class="offline">Modo sin conexión: el saldo se guarda solo en este ${DEVICE}</p>` : ''}
-      ${backend.account?.profile?.paid_block ? `<button class="notice account-hint" data-go="account">${{ account_required: 'Crea tu cuenta con email para jugar mesas con entrada', kyc_required: 'Verifica tu edad e identidad para jugar mesas con entrada', account_review: 'Tu cuenta está en revisión: de momento solo Práctica', underage: 'Mesas con entrada solo para mayores de 18' }[backend.account.profile.paid_block]} ${icon('next')}</button>` : ''}
-      ${backend.parties ? '<section class="party-box"></section>' : ''}
-      <div class="section-head">
-        <div class="section-title-row">
-          <h1>Mesas de Torneo</h1>
-          <span class="live-pill"><i class="pulse-dot"></i> EN VIVO</span>
-        </div>
-        <div class="lobby-specs">
-          <span class="spec-chip">${PLAYERS_PER_MATCH} Jugadores</span>
-          <span class="spec-chip">${HOLES_PER_MATCH} Hoyos</span>
-          <span class="spec-chip">Determinista</span>
-        </div>
-      </div>
-      <div class="tiers"></div>
-      <p class="legal">Créditos de demostración sin valor real. ${backend.tournaments ? 'Las mesas de pago son partidas en vivo contra jugadores reales: todos jugáis los mismos hoyos a la vez y el servidor repite cada golpe para validarlo. Los huecos libres los ocupan bots, que nunca cuentan para el premio. La práctica es contra rivales simulados. ' : ''}El resultado depende solo de la habilidad: mismo campo para todos y sin elementos aleatorios. En empate, tiro de desempate: gana quien deje la bola más cerca. Comisión de la plataforma: ${Math.round(PLATFORM_COMMISSION * 100)}% del bote.</p>
-    </main>`);
-  const list = view.querySelector('.tiers');
-  for (const tier of TIERS) {
-    const free = tier.entryFee === 0;
-    const enough = balance >= tier.entryFee;
-    const card = h(`
-      <div class="tier holo tier--${tier.id}">
-        <div class="shine"></div>
-        <div class="tier-ambient"></div>
-        <div class="tier-top">
-          <div class="gem-wrapper"><span class="gem gem--${tier.id}"></span></div>
-          <div class="tier-identity">
-            <span class="tier-name">${tier.name}</span>
-            <span class="tier-tagline">${free ? 'Entrenamiento' : 'Torneo Esports'}</span>
-          </div>
-          <span class="tier-fee">${free ? 'Gratis' : `Entrada ${coin(tier.entryFee)}`}</span>
-        </div>
-        <div class="tier-mid">
-          ${free ? '<span class="tier-prize small">Entrena sin arriesgar créditos</span>' : `<span class="tier-label">Premio Garantizado</span><span class="tier-prize">${coin(prizeFor(tier))}</span><span class="tier-pot">Bote ${fmt(potFor(tier))}</span>`}
-        </div>
-        <button class="play" ${enough ? '' : 'disabled'}>${!enough ? 'Saldo insuficiente' : free ? 'Practicar' : 'Jugar Torneo'}</button>
-      </div>`);
-    const play = card.querySelector('.play');
-    play.dataset.tier = tier.id;
-    play.dataset.label = play.textContent;
-    play.addEventListener('click', () => (!free && party.state?.party ? party.pickTier(tier) : startMatch(tier)));
-    list.append(card);
-  }
-  await shell(view);
-  if (backend.parties) partyPanel(view.querySelector('.party-box'), list, balance);
-  claimRewards();
-}
-
-// ---------- grupos ----------
-// Hasta 4 amigos: el líder elige la mesa, cada uno pulsa «Listo» y el servidor
-// los mete juntos en el mismo torneo. Se consulta cada pocos segundos mientras
-// se ve el lobby; cuando aparece un torneo nuevo del grupo, se abre su sala.
-
-const PARTY_POLL_MS = 3000;
-const PARTY_SEEN = 'gcb.party.seen';
-const party = { state: null, pickTier: () => { } };
-
-async function partyPanel(box, tierList, balance) {
-  const svc = backend.parties;
-  const hasName = Boolean(backend.account?.profile?.username);
-  let friends = null;
-  let msg = '';
-  let busy = false;
-
-  const seen = () => {
-    try { return localStorage.getItem(PARTY_SEEN); } catch { return null; }
-  };
-  const markSeen = (id) => {
-    try { localStorage.setItem(PARTY_SEEN, id); } catch { }
-  };
-
-  // si el grupo acaba de entrar en un torneo, a su sala (o a seguir jugando)
-  async function openIfNew(state) {
-    const id = newPartyMatch(state?.party, seen());
-    if (!id) return false;
-    markSeen(id);
-    let match;
-    try {
-      match = await backend.tournaments.get(id, TIERS);
-    } catch {
-      return false;
-    }
-    if (match.status !== 'open' || !match.me || match.me.finished) return false;
-    await wallet.getBalance();
-    sfx.tick();
-    enterLive(match);
-    return true;
-  }
-
-  async function apply(job, okMsg = '') {
-    if (busy) return;
-    busy = true;
-    try {
-      const state = await job();
-      msg = okMsg;
-      if (await openIfNew(state)) return;
-      paint(state);
-    } catch (e) {
-      msg = partyMessage(e.code);
-      paint(party.state);
-    } finally {
-      busy = false;
-    }
-  }
-
-  party.pickTier = (tier) =>
-    apply(async () => {
-      if (!party.state.party.leader) {
-        // un miembro solo puede confirmar la mesa que ya eligió el líder
-        if (party.state.party.tier_id !== tier.id) throw Object.assign(new Error(), { code: 'not_leader' });
-        return svc.ready(true);
-      }
-      await svc.setTier(tier.id);
-      return svc.ready(true);
-    });
-
-  // los botones de las mesas dicen qué pasa al pulsarlos estando en grupo
-  function paintTiers(p) {
-    for (const b of tierList.querySelectorAll('.play')) {
-      const tier = TIERS.find((t) => t.id === b.dataset.tier);
-      if (!tier || tier.entryFee === 0 || balance < tier.entryFee) continue;
-      b.classList.toggle('party-pick', Boolean(p) && p.tier_id === tier.id);
-      if (!p) {
-        b.textContent = b.dataset.label;
-        b.disabled = false;
-      } else if (p.leader) {
-        b.textContent = p.tier_id === tier.id ? 'Mesa del grupo' : 'Jugar con el grupo';
-        b.disabled = false;
-      } else {
-        b.textContent = p.tier_id === tier.id ? 'Mesa del grupo · Listo' : 'La elige el líder';
-        b.disabled = p.tier_id !== tier.id;
-      }
-    }
-  }
-
-  function paint(state) {
-    if (!box.isConnected) return;
-    party.state = state;
-    const p = state?.party ?? null;
-    const invites = state?.invites ?? [];
-    paintTiers(p);
-    const inviteRows = invites.map((i) => `<li class="friend">
-        <span class="friend-name"><b>${esc(i.from)}</b><small>te invita a su grupo</small></span>
-        <span class="friend-actions"><button class="chip-btn" data-join="${esc(i.party)}">${icon('check')}Unirme</button><button class="chip-btn" data-no="${esc(i.party)}">${icon('close')}No</button></span>
-      </li>`).join('');
-    const inParty = new Set([...(p?.members ?? []).map((m) => m.name.toLowerCase()), ...(p?.invited ?? []).map((n) => n.toLowerCase())]);
-    const room = p ? p.size - p.members.length - p.invited.length : 3;
-    const candidates = (friends ?? []).filter((f) => !inParty.has(f.name.toLowerCase())).slice(0, 6);
-    const friendRows = room > 0 && candidates.length
-      ? `<ul class="friend-list">${candidates.map((f) => `<li class="friend">
-          ${avatarHtml({ size: 'sm', frame: frameById(f.frame), av: fromWire(f.avatar), initial: f.name })}
-          <span class="friend-name"><b>${esc(f.name)}</b><small>Nv. ${esc(f.level)}</small></span>
-          <button class="chip-btn" data-invite="${esc(f.name)}">${icon('user-plus')}Invitar</button>
-        </li>`).join('')}</ul>`
-      : '';
-    const tier = p?.tier_id ? TIERS.find((t) => t.id === p.tier_id) : null;
-    let body;
-    if (!hasName) {
-      body = `<p class="sub">Ponte un nombre de usuario y añade amigos para buscar partida juntos.</p><button class="chip-btn" data-go="account">${icon('user')}Ir a la cuenta</button>`;
-    } else if (!p) {
-      body = `
-        ${inviteRows ? `<ul class="friend-list">${inviteRows}</ul>` : ''}
-        <p class="sub">Invita a tus amigos y entraréis juntos en el mismo torneo.</p>
-        ${friends === null ? '<p class="sub">Cargando amigos…</p>' : friendRows || `<p class="sub">Aún no tienes amigos. Añádelos en tu cuenta.</p><button class="chip-btn" data-go="account">${icon('user-plus')}Añadir amigos</button>`}`;
-    } else {
-      const members = p.members.map((m) => `<li class="party-member ${m.ready ? 'ready' : ''}">
-          <span class="avatar">${esc(m.name[0] ?? '?')}</span>
-          <span><b>${m.me ? 'Tú' : esc(m.name)}</b><small>${m.leader ? 'Líder · ' : ''}${m.ready ? 'Listo' : 'Esperando'}</small></span>
-        </li>`).join('');
-      const invited = p.invited.map((n) => `<li class="party-member invited"><span class="avatar">${esc(n[0] ?? '?')}</span><span><b>${esc(n)}</b><small>Invitado</small></span></li>`).join('');
-      const me = p.members.find((m) => m.me);
-      const alone = p.members.length < 2;
-      body = `
-        <ul class="party-members">${members}${invited}</ul>
-        <p class="sub">${tier ? `Mesa: <b>${tier.name}</b> · entrada ${coin(tier.entryFee)} cada uno` : p.leader ? 'Elige abajo la mesa del torneo.' : 'El líder está eligiendo la mesa.'}</p>
-        ${p.last_error ? `<p class="party-err">${esc(partyErrorText(p.last_error))}</p>` : ''}
-        ${tier ? `<button class="primary party-ready" ${alone && !me?.ready ? 'disabled' : ''}>${alone ? 'Espera a que entre un amigo' : icon('check') + readyLabel(p)}</button>` : ''}
-        <p class="legal">Al pulsar «${p.leader ? 'Buscar partida' : 'Estoy listo'}» aceptas pagar tu entrada. Cuando estéis todos listos entráis juntos en el mismo torneo; cada uno juega su ronda y gana quien menos golpes haga.</p>
-        ${inviteRows ? `<ul class="friend-list">${inviteRows}</ul>` : ''}
-        ${friendRows ? `<h3 class="friends-sub">Invitar a más amigos</h3>${friendRows}` : ''}`;
-    }
-    box.innerHTML = `
-      <div class="party-card">
-        <div class="section-head party-head">
-          <h2>${p ? `Tu grupo · ${p.members.length}/${p.size}` : 'Juega con amigos'}</h2>
-          ${p ? `<button class="chip-btn party-leave">${icon('logout')}Salir del grupo</button>` : ''}
-        </div>
-        ${msg ? `<p class="party-msg" role="status">${esc(msg)}</p>` : ''}
-        ${body}
-      </div>`;
-    box.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => go(b.dataset.go)));
-    box.querySelectorAll('[data-invite]').forEach((b) => b.addEventListener('click', () => apply(() => svc.invite(b.dataset.invite), `Invitación enviada a ${b.dataset.invite}.`)));
-    box.querySelectorAll('[data-join]').forEach((b) => b.addEventListener('click', () => apply(() => svc.respond(b.dataset.join, true))));
-    box.querySelectorAll('[data-no]').forEach((b) => b.addEventListener('click', () => apply(() => svc.respond(b.dataset.no, false))));
-    box.querySelector('.party-leave')?.addEventListener('click', () => apply(() => svc.leave()));
-    box.querySelector('.party-ready')?.addEventListener('click', () => apply(() => svc.ready(!p.members.find((m) => m.me)?.ready)));
-  }
-
-  if (hasName) {
-    backend.account.friends().then((d) => {
-      friends = d.friends;
-      paint(party.state);
-    }).catch(() => { friends = []; });
-  }
-
-  const poll = async () => {
-    if (!box.isConnected) return;
-    if (!busy) {
-      try {
-        const state = await svc.mine();
-        if (!box.isConnected) return;
-        if (await openIfNew(state)) return;
-        // no repintar si no ha cambiado nada (no se pierde lo que estés tocando)
-        if (JSON.stringify(state) !== JSON.stringify(party.state)) {
-          msg = '';
-          paint(state);
-        }
-      } catch { }
-    }
-    setTimeout(poll, PARTY_POLL_MS);
-  };
-  party.state = null;
-  if (hasName) {
-    paint(null);
-    poll();
-  } else paint(null);
-}
-
-// ---------- skins ----------
-
-const tierOrder = (s) => SKIN_TIERS[s.tier]?.order ?? 0;
-const FILTER_TIERS = Object.keys(SKIN_TIERS).reverse();
-
-async function showSkins() {
-  screen = 'skins';
-  const unlocked = SKINS.filter((s) => progress.isUnlocked(s)).length;
-  const { level, into, need } = progress.level;
-  const collections = [...new Set(SKINS.map((s) => s.collection))];
-  const filter = { tier: 'all', owned: false, collection: 'all' };
-
-  const view = h(`
-    <main class="screen skins">
-      <div class="section-head">
-        <h1>Skins</h1>
-        <p class="sub">${unlocked}/${SKINS.length} desbloqueadas · solo cambian el aspecto, nunca el juego</p>
-      </div>
-      <div class="level-card">
-        <div><small>Nivel</small><strong>${level}</strong></div>
-        <div class="level-progress"><span><i style="width:${(into / need) * 100}%"></i></span><small>${into} / ${need} XP</small></div>
-      </div>
-      <div class="sk-filters" role="toolbar" aria-label="Filtros de skins">
-        <div class="sk-filter-row">
-          <button type="button" class="sk-fchip on" data-tier="all">Todas</button>
-          ${FILTER_TIERS.map((id) => `<button type="button" class="sk-fchip rarity-${id}" data-tier="${id}"><i>${tierIcon(id)}</i>${SKIN_TIERS[id].name}</button>`).join('')}
-        </div>
-        <div class="sk-filter-row">
-          <button type="button" class="sk-fchip sk-fowned" aria-pressed="false">Solo desbloqueadas</button>
-          ${collections.length > 1 ? `<select class="sk-fcoll" aria-label="Colección"><option value="all">Todas las colecciones</option>${collections.map((c) => `<option value="${c}">${c[0].toUpperCase()}${c.slice(1)}</option>`).join('')}</select>` : ''}
-        </div>
-      </div>
-      <div class="sk-grid"></div>
-      <p class="sk-empty" hidden>Ninguna skin cumple estos filtros.</p>
-      <h2>Desafíos</h2>
-      <ul class="challenges">
-        ${CHALLENGES.map((c) => {
-    const st = progress.challenge(c.id);
-    const reward = SKINS.find((s) => s.unlock?.challenge === c.id);
-    return `<li class="${st.done ? 'done' : ''}">
-            ${ball(reward, 34)}
-            <div><b>${c.name}</b><span class="bar"><i style="width:${(st.value / st.goal) * 100}%"></i></span></div>
-            <small>${st.done ? 'Completado' : `${st.value}/${st.goal}`}</small>
-          </li>`;
-  }).join('')}
-      </ul>
-    </main>`);
-
-  const grid = view.querySelector('.sk-grid');
-  const empty = view.querySelector('.sk-empty');
-  const cards = new Map();
-
-  const isOpen = (s) => progress.isUnlocked(s);
-  const sorted = [...SKINS].sort((a, b) => tierOrder(b) - tierOrder(a) || isOpen(b) - isOpen(a) || a.name.localeCompare(b.name, 'es'));
-  const jobs = [];
-
-  for (const skin of sorted) {
-    const tier = SKIN_TIERS[skin.tier];
-    const open = isOpen(skin);
-    const inst = progress.instance(skin.id);
-    const req = progress.requirement(skin);
-    const rare = open && inst ? rarePatternOf(skin, inst.seed) : null;
-    const card = h(`
-      <button type="button" class="sk-card rarity-${skin.tier} ${open ? '' : 'locked'}" data-skin-id="${skin.id}" style="--sk-a:${skin.palette.base};--sk-b:${skin.palette.accent}">
-        <div class="shine"></div>
-        <div class="sk-scene">
-          <span class="sk-ico" title="${tier.name}">${tierIcon(skin.tier)}</span>
-          <span class="sk-eq">Equipada</span>
-          <img class="sk-thumb" src="${(open && thumbCached(skin, inst)) || ballPreview(skin, 152)}" width="76" height="76" alt="" draggable="false">
-          ${open ? '' : `<span class="sk-lock">${icon('lock')}</span>`}
-          ${open && inst?.counter?.enabled ? '<span class="sk-chip">Marcador</span>' : ''}
-          ${rare ? `<span class="sk-chip sk-chip-rare">${icon('sparkle')} Patrón raro</span>` : ''}
-        </div>
-        <div class="sk-strip">
-          <b>${skin.name}</b>
-          <small>${tier.name}</small>
-        </div>
-      </button>`);
-    const img = card.querySelector('.sk-thumb');
-    img.dataset.thumb = '1';
-    // bloqueadas: silueta con el marcador 2D (no se renderiza nada en 3D)
-    if (open) jobs.push({ img, skin, inst });
-    card.addEventListener('click', () => openInspect(skin, card));
-    cards.set(skin.id, { card, skin, open });
-    grid.append(card);
-  }
-
-  const refreshEquipped = () => {
-    for (const { card, skin } of cards.values()) card.classList.toggle('equipped', progress.skin.id === skin.id);
-  };
-  const applyFilters = () => {
-    let shown = 0;
-    for (const { card, skin, open } of cards.values()) {
-      const ok = (filter.tier === 'all' || skin.tier === filter.tier) && (filter.collection === 'all' || skin.collection === filter.collection) && (!filter.owned || open);
-      card.hidden = !ok;
-      if (ok) shown++;
-    }
-    empty.hidden = shown > 0;
-  };
-  view.querySelectorAll('[data-tier]').forEach((b) => b.addEventListener('click', () => {
-    filter.tier = b.dataset.tier;
-    view.querySelectorAll('[data-tier]').forEach((x) => x.classList.toggle('on', x === b));
-    applyFilters();
-  }));
-  const ownedBtn = view.querySelector('.sk-fowned');
-  ownedBtn.addEventListener('click', () => {
-    filter.owned = !filter.owned;
-    ownedBtn.classList.toggle('on', filter.owned);
-    ownedBtn.setAttribute('aria-pressed', String(filter.owned));
-    applyFilters();
-  });
-  view.querySelector('.sk-fcoll')?.addEventListener('change', (e) => {
-    filter.collection = e.target.value;
-    applyFilters();
-  });
-
-  // inspección a pantalla completa (también en móvil); equipar es un botón explícito
-  let view3d = null;
-  const closeInspect = () => {
-    if (!view3d) return;
-    const { overlay, onKey, from } = view3d;
-    const inspector = view3d.inspector;
-    view3d = null;
-    document.removeEventListener('keydown', onKey, true);
-    try { inspector?.destroy(); } catch { }
-    overlay.remove();
-    document.body.classList.remove('sk-noscroll');
-    if (from?.isConnected) from.focus({ preventScroll: true });
-  };
-  function openInspect(skin, from) {
-    closeInspect();
-    const tier = SKIN_TIERS[skin.tier];
-    const overlay = h(`
-      <div class="sk-view rarity-${skin.tier}" role="dialog" aria-modal="true" aria-label="Inspeccionar ${skin.name}">
-        <div class="sk-view-bar">
-          <button type="button" class="sk-view-back" aria-label="Cerrar inspección">${icon('back')}Skins</button>
-          <span class="sk-view-title">${tierIcon(skin.tier)} ${skin.name}</span>
-        </div>
-        <div class="sk-view-stage">
-          <div class="sk-view-canvas"><img class="sk-view-poster" src="${thumbCached(skin, progress.instance(skin.id)) ?? ballPreview(skin, 288)}" alt="" draggable="false"></div>
-          <div class="sk-view-lock" hidden>
-            <span class="sk-lock sk-lock-big">${icon('lock')}</span>
-            <div class="sk-view-req"><small></small><span class="bar"><i></i></span></div>
-          </div>
-        </div>
-        <div class="sk-view-actions">
-          <button type="button" class="primary sk-equip"></button>
-        </div>
-      </div>`);
-    document.body.append(overlay);
-    document.body.classList.add('sk-noscroll');
-    const equipBtn = overlay.querySelector('.sk-equip');
-    const lockBox = overlay.querySelector('.sk-view-lock');
-    const syncAction = () => {
-      const req = progress.requirement(skin);
-      const open = req.ratio >= 1;
-      const isEq = progress.skin.id === skin.id;
-      equipBtn.disabled = isEq || !open;
-      equipBtn.innerHTML = isEq ? `${icon('check')}Equipada` : open ? 'Equipar' : 'Bloqueada';
-      lockBox.hidden = open;
-      lockBox.querySelector('small').textContent = req.text;
-      lockBox.querySelector('.bar i').style.width = `${req.ratio * 100}%`;
-    };
-    syncAction();
-    equipBtn.addEventListener('click', () => {
-      if (progress.equip(skin.id)) {
-        refreshEquipped();
-        syncAction();
-      }
-    });
-    overlay.querySelector('.sk-view-back').addEventListener('click', closeInspect);
-    const onKey = (e) => {
-      if (e.key !== 'Escape') return;
-      e.stopPropagation();
-      closeInspect();
-    };
-    document.addEventListener('keydown', onKey, true);
-    const mine = { overlay, inspector: null, onKey, from };
-    view3d = mine;
-    overlay.querySelector('.sk-view-back').focus({ preventScroll: true });
-    // el visor 3D (three.js + materiales) se descarga y crea solo ahora, al abrir
-    loadSkinInspector().then(({ createSkinInspector }) => {
-      if (view3d !== mine) return; // cerrado mientras cargaba
-      mine.inspector = createSkinInspector(overlay.querySelector('.sk-view-canvas'), { skin, instance: progress.instance(skin.id) ?? undefined, mode: 'fullscreen' });
-      // el candado va sobre el visor 3D, centrado en la bola (el visor vacía el contenedor al crearse)
-      overlay.querySelector('.sk-stage')?.append(lockBox);
-    }).catch((err) => console.warn('inspector no disponible', err));
-  }
-
-  refreshEquipped();
-  applyFilters();
-  await shell(view);
-  // shell() destruye el inspector anterior: el nuevo se registra después
-  activeSkinInspector = { destroy: closeInspect };
-
-  // miniaturas estáticas (caché); las que falten se renderizan una vez, en cola, la equipada primero
-  const eqId = progress.skin.id;
-  jobs.sort((a, b) => (b.skin.id === eqId) - (a.skin.id === eqId));
-  for (const j of jobs) upgradeImg(j.img, j.skin, j.inst, { size: 76, priority: j.skin.id === eqId });
-}
-
 // ---------- cuenta ----------
-
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 const BLOCK_TEXT = {
   account_required: 'Para jugar con créditos necesitas una cuenta con email. Crea tu cuenta para conservar tu saldo, nivel y skins.',
   kyc_required: 'Antes de jugar con créditos tienes que verificar tu edad e identidad. Solo se hace una vez.',
   underage: 'Las mesas con entrada son solo para mayores de 18 años. Puedes seguir jugando en Práctica.',
   account_review: 'Tu cuenta está en revisión por el sistema antitrampas. Mientras tanto puedes jugar en Práctica.',
-};
-
-const KYC_TEXT = {
-  none: 'Sin verificar',
-  pending: 'En curso',
-  verified: 'Verificada',
-  rejected: 'Rechazada',
-};
-
-const KYC_REASON = {
-  underage: 'Hay que ser mayor de 18 años.',
-  duplicate_identity: 'Ese documento ya está en otra cuenta. Solo se permite una cuenta por persona.',
-  provider_declined: 'No se ha podido comprobar el documento. Prueba otra vez con buena luz.',
-  missing_data: 'Faltan datos del documento. Prueba otra vez.',
 };
 
 function showBlocked(code) {
@@ -761,15 +259,12 @@ function showBlocked(code) {
         <button class="ghost back">Volver</button>
       </div>
     </div>`);
-  overlay.querySelector('.go')?.addEventListener('click', () => showAccount());
+  overlay.querySelector('.go')?.addEventListener('click', () => go('account'));
   overlay.querySelector('.back').addEventListener('click', () => overlay.remove());
   app.append(overlay);
 }
 
 // ---------- ranking de victorias ----------
-
-const RANKING_TABS = { weekly: 'Semanal', monthly: 'Mensual', historic: 'Histórico' };
-let rankingTab = 'weekly';
 
 /** Aviso de marco nuevo si la partida hizo cruzar un nivel de prestigio. */
 const prestigeNote = (gained) => {
@@ -779,539 +274,13 @@ const prestigeNote = (gained) => {
   return `<p class="reward-note prestige-note" style="${frameStyle(f)}"><i></i>¡Marco de prestigio ${esc(f.name)} desbloqueado!</p>`;
 };
 
-async function showRanking() {
-  screen = 'ranking';
-  const account = backend.account;
-  if (!account) {
-    await shell(
-      h(`<main class="screen ranking"><div class="section-head"><h1>Ranking</h1></div>
-        <p class="offline">El ranking de victorias necesita conexión con el servidor.</p></main>`),
-    );
-    return;
-  }
-  const view = h(`
-    <main class="screen ranking">
-      <div class="section-head"><h1>Ranking</h1><span class="sub">Victorias en mesas online</span></div>
-      <div class="rank-tabs">${Object.entries(RANKING_TABS).map(([k, v]) => `<button data-tab="${k}" class="${k === rankingTab ? 'on' : ''}">${v}</button>`).join('')}</div>
-      <p class="rank-period"></p>
-      <ol class="rank-list"></ol>
-      <div class="rank-me"></div>
-      <p class="legal">Cuentan las mesas con jugadores reales ya liquidadas. Semana de lunes a domingo y mes natural (hora UTC). En empate gana quien llegó antes a esas victorias. Terminar un periodo entre los mejores desbloquea bolas exclusivas en Skins.</p>
-    </main>`);
-  const list = view.querySelector('.rank-list');
-  const me = view.querySelector('.rank-me');
-  const period = view.querySelector('.rank-period');
-  const row = (r) => {
-    const f = frameById(r.frame);
-    return `<li class="rank-row ${r.me ? 'me' : ''} ${r.pos <= 3 ? `podium p${r.pos}` : ''}">
-      <b class="rank-pos">${r.pos <= 3 ? icon('medal', { tone: ['gold', 'silver', 'bronze'][r.pos - 1], arg: r.pos, label: `Puesto ${r.pos}` }) : r.pos}</b>
-      ${avatarHtml({ size: 'sm', frame: f, av: r.me ? avatar.get() : null, initial: (r.name ?? '?')[0] })}
-      <span class="rank-name">${esc(r.name)}<small>Nv. ${r.level}${f ? ` · ${esc(f.name)}` : ''}</small></span>
-      <span class="rank-wins"><b>${r.wins}</b><small>victoria${r.wins === 1 ? '' : 's'}</small></span>
-    </li>`;
-  };
-  const load = async (tab) => {
-    rankingTab = tab;
-    view.querySelectorAll('.rank-tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
-    list.innerHTML = '<li class="rank-empty">Cargando…</li>';
-    me.innerHTML = '';
-    try {
-      const r = await account.ranking(tab);
-      if (rankingTab !== tab || !view.isConnected) return;
-      period.textContent = tab === 'historic' ? 'Desde el principio' : `${new Date(r.from).toLocaleDateString('es', { day: 'numeric', month: 'short', timeZone: 'UTC' })} – ${new Date(new Date(r.to) - 1).toLocaleDateString('es', { day: 'numeric', month: 'short', timeZone: 'UTC' })}`;
-      list.innerHTML = r.top.length ? r.top.map(row).join('') : '<li class="rank-empty">Aún no hay victorias en este periodo. ¡Sé el primero!</li>';
-      const inTop = r.top.some((x) => x.me);
-      me.innerHTML = inTop ? '' : r.me
-        ? `<p class="rank-mine">Tu posición: <b>#${r.me.pos}</b> · ${r.me.wins} victoria${r.me.wins === 1 ? '' : 's'}</p>`
-        : '<p class="rank-mine">Aún no tienes victorias en este periodo. Gana una mesa online para entrar.</p>';
-    } catch {
-      if (rankingTab === tab && view.isConnected) list.innerHTML = '<li class="rank-empty">No se ha podido cargar el ranking. Prueba otra vez.</li>';
-    }
-  };
-  view.querySelectorAll('.rank-tabs button').forEach((b) => b.addEventListener('click', () => load(b.dataset.tab)));
-  await shell(view);
-  load(rankingTab);
-}
-
-const accountTabs = (balance) => `
-  <div class="rank-tabs acc-tabs">
-    <button data-acc="profile">${icon('user')}Perfil</button>
-    <button data-acc="wallet">${icon('wallet')}Wallet <small>${coin(balance)}</small></button>
-  </div>`;
-
-/** Muestra una sola pestaña de la cuenta (Perfil o Wallet) sin volver a pintar. */
-function bindAccountTabs(view) {
-  const apply = (tab) => {
-    accountTab = tab;
-    view.querySelectorAll('[data-acc]').forEach((b) => b.classList.toggle('on', b.dataset.acc === tab));
-    view.querySelectorAll('[data-pane]').forEach((el) => { el.hidden = el.dataset.pane !== tab; });
-  };
-  view.querySelectorAll('[data-acc]').forEach((b) => b.addEventListener('click', () => { sfx.tap(); apply(b.dataset.acc); }));
-  apply(accountTab);
-}
-
-async function showAccount(note = '', tab = 'profile') {
-  screen = 'account';
-  accountTab = tab;
-  const account = backend.account;
-  const [balance, txs] = await Promise.all([wallet.getBalance(), wallet.getTransactions()]);
-  if (!account) {
-    const offline = h(`<main class="screen account"><div class="section-head"><h1>Cuenta</h1></div>
-      ${accountTabs(balance)}
-      <div data-pane="profile" class="acc-pane"><p class="offline">Sin conexión con el servidor: el perfil no está disponible en este modo.</p></div>
-      <div data-pane="wallet" class="acc-pane wallet-pane">${walletPane(balance, txs)}</div></main>`);
-    bindAccountTabs(offline);
-    bindWallet(offline);
-    await shell(offline);
-    return;
-  }
-  const p = await account.load().catch(() => account.profile);
-  const confirmed = Boolean(p.email) && p.email_confirmed && !p.is_anonymous;
-  const kyc = p.kyc_status;
-  const name = p.username ?? 'Sin nombre';
-  const lvl = progress.level;
-  const prestige = progress.prestige;
-  const unlockedSkins = SKINS.filter((s) => progress.isUnlocked(s)).length;
-  const completedChallenges = CHALLENGES.filter((c) => progress.challenge(c.id).done).length;
-  const view = h(`
-    <main class="screen account">
-      <div class="profile-card passport-card holo">
-        <div class="shine"></div>
-        <div class="passport-header">
-          <button class="avatar-wrap edit-avatar" title="Cambiar avatar" aria-label="Cambiar avatar">
-            ${avatarHtml({ size: 'lg', frame: prestige.frame, av: avatar.get(), initial: p.username ? name : '?' })}
-            <span class="avatar-lvl-badge">Nv.${lvl.level}</span>
-            <span class="avatar-edit-tag">Editar</span>
-          </button>
-          <div class="passport-info">
-            <div class="passport-tag-row">
-              <span class="passport-status ${confirmed ? 'vip' : 'guest'}">${confirmed ? 'Jugador Oficial' : 'Email sin confirmar'}</span>
-              <span class="kyc-mini-pill ${kyc === 'verified' ? 'verified' : ''}">${KYC_TEXT[kyc]}</span>
-            </div>
-            <strong class="passport-name">${esc(name)}</strong>
-            <div class="chip-row"><button class="chip-btn rename">${icon('pencil')}Cambiar nombre</button><button class="chip-btn edit-avatar">${icon('upload')}Cambiar avatar</button></div>
-          </div>
-        </div>
-
-        <div class="career-stats-row">
-          <div class="stat-pill">
-            <span class="stat-pill-label">Nivel</span>
-            <span class="stat-pill-val">Nv. ${lvl.level}</span>
-            <small class="stat-pill-sub">${lvl.into}/${lvl.need} XP</small>
-          </div>
-          <div class="stat-pill">
-            <span class="stat-pill-label">Victorias</span>
-            <span class="stat-pill-val">${progress.state.wins}</span>
-            <small class="stat-pill-sub">${progress.state.matches} partidas</small>
-          </div>
-          <div class="stat-pill">
-            <span class="stat-pill-label">Skins</span>
-            <span class="stat-pill-val">${unlockedSkins}/${SKINS.length}</span>
-            <small class="stat-pill-sub">colección</small>
-          </div>
-          <div class="stat-pill">
-            <span class="stat-pill-label">Desafíos</span>
-            <span class="stat-pill-val">${completedChallenges}/${CHALLENGES.length}</span>
-            <small class="stat-pill-sub">completados</small>
-          </div>
-        </div>
-      </div>
-      ${accountTabs(balance)}
-      <div data-pane="profile" class="acc-pane">
-      <div class="account-card-panel frames-panel">
-        <div class="panel-head">
-          <h2>Marco de prestigio</h2>
-          <span class="panel-badge ${prestige.frame ? 'verified' : 'pending'}">${prestige.frame ? esc(prestige.frame.name) : 'Sin marco'}</span>
-        </div>
-        <div class="frames">
-          ${FRAMES.map((f) => {
-            const open = lvl.level >= f.level;
-            return `<button class="frame-opt ${open ? '' : 'locked'} ${prestige.frame?.id === f.id ? 'on' : ''}" data-frame="${f.id}" ${open ? '' : 'disabled'} style="${frameStyle(f)}" title="${open ? f.name : `Nivel ${f.level}`}">
-              ${avatarHtml({ size: 'xs', frame: f, av: avatar.get(), initial: name })}<b>${f.name}</b><small>${open ? 'Nv. ' + f.level : icon('lock') + ' Nv. ' + f.level}</small>
-            </button>`;
-          }).join('')}
-        </div>
-        <p class="sub">Se muestra en tu perfil y en el ranking. Siguiente marco: ${(() => { const n = FRAMES.find((f) => f.level > lvl.level); return n ? `${n.name} en el nivel ${n.level}` : 'ya los tienes todos'; })()}.</p>
-      </div>
-      <div class="account-card-panel friends-panel">
-        <div class="panel-head">
-          <h2>Amigos</h2>
-          <span class="panel-badge friends-count"></span>
-        </div>
-        <div class="friends-box"><p class="sub">Cargando…</p></div>
-      </div>
-      ${note ? `<p class="notice">${note}</p>` : ''}
-      ${p.in_review ? `<p class="offline">Tu cuenta está en revisión por el sistema antitrampas.${p.held > 0 ? ` Tienes ${coin(Number(p.held))} en premios retenidos hasta que termine.` : ''}</p>` : ''}
-
-      <div class="account-card-panel">
-        <div class="panel-head">
-          <h2>Email</h2>
-          <span class="panel-badge ${confirmed ? 'verified' : 'pending'}">${confirmed ? 'Confirmado' : 'Sin confirmar'}</span>
-        </div>
-        <div class="email-box"></div>
-      </div>
-
-      <div class="account-card-panel">
-        <div class="panel-head">
-          <h2>Edad e identidad</h2>
-          <span class="panel-badge ${kyc === 'verified' ? 'verified' : ''}">${KYC_TEXT[kyc]}</span>
-        </div>
-        <div class="kyc-box"></div>
-      </div>
-
-      <p class="legal">Para jugar mesas con entrada hace falta cuenta con email, ser mayor de 18 años y verificar tu identidad (una cuenta por persona). La práctica es libre.</p>
-      <button class="ghost logout">${icon('logout')}Cerrar sesión</button>
-      </div>
-      <div data-pane="wallet" class="acc-pane wallet-pane">${walletPane(balance, txs)}</div>
-    </main>`);
-  bindAccountTabs(view);
-  bindWallet(view);
-  view.querySelectorAll('.edit-avatar').forEach((b) => b.addEventListener('click', () => avatarEditor(() => showAccount(note))));
-
-  view.querySelector('.rename').addEventListener('click', () => renameForm(view, name));
-  view.querySelectorAll('.frame-opt:not(.locked)').forEach((b) => b.addEventListener('click', () => {
-    if (progress.equipFrame(b.dataset.frame)) showAccount(note);
-  }));
-
-  friendsPanel(view.querySelector('.friends-box'), view.querySelector('.friends-count'), Boolean(p.username));
-
-  const emailBox = view.querySelector('.email-box');
-  emailBox.innerHTML = `<p class="field-ok">${esc(p.email ?? '')}</p>${confirmed ? '' : '<p class="sub">Abre el enlace que te enviamos al registrarte para confirmar el email.</p>'}`;
-  const changePw = h('<button class="link">Cambiar contraseña</button>');
-  changePw.addEventListener('click', () => changePw.replaceWith(passwordForm()));
-  emailBox.append(changePw);
-
-  const kycBox = view.querySelector('.kyc-box');
-  // TEMPORAL: verificación de identidad desactivada (ver migración 20261106120000)
-  if (true) {
-    kycBox.innerHTML = '<p class="sub">La verificación de identidad está desactivada temporalmente.</p>';
-  } else if (!confirmed) {
-    kycBox.innerHTML = '<p class="sub">Primero confirma tu email.</p>';
-  } else if (kyc === 'verified') {
-    kycBox.innerHTML = `<p class="field-ok">Identidad verificada${p.adult ? ' · mayor de 18' : ''}</p>`;
-  } else {
-    kycBox.innerHTML = `
-      ${kyc === 'rejected' ? `<p class="sub">${KYC_REASON[p.kyc_reason] ?? KYC_REASON.provider_declined}</p>` : ''}
-      ${kyc === 'pending' ? '<p class="sub">Estamos esperando el resultado. Si no terminaste, vuelve a empezar.</p>' : ''}
-      <button class="primary kyc-start">${icon('shield')}${kyc === 'none' ? 'Verificar identidad' : 'Volver a verificar'}</button>
-      <p class="legal">Necesitarás tu DNI o pasaporte y la cámara del móvil. Los datos los comprueba un proveedor externo; aquí solo guardamos tu fecha de nacimiento.</p>`;
-    kycBox.querySelector('.kyc-start').addEventListener('click', async (e) => {
-      e.target.disabled = true;
-      try {
-        const r = await account.startKyc();
-        if (r.url) return (location.href = r.url);
-        if (r.status === 'verified') return showAccount();
-        kycStubForm(kycBox);
-      } catch (err) {
-        e.target.disabled = false;
-        alertMsg(err.code === 'account_required' ? 'Primero confirma tu email.' : 'No se ha podido abrir la verificación. Prueba otra vez.');
-      }
-    });
-  }
-
-  view.querySelector('.logout')?.addEventListener('click', async (e) => {
-    e.target.disabled = true;
-    await account.signOut();
-  });
-  await shell(view);
-}
-
-// amigos: se añaden por nombre de usuario y la otra persona acepta o rechaza
-async function friendsPanel(box, badge, hasName) {
-  const account = backend.account;
-  const paint = (data, msg = '', isErr = false) => {
-    badge.textContent = `${data.friends.length} ${data.friends.length === 1 ? 'amigo' : 'amigos'}`;
-    const row = (f) => {
-      const frame = frameById(f.frame);
-      return `<li class="friend">
-        ${avatarHtml({ size: 'sm', frame, av: fromWire(f.avatar), initial: f.name })}
-        <span class="friend-name"><b>${esc(f.name)}</b><small>Nv. ${esc(f.level)}</small></span>
-        <button class="chip-btn" data-remove="${esc(f.name)}">${icon('trash')}Quitar</button>
-      </li>`;
-    };
-    const asks = (list, buttons) => list.map((r) => `<li class="friend">
-        <span class="friend-name"><b>${esc(r.name)}</b></span>${buttons(esc(r.name))}
-      </li>`).join('');
-    box.innerHTML = `
-      <form class="friend-add form">
-        <div class="row"><input name="name" maxlength="17" placeholder="Nombre de usuario" autocomplete="off" autocapitalize="off" spellcheck="false" ${hasName ? '' : 'disabled'}><button class="primary" ${hasName ? '' : 'disabled'}>${icon('plus')}Añadir</button></div>
-        <p class="friend-msg ${isErr ? 'err' : 'ok'}" role="status">${esc(msg || (hasName ? '' : 'Ponte primero un nombre de usuario para añadir amigos.'))}</p>
-      </form>
-      ${data.incoming.length ? `<h3 class="friends-sub">Peticiones recibidas</h3><ul class="friend-list">${asks(data.incoming, (n) => `<span class="friend-actions"><button class="chip-btn" data-accept="${n}">${icon('check')}Aceptar</button><button class="chip-btn" data-decline="${n}">${icon('close')}Rechazar</button></span>`)}</ul>` : ''}
-      ${data.friends.length ? `<ul class="friend-list">${data.friends.map(row).join('')}</ul>` : '<p class="sub">Aún no tienes amigos. Añade a alguien por su nombre de usuario.</p>'}
-      ${data.outgoing.length ? `<h3 class="friends-sub">Peticiones enviadas</h3><ul class="friend-list">${asks(data.outgoing, (n) => `<button class="chip-btn" data-remove="${n}">${icon('close')}Cancelar</button>`)}</ul>` : ''}`;
-    const run = (name, job, ok) => async () => {
-      try {
-        await job(name);
-        refresh(ok);
-      } catch (err) {
-        refresh(friendMessage(err.code), true);
-      }
-    };
-    box.querySelectorAll('[data-accept]').forEach((b) => b.addEventListener('click', run(b.dataset.accept, (n) => account.respondFriend(n, true), `Ahora eres amigo de ${b.dataset.accept}.`)));
-    box.querySelectorAll('[data-decline]').forEach((b) => b.addEventListener('click', run(b.dataset.decline, (n) => account.respondFriend(n, false), 'Petición rechazada.')));
-    box.querySelectorAll('[data-remove]').forEach((b) => b.addEventListener('click', run(b.dataset.remove, (n) => account.removeFriend(n), 'Hecho.')));
-    box.querySelector('.friend-add').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const name = cleanFriendName(e.target.name.value);
-      if (!name) return void refresh(friendMessage('invalid_username'), true, e.target.name.value);
-      e.target.querySelector('button').disabled = true;
-      try {
-        refresh(addedMessage(await account.addFriend(name), name));
-      } catch (err) {
-        refresh(friendMessage(err.code), true, name);
-      }
-    });
-  };
-  async function refresh(msg = '', isErr = false, keep = '') {
-    let data;
-    try {
-      data = await account.friends();
-    } catch {
-      return void (box.innerHTML = '<p class="sub">No se han podido cargar tus amigos.</p>');
-    }
-    paint(data, msg, isErr);
-    if (keep) box.querySelector('[name=name]').value = keep;
-  }
-  await refresh();
-}
-
-// cambio de contraseña desde la cuenta: pide la actual antes de aceptar la nueva
-function passwordForm() {
-  const pw = (label, name, ac) => `<label>${label}<input type="password" name="${name}" required autocomplete="${ac}" maxlength="72" autocapitalize="off" spellcheck="false"></label>`;
-  const form = h(`
-    <form class="form">
-      ${pw('Contraseña actual', 'current', 'current-password')}
-      ${pw('Contraseña nueva', 'next', 'new-password')}
-      ${pw('Repite la contraseña nueva', 'again', 'new-password')}
-      <p class="sub">Mínimo 8 caracteres, con letras y números.</p>
-      <p class="auth-error" role="alert"></p>
-      <button class="primary">Guardar contraseña</button>
-    </form>`);
-  const error = form.querySelector('.auth-error');
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const btn = form.querySelector('button');
-    error.textContent = '';
-    const bad = validatePassword(form.next.value) ?? (form.next.value !== form.again.value ? 'password_mismatch' : null);
-    if (bad) return void (error.textContent = authMessage(bad));
-    btn.disabled = true;
-    try {
-      await backend.account.changePassword(form.current.value, form.next.value);
-      showAccount('Contraseña cambiada');
-    } catch (err) {
-      btn.disabled = false;
-      error.textContent = authMessage(err.code);
-    }
-  });
-  return form;
-}
-
-// elegir icono o subir imagen propia (máx. 2,5 MB); se guarda en este dispositivo
-function avatarEditor(done) {
-  app.querySelector('.overlay')?.remove();
-  const overlay = h(`
-    <div class="overlay">
-      <div class="card avatar-editor">
-        <h2>Tu avatar</h2>
-        <div class="ae-preview"></div>
-        <div class="ae-icons">${AVATAR_ICONS.map((i) => `<button data-icon="${i.id}" title="${i.name}" aria-label="${i.name}">${avatarIcon(i.id)}</button>`).join('')}</div>
-        <div class="row">
-          <button class="secondary ae-upload">${icon('upload')}Subir imagen</button>
-          <button class="secondary ae-clear">${icon('trash')}Quitar</button>
-        </div>
-        <input type="file" class="ae-file" accept="image/png,image/jpeg,image/webp" hidden>
-        <p class="ae-msg legal">PNG, JPG o WebP, máximo 2,5 MB. Se recorta en cuadrado y solo se guarda en este dispositivo.</p>
-        <button class="primary ae-done">${icon('check')}Listo</button>
-      </div>
-    </div>`);
-  const msg = overlay.querySelector('.ae-msg');
-  const paint = () => {
-    const av = avatar.get();
-    overlay.querySelector('.ae-preview').innerHTML = avatarHtml({ size: 'lg', frame: progress.prestige.frame, av, initial: backend.account?.profile?.username ?? '?' });
-    overlay.querySelectorAll('[data-icon]').forEach((b) => b.classList.toggle('on', b.dataset.icon === av.icon));
-  };
-  overlay.querySelectorAll('[data-icon]').forEach((b) => b.addEventListener('click', () => { avatar.setIcon(b.dataset.icon); paint(); }));
-  overlay.querySelector('.ae-clear').addEventListener('click', () => { avatar.clear(); paint(); });
-  const file = overlay.querySelector('.ae-file');
-  overlay.querySelector('.ae-upload').addEventListener('click', () => file.click());
-  file.addEventListener('change', async () => {
-    const f = file.files[0];
-    file.value = '';
-    if (!f) return;
-    const bad = checkAvatarFile(f);
-    if (bad) { msg.textContent = bad === 'size' ? 'La imagen pesa más de 2,5 MB.' : 'Usa una imagen PNG, JPG o WebP.'; msg.classList.add('err'); return; }
-    try {
-      avatar.setImage(await imageToAvatar(f));
-      msg.classList.remove('err');
-      paint();
-    } catch {
-      msg.textContent = 'No se ha podido leer esa imagen.';
-      msg.classList.add('err');
-    }
-  });
-  overlay.querySelector('.ae-done').addEventListener('click', () => { overlay.remove(); done(); });
-  paint();
-  app.append(overlay);
-}
-
-function renameForm(view, current) {
-  const card = view.querySelector('.profile-card');
-  const form = h(`
-    <form class="form">
-      <input name="name" maxlength="16" autocomplete="nickname" value="${esc(current === 'Sin nombre' ? '' : current)}" placeholder="Nombre (3-16 letras, números o _)">
-      <button class="primary">Guardar nombre</button>
-    </form>`);
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    try {
-      await backend.account.setUsername(form.name.value.trim());
-      showAccount('Nombre guardado');
-    } catch (err) {
-      alertMsg(err.code === 'username_taken' ? 'Ese nombre ya está cogido.' : 'Usa de 3 a 16 letras, números o _.');
-    }
-  });
-  card.after(form);
-  form.name.focus();
-}
-
-// modo pruebas: sin proveedor configurado, se pide fecha y documento a mano
-function kycStubForm(box) {
-  box.innerHTML = `
-    <form class="form">
-      <p class="sub"><small class="tag">pruebas</small> Verificación simulada: aún no hay proveedor conectado.</p>
-      <label>Fecha de nacimiento<input type="date" name="birthdate" required></label>
-      <label>Número de documento<input name="document" required minlength="5" maxlength="32" autocomplete="off"></label>
-      <button class="primary">Verificar</button>
-    </form>`;
-  const form = box.querySelector('form');
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    form.querySelector('button').disabled = true;
-    try {
-      await backend.account.stubKyc(form.birthdate.value, form.document.value);
-      showAccount();
-    } catch {
-      form.querySelector('button').disabled = false;
-      alertMsg('Revisa la fecha y el número de documento.');
-    }
-  });
-}
-
-// ---------- wallet ----------
-
-const TX_LABEL = { bonus: 'Bienvenida', withdrawal: 'Retirada', deposit: 'Recarga', entry: 'Entrada', prize: 'Premio', refund: 'Devolución' };
-
-function walletPane(balance, txs) {
-  const prizeTotal = txs.filter((t) => t.type === 'prize' && t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
-  const matchesPlayed = txs.filter((t) => t.type === 'entry').length;
-  return `
-    <div class="wallet-pane-inner">
-      <div class="wallet-dashboard-col">
-        <div class="wallet-card holo">
-          <div class="shine"></div>
-          <div class="card-ambient"></div>
-          <div class="card-header">
-            <div class="card-chip-badge"><span class="card-chip"></span><span class="card-contactless">)))</span></div>
-            <span class="card-league">DIAMOND VIP</span>
-          </div>
-          <div class="card-balance">
-            <small>Saldo Disponible</small>
-            <strong>${coin(balance)}</strong>
-          </div>
-          <div class="card-footer">
-            <div class="card-number">•••• •••• •••• ${String(Math.abs(Math.round(balance * 100)) % 9000 + 1000)}</div>
-            <div class="card-holder"><small>TITULAR</small><span>GOLF CASH PRO</span></div>
-          </div>
-        </div>
-        <div class="wallet-metrics">
-          <div class="metric-card">
-            <small>Premios Ganados</small>
-            <b>${coin(prizeTotal)}</b>
-          </div>
-          <div class="metric-card">
-            <small>Torneos Jugados</small>
-            <b>${matchesPlayed}</b>
-          </div>
-        </div>
-        <div class="deposit-section">
-          <h3>Recarga Rápida de Créditos Demo</h3>
-          <div class="row deposit-row">
-            <button class="primary deposit-btn" data-add="50">${icon('coins')}<span>+50</span> Créditos</button>
-            <button class="primary deposit-btn" data-add="200">${icon('coins')}<span>+200</span> Créditos</button>
-          </div>
-        </div>
-        ${wallet.depositCrypto
-      ? `<div class="crypto-section">
-          <h3>Depositar en Cripto <small class="tag">pruebas</small></h3>
-          <div class="row">
-            <button class="secondary" data-crypto="10">${icon('coins')}10 USD</button>
-            <button class="secondary" data-crypto="25">${icon('coins')}25 USD</button>
-            <button class="secondary" data-crypto="50">${icon('coins')}50 USD</button>
-          </div>
-          <p class="legal">Pago con NOWPayments (USDT, BTC, ETH…). Modo de pruebas: no se cobra dinero real.</p>
-        </div>`
-      : ''
-    }
-      </div>
-      <div class="txs-container">
-        <h3>Historial de Movimientos</h3>
-        <ul class="txs">
-          ${txs.length
-      ? txs
-        .map(
-          (t) => `<li>
-                        <div class="tx-info">
-                          <div class="tx-text">
-                            <b>${TX_LABEL[t.type] ?? t.type}</b>
-                            <small>${t.note} · ${new Date(t.at).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' })}</small>
-                          </div>
-                        </div>
-                        <span class="${t.amount >= 0 ? 'pos' : 'neg'}">${t.amount >= 0 ? '+' : ''}${fmt(t.amount)}</span>
-                      </li>`,
-        )
-        .join('')
-      : '<li class="empty"><p>Sin movimientos todavía</p></li>'
-    }
-        </ul>
-      </div>
-    </div>`;
-}
-
-function bindWallet(view) {
-  view.querySelectorAll('[data-add]').forEach((b) =>
-    b.addEventListener('click', async () => {
-      b.disabled = true;
-      try {
-        await wallet.deposit(Number(b.dataset.add), 'Recarga demo');
-      } catch (e) {
-        if (e.code === 'daily_cap') return alertMsg('Has llegado al límite de recargas demo de hoy');
-        throw e;
-      }
-      sfx.coins();
-      showAccount('', 'wallet');
-    }),
-  );
-  view.querySelectorAll('[data-crypto]').forEach((b) =>
-    b.addEventListener('click', async () => {
-      b.disabled = true;
-      try {
-        const { invoiceUrl } = await wallet.depositCrypto(Number(b.dataset.crypto));
-        location.href = invoiceUrl;
-      } catch (e) {
-        alertMsg(e.code === 'not_configured' ? 'Los depósitos en cripto todavía no están activados.' : 'No se ha podido crear el pago. Prueba otra vez.');
-      }
-    }),
-  );
-}
-
 // ---------- matchmaking ----------
 
 async function startMatch(tier, rematchOf = null) {
   leaveFinale();
   // #hoyo3 en la URL: la práctica empieza por ese hoyo (útil para probar);
   // #hoyo3-empate además fuerza el desempate al final
-  const forced = tier.entryFee === 0 && /^#hoyo(\d+)(-empate)?$/.exec(location.hash);
+  const forced = tier.entryFee === 0 && testHole;
   // con servidor, las mesas de pago son torneos contra jugadores reales y la
   // práctica se juega en el móvil contra rivales simulados
   if (!forced && tier.entryFee > 0 && backend.tournaments) return startTournament(tier, rematchOf);
@@ -1320,47 +289,28 @@ async function startMatch(tier, rematchOf = null) {
   try {
     match = await service.join(tier);
   } catch (e) {
-    if (e instanceof InsufficientFundsError) return showAccount('', 'wallet');
+    if (e instanceof InsufficientFundsError) return go('wallet');
     return alertMsg('No se ha podido crear la partida. Prueba otra vez.');
   }
   match.service = service;
   match.myHoles = [];
-  if (forced) Object.assign(match, { courses: [Number(forced[1]) - 1], holes: 1, forceTie: !!forced[2] });
-  const room = createMatchmakingView({
-    tier,
-    mode: tier.entryFee ? 'local' : 'practice',
-    seats: PLAYERS_PER_MATCH,
-    ballHtml: ball(progress.skin, 72),
-    coin,
-    kicker: tier.entryFee ? `${esc(tier.name)} · Mesa` : 'Práctica',
-    title: 'Buscando rivales',
-    potNote: tier.entryFee ? `Premio al ganador ${coin(prizeFor(tier))}` : 'Rivales simulados · juega sin riesgo',
-    cancelLabel: 'Cancelar y recuperar entrada',
-  });
-  const { view } = room;
+  if (forced) Object.assign(match, { courses: [forced.hole - 1], holes: 1, forceTie: forced.tie });
   let cancelled = false;
-  room.cancelButton.addEventListener('click', async () => {
-    cancelled = true;
-    room.stop();
-    await match.service.cancel(match);
-    showLobby();
+  // la pantalla de emparejamiento (src/screens/matchmaking.js) pinta la sesión; aquí solo se va rellenando
+  const session = createMatchmaking({
+    tier,
+    abandon: async () => { cancelled = true; await match.service.cancel(match); },
+    cancel: async () => { cancelled = true; await match.service.cancel(match); goHome(); },
   });
-  await shell(view, { nav: false });
+  go('matchmaking');
   for (let i = 0; i < match.players.length; i++) {
     await wait(i === 0 ? 200 : 250 + Math.random() * 350);
     if (cancelled) return;
-    const p = match.players[i];
-    // en práctica los rivales son simulados: no se marcan como BOT
-    room.setSeat(i, { name: p.name, color: p.color, me: p.id === 'me' });
-    room.setPot(tier.entryFee * (i + 1));
+    session.fill(i, match.players[i]); // el tic suena al pintar el asiento
   }
   await wait(250);
   if (cancelled) return;
-  room.go();
-  await wait(650);
-  if (cancelled) return;
-  room.cancelButton.disabled = true;
-  await room.leave();
+  await session.finish(); // «¡YA!» y salida animada (la pinta src/screens/matchmaking.js)
   if (!cancelled) playHole(match, 0);
 }
 
@@ -1372,28 +322,29 @@ async function startMatch(tier, rematchOf = null) {
  */
 function playScreen(match, { course, title, subtitle, players, onDone, firstSunkTick = null, timeLimit = HOLE_TIME_LIMIT, freePlay = false, onRestartHole = null, onSelectMap = null, rivals = null, live = false, onGame = null, onShots = null }) {
   const tiebreak = !!course.noCup;
+  // en partida el HUD solo lleva FPS · latencia, Ajustes y Pantalla completa:
+  // ni golpes de cada rival en directo ni avisos menores (sí el «¡Birdie!» al embocar)
+  const lean = !freePlay;
   const view = h(`
     <main class="play-screen ${tiebreak ? 'is-tiebreak' : ''} ${freePlay ? 'is-freeplay' : ''}">
       <div class="stage"></div>
       <div class="vignette"></div>
-      <div class="hud ${freePlay ? 'hud-freeplay' : ''}">
-        ${freePlay ? '<div class="pill hl freeplay-pill">Modo Libre</div>' : `<div class="pill hl">${title}</div>`}
-        <div class="pill">${freePlay ? course.name : tiebreak ? '1 tiro' : `Par ${course.par}`}</div>
-        ${freePlay ? `<div class="pill">Par ${course.par}</div>` : ''}
-        ${tiebreak ? '' : '<div class="pill strokes">Golpes <b>0</b></div>'}
-        <div class="pill dist">— m</div>
+      <div class="hud ${freePlay ? 'hud-freeplay' : 'hud-lean'}">
+        ${lean ? '<div class="pill net-stats" title="Fotogramas por segundo · latencia con el servidor">— FPS · — ms</div>' : `
+        <div class="pill hl freeplay-pill">Modo Libre</div>
+        <div class="pill">${course.name}</div>
+        <div class="pill">Par ${course.par}</div>
+        <div class="pill strokes">Golpes <b>0</b></div>
+        <div class="pill dist">— m</div>`}
         ${freePlay ? `
         <button class="pill restart-btn hud-freeplay-btn" aria-label="Reiniciar hoyo" title="Reiniciar hoyo al tee (R)">${icon('restart')}Reiniciar <kbd class="kbd-hint">R</kbd></button>
         <button class="pill map-select-btn hud-freeplay-btn" aria-label="Elegir otro mapa" title="Elegir otro mapa">${icon('map')}Mapas</button>
         ` : ''}
-        <button class="pill mute mobile-only" aria-label="Sonido">${soundLabel()}</button>
-        <button class="pill fullscreen mobile-only" aria-label="Pantalla completa" title="Pantalla completa (F11)">${icon('fullscreen')}Pantalla</button>
+        ${lean ? '' : `<button class="pill mute mobile-only" aria-label="Sonido">${soundLabel()}</button>`}
+        <button class="pill fullscreen ${lean ? '' : 'mobile-only'}" aria-label="Pantalla completa" title="Pantalla completa (F11)">${icon('fullscreen')}Pantalla</button>
         <button class="pill settings-btn-hud mobile-only" aria-label="Ajustes" title="Ajustes (Esc)">${icon('gear')}Ajustes</button>
         <button class="pill desktop-esc-hint" aria-label="Ajustes">${icon('gear')}Ajustes <kbd class="kbd-hint">Esc</kbd></button>
       </div>
-      <div class="rivals ${freePlay ? 'rivals-hidden' : ''}">${freePlay ? '' : players
-      .map((p) => `<div class="chip ${p.id === 'me' ? 'me' : ''} ${live && p.isBot ? 'bot' : ''}" data-id="${p.id}" style="--c:${p.color}"><i>${p.name[0]}</i><b>${tiebreak ? '·' : 0}</b></div>`)
-      .join('')}</div>
       <div class="toasts"></div>
       <div class="intro-banner">
         <small>${subtitle}</small>
@@ -1420,8 +371,11 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       <button class="map-btn" aria-label="Ver el hoyo completo">${icon('eye')}Ver mapa <kbd class="kbd-hint">Espacio</kbd></button>
     </main>`);
   const gameClass = loadGolfGame();
-  Promise.all([gameClass, shell(view, { hideHeader: true })]).then(([GolfGame]) => {
+  paintApp(view);
+  gameClass.then((GolfGame) => {
     if (!view.isConnected) return; // se salió de la pantalla mientras cargaba el motor
+    playScope?.dispose();
+    playScope = createScope();
     const strokesEl = view.querySelector('.strokes b');
     const distEl = view.querySelector('.dist');
     const power = view.querySelector('.power');
@@ -1431,7 +385,11 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
     const stageEl = view.querySelector('.stage');
     const timerEl = view.querySelector('.hole-timer');
     let finished = false;
-    const showDistance = () => (distEl.textContent = `${game.distanceToCup().toFixed(tiebreak ? 2 : 1)} m`);
+    const showDistance = () => distEl && (distEl.textContent = `${game.distanceToCup().toFixed(tiebreak ? 2 : 1)} m`);
+    const netEl = view.querySelector('.net-stats');
+    if (netEl) mountNetStats(netEl, { ping: backend?.ping });
+    // avisos menores (lava, agua, rivales…): solo en Modo Libre
+    const notify = (text, color) => !lean && toast(text, color);
     const banner = (text) => {
       cupBanner.textContent = text;
       cupBanner.classList.add('show');
@@ -1449,6 +407,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       }
     });
 
+    gameGuard = () => { openSettingsMenu(); return true; };
     function openSettingsMenu() {
       const existing = view.querySelector('.in-game-settings-overlay');
       if (existing) {
@@ -1541,7 +500,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
           overlay.remove();
           game.setPaused?.(false);
           game.dispose();
-          showLobby();
+          goHome();
         }
       });
 
@@ -1562,7 +521,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
           game.setPaused?.(false);
           game.dispose();
           if (onSelectMap) onSelectMap();
-          else showFreePlayCourseSelect();
+          else go('freeplay');
         });
       }
 
@@ -1593,7 +552,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
           return;
         }
         setChip(p.id, st.strokes, st.sunk);
-        if (st.sunk) toast(`${esc(p.name)} ha embocado en ${st.strokes}`, p.color);
+        if (st.sunk) notify(`${esc(p.name)} ha embocado en ${st.strokes}`, p.color);
       },
       onStroke: (n) => {
         if (n > 0) onShots?.(game.shots);
@@ -1605,12 +564,12 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       onCup: (n) => {
         setChip('me', n, true);
         banner(scoreLabel(n, course.par));
-        distEl.textContent = '0 m';
+        if (distEl) distEl.textContent = '0 m';
       },
       onSunk: finish,
       onTimer: (left) => {
         if (left == null) return (timerEl.hidden = true);
-        if (timerEl.hidden) toast(`¡${left} s para embocar o quedas descalificado!`, '#ff5a5a');
+        if (timerEl.hidden) notify(`¡${left} s para embocar o quedas descalificado!`, '#ff5a5a');
         timerEl.hidden = false;
         timerEl.querySelector('b').textContent = left;
         timerEl.classList.toggle('urgent', left <= 5);
@@ -1626,11 +585,11 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         cupBanner.classList.add('dq');
         setTimeout(() => finish(maxStrokesOf(course)), 1600);
       },
-      onLip: () => toast('¡Uy! Demasiado fuerte para entrar', '#ffffff'),
-      onLava: () => toast(`${icon('fire')} ¡A la lava! Vuelves al sitio del golpe`, '#ff8a3a'),
-      onWater: () => toast(`${icon('drop')} ¡Al agua! Vuelves al sitio del golpe`, '#7fdcff'),
-      onOut: () => toast(`${icon('palm')} ¡Fuera del campo! Vuelves al sitio del golpe`, '#b8f07a'),
-      onFall: () => toast(`${icon('pit')} ¡Al agujero! Vuelves al sitio del golpe`, '#ffc400'),
+      onLip: () => notify('¡Uy! Demasiado fuerte para entrar', '#ffffff'),
+      onLava: () => notify(`${icon('fire')} ¡A la lava! Vuelves al sitio del golpe`, '#ff8a3a'),
+      onWater: () => notify(`${icon('drop')} ¡Al agua! Vuelves al sitio del golpe`, '#7fdcff'),
+      onOut: () => notify(`${icon('palm')} ¡Fuera del campo! Vuelves al sitio del golpe`, '#b8f07a'),
+      onFall: () => notify(`${icon('pit')} ¡Al agujero! Vuelves al sitio del golpe`, '#ffc400'),
       onRest: (n) => {
         showDistance();
         if (tiebreak) {
@@ -1659,7 +618,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         game.exitPointerLock?.();
         game.dispose();
         if (onSelectMap) onSelectMap();
-        else showFreePlayCourseSelect();
+        else go('freeplay');
       });
       const onKeyR = (e) => {
         if (e.code === 'KeyR' && !game?.paused && !view.querySelector('.in-game-settings-overlay')) {
@@ -1673,10 +632,10 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
           }
         }
       };
-      window.addEventListener('keydown', onKeyR);
+      playScope.on(window, 'keydown', onKeyR);
     }
-    if (isMuted()) toast('Sonido silenciado · actívalo en Ajustes', '#ffffff');
-    view.querySelector('.mute').addEventListener('click', toggleMute);
+    if (isMuted()) notify('Sonido silenciado · actívalo en Ajustes', '#ffffff');
+    view.querySelector('.mute')?.addEventListener('click', toggleMute);
     const fsBtn = view.querySelector('.fullscreen');
     if (fsBtn) {
       fsBtn.addEventListener('click', () => {
@@ -1686,7 +645,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
           document.exitFullscreen().catch(() => { });
         }
       });
-      document.addEventListener('fullscreenchange', () => {
+      playScope.on(document, 'fullscreenchange', () => {
         fsBtn.innerHTML = `${icon('fullscreen')}${document.fullscreenElement ? 'Ventana' : 'Pantalla'}`;
       });
     }
@@ -1704,7 +663,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
     function toast(text, color) {
       const el = h(`<div class="toast" style="--c:${color}">${text}</div>`);
       view.querySelector('.toasts').append(el);
-      setTimeout(() => el.remove(), 2600);
+      playScope.timeout(() => el.remove(), 2600);
     }
     mapBtn?.addEventListener('click', (e) => {
       e.preventDefault();
@@ -1854,7 +813,6 @@ async function showResults(match, tiebreak = {}) {
   const won = result.me.position === 1 || result.me.payout > 0;
   const tiebreakWon = won && tiebreak.me !== undefined;
   const gained = progress.recordMatch({ position: result.me.position, won, entryFee: match.tier.entryFee, holes: match.myHoles.filter(Boolean), tiebreakWon });
-  screen = 'lobby';
   showEndOverlay({
     onRematch: () => startMatch(match.tier),
     won,
@@ -1914,7 +872,7 @@ function showEndOverlay({ won, position, total, prize, ranking, legal, holes, ga
     overlay.remove();
     onRematch();
   });
-  overlay.querySelector('.next').addEventListener('click', () => showLobby());
+  overlay.querySelector('.next').addEventListener('click', () => goHome());
   app.append(overlay);
   enterFinale();
   sfx.endJingle(won, position);
@@ -1945,7 +903,7 @@ function statsGrid(holes) {
 // cuentan los sigue calculando el servidor.
 
 const LIVE_BEAT_MS = 4000; // latido: estado de la partida (y "sigo conectado")
-const LIVE_NEXT_S = 6; // pausa entre hoyos
+const LIVE_NEXT_MS = 1500; // pausa entre hoyos (sin marcador)
 const LIVE_GRACE_TICKS = 120 * 6; // margen tras acabarse el contador del hoyo
 const LIVE_HOLE_CAP_MS = 150000; // como mucho se espera esto a los demás en un hoyo
 
@@ -1975,7 +933,7 @@ async function startTournament(tier, rematchOf = null) {
       throw e;
     });
   } catch (e) {
-    if (e instanceof InsufficientFundsError) return showAccount('', 'wallet');
+    if (e instanceof InsufficientFundsError) return go('wallet');
     if (e.blocked) {
       backend.account?.load().catch(() => { });
       return showBlocked(e.code);
@@ -2022,6 +980,7 @@ function showLiveRoom(live) {
     legalHtml: `${match.rematchOf ? '<p class="legal">Revancha: quienes pidan revancha como tú entrarán juntos en esta sala.</p>' : ''}
       <p class="legal">Empezáis todos a la vez y verás las bolas de los demás en directo. Los huecos libres los ocupan bots: juegan contigo, pero nunca cuentan para el premio (el bote es solo de los jugadores reales). Si no entra nadie más, juegas contra bots y se te devuelve la entrada.</p>`,
     cancelLabel: 'Salir y recuperar entrada',
+    footHtml: lobbyButton(),
   });
   const { view } = room;
   let launching = false;
@@ -2090,10 +1049,10 @@ function showLiveRoom(live) {
     room.stop();
     live.finished = true;
     await backend.tournaments.leave(match).catch(() => { });
-    showLobby();
+    goHome();
   });
   render();
-  shell(view, { nav: false });
+  paintLive(view);
 }
 
 async function beginLive(live) {
@@ -2211,34 +1170,15 @@ async function finishLiveHole(live, index, course, result) {
   } catch { }
   if (live.stopped || live.hole !== index) return;
   if (match.status !== 'open') return showLiveResults(live);
+  // sin marcador entre hoyos: la clasificación sale solo al final de la partida.
+  // Una pausa corta para ver el «¡Birdie!» del hoyo y se pasa al siguiente.
   const last = index + 1 >= match.holes;
-  const standings = liveStandings(match, live.roster, live.botScores);
-  const overlay = h(`
-    <div class="overlay">
-      <div class="card ${!result.timedOut && result.strokes <= course.par ? 'good' : ''}">
-        ${holeHeader(result.strokes, course.par, result.timedOut)}
-        ${standingsTable(standings)}
-        <p class="legal">Los bots no cuentan para el premio.</p>
-        <button class="primary next">${last ? 'Ver resultado' : 'Siguiente hoyo'}${icon('next')} <span class="secs">${LIVE_NEXT_S}</span></button>
-      </div>
-    </div>`);
-  let left = LIVE_NEXT_S;
-  const go = () => {
-    clearInterval(live.timer);
-    if (live.stopped || live.hole !== index || !overlay.isConnected) return;
+  clearTimeout(live.timer);
+  live.timer = setTimeout(() => {
+    if (live.stopped || live.hole !== index) return;
     if (last) liveAfterRound(live);
     else playLiveHole(live, index + 1);
-  };
-  overlay.querySelector('.next').addEventListener('click', go);
-  app.querySelector('.overlay')?.remove();
-  app.append(overlay);
-  clearInterval(live.timer);
-  live.timer = setInterval(() => {
-    left--;
-    const el = overlay.querySelector('.secs');
-    if (el) el.textContent = left;
-    if (left <= 0) go();
-  }, 1000);
+  }, LIVE_NEXT_MS);
 }
 
 /** Tras el último hoyo: desempate si empatas en cabeza con otro jugador real; si no, has terminado. */
@@ -2343,7 +1283,7 @@ function liveRanking(live) {
 }
 
 async function showLiveResults(live) {
-  if (!live || live.stopped) return showLobby();
+  if (!live || live.stopped) return goHome();
   const { match } = live;
   live.finished = true;
   live.check = null;
@@ -2357,7 +1297,6 @@ async function showLiveResults(live) {
     else await backend.tournaments.status(match);
   } catch { }
   if (live.stopped) return;
-  screen = 'lobby';
   const { me, tier } = match;
   const open = match.status === 'open';
   const cancelled = match.status === 'cancelled';
@@ -2405,14 +1344,12 @@ async function showLiveResults(live) {
       ${standingsTable(rows, !open)}
       ${match.status === 'settled' ? `<p class="legal">Bote ${fmt(match.pot)} · comisión ${fmt(match.commission)} · premio ${fmt(match.prize)} · los bots no cuentan</p>` : ''}
       ${open ? '<p class="legal">Si alguien se ha desconectado, en menos de un minuto se le da por terminado. Si sales, el premio te llega igual al saldo.</p>' : ''}
-      <div class="row">
-        ${open ? '' : `<button class="primary again">${icon('restart')}Revancha</button>`}
-        <button class="${open ? 'primary' : 'ghost'}" data-go="lobby">${icon('back')}Lobby</button>
-      </div>
+      ${open ? '' : `<div class="row"><button class="primary again">${icon('restart')}Revancha</button></div>`}
+      ${lobbyButton()}
     </main>`);
   view.querySelector('.again')?.addEventListener('click', () => startMatch(tier, match.id));
   const key = `${match.status}:${waiting.length}`;
-  await shell(view, { nav: false });
+  paintLive(view);
   if (!open) return stopLive();
   live.fast = true;
   live.onStatus = () => {
@@ -2451,177 +1388,13 @@ function alertMsg(text) {
         <button class="primary">${icon('back')}Volver al lobby</button>
       </div>
     </div>`);
-  overlay.querySelector('button').addEventListener('click', () => showLobby());
+  overlay.querySelector('button').addEventListener('click', () => goHome());
   app.append(overlay);
 }
 
 // ---------- juego libre en solitario ----------
 
-const THEME_INFO = {
-  meadow: { name: 'Pradera', icon: '', color: '#5cc24a' },
-  meadowDay: { name: 'Pradera de Día', icon: '', color: '#6fd24f' },
-  beach: { name: 'Playa', icon: '', color: '#2fe0ff' },
-  sunset: { name: 'Atardecer', icon: '', color: '#ff9a5c' },
-  snow: { name: 'Nieve', icon: '', color: '#90d7ff' },
-  glacier: { name: 'Glaciar', icon: '', color: '#9fd6ee' },
-  canyon: { name: 'Cañón', icon: '', color: '#e58f4a' },
-  autumn: { name: 'Otoño', icon: '', color: '#e06b3a' },
-  night: { name: 'Noche', icon: '', color: '#7a8bff' },
-  gardenNight: { name: 'Jardín Nocturno', icon: '', color: '#da70d6' },
-  volcano: { name: 'Volcán', icon: '', color: '#ff4d2e' },
-  beachNight: { name: 'Playa Nocturna', icon: '', color: '#00d2be' },
-  neon: { name: 'Neón Cyberpunk', icon: '', color: '#00e5ff' },
-  neonPink: { name: 'Neón Magenta', icon: '', color: '#ff2e93' },
-};
-
-function getCourseFeatures(c) {
-  const feats = [];
-  if (c.loops?.length) feats.push('Looping');
-  if (c.windmills?.length) feats.push('Molino');
-  if (c.portals?.length) {
-    if (c.portals.some((p) => p.tube)) feats.push('Tubos');
-    else feats.push('Portales');
-  }
-  if (c.tunnels?.length) feats.push('Pasadizo');
-  if (c.boosts?.length) feats.push('Acelerador');
-  if (c.mounds?.length) feats.push('Volcán');
-  if (c.slopes?.length) feats.push('Pendiente');
-  if (c.movers?.length) feats.push('Bloques');
-  if (c.spinners?.length) feats.push('Aspas');
-  if (c.bumpers?.length) feats.push('Setas');
-  if (c.ice?.length) feats.push('Hielo');
-  if (c.sand?.length) feats.push('Arena');
-  return feats;
-}
-
-export async function showFreePlayCourseSelect() {
-  screen = 'freeplay';
-  const view = h(`
-    <main class="screen freeplay-select">
-      <div class="freeplay-select-hero">
-        <div class="freeplay-select-badge-row">
-          <span class="rarity-pill rarity-epic">Modo Práctica Libre</span>
-          <span class="hero-level-tag">${COURSES.length} Hoyos</span>
-        </div>
-        <div class="section-title-row">
-          <h1>Selector de Mapas</h1>
-          <span class="live-pill solo-live-pill"><i class="pulse-dot"></i> EN SOLITARIO</span>
-        </div>
-        <p class="freeplay-desc">Elige cualquier hoyo para entrenar a tu propio ritmo. Sin límite de tiempo, sin desafíos ni misiones y sin oponentes.</p>
-        <div class="freeplay-features-bar">
-          <span class="spec-chip">Sin límite de tiempo</span>
-          <span class="spec-chip">Sin rivales</span>
-          <span class="spec-chip">Tiros ilimitados</span>
-          <span class="spec-chip">Reinicio rápido [R]</span>
-        </div>
-      </div>
-
-      <div class="courses-grid"></div>
-
-      <div class="freeplay-footer-actions">
-        <button class="ghost back-to-lobby" data-go="lobby">${icon('back')}Volver al Menú Principal</button>
-      </div>
-    </main>
-  `);
-
-  const grid = view.querySelector('.courses-grid');
-  COURSES.forEach((course, idx) => {
-    const theme = THEME_INFO[course.theme] || { name: course.theme, icon: '', color: '#00f076' };
-    const feats = getCourseFeatures(course);
-    const dist = getCourseDistance(course);
-    const card = h(`
-      <div class="course-card holo theme--${course.theme}">
-        <div class="course-card-top">
-          <span class="course-num-badge">Hoyo ${idx + 1}</span>
-          <span class="course-theme-tag" style="--accent:${theme.color}">
-            ${theme.name}
-          </span>
-          <span class="course-par-badge">Par ${course.par}</span>
-        </div>
-        <div class="course-card-preview-wrap" style="--accent:${theme.color}" title="Haga clic para jugar el Hoyo ${idx + 1}">
-          <div class="course-preview-media">
-            <img class="course-preview-img" src="${staticCoursePreview(course) ?? ''}" alt="Vista previa de ${course.name}" loading="lazy" />
-            <div class="course-preview-glow"></div>
-            <div class="course-preview-badges">
-              <span class="preview-badge dist-badge">~${dist}m</span>
-              ${feats[0] ? `<span class="preview-badge feat-badge">${feats[0]}</span>` : ''}
-            </div>
-            <div class="course-preview-action-overlay">
-              <span class="preview-play-icon">${icon('play')}</span>
-              <span class="preview-play-text">Entrenar Hoyo ${idx + 1}</span>
-            </div>
-          </div>
-        </div>
-        <div class="course-card-body">
-          <h3 class="course-name">${course.name}</h3>
-          ${course.tip ? `<p class="course-tip">${course.tip}</p>` : ''}
-          ${feats.length ? `<div class="course-feats">${feats.map((f) => `<span class="feat-tag">${f}</span>`).join('')}</div>` : ''}
-        </div>
-        <button class="primary play-course-btn">${icon('play')}Jugar Hoyo ${idx + 1}</button>
-      </div>
-    `);
-    const launchPlay = () => playFreePlay(idx);
-    card.querySelector('.play-course-btn').addEventListener('click', launchPlay);
-    card.querySelector('.course-card-preview-wrap').addEventListener('click', launchPlay);
-    grid.append(card);
-  });
-
-  const tbTheme = THEME_INFO[TIEBREAK_COURSE.theme] || { name: 'Atardecer', icon: '', color: '#ff9a5c' };
-  const tbDist = getCourseDistance(TIEBREAK_COURSE);
-  const tbCard = h(`
-    <div class="course-card holo course-card-extra theme--${TIEBREAK_COURSE.theme}">
-      <div class="course-card-top">
-        <span class="course-num-badge extra">Extra</span>
-        <span class="course-theme-tag" style="--accent:${tbTheme.color}">
-          ${tbTheme.name}
-        </span>
-        <span class="course-par-badge">Diana</span>
-      </div>
-      <div class="course-card-preview-wrap" style="--accent:${tbTheme.color}" title="Haga clic para jugar el Desempate">
-        <div class="course-preview-media">
-          <img class="course-preview-img" src="${staticCoursePreview(TIEBREAK_COURSE) ?? ''}" alt="Vista previa de Desempate" loading="lazy" />
-          <div class="course-preview-glow"></div>
-          <div class="course-preview-badges">
-            <span class="preview-badge dist-badge">~${tbDist}m</span>
-            <span class="preview-badge feat-badge">Diana</span>
-          </div>
-          <div class="course-preview-action-overlay">
-            <span class="preview-play-icon">${icon('play')}</span>
-            <span class="preview-play-text">Entrenar Desempate</span>
-          </div>
-        </div>
-      </div>
-      <div class="course-card-body">
-        <h3 class="course-name">Desempate: Diana</h3>
-        <p class="course-tip">Un solo tiro al objetivo: afina la precisión al centro de la diana sin agujero.</p>
-        <div class="course-feats">
-          <span class="feat-tag">Diana de precisión</span>
-          <span class="feat-tag">Muerte súbita</span>
-        </div>
-      </div>
-      <button class="primary play-course-btn">${icon('play')}Jugar Desempate</button>
-    </div>
-  `);
-  const launchTbPlay = () => playFreePlay('tiebreak');
-  tbCard.querySelector('.play-course-btn').addEventListener('click', launchTbPlay);
-  tbCard.querySelector('.course-card-preview-wrap').addEventListener('click', launchTbPlay);
-  grid.append(tbCard);
-  // mapas sin WebP pre-renderizado: se renderizan con three.js (import() solo si hace falta)
-  const missing = [...COURSES, TIEBREAK_COURSE].filter((c) => !staticCoursePreview(c));
-  if (missing.length) {
-    import('./game/render/coursePreview.js').then(({ getCoursePreview }) => {
-      const imgs = view.querySelectorAll('.course-preview-img');
-      [...COURSES, TIEBREAK_COURSE].forEach((c, i) => {
-        if (!staticCoursePreview(c) && imgs[i]) imgs[i].src = getCoursePreview(c);
-      });
-    });
-  }
-
-  await shell(view);
-}
-
 export function playFreePlay(courseIndex) {
-  screen = 'freeplay-game';
   const isTiebreak = courseIndex === 'tiebreak';
   const course = isTiebreak ? TIEBREAK_COURSE : COURSES[courseIndex];
   const holeNum = isTiebreak ? 'Extra' : courseIndex + 1;
@@ -2635,7 +1408,7 @@ export function playFreePlay(courseIndex) {
     players: [{ id: 'me', name: 'Tú', color: '#00f076', isBot: false }],
     timeLimit: null,
     onRestartHole: () => playFreePlay(courseIndex),
-    onSelectMap: () => showFreePlayCourseSelect(),
+    onSelectMap: () => go('freeplay'),
     onDone: (_g, strokes, _banner) => {
       showFreePlayHoleResult(courseIndex, course, strokes);
     },
@@ -2693,11 +1466,11 @@ export function showFreePlayHoleResult(courseIndex, course, strokes) {
   }
   overlay.querySelector('.select-map-btn').addEventListener('click', () => {
     overlay.remove();
-    showFreePlayCourseSelect();
+    go('freeplay');
   });
   overlay.querySelector('.to-lobby-btn').addEventListener('click', () => {
     overlay.remove();
-    showLobby();
+    goHome();
   });
 
   app.append(overlay);
@@ -2714,12 +1487,14 @@ if (skinLab) {
   loadSkinInspector().then(({ mountSkinLab }) => mountSkinLab(app));
 } else {
   app.innerHTML = '<main class="screen loading"><h1>Golf Cash Battle</h1><p class="sub">Conectando…</p></main>';
-  createBackend().then((b) => {
+  createBackend().then(async (b) => {
     if (b.mode === 'auth') {
       // sin sesión: pantallas de entrada. Al entrar se recarga para arrancar limpio con la cuenta
       mountAuth(app, b.auth, { recovery: b.recovery, guest: b.guest, onDone: () => location.replace(location.origin + location.pathname + location.hash) });
+      boot.noSession();
       return;
     }
+    boot.session();
     backend = b;
     ({ wallet, matches } = b);
     if (b.account) {
@@ -2746,14 +1521,110 @@ if (skinLab) {
       // hitos de ranking y marco elegido: pueden desbloquear bolas, que se ofrecen al acabar la próxima partida
       b.account.myRanking().then((r) => progress.setServerStats(r)).catch(() => {});
     }
-    wallet.subscribe((n) => {
-      const el = app.querySelector('.balance');
-      if (el) el.innerHTML = `${coin(n)}<span class="plus">${icon('plus')}</span>`;
-      const m = app.querySelector('.m-coins');
-      if (m) m.innerHTML = coin(n);
+    startNotices(b);
+    startPartyWatch(b);
+    // aviso de versión nueva: una sola vez por carga (ver ui/versionCheck.js)
+    startVersionCheck();
+    // el saldo no frena el arranque: `progress` se marca al llegar o a los 3 s
+    trackProgress(boot, () => wallet.getBalance());
+    const hubScene = hubPreloader.preload();
+    startRouting(b);
+    hubScene.then((scene) => { if (scene && hubPreloader.current() === scene) startCtx.setHubScene(scene); });
+    // `hub` espera al lobby pintado y a que la escena llegue o se omita (margen de 8 s)
+    const maxMs = Number(document.getElementById('splash')?.dataset.maxMs) || 15000;
+    Promise.all([hubScene, waitPainted(app, { maxMs })]).then(([, painted]) => {
+      // un lobby que no se pinta es un fallo de arranque: «Reintentar» (splash.js no lo da solo con `session` marcada)
+      if (painted) boot.hub(); else boot.fail('lobby sin pintar');
     });
-    startNotifier(b);
-    showLobby();
+  }).catch((err) => {
+    // solo backend/sesión (y el lobby sin pintar) pueden bloquear el splash con «Reintentar»
+    boot.fail(String(err?.message ?? err));
+    throw err;
+  });
+}
+
+// three y la escena del hub se piden con import() dinámico durante el splash (nunca en la carga inicial) y se montan
+// en un contenedor oculto; el hub la reclama de ctx.hubScene (T026), que debe llamar a resume(): llega pausada.
+let startCtx = null;
+const hubPreloader = createHubPreloader({
+  boot,
+  importScene: () => import('./game/render/hubScene.js').then((m) => ({ createHubScene: m.createHubScene })),
+  quality: () => getQuality(),
+  reducedMotion: () => matchMedia('(prefers-reduced-motion: reduce)').matches,
+  onReleased: (sc) => { if (startCtx && startCtx.hubScene === sc) startCtx.setHubScene(null); },
+});
+
+// ---------- navegación ----------
+// El router y el host llevan la pila de pantallas; las pantallas aún no migradas se pintan con sus show* de siempre.
+function startRouting(b) {
+  const routes = createRoutes({ root: ROOT_SCREEN });
+  router = createRouter({ routes, root: ROOT_SCREEN, win: window, isBusy: () => screenHost?.isBusy() ?? false });
+  const ctx = createContext({
+    backend: b, wallet, progress, avatar, settings, router, sfx, notify, icon, ball,
+    quality: () => getQuality(),
+    // miniaturas de skins (canvas y observador) aisladas de la pantalla
+    // visor 3D del inspector de skin: three.js solo se descarga al abrir la pantalla (import() dinámico)
+    loadViewer: () => loadSkinInspector().then((m) => m.createSkinInspector),
+    thumbs: createThumbs({ upgrade: upgradeImg, cached: thumbCached, preview: ballPreview, warm: warmThumbs }),
+    actions: {
+      startMatch: (tier) => startMatch(tier),
+      startPractice: () => startMatch(TIERS.find((x) => x.entryFee === 0) ?? TIERS[0]),
+      claimRewards: () => claimRewards(),
+      toggleFullscreen: () => toggleFullscreen(),
+      toggleMute: () => toggleMute(),
+      reviveHubScene: () => reviveHubScene(),
+      playFreePlay: (i) => playFreePlay(i),
+    },
+    legacy: {
+      // Mesas (T028): lo que la pantalla necesita de main.js
+      enterTables: () => { leaveFinale(); stopLive(); releasePlay(); },
+      enterSettings: () => { leaveFinale(); stopLive(); releasePlay(); },
+      enterMaps: () => { leaveFinale(); stopLive(); releasePlay(); },
+    },
+  });
+  screenHost = createHost({ router, routes, root: app, ctx, notify, win: window, doc: document });
+  const navigate = createNavigator({ router, host: screenHost, rootId: ROOT_SCREEN });
+  go = (to) => navigate(to === 'lobby' ? 'tables' : to); // «lobby» (Jugar, tecla 1) = Mesas
+  startCtx = ctx;
+  screenHost.attach();
+  testHole = router.start().testHole;
+  ctx.testHole = testHole;
+  ctx.notifier = notifier;
+  ctx.partyWatch = partyWatch;
+  router.setBackGuard(backGuard);
+}
+
+// ---------- avisos emergentes ----------
+// Cada pocos segundos se mira si llegó una petición de amistad o una invitación a grupo
+// y se enseña un aviso de 5 s. (notify() sirve para cualquier otro aviso.)
+
+// TODO(F3): notifier y partyWatch sondean ambos parties.mine() con el lobby abierto; compartir el resultado cuando el hub unifique el sondeo.
+function startNotices(b) {
+  if (!b.account) return;
+  notifier = createNotifier({
+    account: b.account,
+    parties: b.parties,
+    isHidden: () => document.hidden,
+    onNotice: (n) => {
+      sfx.tick();
+      if (n.kind === 'friend') {
+        notify({ kind: 'friend', icon: 'user-plus', title: 'Petición de amistad', text: `${n.from} quiere ser tu amigo`, onClick: () => go('friends') });
+      } else {
+        notify({ kind: 'invite', icon: 'users', title: 'Invitación a grupo', text: `${n.from} te invita a su grupo`, onClick: () => go('lobby') });
+      }
+    },
+  });
+  notifier.start();
+}
+
+function startPartyWatch(b) {
+  if (!b.parties) return;
+  partyWatch = createPartyWatch({ parties: b.parties, tournaments: b.tournaments, tiers: TIERS });
+  // el grupo entra en un torneo: a su sala (o a seguir jugando), como antes
+  partyWatch.onNewMatch(async (match) => {
+    await wallet.getBalance();
+    sfx.tick();
+    enterLive(match);
   });
 }
 

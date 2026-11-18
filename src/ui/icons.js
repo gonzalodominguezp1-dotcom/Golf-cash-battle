@@ -156,6 +156,27 @@ const personParts = (ox, oy, s, t) => [
   S(blob(ox, oy - 10 * s, 7.2 * s, 7.8 * s), t),
 ];
 
+// Cadena: eslabones alternos (ovalado de frente / de canto) a lo largo de una diagonal, con solape entre vecinos.
+// (x0,y0)→(x1,y1) son los centros del primer y último eslabón; `frontFirst` decide si el primero va de frente.
+const chainParts = (x0, y0, x1, y1, n, frontFirst) => {
+  const ux = (x1 - x0) / Math.hypot(x1 - x0, y1 - y0);
+  const uy = (y1 - y0) / Math.hypot(x1 - x0, y1 - y0);
+  const rot = (u, v, cx, cy) => [cx + ux * u - uy * v, cy + uy * u + ux * v]; // u a lo largo, v de través
+  const out = [];
+  for (let k = 0; k < n; k++) {
+    const cx = x0 + ((x1 - x0) * k) / (n - 1);
+    const cy = y0 + ((y1 - y0) * k) / (n - 1);
+    if ((k % 2 === 0) === frontFirst) {
+      const ring = [];
+      for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; ring.push(rot(Math.cos(a) * 4.6, Math.sin(a) * 2.9, cx, cy)); }
+      out.push(T(smooth(ring, true, 0), 'silver', 1.9));
+    } else {
+      out.push(S(rpoly([rot(-3.4, -1.3, cx, cy), rot(3.4, -1.3, cx, cy), rot(3.4, 1.3, cx, cy), rot(-3.4, 1.3, cx, cy)], 1, 0.15), 'gray'));
+    }
+  }
+  return out;
+};
+
 const speaker = () => S(rpoly([[6, 18], [14, 18], [24, 9], [24, 39], [14, 30], [6, 30]], 2.5), 'white');
 
 const ICONS = {
@@ -256,6 +277,8 @@ const ICONS = {
     F('M24 27a3.2 3.2 0 0 0-1.8 5.8l-.9 4.7h5.4l-.9-4.7A3.2 3.2 0 0 0 24 27z', TONES.dark[1], 0),
     G(14, 25, 1.6),
   ],
+  // dos cadenas cruzadas en X de esquina a esquina (para el estado bloqueado del hub); la segunda pasa por encima
+  chains: () => [...chainParts(2, 2, 47, 47, 11, true), ...chainParts(47, 2, 2, 47, 11, false)],
   check: (t = 'green') => [T('M9 25l9.5 9.5L39 13', t, 6.5)],
   close: (t = 'red') => [T('M13 13l22 22M35 13L13 35', t, 6.5)],
   plus: (t = 'green') => [T('M24 9v30M9 24h30', t, 6.5)],

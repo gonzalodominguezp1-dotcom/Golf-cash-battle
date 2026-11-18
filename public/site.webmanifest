@@ -1,11 +1,18 @@
 {
+  "id": "/",
+  "scope": "/",
+  "start_url": "/",
   "name": "Golf Cash Battle",
   "short_name": "GolfCash",
   "description": "High-stakes luxury esports mini-golf wagering platform",
-  "start_url": "/",
   "display": "standalone",
-  "background_color": "#08070D",
-  "theme_color": "#08070D",
+  "orientation": "any",
+  "background_color": "#090515",
+  "theme_color": "#090515",
+  "categories": [
+    "games",
+    "sports"
+  ],
   "icons": [
     {
       "src": "/favicon-16x16.png",
@@ -31,6 +38,12 @@
       "src": "/apple-touch-icon.png",
       "sizes": "180x180",
       "type": "image/png"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     }
   ]
 }

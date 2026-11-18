@@ -466,6 +466,8 @@ export class GolfGame {
   }
 
   dispose() {
+    if (this.disposed) return; // idempotente: pausa→salir llama dos veces (game.dispose y goHome→releasePlay)
+    this.disposed = true;
     setCharge(0);
     stopAmbient();
     stopRolling();
@@ -477,6 +479,8 @@ export class GolfGame {
     this.perf = null;
     this.composer.dispose();
     this.renderer.dispose();
+    // suelta ya el contexto WebGL (si no, vive hasta el GC y se acumula uno por partida; el hub crea el suyo justo después)
+    try { this.renderer.forceContextLoss?.(); } catch { /* ya perdido */ }
     this.renderer.domElement.remove();
     this.cupMarker?.remove();
   }

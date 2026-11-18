@@ -5,14 +5,13 @@ import { SkinFX } from '../game/render/skins/skinFx.js';
 import { BALL_R } from '../game/physics.js';
 import { QUALITY_LEVELS, QUALITY_NAMES, getQuality } from '../game/render/quality.js';
 import { SKINS, TIERS } from '../progress/skins.js';
-import { rarePatternOf } from '../progress/inventory.js';
-import { tierIcon } from './icons.js';
 
 // Inspector 360° de skins v2 (P8).
 //   createSkinInspector(container, { skin, instance, mode: 'panel'|'fullscreen', quality? })
 //     -> { setSkin(skin, instance?, { quality }?), playFx(on?), destroy(), ... }
 // Un único WebGLRenderer por inspector. Render bajo demanda: solo hay bucle mientras hay interacción o
-// una animación en curso (entrada, giro con inercia, zoom, barrido, efectos); en reposo no se dibuja nada.
+// una animación en curso (entrada, giro con inercia, zoom, efectos); en reposo no se dibuja nada.
+// «Probar efectos» divide el visor en 4 paneles (2×2), cada uno con un bucle de un efecto de la bola.
 // Pixel ratio ≤ 1,5 (1 en Baja), reflejo de suelo solo en Alta, pausa si no es visible y en destroy()
 // se libera todo (dispose + forceContextLoss). Este módulo se carga con import() al abrir el visor.
 
@@ -28,7 +27,44 @@ const SPIN = Math.PI / 4; // rad/s del giro continuo (vuelta completa en 8 s)
 // Las vistas previas de skins siempre se dibujan en calidad máxima, sea cual sea la calidad del juego.
 const PREVIEW_QUALITY = 'high';
 const EPS = 0.02; // rad/s de inercia por debajo de los cuales la bola se considera parada
-const FX_LOOP = 6;
+const FX_CUP_X = -0.1;
+const FX_WALL_X = 1.0;
+// zona de «Probar efectos» en píxeles CSS: libre arriba (barra con nombre) y abajo (botones), y margen entre paneles
+const FX_TOP = 96;
+const FX_BOTTOM = 136;
+const FX_GAP = 6;
+// Paneles de «Probar efectos»: cada uno repite un efecto de la bola (x en unidades del inspector).
+const FX_SCENES = [
+  {
+    id: 'golpe', name: 'Golpe', loop: 2.6,
+    pose: (t) => ({ x: t < 0.3 ? -0.8 : -0.8 + 1.25 * easeOut(Math.min(1, (t - 0.3) / 1.3)), y: 0, s: 1 }),
+    events: [{ t: 0.3, kind: 'hit', power: 0.9, dx: 1 }],
+  },
+  {
+    id: 'pared', name: 'Pared', loop: 2.6,
+    pose: (t) => {
+      if (t < 0.2) return { x: -0.5, y: 0, s: 1 };
+      if (t < 1.0) return { x: -0.5 + (0.57 + 0.5) * easeOut((t - 0.2) / 0.8), y: 0, s: 1 };
+      return { x: 0.57 + (0.2 - 0.57) * easeOut(Math.min(1, (t - 1.0) / 0.8)), y: 0, s: 1 };
+    },
+    events: [{ t: 1.0, kind: 'wall', power: 0.8 }],
+  },
+  {
+    id: 'embocada', name: 'Embocada', loop: 2.8,
+    pose: (t) => {
+      if (t < 0.2) return { x: 0.2, y: 0, s: 1 };
+      if (t < 1.4) return { x: 0.2 + (FX_CUP_X - 0.2) * easeOut((t - 0.2) / 1.2), y: 0, s: 1 };
+      const u = Math.min(1, (t - 1.4) / 0.4);
+      return { x: FX_CUP_X, y: -0.45 * u, s: 1 - u };
+    },
+    events: [{ t: 1.4, kind: 'sink' }],
+  },
+  {
+    id: 'rodada', name: 'Rodada', loop: 3,
+    pose: (t) => ({ x: -0.8 + 1.37 * easeOut(Math.min(1, t / 2.8)), y: 0, s: 1 }),
+    events: [],
+  },
+];
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const easeOut = (u) => 1 - (1 - u) * (1 - u) * (1 - u);
@@ -91,7 +127,7 @@ function makeRenderer(canvas, antialias = true) {
 }
 
 const tierOf = (skin) => TIERS[skin.tier ?? skin.rarity] ?? TIERS.common;
-const SAFE_INSTANCE = { seed: 0, counter: { enabled: false, aces: 0, sinks: 0, birdies: 0 } };
+const SAFE_INSTANCE = { seed: 0 };
 
 export function createSkinInspector(container, opts = {}) {
   const mode = opts.mode === 'fullscreen' ? 'fullscreen' : 'panel';
@@ -100,27 +136,28 @@ export function createSkinInspector(container, opts = {}) {
   let level = QUALITY_LEVELS.includes(opts.quality) ? opts.quality : PREVIEW_QUALITY;
   const autoSpin = !!opts.autoSpin;
   const bare = !!opts.bare;
+  const noFloor = !!opts.noFloor; // sin suelo, brillo ni reflejo (la bola flota sola)
+  const noEnv = !!opts.noEnv; // sin reflejos del entorno en la bola
 
   // ---------------------------------------------------------------- DOM
   const root = el('div', `sk-insp sk-${mode}${bare ? ' sk-bare' : ''}`);
   const stage = el('div', 'sk-stage');
   const canvas = el('canvas', 'sk-canvas');
-  const hint = el('p', 'sk-hint', 'Arrastra para girar · pellizca o usa la rueda para acercar · doble toque para voltear');
   const tools = el('div', 'sk-tools');
-  const btnGood = el('button', 'sk-btn', 'Lado bueno');
-  const btnSweep = el('button', 'sk-btn', 'Barrido de luz');
   const btnFx = el('button', 'sk-btn sk-btn-fx', 'Probar efectos');
-  for (const b of [btnGood, btnSweep, btnFx]) b.type = 'button';
-  tools.append(btnGood, btnSweep, btnFx);
-  stage.append(canvas, hint, tools);
-  const sheet = el('aside', 'sk-sheet');
-  const grab = el('button', 'sk-grab');
-  grab.type = 'button';
-  grab.setAttribute('aria-label', 'Mostrar u ocultar datos');
-  sheet.append(grab);
-  const body = el('div', 'sk-sheet-body');
-  sheet.append(body);
-  root.append(stage, sheet);
+  btnFx.type = 'button';
+  tools.append(btnFx);
+  // rejilla 2×2 de «Probar efectos»: solo visible en ese modo; cada celda lleva el nombre de su efecto
+  const fxGrid = el('div', 'sk-fx-grid');
+  fxGrid.style.top = `${FX_TOP}px`;
+  fxGrid.style.bottom = `${FX_BOTTOM}px`;
+  for (const sc of FX_SCENES) {
+    const cell = el('div', 'sk-fx-cell');
+    cell.append(el('span', 'sk-fx-cap', sc.name));
+    fxGrid.append(cell);
+  }
+  stage.append(canvas, fxGrid, tools);
+  root.append(stage);
   container.replaceChildren(root);
 
   // ---------------------------------------------------------------- WebGL
@@ -129,8 +166,7 @@ export function createSkinInspector(container, opts = {}) {
     renderer = makeRenderer(canvas, true);
   } catch (err) {
     stage.replaceChildren(el('p', 'sk-hint', 'No se pudo iniciar WebGL en este dispositivo.'));
-    renderPanel();
-    return { setSkin(s, i) { skin = s; instance = i ?? instance; renderPanel(); }, playFx() { return false; }, destroy() { root.remove(); }, stats: () => ({ webgl: false }) };
+    return { setSkin(s, i) { skin = s; instance = i ?? SAFE_INSTANCE; }, playFx() { return false; }, destroy() { root.remove(); }, stats: () => ({ webgl: false }) };
   }
 
   const scene = new THREE.Scene();
@@ -161,40 +197,79 @@ export function createSkinInspector(container, opts = {}) {
   glow.renderOrder = 2;
   scene.add(floor, glow);
 
-  // escena de «Probar efectos»: tramo de césped, hoyo y valla
-  const fxStage = new THREE.Group();
-  fxStage.visible = false;
-  const grassMat = new THREE.MeshStandardMaterial({ map: grassTexture(), roughness: 0.95 });
-  const strip = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.04, 1.1), grassMat);
-  strip.position.y = FLOOR_Y - 0.02;
-  const cupMat = new THREE.MeshBasicMaterial({ color: 0x05070a });
-  const cup = new THREE.Mesh(new THREE.CircleGeometry(0.3, 32), cupMat);
-  cup.rotation.x = -Math.PI / 2;
-  const FX_CUP_X = -0.1;
-  cup.position.set(FX_CUP_X, FLOOR_Y + 0.003, 0);
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0xc9a46a, roughness: 0.7 });
-  const wall = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.34, 1.1), wallMat);
-  wall.position.set(1.0, FLOOR_Y + 0.17, 0);
-  fxStage.add(strip, cup, wall);
-  scene.add(fxStage);
-  const fxGroup = new THREE.Group(); // las partículas viven en unidades de juego
-  fxGroup.scale.setScalar(FX_K);
-  scene.add(fxGroup);
+  // recursos compartidos de «Probar efectos»: tramo de césped, hoyo y valla (un juego por panel, mismos recursos)
+  const fxAssets = {
+    stripGeo: new THREE.BoxGeometry(2.3, 0.04, 1.1),
+    cupGeo: new THREE.CircleGeometry(0.3, 32),
+    wallGeo: new THREE.BoxGeometry(0.1, 0.34, 1.1),
+    grassMat: new THREE.MeshStandardMaterial({ map: grassTexture(), roughness: 0.95 }),
+    cupMat: new THREE.MeshBasicMaterial({ color: 0x05070a }),
+    wallMat: new THREE.MeshStandardMaterial({ color: 0xc9a46a, roughness: 0.7 }),
+  };
+  let fxPanels = [];
 
   function buildBall() {
     handle?.dispose();
     geo?.dispose();
     const [w, h] = SPHERE[level] ?? SPHERE.medium;
     geo = new THREE.SphereGeometry(R, w, h);
-    handle = createSkinMaterial(skin, { quality: level, instance: { seed: instance.seed } });
+    handle = createSkinMaterial(skin, { quality: level, instance: { seed: instance.seed }, noEnv });
     ball.geometry = mirrorBall.geometry = geo;
     ball.material = mirrorBall.material = handle.material;
     tierColor.set(tierOf(skin).color);
+    root.style.setProperty('--sk-tier', tierOf(skin).color);
     glow.material.color.copy(tierColor);
     lights.rim.color.set(0xbfd8ff).lerp(tierColor, 0.35);
-    skinFx?.dispose();
-    skinFx = null;
-    if (fxMode) startFx();
+    if (fxMode) buildFxPanels();
+  }
+
+  /** Un panel de «Probar efectos»: escena propia (luces, césped, hoyo, valla, bola y partículas). */
+  function makeFxPanel(i) {
+    const sc = FX_SCENES[i];
+    const pScene = new THREE.Scene();
+    const pCamera = new THREE.PerspectiveCamera(36, 1, 0.1, 40);
+    addStudioLights(pScene, tierColor);
+    const stage3 = new THREE.Group();
+    const strip = new THREE.Mesh(fxAssets.stripGeo, fxAssets.grassMat);
+    strip.position.y = FLOOR_Y - 0.02;
+    const cup = new THREE.Mesh(fxAssets.cupGeo, fxAssets.cupMat);
+    cup.rotation.x = -Math.PI / 2;
+    cup.position.set(FX_CUP_X, FLOOR_Y + 0.003, 0);
+    const wall = new THREE.Mesh(fxAssets.wallGeo, fxAssets.wallMat);
+    wall.position.set(FX_WALL_X, FLOOR_Y + 0.17, 0);
+    stage3.add(strip, cup, wall);
+    pScene.add(stage3);
+    const pBall = new THREE.Mesh(geo, handle.material);
+    pScene.add(pBall);
+    const pFxGroup = new THREE.Group(); // las partículas viven en unidades de juego
+    pFxGroup.scale.setScalar(FX_K);
+    pScene.add(pFxGroup);
+    return {
+      index: i,
+      scene: pScene,
+      camera: pCamera,
+      ball: pBall,
+      skinFx: new SkinFX(pFxGroup, skin, { quality: level }),
+      matCtx: { speed: 0, impact: 0, state: 0 },
+      camLocal: { position: new THREE.Vector3() },
+      t: 0,
+      prev: 0,
+      x: sc.pose(0).x,
+      q: new THREE.Quaternion(),
+      disposeLocal() {
+        this.skinFx.dispose();
+      },
+    };
+  }
+
+  function disposeFxPanels() {
+    for (const p of fxPanels) p.disposeLocal();
+    fxPanels = [];
+  }
+
+  function buildFxPanels() {
+    disposeFxPanels();
+    fxPanels = FX_SCENES.map((_, i) => makeFxPanel(i));
   }
 
   // ---------------------------------------------------------------- estado de vista
@@ -206,18 +281,15 @@ export function createSkinInspector(container, opts = {}) {
   const AZ = new THREE.Vector3(0, 0, 1);
   const goodQ = new THREE.Quaternion();
   let vx = 0, vy = 0; // velocidad angular (rad/s)
+  let spinMul = 1, spinTarget = 1; // multiplicador del giro automático (setSpin), suavizado; la dirección no cambia
   let zoom = 1;
   let zoomT = 1;
   let baseDist = 3;
   let camY = 0.2, lookY = -0.04;
   let tween = null;
   let time = 0;
-  let sweep = -1;
   let fxMode = false;
-  let skinFx = null;
-  let fxT = 0;
-  let fxPrev = 0;
-  let fxX = -0.8;
+  const matCtx = { speed: 0, impact: 0, state: 0 };
 
   function computeGoodQ() {
     const gs = skin.goodSide ?? {};
@@ -254,12 +326,13 @@ export function createSkinInspector(container, opts = {}) {
       } else q.slerpQuaternions(tween.from, tween.to, e);
       if (u >= 1) tween = null;
     } else {
+      spinMul += (spinTarget - spinMul) * (1 - Math.exp(-4 * dt)); // cambio de velocidad suave
       const decay = Math.exp(-3.4 * dt);
       vx *= decay;
       vy *= decay;
       if (!dragging && Math.abs(vx) < EPS && Math.abs(vy) < EPS) vx = vy = 0;
       if (!dragging) {
-        qTmp.setFromAxisAngle(AY, vy * dt + (autoSpin && !reducedMotion() ? SPIN * dt : 0));
+        qTmp.setFromAxisAngle(AY, vy * dt + (autoSpin && !reducedMotion() ? SPIN * spinMul * dt : 0));
         q.premultiply(qTmp);
         qTmp.setFromAxisAngle(AX, vx * dt);
         q.premultiply(qTmp);
@@ -363,99 +436,90 @@ export function createSkinInspector(container, opts = {}) {
   canvas.addEventListener('wheel', onWheel, { passive: false });
   canvas.addEventListener('dblclick', onDbl);
 
-  // ---------------------------------------------------------------- barrido de luz
-  btnGood.addEventListener('click', () => {
-    computeGoodQ();
-    zoomT = 1;
-    gotoQ(goodQ, 0.8);
-  });
-  btnSweep.addEventListener('click', () => {
-    sweep = 0;
-    btnSweep.classList.add('sk-on');
-    invalidate();
-  });
   btnFx.addEventListener('click', () => api.playFx(!fxMode));
 
-  const KEY_BASE = new THREE.Vector3(2.2, 3, 3);
-  function stepSweep(dt) {
-    if (sweep < 0) return;
-    sweep += dt / 3;
-    const a = easeOut(Math.min(1, sweep)) * TAU;
-    const m = handle.material;
-    if (m.envMapRotation) m.envMapRotation.y = a;
-    lights.key.position.set(KEY_BASE.x * Math.cos(a) + KEY_BASE.z * Math.sin(a), KEY_BASE.y, -KEY_BASE.x * Math.sin(a) + KEY_BASE.z * Math.cos(a));
-    if (sweep >= 1) {
-      sweep = -1;
-      if (m.envMapRotation) m.envMapRotation.y = 0;
-      lights.key.position.copy(KEY_BASE);
-      btnSweep.classList.remove('sk-on');
-    }
-  }
-
-  // ---------------------------------------------------------------- probar efectos
+  // ---------------------------------------------------------------- probar efectos (4 paneles)
   const pPos = new THREE.Vector3();
   const pDir = new THREE.Vector3();
   const pNormal = new THREE.Vector3();
   const pCup = new THREE.Vector3();
-  const camLocal = { position: new THREE.Vector3() };
-  const fxCtx = { pos: pPos, speed: 0, moving: false, camera: camLocal };
-  const matCtx = { speed: 0, impact: 0, state: 0 };
+  const fxCtx = { pos: pPos, speed: 0, moving: false, camera: null };
 
-  function startFx() {
-    if (skinFx) return;
-    skinFx = new SkinFX(fxGroup, skin, { quality: level });
-    fxT = 0;
-    fxPrev = 0;
-  }
-
-  /** Posición de la bola en la secuencia: golpe -> rodada -> choque -> rebote -> golpe -> embocada. */
-  function stepFx(dt) {
-    fxPrev = fxT;
-    fxT += dt;
-    if (fxT >= FX_LOOP) {
-      fxT -= FX_LOOP;
-      fxPrev = -1;
-      skinFx.reset();
+  /** Avanza un panel: pose de su efecto, eventos al cruzar su tiempo y bucle. */
+  function stepPanel(p, dt) {
+    const sc = FX_SCENES[p.index];
+    p.prev = p.t;
+    p.t += dt;
+    if (p.t >= sc.loop) {
+      p.t -= sc.loop;
+      p.prev = -1;
+      p.skinFx.reset();
     }
-    const t = fxT;
-    const crossed = (tt) => fxPrev < tt && t >= tt;
-    const X0 = -0.8, XW = 0.57;
-    let x, y = 0, s = 1;
-    if (t < 0.3) x = X0;
-    else if (t < 1.35) x = X0 + (XW - X0) * easeOut((t - 0.3) / 1.05);
-    else if (t < 1.9) x = XW + (0.4 - XW) * easeOut((t - 1.35) / 0.55);
-    else if (t < 2.4) x = 0.4;
-    else if (t < 3.3) x = 0.4 + (FX_CUP_X - 0.4) * easeOut((t - 2.4) / 0.9);
-    else {
-      x = FX_CUP_X;
-      const u = clamp((t - 3.3) / 0.3, 0, 1);
-      y = -0.45 * u;
-      s = 1 - u;
+    const { x, y, s } = sc.pose(p.t);
+    const dx = x - p.x;
+    p.x = x;
+    const k = 1 / FX_K;
+    for (const ev of sc.events) {
+      if (!(p.prev < ev.t && p.t >= ev.t)) continue;
+      if (ev.kind === 'hit') p.skinFx.onHit(ev.power, pPos.set(x * k, 0, 0), pDir.set(ev.dx, 0, 0));
+      else if (ev.kind === 'wall') p.skinFx.onWall(ev.power, pPos.set((x + R) * k, 0, 0), pNormal.set(-1, 0, 0));
+      else if (ev.kind === 'sink') p.skinFx.onSink(pCup.set(FX_CUP_X * k, FLOOR_Y * k, 0));
     }
-    const dx = x - fxX;
-    fxX = x;
     const speedW = dt > 0 ? Math.abs(dx) / dt : 0;
-    ball.position.set(x, y, 0);
-    ball.scale.setScalar(Math.max(0.001, s));
+    p.ball.position.set(x, y, 0);
+    p.ball.scale.setScalar(Math.max(0.001, s));
+    p.ball.visible = s > 0.01;
     if (dx !== 0) {
       qTmp.setFromAxisAngle(AZ, -dx / R);
-      q.premultiply(qTmp);
+      p.q.premultiply(qTmp);
     }
-    const k = 1 / FX_K;
-    pPos.set(x * k, y * k, 0);
-    if (crossed(0.3)) skinFx.onHit(0.9, pPos, pDir.set(1, 0, 0));
-    if (crossed(1.35)) skinFx.onWall(0.8, pPos.set((x + R) * k, 0, 0), pNormal.set(-1, 0, 0));
-    if (crossed(2.4)) skinFx.onHit(0.35, pPos.set(x * k, 0, 0), pDir.set(-1, 0, 0));
-    if (crossed(3.3)) skinFx.onSink(pCup.set(FX_CUP_X * k, FLOOR_Y * k, 0));
-    pPos.set(x * k, y * k, 0);
+    p.q.normalize();
+    p.ball.quaternion.copy(p.q);
     const speed = speedW * k;
+    pPos.set(x * k, y * k, 0);
     fxCtx.speed = speed;
     fxCtx.moving = speed > 0.3 && s > 0.5;
-    camLocal.position.copy(camera.position).multiplyScalar(k);
-    skinFx.update(time, dt, fxCtx);
-    matCtx.speed = Math.min(1, speed / 12);
-    matCtx.impact = skinFx.impact;
-    ball.visible = s > 0.01;
+    fxCtx.camera = p.camLocal;
+    p.camLocal.position.copy(p.camera.position).multiplyScalar(k);
+    p.skinFx.update(time, dt, fxCtx);
+    p.matCtx.speed = Math.min(1, speed / 12);
+    p.matCtx.impact = p.skinFx.impact;
+  }
+
+  /** Dibuja los 4 paneles en una rejilla 2×2 con viewport y scissor (un solo renderer). */
+  const fxSize = new THREE.Vector2();
+  function renderFxGrid(dt) {
+    // three.js (setViewport/setScissor) recibe píxeles CSS y multiplica por el pixelRatio: aquí no se escala a mano
+    // (escalar dos veces dejaba las celdas de abajo fuera del canvas en pantallas de alta densidad)
+    const size = renderer.getSize(fxSize);
+    const W = size.x, H = size.y;
+    const top = FX_TOP, bottom = FX_BOTTOM, gap = FX_GAP;
+    const cw = Math.max(1, Math.floor(W / 2)), ch = Math.max(1, Math.floor((H - top - bottom) / 2));
+    const t = Math.tan((36 * Math.PI) / 360);
+    renderer.setScissorTest(true);
+    renderer.setScissor(0, 0, W, H);
+    renderer.setViewport(0, 0, W, H);
+    renderer.clear();
+    for (const p of fxPanels) {
+      stepPanel(p, dt);
+      const col = p.index % 2, row = Math.floor(p.index / 2);
+      // celda en GL (origen abajo): fila 0 arriba; el panel va con margen para dejar la separación
+      const cx = col * cw, cy = bottom + (1 - row) * ch;
+      const x = cx + gap, y = cy + gap, w = Math.max(1, cw - 2 * gap), h = Math.max(1, ch - 2 * gap);
+      renderer.setViewport(x, y, w, h);
+      renderer.setScissor(x, y, w, h);
+      // distancia que encaja la bola y el tramo en la celda (el mismo encuadre para los 4)
+      const aspect = w / h;
+      const d = clamp(1.5 / (t * aspect), 1.6, 9);
+      p.camera.aspect = aspect;
+      p.camera.position.set(0, d * 0.3, d);
+      p.camera.lookAt(0, -0.18, 0);
+      p.camera.updateProjectionMatrix();
+      handle.update(time, dt, p.matCtx);
+      renderer.render(p.scene, p.camera);
+    }
+    renderer.setScissorTest(false);
+    renderer.setViewport(0, 0, W, H);
   }
 
   // ---------------------------------------------------------------- bucle (bajo demanda)
@@ -468,7 +532,7 @@ export function createSkinInspector(container, opts = {}) {
   const visibleNow = () => intersecting && !document.hidden && root.isConnected && !destroyed;
   /** ¿Sigue moviéndose algo? Si no, el bucle se detiene hasta la próxima interacción. */
   const animating = () =>
-    (autoSpin && !reducedMotion()) || !!tween || dragging || pointers.size > 0 || fxMode || sweep >= 0 || Math.abs(vx) >= EPS || Math.abs(vy) >= EPS ||
+    (autoSpin && !reducedMotion()) || !!tween || dragging || pointers.size > 0 || fxMode || Math.abs(vx) >= EPS || Math.abs(vy) >= EPS ||
     Math.abs(zoomT - zoom) > 0.001 || Math.abs(camGoalY - camY) > 0.001 || Math.abs(lookGoalY - lookY) > 0.001;
   function invalidate() {
     dirty = true;
@@ -482,13 +546,15 @@ export function createSkinInspector(container, opts = {}) {
     const dt = clamp((now - last) / 1000, 0, 0.05);
     last = now;
     time += dt;
-    if (fxMode && skinFx) stepFx(dt);
-    else matCtx.impact = matCtx.speed = 0;
-    stepRotation(dt);
-    stepSweep(dt);
-    stepCamera(dt);
-    handle.update(time, dt, matCtx);
-    renderer.render(scene, camera);
+    if (fxMode) {
+      renderFxGrid(dt);
+    } else {
+      matCtx.impact = matCtx.speed = 0;
+      stepRotation(dt);
+      stepCamera(dt);
+      handle.update(time, dt, matCtx);
+      renderer.render(scene, camera);
+    }
     if (animating() || dirty) raf = requestAnimationFrame(frame);
   }
   function sync() {
@@ -507,24 +573,21 @@ export function createSkinInspector(container, opts = {}) {
     const f = 1 - Math.exp(-8 * dt);
     zoom += (zoomT - zoom) * f;
     const d = baseDist / zoom;
-    const targetCamY = fxMode ? d * 0.3 : d * 0.07;
-    const targetLook = fxMode ? -0.18 : -0.04;
+    const targetCamY = d * 0.07;
+    const targetLook = -0.04;
     camGoalY = targetCamY;
     lookGoalY = targetLook;
     camY += (targetCamY - camY) * f;
     lookY += (targetLook - lookY) * f;
     camera.position.set(0, camY, d);
     camera.lookAt(0, lookY, 0);
-    const show = !fxMode;
+    const show = !noFloor;
     floor.visible = show;
     mirror.visible = show && level === 'high';
     glow.visible = show;
-    fxStage.visible = fxMode;
-    if (!fxMode) {
-      ball.position.set(0, 0, 0);
-      ball.scale.setScalar(1);
-      ball.visible = true;
-    }
+    ball.position.set(0, 0, 0);
+    ball.scale.setScalar(1);
+    ball.visible = true;
   }
 
   const resize = () => {
@@ -534,8 +597,7 @@ export function createSkinInspector(container, opts = {}) {
     camera.aspect = w / h;
     const t = Math.tan((camera.fov * Math.PI) / 360);
     const fitBall = (R * 2.2) / (t * Math.min(1, camera.aspect));
-    const fitFx = 1.5 / (t * camera.aspect);
-    baseDist = clamp(fxMode ? Math.max(fitBall, fitFx) : fitBall, 1.6, 9);
+    baseDist = clamp(fitBall, 1.6, 9);
     camera.updateProjectionMatrix();
     if (visibleNow() && !raf) renderer.render(scene, camera);
   };
@@ -549,48 +611,6 @@ export function createSkinInspector(container, opts = {}) {
   const onVis = () => invalidate();
   document.addEventListener('visibilitychange', onVis);
 
-  grab.addEventListener('click', () => root.classList.toggle('sk-open'));
-
-  // ---------------------------------------------------------------- panel de datos
-  function renderPanel() {
-    const tier = tierOf(skin);
-    const inst = instance ?? SAFE_INSTANCE;
-    const rare = rarePatternOf(skin, inst.seed);
-    root.style.setProperty('--sk-tier', tier.color);
-    body.replaceChildren();
-
-    const head = el('div', 'sk-head');
-    const chip = el('span', 'sk-tier');
-    chip.innerHTML = `${tierIcon(skin.tier ?? skin.rarity)} ${tier.name}`;
-    head.append(chip);
-    if (skin.collection && skin.collection !== 'clasica') head.append(el('span', 'sk-coll', skin.collection));
-    body.append(head, el('h3', 'sk-name', skin.name));
-
-    const pat = el('div', 'sk-row sk-block');
-    pat.append(el('span', 'sk-label', 'Patrón'), el('strong', 'sk-mono', `#${inst.seed ?? 0}`));
-    if (rare) pat.append(el('span', 'sk-rare', rare.name));
-    body.append(pat);
-
-    if (inst.counter?.enabled) {
-      const lcd = el('div', 'sk-lcd');
-      for (const [label, v] of [['Hoyos en uno', inst.counter.aces], ['Embocadas', inst.counter.sinks], ['Birdies', inst.counter.birdies]]) {
-        const cell = el('div', 'sk-lcd-cell');
-        cell.append(el('b', '', String(v ?? 0).padStart(4, '0')), el('small', '', label));
-        lcd.append(cell);
-      }
-      body.append(el('span', 'sk-label', 'Marcador'), lcd);
-    }
-    if (inst.unlockedAt) {
-      const d = new Date(inst.unlockedAt);
-      if (!Number.isNaN(d.getTime()) && d.getTime() > 1e10) {
-        const r = el('div', 'sk-row sk-block');
-        r.append(el('span', 'sk-label', 'Desbloqueada'), el('span', '', d.toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })));
-        body.append(r);
-      }
-    }
-    if (skin.lore) body.append(el('p', 'sk-lore', `“${skin.lore}”`));
-  }
-
   // ---------------------------------------------------------------- API
   const api = {
     /** Cambia de skin (y opcionalmente de instancia/calidad). Mismo skin+calidad: solo actualiza la semilla. */
@@ -599,9 +619,8 @@ export function createSkinInspector(container, opts = {}) {
       const nextLevel = QUALITY_LEVELS.includes(o.quality) ? o.quality : level;
       const same = next.id === skin.id && nextLevel === level;
       skin = next;
-      if (nextInstance) instance = nextInstance;
+      instance = nextInstance ?? SAFE_INSTANCE; // sin instancia explícita, no se arrastra la de la skin anterior
       level = nextLevel;
-      renderPanel();
       if (same) {
         handle.setInstance({ seed: instance.seed });
         invalidate();
@@ -618,19 +637,21 @@ export function createSkinInspector(container, opts = {}) {
       fxMode = on;
       btnFx.classList.toggle('sk-on', on);
       btnFx.textContent = on ? 'Detener efectos' : 'Probar efectos';
+      root.classList.toggle('sk-fxon', on);
       if (on) {
-        startFx();
-        fxX = -0.8;
         zoomT = 1;
+        buildFxPanels();
       } else {
-        skinFx?.dispose();
-        skinFx = null;
+        disposeFxPanels();
         matCtx.impact = matCtx.speed = 0;
         startEntrance();
       }
       resize();
       sync();
       return fxMode;
+    },
+    setSpin(m) {
+      spinTarget = Math.max(0, m);
     },
     stats() {
       return { geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, programs: renderer.info.programs?.length ?? 0, running: !!raf, fx: fxMode, quality: level };
@@ -649,14 +670,17 @@ export function createSkinInspector(container, opts = {}) {
       canvas.removeEventListener('pointercancel', onUp);
       canvas.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('dblclick', onDbl);
-      skinFx?.dispose();
-      skinFx = null;
+      disposeFxPanels();
       handle.dispose();
       geo.dispose();
-      for (const m of [floor, glow, strip, cup, wall]) {
+      for (const m of [floor, glow]) {
         m.geometry.dispose();
         m.material.map?.dispose();
         m.material.dispose();
+      }
+      for (const g of Object.values(fxAssets)) {
+        if (g.isBufferGeometry) g.dispose();
+        else { g.map?.dispose(); g.dispose(); }
       }
       renderer.dispose();
       renderer.forceContextLoss();
@@ -664,7 +688,6 @@ export function createSkinInspector(container, opts = {}) {
     },
   };
 
-  renderPanel();
   buildBall();
   startEntrance();
   resize();
@@ -721,7 +744,7 @@ function createThumbRenderer(size = 144) {
  */
 export function mountSkinLab(container) {
   const state = { id: SKINS[0].id, seed: 123, quality: getQuality() };
-  const instFor = () => ({ seed: state.seed, counter: { enabled: true, aces: 2, sinks: 47, birdies: 12 }, unlockedAt: '2026-01-15T10:00:00Z' });
+  const instFor = () => ({ seed: state.seed });
   const skinNow = () => SKINS.find((s) => s.id === state.id) ?? SKINS[0];
 
   const root = el('div', 'sk-lab');
@@ -773,7 +796,7 @@ export function mountSkinLab(container) {
     cells.set(s.id, { b, img });
   }
 
-  const inspector = createSkinInspector(main, { skin: skinNow(), instance: instFor(), mode: 'panel', quality: state.quality });
+  const inspector = createSkinInspector(main, { skin: skinNow(), instance: instFor(), mode: 'panel', quality: state.quality, noEnv: true });
   function select(id) {
     state.id = id;
     for (const [k, c] of cells) c.b.classList.toggle('sk-sel', k === id);

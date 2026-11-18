@@ -32,6 +32,7 @@ export function seatHtml(p) {
  * @param {string} [o.legalHtml] párrafos legales (ya escapados)
  * @param {string} o.cancelLabel texto del botón de salir
  * @param {string} [o.extraClass]
+ * @param {string} [o.footHtml] HTML extra al final (p. ej. el botón Lobby flotante)
  */
 export function createMatchmakingView(o) {
   const t = document.createElement('template');
@@ -81,6 +82,7 @@ export function createMatchmakingView(o) {
       <div class="seats mm-seats">${Array.from({ length: o.seats }, (_, i) => `<div class="seat" style="--i:${i}">${seatHtml(null)}</div>`).join('')}</div>
       ${o.legalHtml ?? ''}
       <button class="ghost cancel">${icon('close')}${o.cancelLabel}</button>
+      ${o.footHtml ?? ''}
     </main>`;
   const view = t.content.firstElementChild;
   const $ = (s) => view.querySelector(s);

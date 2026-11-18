@@ -1,0 +1,106 @@
+/* Componentes comunes de las pantallas (prefijo scr-). Usa los tokens de :root de style.css. */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+.scr-head {
+  display: flex; align-items: center; gap: 8px; min-height: 56px;
+  padding: calc(env(safe-area-inset-top, 0px) + 8px) calc(env(safe-area-inset-right, 0px) + 12px) 8px calc(env(safe-area-inset-left, 0px) + 12px);
+  box-sizing: border-box; max-width: 100%;
+}
+.scr-title {
+  flex: 1; min-width: 0; margin: 0; font: 700 1.25rem/1.2 var(--display);
+  color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.scr-back {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 44px; min-height: 44px; padding: 0; border-radius: var(--radius-sm);
+  background: var(--panel); border: 1px solid var(--line-light); color: var(--text); cursor: pointer;
+}
+.scr-back:focus-visible, .scr-btn:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+/* Botón «Lobby»: fijo abajo a la izquierda, móvil y escritorio. Por debajo de los diálogos (40) y de los avisos (1000). */
+.scr-lobby {
+  position: fixed; left: calc(12px + env(safe-area-inset-left, 0px)); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 20;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 52px; height: 52px; min-width: 44px; min-height: 44px; padding: 0; box-sizing: border-box;
+  border-radius: 50%; border: 1px solid var(--line-light); background: rgba(10, 16, 14, 0.78); color: var(--text);
+  cursor: pointer; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+.scr-lobby:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.scr-lobby:active { transform: scale(0.97); }
+@media (prefers-reduced-motion: reduce) { .scr-lobby:active { transform: none; } }
+.scr-balance { display: inline-flex; align-items: center; gap: 4px; color: var(--gold); font-weight: 700; }
+
+.scr-card {
+  background: var(--panel-card); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow-card); padding: 14px; box-sizing: border-box; max-width: 100%;
+}
+
+.scr-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-width: 44px; min-height: 44px; padding: 0 18px; border-radius: var(--radius-sm);
+  font: 700 1rem var(--body); cursor: pointer; border: 1px solid var(--line-light);
+}
+.scr-btn-primary { background: var(--emerald); color: #04130d; border-color: transparent; }
+.scr-btn-secondary { background: var(--panel); color: var(--text); }
+.scr-btn-ghost { background: transparent; color: var(--text-dim); border-color: transparent; }
+
+.scr-badge { position: relative; display: inline-block; width: 12px; height: 12px; }
+.scr-badge-dot {
+  display: block; width: 12px; height: 12px; border-radius: 50%;
+  background: var(--neg); box-shadow: 0 0 0 2px var(--bg);
+}
+
+.scr-state { margin: 24px 12px; text-align: center; color: var(--text-dim); }
+.scr-state-error { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+
+/* Transición entre pantallas: la duración la pone el host en --scr-ms (200 ms, 80 ms con reduced-motion). */
+/* El escenario de cada pantalla (host.js) entra ya visible: la saliente sale en el mismo turno, así que el
+   deslizamiento arranca en opacidad 0,6 y no en 0 (con 0 se veía el fondo entre pantallas = parpadeo). */
+@keyframes scr-slide-in { from { opacity: 0.6; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+@keyframes scr-fade-in { from { opacity: 0; } to { opacity: 1; } }
+.scr-stage { min-height: 100vh; min-height: 100dvh; }
+.scr-stage-wait { visibility: hidden; } /* mide y monta sin pintar; la saliente sigue visible */
+/* «backwards» y no «both»: sin transform residual tras la transición (ver .screen en style.css). */
+.scr-t-slide > * { animation: scr-slide-in var(--scr-ms, 200ms) ease-out backwards; }
+.scr-t-fade > * { animation: scr-fade-in var(--scr-ms, 80ms) linear backwards; }
+
+/* Escritorio (≥900 px): las pantallas del HUD ocupan casi toda la ventana. La base de .screen (style.css) limita a 520 px;
+   Mapas tenía además 1140 px. Móvil no cambia. El visor de skins (.sk-inspect) va aparte en skinInspect.css. */
+@media (min-width: 900px) {
+  main.screen.tables, main.screen.skins, main.screen.settings-screen, main.screen.ach, main.screen.friends,
+  main.screen.ranking, main.screen.account, main.screen.wallet-screen, main.screen.freeplay-select, main.screen.matchmaking {
+    max-width: none; width: 100%; margin: 0; box-sizing: border-box;
+    padding: 24px 32px calc(env(safe-area-inset-bottom, 0px) + 100px);
+  }
+  main.screen.ach .ach-body { max-width: none; }
+}
+
+/* Diálogo de motivo (reasonDialog): usa .overlay de style.css (el manejador global de Esc/Intro de main.js lo reconoce) */
+.reason-overlay { z-index: 40; animation: reason-fade 0.18s ease-out; padding: calc(env(safe-area-inset-top, 0px) + 16px) calc(env(safe-area-inset-right, 0px) + 16px) calc(env(safe-area-inset-bottom, 0px) + 16px) calc(env(safe-area-inset-left, 0px) + 16px); }
+.reason-card {
+  box-sizing: border-box; width: min(100%, 380px); max-height: 100%; overflow: auto; padding: 18px; color: var(--text);
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.98), rgba(11, 15, 21, 0.98));
+  border: 1.5px solid rgba(212, 175, 55, 0.75); border-radius: var(--radius-lg);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.2); animation: reason-pop 0.18s ease-out;
+}
+.reason-head { display: flex; align-items: center; gap: 10px; }
+.reason-ico { flex: none; display: grid; place-items: center; width: 34px; height: 34px; }
+.reason-ico > svg { width: 30px; height: 30px; }
+.reason-title { margin: 0; font: 800 1.25rem/1.2 var(--display); color: #fff; }
+.reason-body { margin: 12px 0 0; font: 500 0.95rem/1.45 var(--body); color: var(--text-dim); }
+.reason-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+.reason-btn {
+  min-height: 48px; min-width: 112px; padding: 0 18px; box-sizing: border-box; border-radius: var(--radius-sm); cursor: pointer;
+  font: 800 1rem/1 var(--display); flex: 1 1 auto;
+}
+.reason-btn-ghost { background: rgba(255, 255, 255, 0.08); color: #fff; border: 1px solid var(--line-light); }
+.reason-btn-primary { background: linear-gradient(180deg, #4ade9f, var(--emerald)); color: #04251a; border: 1px solid rgba(255, 255, 255, 0.45); }
+.reason-btn:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.reason-btn:active { transform: scale(0.97); }
+@keyframes reason-fade { from { opacity: 0; } }
+@keyframes reason-pop { from { opacity: 0; transform: translateY(8px) scale(0.97); } }
+@media (prefers-reduced-motion: reduce) {
+  .reason-overlay, .reason-card { animation: none; }
+}

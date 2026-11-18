@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { newPartyMatch, partyErrorText, partyMessage, readyLabel } from '../src/match/partyRules.js';
 
 test('cada error de grupo del servidor tiene texto y lo desconocido no se filtra', () => {
@@ -36,14 +36,29 @@ test('el botón del grupo dice lo que va a pasar', () => {
 // en CI no hay Postgres: comprobamos en el texto del SQL las reglas clave
 const sql = readFileSync(new URL('../supabase/migrations/20261103150000_matchmaking_parties.sql', import.meta.url), 'utf8');
 
+// Las migraciones se redefinen con `create or replace`: la regla vigente es la de la última que define la función.
+const MIG = new URL('../supabase/migrations/', import.meta.url);
+const migrations = readdirSync(MIG).filter((f) => f.endsWith('.sql')).sort();
+function currentDef(signature) {
+  for (const f of migrations.slice().reverse()) {
+    const s = readFileSync(new URL(f, MIG), 'utf8');
+    const at = s.indexOf(signature);
+    if (at !== -1) {
+      const next = s.indexOf('create or replace function', at + 1);
+      return s.slice(at, next === -1 ? s.length : next);
+    }
+  }
+  throw new Error(`sin definición vigente: ${signature}`);
+}
+
 test('un torneo ya no espera a llenar la mesa para cerrarse', () => {
-  const settle = sql.slice(sql.indexOf('function public._settle_tournament'), sql.indexOf('function public._tournament_live'));
+  const settle = currentDef('function public._settle_tournament');
   assert.doesNotMatch(settle, /v_n < v_t\.seats and now\(\) < v_t\.closes_at/);
 });
 
 test('el matchmaking se serializa por mesa y solo usa torneos vivos', () => {
-  assert.match(sql, /pg_advisory_xact_lock\(hashtextextended\('matchmaking:' \|\| p_tier/);
-  assert.match(sql, /and public\._tournament_live\(t\.id\)/);
+  assert.match(currentDef('function public.join_tournament'), /pg_advisory_xact_lock\(hashtextextended\('matchmaking:' \|\| p_tier/);
+  assert.match(currentDef('function public._find_tournament'), /t\.status = 'open'[\s\S]*t\.closes_at > now\(\)/);
 });
 
 test('las funciones de grupo son solo para usuarios con sesión', () => {
