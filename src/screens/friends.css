@@ -1,5 +1,6 @@
 /* Amigos y grupo (T030). Las clases .friend*, .party-* y .account-card-panel vienen de style.css; aqui solo lo propio de la pantalla. */
-.friends .friends-body { display: grid; gap: 14px; padding: 0 calc(env(safe-area-inset-right, 0px) + 12px) calc(env(safe-area-inset-bottom, 0px) + 16px) calc(env(safe-area-inset-left, 0px) + 12px); }
+.friends .friends-body { display: grid; gap: 14px; min-height: 100%; padding: 8px calc(env(safe-area-inset-right, 0px) + 6px) calc(env(safe-area-inset-bottom, 0px) + 16px) calc(env(safe-area-inset-left, 0px) + 6px); box-sizing: border-box; }
+.friends .friends-body .account-card-panel { width: 100%; box-sizing: border-box; }
 .friends .friends-box { display: grid; gap: 10px; }
 .friends .chip-btn, .friends .friend-add button, .friends .friend-add input { min-height: 44px; }
 .friends .friends-locked { display: grid; gap: 12px; justify-items: start; }
