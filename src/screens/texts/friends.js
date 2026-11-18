@@ -34,6 +34,7 @@ register('friends', {
   invitesTitle: 'Invitaciones a grupo',
   noOnlineFriends: 'Ninguno de tus amigos está conectado ahora. Vuelve a mirar cuando alguno entre.',
   invite: 'Invitar',
+  online: 'Conectado',
   inviteSent: 'Invitación enviada a {name}.',
   needNameParty: 'Ponte un nombre de usuario y añade amigos para buscar partida juntos.',
   goAccount: 'Ir a la cuenta',

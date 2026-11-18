@@ -20,6 +20,10 @@ const MESSAGES = {
 
 export const friendMessage = (code) => MESSAGES[code] ?? 'No se ha podido completar. Prueba otra vez.';
 
+/** Amigos conectados primero (online === true). Orden estable: dentro de cada grupo se mantiene el orden del servidor. */
+export const sortOnlineFirst = (friends = []) =>
+  [...friends].sort((a, b) => Number(b.online === true) - Number(a.online === true));
+
 /** Texto tras añadir: 'pending' (enviada) o 'accepted' (la otra persona ya te había añadido). */
 export const addedMessage = (status, name) =>
   status === 'accepted' ? `Ya eres amigo de ${name}.` : `Petición enviada a ${name}.`;

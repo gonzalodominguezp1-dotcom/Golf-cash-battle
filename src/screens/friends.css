@@ -5,3 +5,8 @@
 .friends .chip-btn, .friends .friend-add button, .friends .friend-add input { min-height: 44px; }
 .friends .friends-locked { display: grid; gap: 12px; justify-items: start; }
 .friends .party-card { margin: 0; }
+
+/* conectado: círculo verde a la izquierda del nombre de usuario (amigos y candidatos a grupo) */
+.friend-who { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
+.friend-who b { min-width: 0; }
+.online-dot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: #2ee07a; box-shadow: 0 0 0 2px rgba(46, 224, 122, 0.25), 0 0 8px rgba(46, 224, 122, 0.7); }

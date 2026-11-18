@@ -1,6 +1,6 @@
 // Amigos y grupo (T030): el panel de amigos y el de grupo que vivían en main.js, ahora como pantalla del router.
 // Los amigos se añaden por nombre de usuario y la otra persona acepta o rechaza. El CSS (friends.css) lo importa el arranque.
-import { addedMessage, cleanFriendName, friendMessage } from '../account/friendRules.js';
+import { addedMessage, cleanFriendName, friendMessage, sortOnlineFirst } from '../account/friendRules.js';
 import { frameById } from '../progress/prestige.js';
 import { fromWire } from '../progress/avatar.js';
 import { bindHeader, bindLobby, listState, lobbyButton } from './components.js';
@@ -65,7 +65,7 @@ export async function mount(root, ctx) {
       badge.textContent = `${data.friends.length} ${t(data.friends.length === 1 ? 'friends.one' : 'friends.many')}`;
       const row = (f) => `<li class="friend">
         ${avatarHtml({ size: 'sm', frame: frameById(f.frame), av: fromWire(f.avatar), initial: f.name })}
-        <span class="friend-name"><b>${esc(f.name)}</b><small>${esc(t('friends.level', { n: f.level }))}</small></span>
+        <span class="friend-name"><span class="friend-who">${f.online === true ? `<i class="online-dot" role="img" aria-label="${esc(t('friends.online'))}" title="${esc(t('friends.online'))}"></i>` : ''}<b>${esc(f.name)}</b></span><small>${esc(t('friends.level', { n: f.level }))}</small></span>
         <span class="friend-actions"><button class="chip-btn" data-invite="${esc(f.name)}">${icon('user-plus')}${esc(t('friends.invite'))}</button><button class="chip-btn" data-remove="${esc(f.name)}">${icon('trash')}${esc(t('friends.remove'))}</button></span>
       </li>`;
       const asks = (list, buttons) => list.map((r) => `<li class="friend">
@@ -81,7 +81,7 @@ export async function mount(root, ctx) {
         <span class="friend-actions"><button class="chip-btn btn-accept" data-join="${esc(i.party)}">${icon('check')}${esc(t('friends.join'))}</button><button class="chip-btn btn-decline" data-no="${esc(i.party)}">${icon('close')}${esc(t('friends.no'))}</button></span>
       </li>`).join('')}</ul>` : ''}
       ${data.incoming.length ?`<h3 class="friends-sub">${esc(t('friends.incoming'))}</h3><ul class="friend-list">${asks(data.incoming, (n) => `<span class="friend-actions"><button class="chip-btn" data-accept="${n}">${icon('check')}${esc(t('friends.accept'))}</button><button class="chip-btn" data-decline="${n}">${icon('close')}${esc(t('friends.decline'))}</button></span>`)}</ul>` : ''}
-      ${data.friends.length ? `<ul class="friend-list">${data.friends.map(row).join('')}</ul>` : `<p class="sub">${esc(t('friends.none'))}</p>`}
+      ${data.friends.length ? `<ul class="friend-list">${sortOnlineFirst(data.friends).map(row).join('')}</ul>` : `<p class="sub">${esc(t('friends.none'))}</p>`}
       ${data.outgoing.length ? `<h3 class="friends-sub">${esc(t('friends.outgoing'))}</h3><ul class="friend-list">${asks(data.outgoing, (n) => `<button class="chip-btn" data-remove="${n}">${icon('close')}${esc(t('friends.cancel'))}</button>`)}</ul>` : ''}`;
       const act = (name, job, ok) => async () => {
         try {
