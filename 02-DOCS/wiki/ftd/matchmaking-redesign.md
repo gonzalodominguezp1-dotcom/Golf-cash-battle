@@ -43,3 +43,15 @@ Esperar al subagente de UI, revisar el diff y pasar tests.
   - En `matchmakingBanner.js` y `matchmakingRules.js`: el banner detecta la fase `error` (`is-error`), muestra el estado de error y mantiene habilitada la `X` para cancelar y devolver la entrada.
 - [x] Tests añadidos en `tests/matchmaking-controller.test.js` y `tests/matchmaking-banner.test.js` verificando cancelación tras fallo en `launch()`, reintento de arranque y cancelación desde el banner.
 - Evidencia: tests de matchmaking 27/27 y suite general 768/768 verde, `pnpm build` ok en 1.44s.
+
+## Iteración 3 (2026-11-18)
+- [x] Simetría visual y espaciado equidistante del radar:
+  - Definida variable `--mm-radar-gap: clamp(30px, 4.8vh, 46px)`.
+  - Aplicada idénticamente tanto por arriba (hacia `.mm-head` mediante `margin-top: calc(var(--mm-radar-gap) - var(--mm-gap))`) como por abajo (hacia `.mm-pot` mediante `gap: var(--mm-radar-gap)` en `.mm-core`).
+  - Distancia visual del aro del radar (`.mm-ring` con `inset: -12px`) exactamente igualada por arriba y por abajo (`var(--mm-radar-gap) - 12px`, de 18px a 34px de holgura limpia).
+- [x] Eliminada regla de 2 columnas en escritorio (`@media (min-width: 700px) .mm-core`): la sala mantiene flujo en columna centrada uniforme en todas las resoluciones.
+- [x] Suavizada sombra inferior del radar: de `0 18px 40px` (que oscurecía y visualmente comía el gap hacia el bote) a sombra ambiental `0 8px 24px rgba(0, 0, 0, 0.5)`.
+- [x] Dimensionamiento adaptativo de elementos para ocupar la pantalla sin scroll:
+  - Radar con límite `30vh` (`32vh` en desktop) y pot con padding compacto (`7px 18px`).
+- [x] Sincronización en tiempo real y commits en ambas ramas (`continuar_rediseno_claude` y `matchmaking-redesign`).
+- Evidencia: tests 32/32 matchmaking y 768/768 suite general pasando (`node --test tests/*.test.js`), `pnpm build` correcto en 1.6s.

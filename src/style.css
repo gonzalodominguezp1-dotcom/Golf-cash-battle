@@ -915,7 +915,8 @@ body.sk-noscroll { overflow: hidden; } /* lo usa skinReveal.js: no borrar */
   --mm-hot: #ff3d6e;
   --mm-stripes: repeating-linear-gradient(118deg, rgba(255, 255, 255, 0.1) 0 2px, transparent 2px 9px);
   --mm-glass: rgba(10, 12, 20, 0.9);
-  --mm-gap: clamp(14px, 2.5vh, 24px);
+  --mm-gap: clamp(16px, 2.6vh, 24px);
+  --mm-radar-gap: clamp(30px, 4.8vh, 46px);
   max-width: 760px;
   min-height: 100dvh;
   box-sizing: border-box;
@@ -1035,51 +1036,41 @@ body.sk-noscroll { overflow: hidden; } /* lo usa skinReveal.js: no borrar */
 @keyframes mmPop { from { opacity: 0; transform: translateY(-6px) scale(0.97); } }
 
 .mm-title {
-  margin: 6px 0 2px;
-  font: 900 clamp(24px, 6.5vw, 38px)/1.05 var(--display);
+  margin: 4px 0 0;
+  font: 900 clamp(24px, 6.5vw, 36px)/1.05 var(--display);
   letter-spacing: -0.01em; text-transform: uppercase;
   background: linear-gradient(180deg, #fff 30%, var(--mm-a));
   -webkit-background-clip: text; background-clip: text; color: transparent;
-  filter: drop-shadow(0 0 18px var(--mm-g));
+  filter: drop-shadow(0 0 16px var(--mm-g));
 }
 .mm-hype {
-  min-height: 1.4em; margin: 3px 0 0;
+  min-height: 1.3em; margin: 2px 0 0;
   font-size: 13.5px; font-weight: 700; color: var(--text-dim);
 }
 
-/* radar + bote */
+/* radar + bote: el radar mantiene la misma distancia arriba (a cabecera) y abajo (a bote) */
 .mm-core {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--mm-gap);
-  margin: 0;
+  gap: var(--mm-radar-gap);
+  margin-top: calc(var(--mm-radar-gap) - var(--mm-gap));
+  margin-bottom: 0;
   transition: transform 0.5s cubic-bezier(0.5, 0, 0.75, 0), opacity 0.42s ease;
-}
-@media (min-width: 700px) {
-  .mm-core {
-    display: grid;
-    grid-template-columns: auto minmax(220px, 1fr);
-    align-items: center;
-    justify-items: stretch;
-    gap: 32px;
-    margin: 0;
-  }
-  .mm-core .mm-radar { justify-self: center; }
 }
 
 .mm-radar {
   position: relative; contain: layout style;
-  width: min(clamp(200px, 58vw, 290px), 35vh); aspect-ratio: 1;
+  width: min(clamp(190px, 50vw, 270px), 30vh); aspect-ratio: 1;
   border-radius: 50%;
   background:
     radial-gradient(circle, transparent 0 32%, color-mix(in srgb, var(--mm-a) 18%, transparent) 32.4% 33%, transparent 33.4% 55%, color-mix(in srgb, var(--mm-a) 14%, transparent) 55.4% 56%, transparent 56.4%),
     radial-gradient(circle at center, color-mix(in srgb, var(--mm-a) 10%, rgba(14, 12, 30, 0.85)), rgba(6, 5, 14, 0.96) 72%);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--mm-a) 35%, transparent), 0 0 40px var(--mm-g), 0 18px 40px rgba(0, 0, 0, 0.6), inset 0 0 30px rgba(0, 0, 0, 0.7);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--mm-a) 35%, transparent), 0 0 36px var(--mm-g), 0 8px 24px rgba(0, 0, 0, 0.5), inset 0 0 30px rgba(0, 0, 0, 0.7);
 }
 @media (min-width: 700px) {
-  .mm-radar { width: clamp(240px, 28vw, 320px); }
+  .mm-radar { width: min(clamp(220px, 28vw, 300px), 32vh); }
 }
 .mm.is-fresh .mm-radar { animation: mmRadarIn 0.7s var(--ease-out) 0.05s backwards; }
 @keyframes mmRadarIn { from { opacity: 0; transform: scale(0.82); } }
@@ -1180,11 +1171,11 @@ body.sk-noscroll { overflow: hidden; } /* lo usa skinReveal.js: no borrar */
   position: relative; contain: layout style;
   display: inline-flex; align-items: center; justify-content: center; gap: 10px 14px; flex-wrap: wrap;
   width: auto; max-width: min(100%, 460px);
-  padding: 8px 18px; border-radius: var(--radius-lg);
+  padding: 7px 18px; border-radius: var(--radius-lg);
   background: var(--mm-stripes), var(--mm-foil);
   background-size: 100% 100%, 220% 220%;
   border: 1.5px solid var(--mm-a); color: var(--mm-ink);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45), 0 0 16px var(--mm-g), inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 -2px 0 rgba(0, 0, 0, 0.25);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4), 0 0 16px var(--mm-g), inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 -2px 0 rgba(0, 0, 0, 0.25);
 }
 .mm.is-fresh .mm-pot { animation: mmRise2 0.6s var(--ease-out) 0.15s backwards; }
 @keyframes mmRise2 { from { opacity: 0; transform: translateY(14px); } }
