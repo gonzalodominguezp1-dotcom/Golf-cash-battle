@@ -155,8 +155,8 @@ los entornos tras la aprobación.
 - [x] Paso 2 — pino (visto bueno del usuario 2026-11-16; sustituido en `environment.js` 2026-11-18, pendiente de verlo en pantalla)
 - [x] Paso 3 — palmera (visto bueno del usuario 2026-11-18; sustituida en `environment.js`)
 - [ ] Paso 4 — arbustos (en laboratorio 2026-11-18, pendiente de visto bueno; aún NO sustituidos en `environment.js`)
-- [ ] Paso 5 — césped
-- [ ] Paso 6 — flores
+- [x] Paso 5 — césped (visto bueno del usuario 2026-11-18; sustituido en `environment.js`, sin commit)
+- [ ] Paso 6 — flores (en laboratorio 2026-11-18, revisadas sin bloqueantes; pendiente de visto bueno y de decidir densidad; NO sustituidas en `environment.js`)
 - [ ] Paso 7 — rocas
 - [ ] Paso 8 — agua
 - [ ] Paso 9 — especiales
@@ -205,5 +205,10 @@ los entornos tras la aprobación.
 - Revisión de contexto limpio: sin bloqueantes. Should-fix corregidos (Sonnet): `dispose` de `InstancedMesh` en el laboratorio y en `addGrass`, test del `.clone()` por campo. Nits abiertos: fundido por distancia y tono ocre sin test; el «antes» del laboratorio usa `preset.grass` y el «después» no.
 - `pnpm test` 404 tests, 399 pasan (5 VFX ajenos). Sin verificar: GLSL en GPU real, subida de la textura no cuadrada con mipmaps propios, vista en pantalla/móvil. Césped aún NO sustituido en `environment.js`/`flora.js`.
 
+(2026-11-18) **Césped sustituido en entornos + Paso 6 flores en laboratorio; sin commit.**
+- Césped: `addGrass` sustituye al viejo (`environment.js`, `env.lod`, `env.dispose`; una línea en `GolfGame.js#buildScene`). `makeTuft`/`makeGrassClump` siguen (lava/caldera y «Antes» del laboratorio; se borran en el Paso F). `tests/grass-env.test.js` 8/8; mutaciones detectadas. Revisión limpia: sin bloqueantes; should-fix (test de `dispose` y tinte) corregido.
+- Flores: `flower.js` (3 especies instanciadas, 3 llamadas de dibujo), `tests/flower.test.js` 16/16, 11 mutaciones detectadas. Triángulos por flor máx. 20/65/100; por campo máx. 3 764/16 040/29 358. Revisión limpia: sin bloqueantes. Should-fix abierto: el campo nuevo saca 3–4,6× más flores que el viejo (Alto 88 vs 29 en el laboratorio) → decidir densidad. Nits: `update(cam)` casi nunca oculta (esfera de todo el campo); `only` no es subconjunto exacto del campo mixto; test de viento no suma la inclinación del tallo.
+- `pnpm test` 423/428 (5 VFX ajenos). Sin verificar: GLSL en GPU real, vista en pantalla/móvil.
+
 ## Next step
-Visto bueno visual del usuario a arbustos y césped en `assets-lab.html`; después sustituir el césped en `environment.js`/`flora.js` y seguir con el Paso 6 (flores).
+Visto bueno visual del usuario a las flores en `assets-lab.html` y decidir su densidad; después sustituirlas en `environment.js` y seguir con el Paso 7 (rocas).
