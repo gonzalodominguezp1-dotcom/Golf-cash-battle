@@ -690,22 +690,37 @@ function paintFlesh(g, w, h, skin) {
     const col = i % 3 ? glow : accent;
     wrap(() => strokeLayers(g, pts, [[col, 30, 0.05], [col, 18, 0.06], [col, 9, 0.06]]));
   }
-  // venas marcadas y ramificadas: halo, cuerpo, núcleo y un brillo central tenue (abultadas)
-  const veinCols = ['#3d3f86', '#4a3a80', '#7a2c4c'];
+  // arrugas verticales: pliegues blandos y largos (meridianos), con degradado que se desvanece arriba y abajo
+  for (const [fx, k] of [[0.16, 1], [0.47, 0.6], [0.83, 1]]) {
+    const x0 = w * fx, y0 = h * 0.16, y1 = h * 0.84, pts = [];
+    for (let y = y0; y <= y1; y += 4) pts.push([x0 + Math.sin(y * 0.045 + fx * 9) * 3.5, y]);
+    const fade = (col) => {
+      const f = g.createLinearGradient(0, y0, 0, y1);
+      f.addColorStop(0, rgba(col, 0));
+      f.addColorStop(0.3, rgba(col, 1));
+      f.addColorStop(0.7, rgba(col, 1));
+      f.addColorStop(1, rgba(col, 0));
+      return f;
+    };
+    const tone = mix(accent, secondary, 0.4);
+    strokeLayers(g, pts, [[fade(tone), 15, 0.07 * k], [fade(tone), 8, 0.1 * k], [fade(tone), 3.5, 0.1 * k]]);
+  }
+  // venas finas y ramificadas, verdosas: halo, cuerpo, núcleo y un brillo central tenue (abultadas)
+  const veinCols = ['#2f5d47', '#3a6046', '#2a5a58'];
   for (let i = 0; i < 4; i++) {
     const col = veinCols[i % 3];
     const x = i < 5 ? w * 0.25 + rnd() * w * 0.5 : rnd() * w;
     const main = meander(x, (0.2 + rnd() * 0.6) * h, rnd() * Math.PI * 2, 9 + Math.floor(rnd() * 6), 6, 0.35);
     const branches = [];
-    for (let b = 0; b < 1; b++) {
-      const k = 3 + Math.floor(rnd() * (main.length - 6));
+    for (let b = 0; b < 3; b++) {
+      const k = 2 + Math.floor(rnd() * (main.length - 4));
       const head = Math.atan2(main[k + 1][1] - main[k - 1][1], main[k + 1][0] - main[k - 1][0]);
       const side = rnd() < 0.5 ? -1 : 1;
-      branches.push(meander(main[k][0], main[k][1], head + side * (0.5 + rnd() * 0.5), 4 + Math.floor(rnd() * 4), 5, 0.4));
+      branches.push(meander(main[k][0], main[k][1], head + side * (0.5 + rnd() * 0.5), 3 + Math.floor(rnd() * 4), 4, 0.4));
     }
     wrap(() => {
-      for (const br of branches) strokeLayers(g, br, [[col, 8, 0.07], [col, 4, 0.3], [col, 2.4, 0.5]]);
-      strokeLayers(g, main, [[col, 13, 0.08], [col, 7.5, 0.3], [col, 4.5, 0.6], [glow, 1.3, 0.12]]);
+      for (const br of branches) strokeLayers(g, br, [[col, 4.5, 0.07], [col, 2.2, 0.3], [col, 1.2, 0.5]]);
+      strokeLayers(g, main, [[col, 7, 0.08], [col, 4, 0.3], [col, 2.4, 0.6], [glow, 0.8, 0.1]]);
     });
   }
   // pelos negros rizados (~300; la mitad cae en el frente que se ve en miniatura)
