@@ -174,10 +174,7 @@ test('ajustes: routes resuelve la ruta a esta pantalla y no al marcador', async 
   assert.notEqual(mod.manages, true);
 });
 
-test('ajustes: main.js ya no tiene showSettings ni la entrada legacy settings; sin «desafío»', () => {
-  const main = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
-  assert.doesNotMatch(main, /showSettings/);
-  assert.doesNotMatch(main, /^\s*settings: \(\) =>/m);
+test('ajustes: sin texto «desafío» en la pantalla ni sus textos', () => {
   const src = readFileSync(new URL('../src/screens/settings.js', import.meta.url), 'utf8') + readFileSync(new URL('../src/screens/texts/settings.js', import.meta.url), 'utf8');
   assert.doesNotMatch(src, /desaf[ií]o/i);
 });

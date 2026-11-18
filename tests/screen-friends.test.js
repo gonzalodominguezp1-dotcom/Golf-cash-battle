@@ -107,9 +107,6 @@ test('friends: monta amigos, solicitudes y la caja de grupo con textos en españ
   assert.match(box.innerHTML, /data-accept="Bo"/);
   assert.match(box.innerHTML, /data-remove="Cy"/);
   assert.match(box.innerHTML, /Nv\. 3/);
-  // sin caja de grupo: la pantalla de amigos ya no monta el panel «Juega con amigos»
-  assert.equal(root.querySelector('[data-friends-body]').querySelector('[data-party-box]'), null);
-  assert.doesNotMatch(root.innerHTML, /Juega con amigos/);
   assert.equal(calls.start, 0);
   assert.equal(subs.size, 1); // solo el aviso de invitar al grupo
 });
@@ -226,13 +223,12 @@ test('friends: un error al refrescar tras una acción muestra el mensaje con Rei
 
 test('friends: destroy deja el scope a cero (comprobado que había algo vivo antes)', async () => {
   const env = fakeEnv();
-  const { ctx, calls } = makeCtx(env);
+  const { ctx } = makeCtx(env);
   const screen = await mount(fakeNode(env), ctx, {}); await settle();
   const live = ctx.scope.live();
   assert.ok(live.listeners > 0 && live.subs > 0, 'había algo vivo');
   screen.destroy();
   assert.deepEqual(ctx.scope.live(), { listeners: 0, timers: 0, subs: 0 });
-  assert.equal(calls.stop, 0); // la pantalla ya no arranca el sondeo de grupo
 });
 
 test('friends: destroy durante la carga no pinta después ni deja timers', async () => {

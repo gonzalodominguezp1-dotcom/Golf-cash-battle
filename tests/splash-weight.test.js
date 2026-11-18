@@ -11,11 +11,6 @@ const LIMIT = 150 * 1024;
 function countScriptInline(text) {
   return text.split('\n').filter((l) => l.includes('<script>') || l.includes('<script type="module">')).length;
 }
-// Equivale a `grep -cE -e "animation[^;]* ([0-9]{1,2}|[12][0-9]{2})ms"` (ciclos < 333 ms).
-function countFastAnimations(text) {
-  const re = /animation[^;]* ([0-9]{1,2}|[12][0-9]{2})ms/;
-  return text.split('\n').filter((l) => re.test(l)).length;
-}
 function styleBlocks(html) {
   return [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join('\n');
 }
@@ -74,12 +69,6 @@ function cycles(css) {
   return out;
 }
 const fastCycles = (css) => cycles(css).filter((c) => c.seconds < MIN_CYCLE_S);
-
-test('ningún animation con ciclo < 333 ms, y el grep puede fallar', () => {
-  assert.equal(countFastAnimations(INDEX), 0);
-  assert.equal(countFastAnimations('a { animation: x 200ms linear infinite; }'), 1);
-  assert.equal(countFastAnimations('a { animation: x 2.4s linear infinite; }'), 0);
-});
 
 test('ningún ciclo de animación < 0,5 s (en segundos y con alternate x2)', () => {
   const css = styleBlocks(INDEX);
