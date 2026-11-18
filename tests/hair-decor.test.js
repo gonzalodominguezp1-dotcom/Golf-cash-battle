@@ -13,11 +13,37 @@ const radii = (geo) => {
 
 test('cada pelo es un tubo: vértices e índices exactos y todo finito', () => {
   const g = fillHairGeometry(new THREE.BufferGeometry(), { count: 50, seed: 3 });
-  assert.equal(g.getAttribute('position').count, 50 * 7 * 4);
-  assert.equal(g.index.count, 50 * 6 * 4 * 6);
-  assert.ok(Array.from(g.getAttribute('position').array).every(Number.isFinite));
-  assert.ok(Array.from(g.getAttribute('normal').array).every(Number.isFinite));
+  assert.equal(g.getAttribute('position').count, 50 * 11 * 4); // 10 tramos (bultito + pelo) x 4 caras
+  assert.equal(g.index.count, 50 * 10 * 4 * 6);
+  assert.equal(g.getAttribute('color').count, g.getAttribute('position').count);
+  for (const k of ['position', 'normal', 'color']) assert.ok(Array.from(g.getAttribute(k).array).every(Number.isFinite), k);
   assert.ok(Math.max(...g.index.array) < g.getAttribute('position').count);
+});
+
+test('muchos pelos no desbordan los índices (Uint32 si hace falta)', () => {
+  const g = fillHairGeometry(new THREE.BufferGeometry(), { count: 1600, seed: 2 });
+  assert.ok(g.getAttribute('position').count > 65535);
+  assert.ok(g.index.array instanceof Uint32Array);
+  let max = 0;
+  for (const i of g.index.array) if (i > max) max = i;
+  assert.ok(max < g.getAttribute('position').count);
+});
+
+test('reparto: se agrupan junto al rafe (x ≈ 0, por delante) y la raíz es color carne, no negra', () => {
+  const n = 400;
+  const g = fillHairGeometry(new THREE.BufferGeometry(), { count: n, seed: 5 });
+  const a = g.getAttribute('position').array, c = g.getAttribute('color').array;
+  let near = 0;
+  for (let i = 0; i < n; i++) {
+    const o = i * 11 * 4 * 3; // centro del anillo 0 (bultito) = raíz
+    let x = 0, y = 0, z = 0;
+    for (let j = 0; j < 4; j++) { x += a[o + j * 3]; y += a[o + j * 3 + 1]; z += a[o + j * 3 + 2]; }
+    const r = Math.hypot(x, y, z);
+    if (Math.abs(x / r) < 0.15 && z / r > -0.2) near++;
+    assert.ok(c[o] > c[o + 3 * 4 * 5], 'la raíz es más clara que el pelo');
+  }
+  // al azar solo caería ~15 % en esa franja; con el rafe, bastante más
+  assert.ok(near / n > 0.3, `junto al rafe: ${near}/${n}`);
 });
 
 test('los pelos SOBRESALEN de la esfera: raíces en la piel y puntas claramente fuera', () => {

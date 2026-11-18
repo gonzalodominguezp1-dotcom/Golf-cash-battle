@@ -85,4 +85,10 @@ test('el shader y la textura 2D de la skin existen', () => {
     if (m[1] === 'Q') continue;
     assert.ok(m[1].toLowerCase() in pattern.quality.high, `SK_${m[1]} sin definir`);
   }
+  // media también compila el shader: todas las calidades definen las mismas constantes (y numéricas)
+  const keys = Object.keys(pattern.quality.high).sort();
+  for (const lvl of ['low', 'medium']) assert.deepEqual(Object.keys(pattern.quality[lvl]).sort(), keys, lvl);
+  for (const lvl of ['low', 'medium', 'high']) for (const k of keys) assert.ok(Number.isFinite(pattern.quality[lvl][k]), `${lvl}.${k}`);
+  // las octavas de fbm y el interruptor `fine` se usan como enteros en el GLSL
+  for (const lvl of ['low', 'medium', 'high']) for (const k of ['tone', 'fine']) assert.ok(Number.isInteger(pattern.quality[lvl][k]), `${lvl}.${k}`);
 });
