@@ -1,5 +1,5 @@
 // Reglas puras del hub (AC10, AC11): anillo de nivel, puntos de novedades y última mesa.
-import { FRAMES } from '../progress/prestige.js';
+import { LEVEL_FRAMES } from '../progress/prestige.js';
 import { t } from './texts/index.js';
 import './texts/hub.js';
 
@@ -91,10 +91,10 @@ export function nudgeVars(name) {
 
 /**
  * Siguiente marco de prestigio por alcanzar: { frame, missing } (niveles que faltan) o null si ya están todos.
- * Cuenta › Progreso lo usa para decir cuánto falta (C2); no inventa nada: los marcos son los de FRAMES.
+ * Cuenta › Progreso lo usa para decir cuánto falta (C2); no inventa nada: los marcos por nivel son los de LEVEL_FRAMES.
  */
 export function nextFrame(level) {
   const n = Number.isFinite(level) ? level : 0;
-  const frame = FRAMES.find((f) => f.level > n);
+  const frame = LEVEL_FRAMES.find((f) => f.level > n);
   return frame ? { frame, missing: frame.level - n } : null;
 }

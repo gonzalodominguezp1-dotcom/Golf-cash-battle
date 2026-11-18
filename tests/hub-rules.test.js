@@ -49,13 +49,13 @@ test('lastTier: mesa inexistente o almacenamiento roto devuelve null', () => {
   assert.doesNotThrow(() => rememberTier(bad, 'gold'));
 });
 
-test('nextFrame: siguiente marco y niveles que faltan; null con todos los marcos', async () => {
+test('nextFrame: siguiente marco por nivel y niveles que faltan; null con todos', async () => {
   const { nextFrame } = await import('../src/screens/hubRules.js');
-  const { FRAMES } = await import('../src/progress/prestige.js');
-  assert.deepEqual(nextFrame(1), { frame: FRAMES[0], missing: 24 });
-  assert.deepEqual(nextFrame(24), { frame: FRAMES[0], missing: 1 });
-  assert.deepEqual(nextFrame(25), { frame: FRAMES[1], missing: 25 }); // en el nivel justo ya se tiene ese marco
-  assert.deepEqual(nextFrame(149), { frame: FRAMES.at(-1), missing: 1 });
+  const { LEVEL_FRAMES } = await import('../src/progress/prestige.js');
+  assert.deepEqual(nextFrame(1), { frame: LEVEL_FRAMES[0], missing: 4 });
+  assert.deepEqual(nextFrame(4), { frame: LEVEL_FRAMES[0], missing: 1 });
+  assert.deepEqual(nextFrame(5), { frame: LEVEL_FRAMES[1], missing: 10 }); // en el nivel justo ya se tiene ese marco
+  assert.deepEqual(nextFrame(149), { frame: LEVEL_FRAMES.at(-1), missing: 1 });
   assert.equal(nextFrame(150), null);
   assert.equal(nextFrame(999), null);
 });

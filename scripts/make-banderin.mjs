@@ -3,7 +3,7 @@
 // Uso (desde la raíz del proyecto):  pnpm banderin:make
 // Requiere Node >=22 (WebSocket y fetch globales) y Chrome/Edge (o CHROME_PATH).
 //
-// Dibuja el banderín como SVG (forma, degradado, pliegues, ribete, anillas) con public/logo.png REAL incrustado
+// Dibuja el banderín como SVG (forma, degradado, pliegues, ribete, anillas) con scripts/assets/logo.png REAL incrustado
 // (sin deformarlo) y lo renderiza con Chrome headless por CDP con fondo transparente.
 // Escribe public/hub/banderin.webp (1024x640, alfa, <=60 KB) y
 // 02-DOCS/attachments/ui-pantallas/banderin-boceto.png (el banderín sobre hub-fallback.webp a 375x812 y 1280x800).
@@ -240,7 +240,7 @@ try {
     await sleep(200);
   }
 
-  const logo = `data:image/png;base64,${(await readFile(resolve(root, 'public/logo.png'))).toString('base64')}`;
+  const logo = `data:image/png;base64,${(await readFile(resolve(root, 'scripts/assets/logo.png'))).toString('base64')}`;
   const svg = bannerSvg(logo);
   if (process.env.BANDERIN_SVG) await writeFile(process.env.BANDERIN_SVG, svg);
 

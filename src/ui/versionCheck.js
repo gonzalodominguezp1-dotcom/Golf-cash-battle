@@ -13,8 +13,31 @@ import {
 /** Id de build de esta página (lo define vite.config.js); en desarrollo no existe. */
 const PAGE_BUILD = typeof __APP_BUILD__ === 'string' ? __APP_BUILD__ : null;
 
-function showUpdateBanner() {
+/** Segundos de cuenta atrás antes de recargar la página con la versión nueva. */
+const VERSION_COUNTDOWN_SECONDS = 5;
+
+/** Clave de sessionStorage: build por la que esta pestaña ya recargó (evita bucles de recarga). */
+const RELOAD_KEY = 'golf-version-reloaded-for';
+
+function alreadyReloadedFor(build) {
+  try {
+    return sessionStorage.getItem(RELOAD_KEY) === build;
+  } catch {
+    return false;
+  }
+}
+
+function markReloadedFor(build) {
+  try {
+    sessionStorage.setItem(RELOAD_KEY, build);
+  } catch {
+    // sin almacenamiento: el peor caso es recargar una vez más, no un bucle infinito
+  }
+}
+
+function showUpdateBanner(info) {
   if (document.getElementById('version-banner')) return;
+  if (alreadyReloadedFor(info.build)) return;
   const box = document.createElement('div');
   box.id = 'version-banner';
   box.setAttribute('role', 'status');
@@ -36,22 +59,20 @@ function showUpdateBanner() {
     boxShadow: '0 6px 24px rgba(0, 0, 0, 0.35)',
   });
   const text = document.createElement('span');
-  text.textContent = t('version.title');
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.textContent = t('version.reload');
-  Object.assign(btn.style, {
-    border: '0',
-    borderRadius: '8px',
-    padding: '8px 14px',
-    background: '#f5c542',
-    color: '#16202a',
-    font: 'inherit',
-    cursor: 'pointer',
-  });
-  btn.addEventListener('click', () => location.reload());
-  box.append(text, btn);
+  let left = VERSION_COUNTDOWN_SECONDS;
+  text.textContent = `${t('version.title')} ${left}`;
+  box.append(text);
   document.body.append(box);
+  const tick = setInterval(() => {
+    left -= 1;
+    if (left > 0) {
+      text.textContent = `${t('version.title')} ${left}`;
+      return;
+    }
+    clearInterval(tick);
+    markReloadedFor(info.build);
+    location.reload();
+  }, 1000);
 }
 
 /**

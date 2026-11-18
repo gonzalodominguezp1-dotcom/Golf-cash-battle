@@ -4,6 +4,7 @@ import './screens/hub.css';
 import './screens/tables.css';
 import './screens/friends.css';
 import './screens/ranking.css';
+import './screens/novedades.css';
 import './screens/skins.css';
 import './screens/skinInspect.css';
 import './screens/account.css';
@@ -32,6 +33,7 @@ import { buildRoster, humanLeaders, liveStandings, seededRng } from './match/liv
 import { notify } from './ui/notifyPopup.js';
 import { createNotifier } from './ui/notifier.js';
 import { createPartyWatch } from './match/partyWatch.js';
+import { startPresence } from './account/presence.js';
 import { createScope } from './screens/lifecycle.js';
 import { icon, iconUrl } from './ui/icons.js';
 import { mountMatchmakingBanner } from './ui/matchmakingBanner.js';
@@ -50,6 +52,7 @@ import { createNavigator } from './screens/navigate.js';
 import { createGoHome } from './screens/playLifecycle.js';
 import { createThumbs } from './screens/skinThumbsHook.js';
 import { getQuality } from './game/render/quality.js';
+import { isSkinLabRequested } from './game/render/perfGovernor.js';
 import { createBoot, createHubPreloader, trackProgress, waitPainted } from './ui/splashBridge.js';
 import { mountNetStats } from './ui/netStats.js';
 import { startVersionCheck } from './ui/versionCheck.js';
@@ -1544,10 +1547,7 @@ export function showFreePlayHoleResult(courseIndex, course, strokes) {
 }
 
 installThumbObserver(app, (id) => progress.instance(id));
-let skinLab = false;
-try {
-  skinLab = new URLSearchParams(location.search).get('skinlab') === '1';
-} catch { }
+const skinLab = isSkinLabRequested();
 if (skinLab) {
   app.innerHTML = '';
   loadSkinInspector().then(({ mountSkinLab }) => mountSkinLab(app));
@@ -1583,7 +1583,11 @@ if (skinLab) {
       };
       addEventListener('pagehide', sendSettings);
       settings.hydrate(b.account.profile?.settings, b.user.id);
-      progress.attach(b.user.id, b.account.profile?.progress, (s) => b.account.saveProgress(s), (id) => b.account.setFrame(id));
+      progress.attach(b.user.id, b.account.profile?.progress, (s) => b.account.saveProgress(s), async (id) => {
+        // los marcos de reto se validan con las estadísticas guardadas en el servidor: se sincronizan antes
+        await b.account.saveProgress(progress.state).catch(() => {});
+        return b.account.setFrame(id);
+      });
       // hitos de ranking y marco elegido: pueden desbloquear bolas, que se ofrecen al acabar la próxima partida
       b.account.myRanking().then((r) => progress.setServerStats(r)).catch(() => {});
     }
@@ -1668,6 +1672,7 @@ function startRouting(b) {
 // y se enseña un aviso de 5 s. (notify() sirve para cualquier otro aviso.)
 
 // TODO(F3): notifier y partyWatch sondean ambos parties.mine() con el lobby abierto; compartir el resultado cuando el hub unifique el sondeo.
+let stopPresence = null; // latido de conexión: lo usa Mesas para invitar solo a amigos conectados
 function startNotices(b) {
   if (!b.account) return;
   notifier = createNotifier({
@@ -1684,6 +1689,8 @@ function startNotices(b) {
     },
   });
   notifier.start();
+  stopPresence?.();
+  stopPresence = startPresence(b.account);
 }
 
 function startPartyWatch(b) {

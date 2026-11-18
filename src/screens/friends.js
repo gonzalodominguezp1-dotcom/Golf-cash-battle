@@ -1,9 +1,9 @@
 // Amigos y grupo (T030): el panel de amigos y el de grupo que vivían en main.js, ahora como pantalla del router.
 // Los amigos se añaden por nombre de usuario y la otra persona acepta o rechaza. El CSS (friends.css) lo importa el arranque.
-import { addedMessage, cleanFriendName, friendMessage } from '../account/friendRules.js';
+import { addedMessage, cleanFriendName, friendMessage, sortOnlineFirst } from '../account/friendRules.js';
 import { frameById } from '../progress/prestige.js';
 import { fromWire } from '../progress/avatar.js';
-import { bindHeader, bindLobby, header, listState, lobbyButton } from './components.js';
+import { bindHeader, bindLobby, listState, lobbyButton } from './components.js';
 import { computeLocks } from './hubRules.js';
 import { avatarHtml, esc } from './shared.js';
 import { t } from './texts/index.js';
@@ -18,7 +18,8 @@ export async function mount(root, ctx) {
   const scope = ctx.scope.child(); // todo lo de la pantalla cuelga de aquí: destroy lo libera entero
   const icon = (n, o = {}) => ctx.icon(n, o);
   const account = backend?.account;
-  let gone = false, run = 0, sc = null, onGroupMsg = null; // sc: scope de lo pintado; onGroupMsg: muestra el aviso de grupo en la lista
+  let gone = false, run = 0, sc = null; // sc: scope de lo pintado
+  let onGroupMsg = null, onGroupState = null; // avisos y cambios de grupo (partyWatch): los pinta la lista de amigos abierta
 
   // mismos requisitos y mensajes que el hub (accesos bloqueados): invitado, sin nombre de usuario o sin conexión
   const locked = computeLocks({
@@ -35,7 +36,7 @@ export async function mount(root, ctx) {
   function shell(innerHtml) {
     sc?.dispose();
     sc = scope.child();
-    root.innerHTML = `<main class="screen friends">${header({ title: t('friends.title') })}<div class="friends-body" data-friends-body="1">${innerHtml}</div>${lobbyButton()}</main>`;
+    root.innerHTML = `<main class="screen friends"><div class="friends-body" data-friends-body="1">${innerHtml}</div>${lobbyButton()}</main>`;
     bindHeader(root, { ...ctx, scope: sc });
     bindLobby(root, { ...ctx, scope: sc });
     return root.querySelector('[data-friends-body]');
@@ -54,13 +55,17 @@ export async function mount(root, ctx) {
   // amigos: se añaden por nombre de usuario y la otra persona acepta o rechaza
   function friendsPanel(box, badge, data0) {
     let psc = null, reads = 0; // reads: solo la última lectura pinta; una respuesta vieja tardía no pisa a la nueva
+    let lastData = null, lastInvites = null; // última lectura y última lista de invitaciones pintada
     const paint = (data, msg = '', isErr = false) => {
       psc?.dispose();
       psc = sc.child();
+      lastData = data;
+      const inv = ctx.partyWatch?.state?.invites ?? [];
+      lastInvites = JSON.stringify(inv);
       badge.textContent = `${data.friends.length} ${t(data.friends.length === 1 ? 'friends.one' : 'friends.many')}`;
       const row = (f) => `<li class="friend">
         ${avatarHtml({ size: 'sm', frame: frameById(f.frame), av: fromWire(f.avatar), initial: f.name })}
-        <span class="friend-name"><b>${esc(f.name)}</b><small>${esc(t('friends.level', { n: f.level }))}</small></span>
+        <span class="friend-name"><span class="friend-who">${f.online === true ? `<i class="online-dot" role="img" aria-label="${esc(t('friends.online'))}" title="${esc(t('friends.online'))}"></i>` : ''}<b>${esc(f.name)}</b></span><small>${esc(t('friends.level', { n: f.level }))}</small></span>
         <span class="friend-actions"><button class="chip-btn" data-invite="${esc(f.name)}">${icon('user-plus')}${esc(t('friends.invite'))}</button><button class="chip-btn" data-remove="${esc(f.name)}">${icon('trash')}${esc(t('friends.remove'))}</button></span>
       </li>`;
       const asks = (list, buttons) => list.map((r) => `<li class="friend">
@@ -71,8 +76,12 @@ export async function mount(root, ctx) {
         <div class="row"><input name="name" data-friend-input="1" maxlength="17" placeholder="${esc(t('friends.namePlaceholder'))}" autocomplete="off" autocapitalize="off" spellcheck="false"><button class="primary" data-friend-submit="1">${icon('plus')}${esc(t('friends.add'))}</button></div>
         <p class="friend-msg ${isErr ? 'err' : 'ok'}" role="status" data-friend-msg="1">${esc(msg)}</p>
       </form>
-      ${data.incoming.length ? `<h3 class="friends-sub">${esc(t('friends.incoming'))}</h3><ul class="friend-list">${asks(data.incoming, (n) => `<span class="friend-actions"><button class="chip-btn" data-accept="${n}">${icon('check')}${esc(t('friends.accept'))}</button><button class="chip-btn" data-decline="${n}">${icon('close')}${esc(t('friends.decline'))}</button></span>`)}</ul>` : ''}
-      ${data.friends.length ? `<ul class="friend-list">${data.friends.map(row).join('')}</ul>` : `<p class="sub">${esc(t('friends.none'))}</p>`}
+      ${inv.length ? `<h3 class="friends-sub">${esc(t('friends.invitesTitle'))}</h3><ul class="friend-list">${inv.map((i) => `<li class="friend">
+        <span class="friend-name"><b>${esc(i.from)}</b><small>${esc(t('friends.invitesYou'))}</small></span>
+        <span class="friend-actions"><button class="chip-btn btn-accept" data-join="${esc(i.party)}">${icon('check')}${esc(t('friends.join'))}</button><button class="chip-btn btn-decline" data-no="${esc(i.party)}">${icon('close')}${esc(t('friends.no'))}</button></span>
+      </li>`).join('')}</ul>` : ''}
+      ${data.incoming.length ?`<h3 class="friends-sub">${esc(t('friends.incoming'))}</h3><ul class="friend-list">${asks(data.incoming, (n) => `<span class="friend-actions"><button class="chip-btn" data-accept="${n}">${icon('check')}${esc(t('friends.accept'))}</button><button class="chip-btn" data-decline="${n}">${icon('close')}${esc(t('friends.decline'))}</button></span>`)}</ul>` : ''}
+      ${data.friends.length ? `<ul class="friend-list">${sortOnlineFirst(data.friends).map(row).join('')}</ul>` : `<p class="sub">${esc(t('friends.none'))}</p>`}
       ${data.outgoing.length ? `<h3 class="friends-sub">${esc(t('friends.outgoing'))}</h3><ul class="friend-list">${asks(data.outgoing, (n) => `<button class="chip-btn" data-remove="${n}">${icon('close')}${esc(t('friends.cancel'))}</button>`)}</ul>` : ''}`;
       const act = (name, job, ok) => async () => {
         try {
@@ -90,7 +99,18 @@ export async function mount(root, ctx) {
         const name = b.dataset.invite;
         ctx.partyWatch?.apply(() => backend.parties.invite(name), t('friends.inviteSent', { name }));
       });
+      for (const b of box.querySelectorAll('[data-join]')) psc.on(b, 'click', () => ctx.partyWatch?.apply(() => backend.parties.respond(b.dataset.join, true)));
+      for (const b of box.querySelectorAll('[data-no]')) psc.on(b, 'click', () => ctx.partyWatch?.apply(() => backend.parties.respond(b.dataset.no, false)));
       onGroupMsg = (m) => refresh(m);
+      // invitaciones nuevas o retiradas: se repinta solo si cambia la lista, y se conserva lo escrito en el campo
+      onGroupState = () => {
+        const inv = JSON.stringify(ctx.partyWatch?.state?.invites ?? []);
+        if (!lastData || inv === lastInvites) return;
+        const keep = box.querySelector('[data-friend-input]')?.value ?? '';
+        paint(lastData);
+        const input = box.querySelector('[data-friend-input]');
+        if (input) input.value = keep;
+      };
       const input = box.querySelector('[data-friend-input]');
       psc.on(box.querySelector('[data-friend-form]'), 'submit', async (e) => {
         e.preventDefault?.();
@@ -146,16 +166,24 @@ export async function mount(root, ctx) {
     paintReady(data);
   }
 
-  // avisos de invitar al grupo (partyWatch): solo se pintan si la lista de amigos está en pantalla
-  if (ctx.partyWatch) scope.sub(ctx.partyWatch.subscribe((_, info) => { if (!gone && info?.msg) onGroupMsg?.(info.msg); }));
+  // grupo (partyWatch): invitaciones que llegan o se retiran, y avisos de Invitar / Aceptar / Rechazar
+  if (ctx.partyWatch) scope.sub(ctx.partyWatch.subscribe((_, info) => {
+    if (gone) return;
+    if (info?.msg) onGroupMsg?.(info.msg);
+    else onGroupState?.();
+  }));
 
   if (locked) paintLocked();
-  else load(); // sin esperar: el host serializa los montajes y una red lenta no debe bloquear «Atrás»
+  else {
+    ctx.partyWatch?.start(); // sondea las invitaciones de grupo mientras esta pantalla está abierta
+    load(); // sin esperar: el host serializa los montajes y una red lenta no debe bloquear «Atrás»
+  }
   return {
     title: t('friends.title'),
     destroy() {
       gone = true;
       run++;
+      ctx.partyWatch?.stop?.();
       scope.dispose();
     },
   };

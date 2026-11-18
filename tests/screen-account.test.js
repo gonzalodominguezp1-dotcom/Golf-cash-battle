@@ -6,7 +6,7 @@ import { createScope } from '../src/screens/lifecycle.js';
 import { mount as mountAccount, tabModules } from '../src/screens/account.js';
 import { mount as mountProfile } from '../src/screens/account/profile.js';
 import { openAvatarEditor } from '../src/screens/avatarEditor.js';
-import { FRAMES } from '../src/progress/prestige.js';
+import { FRAMES, framesUnlocked } from '../src/progress/prestige.js';
 
 // Nodo falso: reconoce [data-x] y [data-x="v"] sobre su HTML y devuelve elementos estables; las cajas son nodos hijos.
 // Modela los atributos disabled/type/required/maxlength del HTML y registra en SINKS todo lo que se escribe en el DOM.
@@ -86,7 +86,7 @@ function makeCtx(env, over = {}, profileOver = {}) {
     backend: { mode: 'remote', account },
     progress: {
       get level() { calls.levelReads++; return { level: 30, into: 10, need: 100 }; },
-      get prestige() { return { frame: state.frame }; },
+      get prestige() { return { frame: state.frame, unlocked: framesUnlocked(30) }; },
       state: { wins: 2, matches: 5 },
       isUnlocked: () => false, challenge: () => ({ done: false }),
       equipFrame: (id) => { calls.equip.push(id); state.frame = FRAMES.find((x) => x.id === id) ?? null; return true; },
@@ -373,15 +373,15 @@ test('account/perfil: equipar un marco lo aplica y REPINTA; un marco bloqueado p
   const screen = await mountProfile(root, ctx);
   await settle();
   assert.match(root.innerHTML, /panel-badge pending">Sin marco/);
-  assert.equal(root.querySelector('[data-frame="p50"]').disabled, true);
-  assert.equal(root.querySelector('[data-frame="p25"]').disabled, false);
-  root.querySelector('[data-frame="p50"]').emit('click');
+  assert.equal(root.querySelector('[data-frame="f_toxic"]').disabled, true);
+  assert.equal(root.querySelector('[data-frame="f_cyber"]').disabled, false);
+  root.querySelector('[data-frame="f_toxic"]').emit('click');
   assert.deepEqual(calls.equip, []);
   const before = calls.levelReads;
-  root.querySelector('[data-frame="p25"]').emit('click');
-  assert.deepEqual(calls.equip, ['p25']);
+  root.querySelector('[data-frame="f_cyber"]').emit('click');
+  assert.deepEqual(calls.equip, ['f_cyber']);
   assert.ok(calls.levelReads > before, 'repintó');
-  assert.match(root.innerHTML, /panel-badge verified">Bronce/);
+  assert.match(root.innerHTML, /panel-badge verified">Neón cíber/);
   screen.destroy();
 });
 
@@ -391,10 +391,10 @@ test('account/perfil: tras muchos repintados no se acumulan listeners (el scope 
   const { ctx } = makeCtx(env);
   const screen = await mountProfile(root, ctx);
   await settle();
-  root.querySelector('[data-frame="p25"]').emit('click');
+  root.querySelector('[data-frame="f_cyber"]').emit('click');
   const base = ctx.scope.live();
   assert.ok(base.listeners > 0, 'había algo vivo');
-  for (let i = 0; i < 6; i++) root.querySelector('[data-frame="p25"]').emit('click');
+  for (let i = 0; i < 6; i++) root.querySelector('[data-frame="f_cyber"]').emit('click');
   assert.deepEqual(ctx.scope.live(), base);
   screen.destroy();
   assert.deepEqual(ctx.scope.live(), { listeners: 0, timers: 0, subs: 0 });
@@ -435,7 +435,7 @@ test('account/perfil: XSS: con el formulario de renombrar abierto el nombre no r
     await settle();
     root.querySelector('[data-rename]').emit('click');
     const all = root.all();
-    assert.doesNotMatch(all, /<img/);
+    assert.doesNotMatch(all, /<img(?! class="pf-art")/); // la única imagen permitida es la capa del marco
     assert.doesNotMatch(all, /value="[^"]*"\s+autofocus/);
     for (const [tag] of all.matchAll(/<[^>]*>/g)) assert.doesNotMatch(tag.replace(/="[^"]*"/g, '=""'), /\son(focus|error|mouseover)=|\sautofocus[\s>=]/); // como atributo nunca; dentro de un value va escapado
     const value = root.querySelector('[data-rename-box]').innerHTML.match(/value="([^"]*)"/)[1];

@@ -148,15 +148,23 @@ export class Progress {
   /** Marcos de prestigio alcanzados y el que se luce ahora (null si aún no hay ninguno). */
   get prestige() {
     const level = this.level.level;
-    return { unlocked: framesUnlocked(level), frame: frameFor(level, this.state.framePick) };
+    const done = (id) => this.challenge(id).done;
+    return { unlocked: framesUnlocked(level, done), frame: frameFor(level, this.state.framePick, done) };
   }
 
   /** Elige el marco que se luce. save(id) lo guarda en la cuenta; id desconocido o sin alcanzar no vale. */
   equipFrame(id) {
-    if (!framesUnlocked(this.level.level).some((f) => f.id === id)) return false;
+    if (!this.prestige.unlocked.some((f) => f.id === id)) return false;
+    const before = this.state.framePick;
     this.state.framePick = id;
     this.#persistLocal();
-    this.frameSaver?.(id)?.catch?.(() => {});
+    // si el servidor no lo guarda, se vuelve al marco anterior: si no, el siguiente my_ranking lo pisaría sin avisar
+    this.frameSaver?.(id)?.catch?.((err) => {
+      if (this.state.framePick !== id) return;
+      this.state.framePick = before;
+      this.#persistLocal();
+      this.onFrameSaveError?.(err);
+    });
     return true;
   }
 

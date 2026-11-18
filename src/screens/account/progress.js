@@ -1,10 +1,10 @@
 // Cuenta › Progreso (T036): nivel y XP, marco actual y siguiente, y estadísticas reales de progress.state.
 // Solo lee: no cambia economía ni guarda nada. mount no bloquea: pinta «Cargando» y devuelve { destroy } al momento.
 import './progress.css';
-import { frameStyle } from '../../progress/prestige.js';
+import { FRAMES, frameStyle } from '../../progress/prestige.js';
 import { listState } from '../components.js';
 import { nextFrame } from '../hubRules.js';
-import { esc } from '../shared.js';
+import { avatarHtml, esc } from '../shared.js';
 import { t } from '../texts/index.js';
 import '../texts/common.js';
 import '../texts/progress.js';
@@ -61,6 +61,17 @@ export function mount(el, ctx) {
          <p class="pg-sub" data-progress-next="1">${esc(t('progress.nextUnlocks', { level: nxt.frame.level }))} · ${esc(nxt.missing === 1 ? t('progress.nextMissingOne') : t('progress.nextMissing', { missing: nxt.missing }))}</p>
          ${bar(nextPct, t('progress.nextBarLabel'))}`
       : `<p class="pg-sub" data-progress-next="1">${esc(t('progress.allFrames'))}</p>`;
+    const av = ctx.avatar?.get?.() ?? null;
+    const have = new Set((progress.prestige?.unlocked ?? []).map((f) => f.id));
+    const owned = have.size;
+    const gallery = FRAMES.map((f) => {
+      const open = have.has(f.id);
+      const req = f.level != null ? t('progress.frameLevel', { level: f.level }) : t('progress.frameChallenge', { name: progress.challenge?.(f.challenge)?.name ?? f.challenge });
+      const status = open ? t('progress.frameOwned') : (f.level != null ? t('progress.frameLocked', { level: f.level }) : req);
+      return `<li class="pg-frame-item ${open ? 'open' : 'locked'} ${cur?.id === f.id ? 'on' : ''}" data-frame-item="${esc(f.id)}" style="${frameStyle(f)}" aria-label="${esc(f.name)}: ${esc(status)}">
+            ${avatarHtml({ size: 'xs', frame: f, av, initial: '?' })}<b>${esc(f.name)}</b><small>${esc(req)}${open ? '' : ' · 🔒'}</small>
+          </li>`;
+    }).join('');
     listState(el, { state: 'ready' });
     el.innerHTML = `
       <section class="pg" data-progress="1">
@@ -82,6 +93,10 @@ export function mount(el, ctx) {
         <div class="pg-next">
           <p class="pg-kicker">${esc(t('progress.nextFrameTitle'))}</p>
           ${nextBlock}
+        </div>
+        <div class="pg-gallery" data-progress-gallery="1">
+          <h2 class="pg-stats-title">${esc(t('progress.galleryTitle'))} <span class="pg-gallery-count" data-progress-owned="1">${owned}/${FRAMES.length}</span></h2>
+          <ul class="pg-frames">${gallery}</ul>
         </div>
         <div class="pg-stats-wrap">
           <h2 class="pg-stats-title">${esc(t('progress.statsTitle'))}</h2>

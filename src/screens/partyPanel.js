@@ -2,6 +2,7 @@
 // uno pulsa «Listo» y el servidor los mete juntos en el mismo torneo. Se consulta cada pocos segundos mientras se ve.
 import { TIERS } from '../config.js';
 import { partyErrorText, readyLabel } from '../match/partyRules.js';
+import { sortOnlineFirst } from '../account/friendRules.js';
 import { frameById } from '../progress/prestige.js';
 import { fromWire } from '../progress/avatar.js';
 import { avatarHtml, coin, esc } from './shared.js';
@@ -59,11 +60,12 @@ export function mountPartyPanel(box, tierList, balance, ctx, { friends: given } 
       </li>`).join('');
     const inParty = new Set([...(p?.members ?? []).map((m) => m.name.toLowerCase()), ...(p?.invited ?? []).map((n) => n.toLowerCase())]);
     const room = p ? p.size - p.members.length - p.invited.length : 3;
-    const candidates = (friends ?? []).filter((f) => !inParty.has(f.name.toLowerCase())).slice(0, 6);
+    // solo los amigos conectados ahora (latido de presencia): sin conexión no se invita ni se forma grupo
+    const candidates = sortOnlineFirst((friends ?? []).filter((f) => f.online === true && !inParty.has(f.name.toLowerCase()))).slice(0, 6);
     const friendRows = room > 0 && candidates.length
       ? `<ul class="friend-list">${candidates.map((f) => `<li class="friend">
           ${avatarHtml({ size: 'sm', frame: frameById(f.frame), av: fromWire(f.avatar), initial: f.name })}
-          <span class="friend-name"><b>${esc(f.name)}</b><small>${esc(t('friends.level', { n: f.level }))}</small></span>
+          <span class="friend-name"><span class="friend-who">${f.online === true ? `<i class="online-dot" role="img" aria-label="${esc(t('friends.online'))}" title="${esc(t('friends.online'))}"></i>` : ''}<b>${esc(f.name)}</b></span><small>${esc(t('friends.level', { n: f.level }))}</small></span>
           <button class="chip-btn" data-invite="${esc(f.name)}">${icon('user-plus')}${esc(t('friends.invite'))}</button>
         </li>`).join('')}</ul>`
       : '';
@@ -76,7 +78,9 @@ export function mountPartyPanel(box, tierList, balance, ctx, { friends: given } 
         ${inviteRows ? `<ul class="friend-list">${inviteRows}</ul>` : ''}
         <p class="sub">${esc(t('friends.partyInvite'))}</p>
         ${friends === null ? `<p class="sub">${esc(t('friends.loadingFriends'))}</p>` : friendRows || (tierList
-          ? `<p class="sub">${esc(t('friends.noFriendsParty'))}</p><button class="chip-btn" data-go="account">${icon('user-plus')}${esc(t('friends.addFriends'))}</button>`
+          ? (friends.length
+            ? `<p class="sub" data-no-online="1">${esc(t('friends.noOnlineFriends'))}</p>`
+            : `<p class="sub">${esc(t('friends.noFriendsParty'))}</p><button class="chip-btn" data-go="account">${icon('user-plus')}${esc(t('friends.addFriends'))}</button>`)
           : `<p class="sub">${esc(t('friends.noFriendsHere'))}</p>`)}`;
     } else {
       const members = p.members.map((m) => `<li class="party-member ${m.ready ? 'ready' : ''}">
@@ -120,6 +124,16 @@ export function mountPartyPanel(box, tierList, balance, ctx, { friends: given } 
       friends = d.friends;
       paint(partyWatch.state);
     }).catch(() => { friends = []; });
+  }
+  // en Mesas, quién está conectado cambia mientras se mira: la lista de amigos se relee cada 30 s
+  if (hasName && tierList) {
+    scope.interval(() => {
+      backend.account.friends().then((d) => {
+        if (gone) return;
+        friends = d.friends;
+        paint(partyWatch.state);
+      }).catch(() => {});
+    }, 30000);
   }
 
   partyWatch.state = null;

@@ -1,0 +1,92 @@
+{
+  "f_rustic": {
+    "hole": 0.6101,
+    "hd": 37032,
+    "thumb": 8336
+  },
+  "f_scifi": {
+    "hole": 0.6168,
+    "hd": 37622,
+    "thumb": 7444
+  },
+  "f_emperor": {
+    "hole": 0.3999,
+    "hd": 34894,
+    "thumb": 7514
+  },
+  "f_arcane": {
+    "hole": 0.4856,
+    "hd": 37636,
+    "thumb": 10126
+  },
+  "f_void": {
+    "hole": 0.4517,
+    "hd": 40666,
+    "thumb": 10458
+  },
+  "f_phoenix": {
+    "hole": 0.4414,
+    "hd": 37744,
+    "thumb": 9592
+  },
+  "f_thunder": {
+    "hole": 0.4475,
+    "hd": 39588,
+    "thumb": 10918
+  },
+  "f_vortex": {
+    "hole": 0.5,
+    "hd": 38768,
+    "thumb": 11080
+  },
+  "f_astral": {
+    "hole": 0.4257,
+    "hd": 40626,
+    "thumb": 8402
+  },
+  "f_cyber": {
+    "hole": 0.5684,
+    "hd": 32264,
+    "thumb": 7996
+  },
+  "f_magma": {
+    "hole": 0.4971,
+    "hd": 38920,
+    "thumb": 10456
+  },
+  "f_sakura": {
+    "hole": 0.5372,
+    "hd": 38780,
+    "thumb": 9254
+  },
+  "f_frost": {
+    "hole": 0.4756,
+    "hd": 39566,
+    "thumb": 11196
+  },
+  "f_toxic": {
+    "hole": 0.5146,
+    "hd": 39888,
+    "thumb": 10514
+  },
+  "f_oni": {
+    "hole": 0.5244,
+    "hd": 38618,
+    "thumb": 11924
+  },
+  "f_roulette": {
+    "hole": 0.5211,
+    "hd": 37488,
+    "thumb": 9048
+  },
+  "f_pharaoh": {
+    "hole": 0.4978,
+    "hd": 39030,
+    "thumb": 8728
+  },
+  "f_kraken": {
+    "hole": 0.4916,
+    "hd": 38912,
+    "thumb": 10148
+  }
+}
