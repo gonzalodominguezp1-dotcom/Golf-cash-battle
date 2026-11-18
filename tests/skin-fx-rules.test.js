@@ -7,7 +7,7 @@ import {
 } from '../src/game/render/skins/fxRules.js';
 import { SKIN_SIG } from '../src/game/render/skins/skinFx.js';
 
-test('E1: sin maxParticles el limite es el del nivel (skins actuales intactas)', () => {
+test('sin maxParticles el tope es el del nivel (las skins actuales no cambian)', () => {
   for (const [name, n] of [['low', 40], ['medium', 120], ['high', 300]]) {
     assert.equal(particleLimit(n, name, undefined), n);
     assert.ok(continuousOpen(n, n, undefined));
@@ -15,7 +15,7 @@ test('E1: sin maxParticles el limite es el del nivel (skins actuales intactas)',
   assert.equal(trailRate(undefined, 6), 22);
 });
 
-test('E1: maxParticles acota y en baja se reduce a la mitad hacia arriba', () => {
+test('maxParticles acota el tope y en baja calidad se reduce a la mitad', () => {
   assert.equal(particleLimit(300, 'high', 20), 20);
   assert.equal(particleLimit(120, 'medium', 20), 20);
   assert.equal(particleLimit(40, 'low', 20), 10);
@@ -23,18 +23,18 @@ test('E1: maxParticles acota y en baja se reduce a la mitad hacia arriba', () =>
   assert.equal(particleLimit(10, 'high', 20), 10); // nunca sube el del nivel
 });
 
-test('E1: los continuos solo ocupan la mitad del tope', () => {
+test('los efectos continuos solo ocupan la mitad del tope', () => {
   assert.equal(continuousOpen(9, 20, 20), true);
   assert.equal(continuousOpen(10, 20, 20), false);
   assert.equal(continuousOpen(0, 10, 20), true);
 });
 
-test('E1: trailRate propio o por defecto 10 + 2*speed', () => {
+test('trailRate propio o por defecto 10 + 2*speed', () => {
   assert.equal(trailRate(6, 12), 6);
   assert.equal(trailRate(0, 12), 34);
 });
 
-test('E2: bandera, rafagas a la mitad y hora fija', () => {
+test('con la bandera, las ráfagas van a la mitad y la hora es fija', () => {
   setReducedMotionForTests(true);
   assert.equal(reducedMotion(), true);
   setReducedMotionForTests(false);
@@ -52,7 +52,7 @@ test('el tiempo fijo coincide con el de las miniaturas', () => {
   assert.match(readFileSync(new URL('../src/ui/skinThumbRender.js', import.meta.url), 'utf8'), /handle\.update\(1\.2,/);
 });
 
-test('E3: event_horizon usa attractSink y SkinFX ya no lo compara por id', () => {
+test('event_horizon usa attractSink; SkinFX ya no lo compara por id', () => {
   const src = readFileSync(new URL('../src/game/render/skins/skinFx.js', import.meta.url), 'utf8');
   assert.match(src, /attractSink: true/);
   assert.doesNotMatch(src, /skin\.id === 'event_horizon'\s*\?|skin\.id === 'event_horizon'\) \{\s*this\.particles/);
@@ -67,7 +67,7 @@ test('las skins anteriores a la colección nueva no definen los campos nuevos', 
   }
 });
 
-test('E2: golpe sin soft (tormenta) ni glyph (cronometro) solo con la bandera', () => {
+test('golpe sin soft (tormenta) ni glyph (cronometro) solo con la bandera', () => {
   const src = readFileSync(new URL('../src/game/render/skins/skinFx.js', import.meta.url), 'utf8');
   const spec = (c) => ({ cell: c });
   const full = [spec('spark'), spec('soft'), spec('glyph'), spec('coin')];
@@ -82,7 +82,7 @@ test('E2: golpe sin soft (tormenta) ni glyph (cronometro) solo con la bandera', 
   assert.equal((src.match(/rmDropHit/g) ?? []).length, 3); // 2 skins + la lectura
 });
 
-test('E2: sinkBurst2 de anima_errante y sinkDecal de abyssal_tide solo se omiten con la bandera', () => {
+test('sinkBurst2 y sinkDecal solo se omiten con la bandera', () => {
   const src = readFileSync(new URL('../src/game/render/skins/skinFx.js', import.meta.url), 'utf8');
   assert.equal(sinkBurstAllowed({ rmNoSinkBurst: true }, false), true);
   assert.equal(sinkBurstAllowed({ rmNoSinkBurst: true }, true), false);
@@ -94,7 +94,7 @@ test('E2: sinkBurst2 de anima_errante y sinkDecal de abyssal_tide solo se omiten
   assert.match(src, /abyssal_tide: \{[\s\S]*?rmNoSinkDecal: true/);
 });
 
-test('E2: ruido de la cinta 0 solo con la bandera', () => {
+test('ruido de la cinta 0 solo con la bandera', () => {
   assert.equal(ribbonNoise('shaped', false), 0.6);
   assert.equal(ribbonNoise('ribbon_particles', false), 0.25);
   assert.equal(ribbonNoise('default', false), 0);

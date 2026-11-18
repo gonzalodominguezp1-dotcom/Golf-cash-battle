@@ -96,7 +96,7 @@ test('friends: monta amigos, solicitudes y la caja de grupo con textos en españ
   const root = fakeNode(env);
   const { ctx, calls, partyWatch, subs } = makeCtx(env);
   await mount(root, ctx, {}); await settle();
-  assert.match(root.innerHTML, /Amigos y grupo/);
+  assert.doesNotMatch(root.innerHTML, /Amigos y grupo/); // sin título de pantalla: se quitó para ocupar toda la pantalla
   assert.doesNotMatch(root.innerHTML, /data-back|scr-back/); // sin volver en cabecera: lo hace el lobby
   assert.match(root.innerHTML, /data-lobby/);
   assert.doesNotMatch(root.innerHTML, /desaf[ií]os/i);

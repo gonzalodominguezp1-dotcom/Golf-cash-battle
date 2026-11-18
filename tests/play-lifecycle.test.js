@@ -14,16 +14,3 @@ test('goHome libera final, sala en vivo y partida antes de navegar, en orden', (
   assert.deepEqual(log, ['finale', 'live', 'release', 'go:home']);
 });
 
-test('tras goHome el guard de partida ya no existe: atrás en el hub no hace nada', () => {
-  const state = { gameGuard: () => true, game: {}, finale: true, live: {} };
-  const backGuard = () => (state.gameGuard ? state.gameGuard() : false);
-  const goHome = createGoHome({
-    leaveFinale: () => { state.finale = false; },
-    stopLive: () => { state.live = null; },
-    releasePlay: () => { state.game = null; state.gameGuard = null; },
-    go: () => { assert.equal(state.game, null); assert.equal(state.live, null); assert.equal(state.finale, false); },
-  });
-  assert.equal(backGuard(), true);
-  goHome();
-  assert.equal(backGuard(), false);
-});

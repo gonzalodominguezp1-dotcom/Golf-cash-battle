@@ -124,14 +124,11 @@
   .sp-screen .sp-nav button { width: 100%; padding: 12px 14px; border-radius: 12px; font-size: 15px; text-align: left; }
   }
 
-/* ---------- pantalla: móvil con barra de secciones abajo ---------- */
+/* ---------- pantalla: móvil con barra de secciones arriba ---------- */
 @media (max-width: 899px) {
-  .settings-screen { padding-bottom: calc(env(safe-area-inset-bottom) + 104px); }
   .sp-screen .sp-nav {
-    position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 12px); transform: translateX(-50%) translateZ(0); z-index: 6;
-    display: flex; gap: 4px; padding: 6px; border-radius: 22px; width: min(calc(100% - 24px), 420px);
-    background: #0e131c; isolation: isolate;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--line) inset;
+    display: flex; gap: 4px; padding: 6px; margin-bottom: 14px; border-radius: 22px;
+    background: #0e131c; box-shadow: 0 0 0 1px var(--line) inset;
   }
   .sp-screen .sp-nav button { flex: 1 1 0; flex-direction: column; gap: 3px; justify-content: center; min-height: 54px; padding: 6px 4px; border-radius: 16px; font-size: 12px; }
   .sp-screen .sp-nav-title, .sp-screen .sp-nav .sp-sync { display: none; }
@@ -141,8 +138,6 @@
   .sp-row-seg .sp-seg { flex: 1 1 100%; }
   .sp-row-seg .sp-seg button { flex: 1 1 0; }
 }
-.sp-sync-m { margin: 0 0 14px; }
-@media (min-width: 900px) { .sp-sync-m { display: none; } }
 
 /* ---------- menú de pausa: pestañas arriba ---------- */
 .sp-modal .sp-nav { display: flex; gap: 4px; padding: 4px; margin-bottom: 14px; border-radius: 14px; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--line); }

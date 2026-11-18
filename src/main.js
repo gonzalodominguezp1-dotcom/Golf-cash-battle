@@ -36,6 +36,7 @@ import { createPartyWatch } from './match/partyWatch.js';
 import { startPresence } from './account/presence.js';
 import { createScope } from './screens/lifecycle.js';
 import { icon, iconUrl } from './ui/icons.js';
+import { createMatchmakingView } from './ui/matchmakingView.js';
 import { errorRef } from './backend/rpcError.js';
 import { coin, createBall, esc, fmt, h } from './screens/shared.js';
 import { createRouter } from './screens/router.js';
@@ -307,10 +308,11 @@ async function startMatch(tier, rematchOf = null) {
   for (let i = 0; i < match.players.length; i++) {
     await wait(i === 0 ? 200 : 250 + Math.random() * 350);
     if (cancelled) return;
-    session.fill(i, match.players[i]);
-    sfx.tick();
+    session.fill(i, match.players[i]); // el tic suena al pintar el asiento
   }
-  await wait(600);
+  await wait(250);
+  if (cancelled) return;
+  await session.finish(); // «¡YA!» y salida animada (la pinta src/screens/matchmaking.js)
   if (!cancelled) playHole(match, 0);
 }
 
@@ -964,44 +966,34 @@ function enterLive(match) {
   showLiveRoom(live);
 }
 
-function seatHtml(p) {
-  if (!p) return '<span>…</span>';
-  return `<span class="avatar">${esc(p.name[0])}</span><span>${esc(p.name)}</span>${p.isBot ? '<em class="bot-tag">BOT</em>' : ''}`;
-}
-
 function showLiveRoom(live) {
   const { match } = live;
   const { tier } = match;
   live.fast = true;
-  const view = h(`
-    <main class="screen matchmaking live-room tier--${tier.id}">
-      <div class="radar"><span></span><span></span><span></span>${ball(progress.skin, 64)}</div>
-      <h1>${icon('hourglass')} ${tier.name} · en vivo</h1>
-      <p class="sub count"></p>
-      <div class="seats"></div>
-      ${match.rematchOf ? '<p class="legal">Revancha: quienes pidan revancha como tú entrarán juntos en esta sala.</p>' : ''}
-      <p class="legal">Empezáis todos a la vez y verás las bolas de los demás en directo. Los huecos libres los ocupan bots: juegan contigo, pero nunca cuentan para el premio (el bote es solo de los jugadores reales). Si no entra nadie más, juegas contra bots y se te devuelve la entrada.</p>
-      <button class="ghost cancel">${icon('close')}Salir y recuperar entrada</button>
-      ${lobbyButton()}
-    </main>`);
-  const seats = view.querySelector('.seats');
+  const room = createMatchmakingView({
+    tier,
+    mode: 'live',
+    seats: match.seats,
+    ballHtml: ball(progress.skin, 72),
+    coin,
+    kicker: `${esc(tier.name)} · En vivo`,
+    title: match.rematchOf ? 'Revancha' : 'Sala en vivo',
+    potNote: 'Solo cuentan los jugadores reales',
+    legalHtml: `${match.rematchOf ? '<p class="legal">Revancha: quienes pidan revancha como tú entrarán juntos en esta sala.</p>' : ''}
+      <p class="legal">Empezáis todos a la vez y verás las bolas de los demás en directo. Los huecos libres los ocupan bots: juegan contigo, pero nunca cuentan para el premio (el bote es solo de los jugadores reales). Si no entra nadie más, juegas contra bots y se te devuelve la entrada.</p>`,
+    cancelLabel: 'Salir y recuperar entrada',
+    footHtml: lobbyButton(),
+  });
+  const { view } = room;
   let launching = false;
   const render = () => {
-    const n = match.players.length;
-    const secs = match.startsAt ? Math.max(0, Math.ceil((match.startsAt - liveNow(match)) / 1000)) : 0;
-    view.querySelector('.count').innerHTML = launching
-      ? 'Rellenando los huecos con bots…'
-      : `${n}/${match.seats} jugadores · empieza en <b>${secs} s</b> · bote ${coin(tier.entryFee * n)}`;
     if (launching) return;
-    seats.innerHTML = '';
+    const n = match.players.length;
+    if (match.startsAt) room.setCountdown(match.startsAt - liveNow(match));
+    room.setPot(tier.entryFee * n);
     for (let i = 0; i < match.seats; i++) {
       const p = match.players.find((q) => q.seat === i);
-      const s = h(`<div class="seat">${seatHtml(p && { name: p.id === 'me' ? 'Tú' : p.name })}</div>`);
-      if (p) {
-        s.classList.add('filled', ...(p.id === 'me' ? ['me'] : []));
-        s.style.setProperty('--c', p.color);
-      }
-      seats.append(s);
+      room.setSeat(i, p ? { name: p.id === 'me' ? 'Tú' : p.name, color: p.color, me: p.id === 'me' } : null, { sound: false });
     }
   };
   let count = match.players.length;
@@ -1014,22 +1006,23 @@ function showLiveRoom(live) {
   const launch = async () => {
     launching = true;
     clearInterval(live.timer);
-    view.querySelector('.cancel').disabled = true;
+    room.cancelButton.disabled = true;
+    room.setStatus('Rellenando los huecos con bots…');
     try {
       await backend.tournaments.status(match);
     } catch { }
     if (live.stopped) return;
     live.roster = buildRoster(match);
-    render();
+    room.setPot(tier.entryFee * match.players.length);
+    for (const r of live.roster) {
+      if (r.isBot) continue;
+      room.setSeat(r.seat, { name: r.name, color: r.color, me: r.id === 'me' }, { sound: false });
+    }
     for (const r of live.roster) {
       if (!r.isBot) continue;
-      const s = seats.children[r.seat];
-      if (!s) continue;
       await wait(140);
-      s.classList.add('filled', 'bot');
-      s.style.setProperty('--c', r.color);
-      s.innerHTML = seatHtml(r);
-      sfx.tick();
+      if (live.stopped) return;
+      room.setSeat(r.seat, { name: r.name, color: r.color, isBot: true });
     }
     try {
       await backend.tournaments.start(match);
@@ -1037,17 +1030,25 @@ function showLiveRoom(live) {
       if (live.stopped) return;
       return retryMsg('No se ha podido empezar la partida.', launch);
     }
-    await wait(500);
+    if (live.stopped) return;
+    room.go();
+    await wait(380);
+    if (live.stopped) return;
+    await room.leave();
     if (!live.stopped) beginLive(live);
   };
   live.timer = setInterval(() => {
-    if (!view.isConnected) return clearInterval(live.timer);
+    if (!view.isConnected) {
+      room.stop();
+      return clearInterval(live.timer);
+    }
     render();
     if (!launching && match.startsAt && liveNow(match) >= match.startsAt) launch();
   }, 250);
-  view.querySelector('.cancel').addEventListener('click', async (e) => {
-    e.target.disabled = true;
+  room.cancelButton.addEventListener('click', async (e) => {
+    e.currentTarget.disabled = true;
     clearInterval(live.timer);
+    room.stop();
     live.finished = true;
     await backend.tournaments.leave(match).catch(() => { });
     goHome();
