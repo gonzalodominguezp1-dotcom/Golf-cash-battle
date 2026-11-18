@@ -346,6 +346,11 @@ h2 { margin: 24px 0 12px; font-size: 21px; letter-spacing: -0.01em; }
   background: rgba(255, 255, 255, 0.14);
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25) inset;
 }
+/* aceptar (verde) y rechazar (rojo) invitaciones de grupo */
+.chip-btn.btn-accept { box-shadow: 0 0 0 2px #22c55e inset; }
+.chip-btn.btn-accept:hover { box-shadow: 0 0 0 2px #4ade80 inset; }
+.chip-btn.btn-decline { box-shadow: 0 0 0 2px #ef4444 inset; }
+.chip-btn.btn-decline:hover { box-shadow: 0 0 0 2px #f87171 inset; }
 
 /* ---------- brillo holográfico (cartas) ---------- */
 
@@ -3006,6 +3011,20 @@ body.sk-noscroll { overflow: hidden; } /* lo usa skinReveal.js: no borrar */
 .friend-msg { margin: 0; min-height: 1.2em; font-size: 13px; }
 .friend-msg.err { color: #ff6b8a; }
 .friend-msg.ok { color: var(--muted); }
+
+/* móvil: amigos en cuadrícula de 2 columnas, tarjeta centrada (foto arriba, nombre y acciones abajo) */
+@media (max-width: 640px) {
+  .friend-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .friend {
+    flex-direction: column; align-items: center; justify-content: center; text-align: center;
+    gap: 8px; padding: 14px 8px 12px; min-width: 0;
+  }
+  .friend-name { justify-items: center; width: 100%; }
+  .friend-name b { max-width: 100%; }
+  .friend-actions { flex-direction: column; align-items: stretch; width: 100%; }
+  .friend > .chip-btn { width: 100%; justify-content: center; }
+  .friend-actions .chip-btn { width: 100%; justify-content: center; }
+}
 
 /* ---------- grupos ---------- */
 .party-box:empty { display: none; }
