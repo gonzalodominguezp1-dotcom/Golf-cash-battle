@@ -34,7 +34,7 @@ Esperar al subagente de UI, revisar el diff y pasar tests.
 - [x] Botones «Cancelar emparejamiento» y «Volver al lobby» bajo los jugadores; texto legal en botón «i».
 - [x] Búsqueda en segundo plano: `src/match/matchmakingController.js` + aviso superior `src/ui/matchmakingBanner.js`.
 - [x] Rediseño de tarjeta de bote (`.mm-pot`): tamaño reducido a una sola línea horizontal (layout horizontal en flex: label + cifra + nota) con padding compacto para garantizar vista sin scroll en móvil.
-- [x] Ajuste responsive móvil: radar reducido de `clamp(210px, 64vw, 270px)` a `clamp(160px, 44vw, 230px)` y márgenes compactos para eliminar scroll vertical en dispositivos móviles.
+- [x] Ajuste responsive móvil: radar ampliado y ajustado con viewport dinámico a `min(clamp(200px, 58vw, 280px), 36vh)` (en escritorio `clamp(240px, 28vw, 310px)`), layout flex a pantalla completa (`min-height: 100dvh; justify-content: space-between`) y espaciado armonioso para llenar la pantalla sin requerir scroll vertical.
 - [x] Tips de ánimo (`.mm-hype`): tiempo de permanencia (`HYPE_MS`) subido de 2800 ms a 6000 ms (6 s) para lectura cómoda.
 - [x] Título de sala en vivo actualizado a «BUSCANDO RIVALES» en lugar de «SALA EN VIVO».
 - [x] Resolución de fallo en arranque (`tournaments.start`):
