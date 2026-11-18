@@ -29,6 +29,8 @@ register('account', {
   framesTitle: 'Marco de prestigio',
   noFrame: 'Sin marco',
   frameLevel: 'Nivel {n}',
+  frameChallenge: 'Reto: {name}',
+  frameSaveError: 'No se pudo guardar el marco. Inténtalo de nuevo.',
   framesSub: 'Se muestra en tu perfil y en el ranking. Siguiente marco: {next}.',
   nextFrame: '{name} en el nivel {n}',
   allFrames: 'ya los tienes todos',

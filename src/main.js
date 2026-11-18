@@ -1517,7 +1517,11 @@ if (skinLab) {
       };
       addEventListener('pagehide', sendSettings);
       settings.hydrate(b.account.profile?.settings, b.user.id);
-      progress.attach(b.user.id, b.account.profile?.progress, (s) => b.account.saveProgress(s), (id) => b.account.setFrame(id));
+      progress.attach(b.user.id, b.account.profile?.progress, (s) => b.account.saveProgress(s), async (id) => {
+        // los marcos de reto se validan con las estadísticas guardadas en el servidor: se sincronizan antes
+        await b.account.saveProgress(progress.state).catch(() => {});
+        return b.account.setFrame(id);
+      });
       // hitos de ranking y marco elegido: pueden desbloquear bolas, que se ofrecen al acabar la próxima partida
       b.account.myRanking().then((r) => progress.setServerStats(r)).catch(() => {});
     }

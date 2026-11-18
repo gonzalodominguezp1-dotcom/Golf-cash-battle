@@ -11,7 +11,8 @@
     "previews:capture": "node scripts/capture-course-previews.mjs",
     "splash:capture": "node scripts/capture-splash-layers.mjs",
     "banderin:make": "node scripts/make-banderin.mjs",
-    "fireball:make": "node scripts/make-fireball.mjs"
+    "fireball:make": "node scripts/make-fireball.mjs",
+    "frames:make": "node scripts/process-frames.mjs"
   },
   "repository": {
     "type": "git",
@@ -26,6 +27,7 @@
     "three": "^0.169.0"
   },
   "devDependencies": {
+    "sharp": "^0.35.5",
     "vite": "^5.4.10"
   },
   "private": true,

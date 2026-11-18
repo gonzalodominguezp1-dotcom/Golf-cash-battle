@@ -4,7 +4,7 @@ import { avatarIcon } from '../ui/icons.js';
 import { thumbCached } from '../ui/skinThumbs.js';
 import { ballPreview } from '../game/render/ballPaint.js';
 import { iconById } from '../progress/avatar.js';
-import { frameStyle } from '../progress/prestige.js';
+import { frameStyle, frameArtSrc } from '../progress/prestige.js';
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
@@ -23,9 +23,17 @@ export const avatarFace = (av, initial) =>
     : av?.icon ? `<span class="pf-glyph">${avatarIcon(iconById(av.icon).id)}</span>`
       : `<b class="pf-initial">${esc(String(initial || '?')[0])}</b>`;
 
-/** Avatar con marco de prestigio. size: xs | sm | lg. */
-export const avatarHtml = ({ size = 'sm', frame = null, av = null, initial = '?' }) =>
-  `<span class="pf pf-${size} ${frame ? `pf-framed pf-${frame.id}` : ''}" style="${frameStyle(frame)}"><i class="pf-halo"></i><i class="pf-wing l"></i><i class="pf-wing r"></i><i class="pf-ring"></i><span class="pf-face">${avatarFace(av, initial)}</span><i class="pf-gem"></i></span>`;
+/**
+ * Avatar con marco. size: xs | sm | lg. El marco es una ilustración: una capa `<img class="pf-art">` sobre la cara;
+ * el CSS reserva el sitio de la ilustración entera y encoge la cara hasta el hueco, así que nada sobresale.
+ * `hd` fuerza la imagen grande (tamaño lg siempre la usa; el resto, la miniatura). Sin marco, solo la cara.
+ */
+export const avatarHtml = ({ size = 'sm', frame = null, av = null, initial = '?', hd = false }) => {
+  const src = frameArtSrc(frame, hd || size === 'lg');
+  const face = `<span class="pf-face">${avatarFace(av, initial)}</span>`;
+  const art = src ? `<img class="pf-art" src="${src}" alt="" pointer-events="none" draggable="false" decoding="async">` : '';
+  return `<span class="pf pf-${size}${frame ? ` pf-framed pf-${frame.id}` : ''}${src ? ' pf-illustrated' : ''}" style="${frameStyle(frame)}">${face}${art}</span>`;
+};
 
 /**
  * Crea `ball` ligada a la instancia de Progress (necesita saber el skin equipado/instancia).

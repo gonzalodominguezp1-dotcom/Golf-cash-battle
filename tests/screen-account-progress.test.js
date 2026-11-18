@@ -5,6 +5,7 @@ import { register } from 'node:module';
 import { fakeEnv } from './helpers/fakeEnv.js';
 import { createScope } from '../src/screens/lifecycle.js';
 import { t } from '../src/screens/texts/index.js';
+import { frameFor, framesUnlocked } from '../src/progress/prestige.js';
 
 // progress.js importa su .css: el hook lo sustituye antes de cargar el módulo
 register('./helpers/cssStubLoader.mjs', import.meta.url);
@@ -29,7 +30,7 @@ function makeCtx(env, { level = { level: 30, into: 50, need: 780 }, state, load 
   return {
     scope: createScope({ win: env.win, doc: env.doc, timers: env.timers }),
     backend: load ? { account: { load } } : null,
-    progress: { get level() { return level; }, state: st, prestige: { frame: level.level >= 25 ? { id: 'p25', name: 'Bronce', level: 25, color: '#cd7f32', glow: '#ffb067' } : null } },
+    progress: { get level() { return level; }, state: st, prestige: { frame: frameFor(level.level), unlocked: framesUnlocked(level.level) }, challenge: (id) => ({ name: id, done: false }) },
   };
 }
 
@@ -46,15 +47,15 @@ test('progreso: no bloquea, pinta Cargando y luego nivel, marco, XP y estadísti
   const h = root.innerHTML;
   // héroe: insignia con el nivel, nombre del marco actual y color del marco
   assert.match(h, /class="pg-badge-num">30</);
-  assert.match(h, /class="pg-frame"[^>]*>Bronce</);
-  assert.match(h, /class="pg-hero" style="--frame:#cd7f32;--frame-glow:#ffb067"/);
+  assert.match(h, /class="pg-frame"[^>]*>Neón cíber</);
+  assert.match(h, /class="pg-hero" style="--frame:#ff3fd0;--frame-glow:#35f0ff;--hole:0.5684"/);
   // barra de XP: texto X / Y XP, porcentaje y progressbar con aria-valuenow
   assert.match(h, /50 \/ 780 XP · 6%/);
   assert.match(h, /role="progressbar" aria-label="Experiencia del nivel actual" aria-valuemin="0" aria-valuemax="100" aria-valuenow="6"/);
   // siguiente marco: nombre, nivel que lo desbloquea, niveles que faltan y su mini barra (25 -> 50, va en 30: 20%)
-  assert.match(h, /class="pg-next-name"[^>]*>Plata</);
-  assert.match(h, /Se desbloquea en el Nivel 50 · Te faltan 20 niveles/);
-  assert.match(h, /aria-label="Progreso hacia el siguiente marco" aria-valuemin="0" aria-valuemax="100" aria-valuenow="20"/);
+  assert.match(h, /class="pg-next-name"[^>]*>Sakura</);
+  assert.match(h, /Se desbloquea en el Nivel 40 · Te faltan 10 niveles/);
+  assert.match(h, /aria-label="Progreso hacia el siguiente marco" aria-valuemin="0" aria-valuemax="100" aria-valuenow="33"/);
   // rejilla de estadísticas: seis tarjetas con su número y etiqueta
   assert.match(h, /class="pg-stats" data-progress-stats="1"/);
   assert.equal((h.match(/class="pg-stat"/g) || []).length, 6);
@@ -72,8 +73,8 @@ test('progreso: sin marco, sin datos y todos los marcos', async () => {
   await settle();
   assert.match(a.innerHTML, /class="pg-badge-num">3</);
   assert.match(a.innerHTML, /class="pg-frame"[^>]*>Sin marco</);
-  assert.match(a.innerHTML, /class="pg-next-name"[^>]*>Bronce</);
-  assert.match(a.innerHTML, /Te faltan 22 niveles/);
+  assert.match(a.innerHTML, /class="pg-next-name"[^>]*>Roble rústico</);
+  assert.match(a.innerHTML, /Te faltan 2 niveles/);
   assert.match(a.innerHTML, /Juega tu primera partida/);
   s1.destroy();
   const b = fakeRoot(env);

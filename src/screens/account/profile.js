@@ -3,7 +3,7 @@
 // los campos de contraseña son type="password", se vacían al enviar y al salir, y ni contraseñas ni datos
 // personales van a consola, URL, storage ni a t(). Todo dato de usuario pasa por esc().
 import { authMessage, validatePassword } from '../../account/authRules.js';
-import { FRAMES, frameStyle } from '../../progress/prestige.js';
+import { FRAMES, LEVEL_FRAMES, frameStyle } from '../../progress/prestige.js';
 import { CHALLENGES, SKINS } from '../../progress/skins.js';
 import { openAvatarEditor } from '../avatarEditor.js';
 import { listState } from '../components.js';
@@ -164,13 +164,15 @@ export function mount(el, ctx) {
     const prestige = progress.prestige;
     const unlockedSkins = SKINS.filter((s) => progress.isUnlocked(s)).length;
     const done = CHALLENGES.filter((c) => progress.challenge(c.id).done).length;
-    const next = FRAMES.find((f) => f.level > lvl.level);
+    const next = LEVEL_FRAMES.find((f) => f.level > lvl.level);
     const locked = computeLocks({ guest: !!p.is_anonymous, hasBackend: true, hasName: !!p.username }).friends;
     const initial = p.username ? name : '?';
     const frameBtn = (f) => {
-      const open = lvl.level >= f.level;
-      return `<button type="button" class="frame-opt ${open ? '' : 'locked'} ${prestige.frame?.id === f.id ? 'on' : ''}" data-frame="${esc(f.id)}" ${open ? '' : 'disabled'} style="${frameStyle(f)}" title="${esc(open ? f.name : t('account.frameLevel', { n: f.level }))}">
-              ${avatarHtml({ size: 'xs', frame: f, av: avatar.get(), initial: name })}<b>${esc(f.name)}</b><small>${open ? esc(t('account.levelShort', { n: f.level })) : `${icon('lock')} ${esc(t('account.levelShort', { n: f.level }))}`}</small>
+      const open = prestige.unlocked ? prestige.unlocked.some((u) => u.id === f.id) : f.level != null && lvl.level >= f.level;
+      const req = f.level != null ? t('account.levelShort', { n: f.level }) : (progress.challenge?.(f.challenge)?.name ?? f.challenge);
+      const reqTitle = f.level != null ? t('account.frameLevel', { n: f.level }) : t('account.frameChallenge', { name: req });
+      return `<button type="button" class="frame-opt ${open ? '' : 'locked'} ${prestige.frame?.id === f.id ? 'on' : ''}" data-frame="${esc(f.id)}" aria-pressed="${prestige.frame?.id === f.id}" aria-label="${esc(f.name)}: ${esc(open ? req : reqTitle)}" ${open ? '' : 'disabled'} style="${frameStyle(f)}" title="${esc(open ? f.name : reqTitle)}">
+              ${avatarHtml({ size: 'xs', frame: f, av: avatar.get(), initial: name, hd: true })}<b>${esc(f.name)}</b><small>${open ? esc(req) : `${icon('lock')} ${esc(req)}`}</small>
             </button>`;
     };
     const framesHtml = FRAMES.map(frameBtn).join('');
@@ -239,6 +241,8 @@ export function mount(el, ctx) {
   }
 
   function bind(p, name, note, friendsLocked) {
+    // el servidor rechazó el marco: Progress ya volvió al anterior, se repinta y se avisa
+    progress.onFrameSaveError = () => { if (!gone) paint(p, t('account.frameSaveError')); };
     for (const b of el.querySelectorAll('[data-edit-avatar]')) {
       sc.on(b, 'click', () => {
         editor?.close();
@@ -289,6 +293,7 @@ export function mount(el, ctx) {
     destroy() {
       gone = true;
       run++;
+      progress.onFrameSaveError = null;
       clearPw();
       const doc = el.querySelector('[data-kyc-box]')?.querySelector('[data-kyc-doc]');
       if (doc) doc.value = ''; // el número de documento tampoco queda en el campo
