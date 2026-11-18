@@ -129,6 +129,26 @@ export async function mount(root, ctx) {
     }
   }
 
+  // canjear código: al acertar se abre la recompensa (revelado) y la rejilla se repinta con la skin ya obtenida
+  const codeForm = root.querySelector('[data-sk-code]');
+  const codeMsg = root.querySelector('[data-sk-code-msg]');
+  scope.on(codeForm, 'submit', (e) => {
+    e.preventDefault();
+    const input = codeForm.elements.code;
+    if (!input.value.trim()) return;
+    const res = progress.redeemCode(input.value);
+    const kind = res.status === 'ok' ? 'info' : 'error';
+    codeMsg.textContent = t(`skins.code_${res.status}`, { name: res.skin?.name ?? '' });
+    codeMsg.dataset.kind = kind;
+    if (res.status === 'invalid') return;
+    input.value = '';
+    if (res.status !== 'ok') return;
+    ctx.notify?.({ kind: 'info', title: t('skins.code_ok', { name: res.skin.name }) });
+    root.querySelector('[data-sk-sub]').textContent = t('skins.sub', { unlocked: SKINS.filter((x) => progress.isUnlocked(x)).length, total: SKINS.length });
+    if (list.dataset.state === 'ready' || list.dataset.state === 'empty') render();
+    Promise.resolve(ctx.actions?.claimRewards?.()).then(() => { if (!gone && list.dataset.state === 'ready') render(); }, () => {});
+  });
+
   for (const b of tierBtns) {
     scope.on(b, 'click', () => {
       filter.tier = lastFilter.tier = b.dataset.tier;

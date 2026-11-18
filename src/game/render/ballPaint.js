@@ -107,6 +107,9 @@ export function paintBall(g, n, skin, opts = {}) {
     case 'abyss_veins':
       paintAbyssVeins(g, w, h, skin);
       break;
+    case 'flesh':
+      paintFlesh(g, w, h, skin);
+      break;
     default:
       break;
   }
@@ -633,6 +636,54 @@ function paintAbyssVeins(g, w, h, skin) {
   sheen.addColorStop(1, rgba('#e6f4ff', 0));
   g.fillStyle = sheen;
   g.fillRect(0, 0, w, h * 0.5);
+}
+
+/** El Huevo Mío: piel con manchas de rubor, venas finas, arrugas oscuras y pelos negros rizados (calidad baja / miniaturas). */
+function paintFlesh(g, w, h, skin) {
+  const { base, accent, secondary } = paletteOf(skin);
+  const rnd = seeded(0x6e55);
+  const gr = g.createLinearGradient(0, 0, 0, h);
+  gr.addColorStop(0, mix(base, accent, 0.2));
+  gr.addColorStop(0.5, base);
+  gr.addColorStop(1, mix(base, accent, 0.3));
+  g.fillStyle = gr;
+  g.fillRect(0, 0, w, h);
+  // manchas de rubor y zonas pálidas (se repiten al otro lado para que no haya costura)
+  for (let i = 0; i < 16; i++) {
+    const x = rnd() * w, y = (0.1 + rnd() * 0.8) * h, r = h * (0.1 + rnd() * 0.18);
+    const col = i % 3 ? rgba(accent, 0.2) : rgba('#ffe6d6', 0.16);
+    for (const dx of [0, -w, w]) {
+      const gg = g.createRadialGradient(x + dx, y, 0, x + dx, y, r);
+      gg.addColorStop(0, col);
+      gg.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gg;
+      g.fillRect(x + dx - r, y - r, r * 2, r * 2);
+    }
+  }
+  // venas finas bajo la piel
+  for (let i = 0; i < 6; i++) {
+    const pts = zigzag(rnd, rnd() * w, (0.2 + rnd() * 0.6) * h, rnd() * Math.PI * 2, 8, 16, 1.1);
+    strokeLayers(g, pts, [['#6d5a86', 3.2, 0.1], ['#6d5a86', 1.2, 0.22]]);
+  }
+  // arrugas: pliegues largos y quebrados, con borde suave y fondo oscuro
+  const dark = mix(secondary, '#000000', 0.3);
+  for (let i = 0; i < 56; i++) {
+    const pts = zigzag(rnd, rnd() * w, (0.08 + rnd() * 0.84) * h, (rnd() - 0.5) * 1.1 + (rnd() < 0.5 ? 0 : Math.PI), 9, 9 + rnd() * 8, 0.9);
+    strokeLayers(g, pts, [[secondary, 5, 0.1], [secondary, 2.2, 0.32], [dark, 0.9, 0.55]]);
+  }
+  // pelos negros rizados, con su sombra
+  for (let i = 0; i < 16; i++) {
+    const x0 = rnd() * w, y0 = (0.22 + rnd() * 0.56) * h, a0 = rnd() * Math.PI * 2, len = 22 + rnd() * 16, K = 0.32 + rnd() * 0.12, A = 2.2 + rnd() * 1.6;
+    const pts = [], sh = [];
+    for (let s = 0; s <= len; s += 2) {
+      const c = A * Math.sin(s * K) * (0.35 + (0.65 * s) / len);
+      const x = x0 + Math.cos(a0) * s - Math.sin(a0) * c, y = y0 + Math.sin(a0) * s + Math.cos(a0) * c;
+      pts.push([x, y]);
+      sh.push([x + 1.6, y + 2.2]);
+    }
+    strokeLayers(g, sh, [['#2a1008', 3, 0.28]]);
+    strokeLayers(g, pts, [['#0b0807', 1.7, 0.95]]);
+  }
 }
 
 function mix(a, b, t) {

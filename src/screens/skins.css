@@ -12,3 +12,9 @@
 .skins .sk-card.locked .sk-state { color: var(--muted); }
 .skins .scr-state { margin: 8px 0; }
 .skins .scr-btn { min-height: 44px; }
+.skins .sk-code { display: flex; gap: 8px; margin-top: 10px; }
+.skins .sk-code-input { flex: 1; min-width: 0; min-height: 44px; padding: 0 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.25); background: rgba(255,255,255,0.06); color: inherit; font: inherit; text-transform: uppercase; letter-spacing: 0.12em; }
+.skins .sk-code-input:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.skins .sk-code-msg { margin: 0; min-height: 1.2em; font-weight: 700; }
+.skins .sk-code-msg[data-kind='error'] { color: #ff8a8a; }
+.skins .sk-code-msg[data-kind='info'] { color: #7dffd8; }
