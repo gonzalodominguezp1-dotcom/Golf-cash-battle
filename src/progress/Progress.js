@@ -1,5 +1,6 @@
 import { CHALLENGES, SKINS, skinById } from './skins.js';
-import { bumpCounter, ensureInstances, sanitizeInventory } from './inventory.js';
+import { MAX_INVENTORY, bumpCounter, createInstance, ensureInstances, sanitizeInventory } from './inventory.js';
+import { skinForCode } from './codes.js';
 import { MAX_STROKES_PER_HOLE } from '../config.js';
 import { frameFor, framesUnlocked } from './prestige.js';
 
@@ -179,10 +180,27 @@ export class Progress {
     this.#persistLocal();
   }
 
+  /**
+   * Canjea un código. Devuelve { status: 'ok' | 'already' | 'invalid' | 'full', skin? }.
+   * 'ok' deja la skin pendiente de abrir (claimable) y la guarda en la cuenta.
+   */
+  redeemCode(raw) {
+    const id = skinForCode(raw);
+    const skin = id && SKINS.find((s) => s.id === id);
+    if (!skin) return { status: 'invalid' };
+    if (this.state.inventory[skin.id]) return { status: 'already', skin };
+    if (Object.keys(this.state.inventory).length >= MAX_INVENTORY) return { status: 'full', skin };
+    this.state.inventory[skin.id] = createInstance(this.#ownerKey, skin);
+    this.#save();
+    return { status: 'ok', skin };
+  }
+
   /** Progreso hacia desbloquear la skin, de 0 a 1, con el texto del requisito. */
   requirement(skin) {
     const u = skin.unlock;
     if (!u) return { text: 'De serie', ratio: 1 };
+    // por código: desbloqueada si ya tiene instancia (el inventario sí viaja a la cuenta)
+    if (u.code) return { text: 'Código secreto', ratio: this.state.inventory[skin.id] ? 1 : 0 };
     if (u.level) return { text: `Nivel ${u.level}`, ratio: Math.min(1, this.level.level / u.level) };
     if (u.wins) return { text: `${u.wins} victoria${u.wins > 1 ? 's' : ''}`, ratio: Math.min(1, this.state.wins / u.wins) };
     const c = this.challenge(u.challenge);

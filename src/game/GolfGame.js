@@ -18,7 +18,7 @@ import { PerfGovernor } from './render/perfGovernor.js';
 import { ResolutionGovernor } from './render/resolutionGovernor.js';
 import { AimDots, Particles, Shockwaves } from './render/effects.js';
 import { labelTexture, softDotTexture } from './render/textures.js';
-import { createSkinMaterial } from './render/ballSkins.js';
+import { attachSkinDecor, createSkinMaterial } from './render/ballSkins.js';
 import { SkinFX } from './render/skins/skinFx.js';
 import { SKINS } from '../progress/skins.js';
 import { HOLE_TIME_LIMIT, maxStrokesOf } from '../config.js';
@@ -522,6 +522,7 @@ export class GolfGame {
       this.skinHandle.material,
     );
     this.ballMesh.castShadow = true;
+    attachSkinDecor(this.ballMesh, this.skinHandle, BALL_R); // pelos y otros extras de la skin
     // la bola va dentro de un grupo para poder aplastarla sin que gire el aplastamiento
     this.ballRoot = new THREE.Group();
     this.ballRoot.add(this.ballMesh);

@@ -80,3 +80,18 @@ test('(b) el botón Lobby sigue fijo respecto a la ventana', () => {
   assert.ok(lobby, 'falta la regla .scr-lobby');
   assert.match(lobby.body, /position:\s*fixed/);
 });
+
+test('(b) el aviso de emparejamiento es fijo arriba (safe-area) y la sala no usa el botón Lobby flotante', () => {
+  const css = stripComments(read('src/style.css'));
+  const banner = rules(css).find((r) => r.selectors === '.mmb');
+  assert.ok(banner, 'falta la regla .mmb');
+  assert.match(banner.body, /position:\s*fixed/);
+  assert.match(banner.body, /top:\s*calc\(env\(safe-area-inset-top/);
+  assert.doesNotMatch(banner.body, /backdrop-filter/);
+  // la sala (.screen.mm) no deja transform/filter propio: su fondo y destello son position: fixed
+  const room = rules(css).find((r) => r.selectors === '.screen.mm');
+  assert.ok(room, 'falta la regla .screen.mm');
+  assert.doesNotMatch(room.body, /(^|[\s;])(transform|filter)\s*:/);
+  const screen = read('src/screens/matchmaking.js') + read('src/ui/matchmakingView.js');
+  assert.doesNotMatch(screen, /lobbyButton\(|scr-lobby/);
+});

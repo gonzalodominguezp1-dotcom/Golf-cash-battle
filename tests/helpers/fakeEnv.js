@@ -31,6 +31,8 @@ export function fakeEnv() {
     clearInterval(id) { live.delete(id); },
     requestAnimationFrame(fn) { const id = ++seq; live.set(id, { at: now + 16, fn, every: 0, raf: true }); return id; },
     cancelAnimationFrame(id) { live.delete(id); },
+    /** hora del reloj falso (ms desde el inicio) */
+    now: () => now,
     advance(ms) {
       const end = now + ms;
       for (;;) {

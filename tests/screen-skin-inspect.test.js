@@ -31,10 +31,17 @@ function makeProgress(open = OPEN0) {
   return {
     st,
     isUnlocked: (s) => st.open.has(s.id),
-    requirement: (s) => (st.open.has(s.id) ? { text: s.unlock ? 'cumplido' : 'De serie', ratio: 1 } : { text: s.unlock?.challenge ? 'Reto X' : `Nivel ${s.unlock?.level}`, ratio: 0.4 }),
+    requirement: (s) => (st.open.has(s.id) ? { text: s.unlock ? 'cumplido' : 'De serie', ratio: 1 } : s.unlock?.code ? { text: 'Código secreto', ratio: 0 } : { text: s.unlock?.challenge ? 'Reto X' : `Nivel ${s.unlock?.level}`, ratio: 0.4 }),
     instance: (id) => (st.open.has(id) ? { seed: 7 } : null),
     get skin() { return skinById(st.equipped); },
     equip(id) { if (!st.open.has(id)) return false; st.equipped = id; return true; },
+    // código de prueba 'rdr' -> huevo_mio (mismo contrato que Progress.redeemCode)
+    redeemCode(raw) {
+      if (String(raw).trim().toUpperCase() !== 'RDR') return { status: 'invalid' };
+      if (st.open.has('huevo_mio')) return { status: 'already', skin: skinById('huevo_mio') };
+      st.open.add('huevo_mio');
+      return { status: 'ok', skin: skinById('huevo_mio') };
+    },
   };
 }
 
@@ -190,6 +197,69 @@ test('skin-inspect: si three o WebGL fallan queda el marcador 2D y lo demás fun
   h = await mount(root, ctx, { id: 'mint' });
   await settle();
   assert.equal(root.querySelector('[data-sk-loading]').hidden, true);
+  h.destroy();
+});
+
+const HUEVO = 'huevo_mio';
+
+test('skin-inspect: skin por código bloqueada muestra el formulario de canje; una skin normal bloqueada no', async () => {
+  const env = fakeEnv();
+  const root = fakeRoot(env);
+  const { ctx } = makeCtx(env);
+  const h = await mount(root, ctx, { id: HUEVO });
+  assert.match(root.innerHTML, /data-sk-code/);
+  assert.match(root.innerHTML, /maxlength="32"/);
+  assert.match(root.innerHTML, /autocapitalize="characters"/);
+  assert.match(root.innerHTML, /autocomplete="off"/);
+  assert.match(root.innerHTML, /placeholder="Código de canje"/);
+  assert.match(root.innerHTML, /<label class="sr-only" for="sk-code-huevo_mio">Código de canje<\/label>/);
+  assert.match(root.innerHTML, /<button type="submit" class="primary sk-code-btn">Canjear<\/button>/);
+  assert.match(root.innerHTML, /role="status" data-sk-code-msg/);
+  h.destroy();
+  const root2 = fakeRoot(env);
+  const h2 = await mount(root2, ctx, { id: LOCKED.id });
+  assert.doesNotMatch(root2.innerHTML, /data-sk-code/);
+  assert.doesNotMatch(root2.innerHTML, /sk-code/);
+  h2.destroy();
+});
+
+test('skin-inspect: escribir el código y enviarlo desbloquea la skin, pulsa Equipar y avisa', async () => {
+  const env = fakeEnv();
+  const root = fakeRoot(env);
+  const { ctx, calls } = makeCtx(env, { actions: { claimRewards: () => { calls.claimed = (calls.claimed ?? 0) + 1; } } });
+  const h = await mount(root, ctx, { id: HUEVO });
+  assert.equal(root.querySelector('[data-sk-equip]').disabled, true);
+  const input = root.querySelector('[data-sk-code-input]');
+  input.value = 'rdr';
+  root.querySelector('[data-sk-code]').emit('submit', { preventDefault() {} });
+  assert.equal(ctx.progress.isUnlocked(skinById(HUEVO)), true);
+  assert.equal(root.querySelector('[data-sk-equip]').disabled, false);
+  assert.equal(root.querySelector('[data-sk-lock]').hidden, true);
+  assert.equal(input.value, '');
+  assert.equal(root.querySelector('[data-sk-code-msg]').dataset.kind, 'info');
+  assert.match(root.querySelector('[data-sk-code-msg]').textContent, /El Huevo Mío/);
+  assert.equal(calls.notify.length, 1);
+  assert.equal(calls.claimed, 1);
+  // teclas dentro del campo no navegan: el inspector no cambia de skin con flechas escritas
+  env.doc.emit('keydown', { key: 'ArrowRight', target: { matches: () => true } });
+  assert.equal(calls.replace.length, 0);
+  h.destroy();
+});
+
+test('skin-inspect: código inválido muestra el error y no desbloquea', async () => {
+  const env = fakeEnv();
+  const root = fakeRoot(env);
+  const { ctx, calls } = makeCtx(env);
+  const h = await mount(root, ctx, { id: HUEVO });
+  root.querySelector('[data-sk-code-input]').value = 'nope';
+  root.querySelector('[data-sk-code]').emit('submit', { preventDefault() {} });
+  const msg = root.querySelector('[data-sk-code-msg]');
+  assert.equal(msg.textContent, 'Ese código no existe.');
+  assert.equal(msg.dataset.kind, 'error');
+  assert.equal(ctx.progress.isUnlocked(skinById(HUEVO)), false);
+  assert.equal(root.querySelector('[data-sk-equip]').disabled, true);
+  assert.equal(root.querySelector('[data-sk-lock]').hidden, false);
+  assert.equal(calls.notify.length, 0);
   h.destroy();
 });
 

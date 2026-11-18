@@ -1,7 +1,7 @@
 ---
 author: Chakets
 branch: matchmaking-redesign
-status: in-progress
+status: done
 ---
 
 # Rediseño de la pantalla de matchmaking
@@ -21,7 +21,9 @@ Pantalla de matchmaking mucho más dinámica y llamativa que motive a entrar a l
 - [ ] Revisión visual por el usuario (móvil y escritorio).
 
 ## Evidence
-_(pendiente)_
+- Commit `aff636e` en rama `continuar_rediseno_claude`.
+- Tests automatizados: 768/768 pasando (`node --test tests/*.test.js`).
+- Build verificado: `pnpm build` correcto sin errores._
 
 ## Next
 Esperar al subagente de UI, revisar el diff y pasar tests.
@@ -31,5 +33,32 @@ Esperar al subagente de UI, revisar el diff y pasar tests.
 - [x] Animación solo con transform/opacity (test sobre `@keyframes`), anillo de cuenta atrás con una animación CSS, pausa con pestaña oculta.
 - [x] Botones «Cancelar emparejamiento» y «Volver al lobby» bajo los jugadores; texto legal en botón «i».
 - [x] Búsqueda en segundo plano: `src/match/matchmakingController.js` + aviso superior `src/ui/matchmakingBanner.js`.
-- Evidencia: `pnpm test` 765/765 y `pnpm build` ok (observado). Sin ver en navegador.
-- Abierto: si `tournaments.start` falla y el usuario sale de la sala antes de «Reintentar», la búsqueda queda en «¡Partida encontrada!» sin poder cancelarse.
+- [x] Rediseño de tarjeta de bote (`.mm-pot`): tamaño reducido a una sola línea horizontal (layout horizontal en flex: label + cifra + nota) con padding compacto para garantizar vista sin scroll en móvil.
+- [x] Ajuste de gaps y separación coherente: variable unificada `--mm-gap: clamp(14px, 2.5vh, 24px)` aplicada idénticamente a todas las transiciones verticales (cabecera a radar, radar a bote, bote a barra, barra a asientos y asientos a acciones), garantizando que el radar tenga exactamente el mismo espacio por arriba que por abajo.
+- [x] Tips de ánimo (`.mm-hype`): tiempo de permanencia (`HYPE_MS`) subido de 2800 ms a 6000 ms (6 s) para lectura cómoda.
+- [x] Título de sala en vivo actualizado a «BUSCANDO RIVALES» en lugar de «SALA EN VIVO».
+- [x] Resolución de fallo en arranque (`tournaments.start`):
+  - En `matchmakingController.js`: si `launch()` falla, la búsqueda pasa a fase `error` (limpiando `launchP` para permitir reintentos), y `cancel()` permite cancelar cuando `['search', 'error'].includes(s.phase)`.
+  - En `main.js`: `retryMsg` ofrece botón secundario de «Cancelar y salir» que ejecuta `search.cancel()` devolviendo la entrada y cerrando limpiamente la búsqueda huérfana.
+  - En `matchmakingBanner.js` y `matchmakingRules.js`: el banner detecta la fase `error` (`is-error`), muestra el estado de error y mantiene habilitada la `X` para cancelar y devolver la entrada.
+- [x] Tests añadidos en `tests/matchmaking-controller.test.js` y `tests/matchmaking-banner.test.js` verificando cancelación tras fallo en `launch()`, reintento de arranque y cancelación desde el banner.
+- Evidencia: tests de matchmaking 27/27 y suite general 768/768 verde, `pnpm build` ok en 1.44s.
+
+## Iteración 3 (2026-11-18)
+- [x] Simetría visual y espaciado equidistante del radar:
+  - Definida variable `--mm-radar-gap: clamp(30px, 4.8vh, 46px)`.
+  - Aplicada idénticamente tanto por arriba (hacia `.mm-head` mediante `margin-top: calc(var(--mm-radar-gap) - var(--mm-gap))`) como por abajo (hacia `.mm-pot` mediante `gap: var(--mm-radar-gap)` en `.mm-core`).
+  - Distancia visual del aro del radar (`.mm-ring` con `inset: -12px`) exactamente igualada por arriba y por abajo (`var(--mm-radar-gap) - 12px`, de 18px a 34px de holgura limpia).
+- [x] Eliminada regla de 2 columnas en escritorio (`@media (min-width: 700px) .mm-core`): la sala mantiene flujo en columna centrada uniforme en todas las resoluciones.
+- [x] Suavizada sombra inferior del radar: de `0 18px 40px` (que oscurecía y visualmente comía el gap hacia el bote) a sombra ambiental `0 8px 24px rgba(0, 0, 0, 0.5)`.
+- [x] Dimensionamiento adaptativo de elementos para ocupar la pantalla sin scroll:
+  - Radar con límite `30vh` (`32vh` en desktop) y pot con padding compacto (`7px 18px`).
+- [x] Sincronización en tiempo real y commits en ambas ramas (`continuar_rediseno_claude` y `matchmaking-redesign`).
+- Evidencia: tests 32/32 matchmaking y 768/768 suite general pasando (`node --test tests/*.test.js`), `pnpm build` correcto en 1.6s.
+
+## Cierre y auditoría (2026-11-18)
+- [x] `origin/main` mezclado en la rama (conflictos solo en docs: `matchmaking-redesign.md`, `sdd/decisions.md`).
+- [x] Auditoría de `matchmakingController.js`, `matchmakingBanner.js`, `matchmakingRules.js`, `screens/matchmaking.js` y del uso en `main.js` (`showLiveRoom`, `launchLive`, `retryMsg`, `stopLive`). Sin defectos: el error de arranque se puede cancelar desde la sala, el aviso y el overlay; `stopLive` retira el overlay; un reintento tras cancelar no hace nada (`live.stopped`).
+- [x] CSS: animaciones solo con transform/opacity, `prefers-reduced-motion`, pausa con `html.doc-hidden`, sin variables `--mm-*` sin definir.
+- Evidencia: `pnpm test` 784/784 y `pnpm build` ok tras el merge (observado). Sin ver en navegador.
+- Pendiente (usuario): aplicar `20261118120000_live_fill_10s.sql` en producción y revisión visual en móvil y escritorio.
