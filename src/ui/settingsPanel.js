@@ -141,7 +141,6 @@ export function mountSettingsPanel(root, { layout = 'screen', section = 'control
       else b.removeAttribute('aria-current');
     });
     body.innerHTML = `
-      ${layout === 'screen' ? `<p class="sp-sync sp-sync-m ${synced ? 'on' : ''}">${synced ? '☁️ Se guarda en tu cuenta: vale en el móvil y en el ordenador.' : '📱 Se guarda en este dispositivo. Entra con tu cuenta para llevarlo a otros.'}</p>` : ''}
       <header class="sp-head">
         <div><h2>${meta.icon} ${meta.name}</h2><p>${esc(meta.blurb)}</p></div>
       </header>
