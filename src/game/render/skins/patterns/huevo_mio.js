@@ -3,28 +3,13 @@
 //     y relieve de ondulaciones anchas y blandas (normal de poca intensidad, sin crestas).
 //   - Venas azul-violáceas/rojizas, ramificadas, de grosor medio constante en el mundo (la distancia a la vena se
 //     normaliza con el gradiente del ruido), borde suavizado con el tamaño de píxel y ligeramente abultadas.
-//   - Pelos negros ligeramente rizados en tres rejillas 3D de distinta escala y giro. Cada celda con raíz sobre la
-//     esfera lleva como mucho un pelo; su largo se recorta a lo que cabe en la celda en línea recta y se funde junto
-//     a las paredes, así que nunca se corta en seco. Llevan sombra suave sobre la piel y un poro en la raíz. Son
-//     pintura: no rompen la silueta. Tres rejillas (A, B, C): unos 300 pelos (≈150 visibles a la vez).
+//   - Los pelos NO están aquí: son geometría real (skins/hairDecor.js, `decor.hair` en skins.js) para que sobresalgan
+//     de la silueta. En calidad baja (sin shader) quedan los pelos pintados de la textura 2D.
 //   Con «reducir movimiento» (uTime fijo) el rubor no late. Al recibir un golpe (uImpact) la piel se enrojece.
-// Coste: 23 ruidos 3D en alta (fine = 1), 18 en media; los pelos solo usan hashes. Baja no ejecuta shader (canvas `flesh`).
-// Ajustes a ojo: quality.*.bump (relieve), wfreq (tamaño de las ondulaciones); en el GLSL HE_VEIN_W (grosor de
-//   vena), HE_HS_* / HE_DENS_* / HE_LEN_* (densidad y largo de pelo), HE_HAIR_W (grosor del pelo).
+// Coste: 23 ruidos 3D en alta (fine = 1), 18 en media; Baja no ejecuta shader (canvas `flesh`).
+// Ajustes a ojo: quality.*.bump (relieve), wfreq (tamaño de las ondulaciones); en el GLSL HE_VEIN_W (grosor de vena).
 export default {
   glsl: /* glsl */ `
-const mat3 HE_ROT_A = mat3(0.8, 0.6, 0.0, -0.48, 0.64, 0.6, 0.36, -0.48, 0.8);
-const mat3 HE_ROT_B = mat3(0.6, 0.0, 0.8, 0.64, 0.6, -0.48, -0.48, 0.8, 0.36);
-const float HE_HS_A = 3.0;      // celdas por unidad (rejilla de pelos largos)
-const float HE_DENS_A = 1.0;    // fracción de celdas válidas con pelo
-const float HE_LEN_A = 0.22;    // largo deseado (se recorta a lo que cabe en la celda)
-const float HE_HS_B = 5.0;      // rejilla de pelos cortos
-const float HE_DENS_B = 0.9;
-const float HE_LEN_B = 0.13;
-const float HE_HS_C = 6.8;      // tercera rejilla: pelos cortos y muy abundantes
-const float HE_DENS_C = 0.9;
-const float HE_LEN_C = 0.10;
-const float HE_HAIR_W = 0.0075; // grosor del pelo en la esfera unitaria (mínimo: un píxel)
 const float HE_VEIN_W = 0.024;  // semiancho de la vena principal en la esfera unitaria
 
 // relieve blando: ondulaciones anchas (sin abs ni crestas)
@@ -34,74 +19,6 @@ float he_relief(vec3 x) {
   h += 0.35 * sk_noise3(x * 2.13 + 4.7);
   #endif
   return h;
-}
-
-// Máscara de un pelo: a = distancia a lo largo, b = a lo ancho (plano tangente en la raíz), L = largo (> 0),
-// A/K/ph = amplitud, frecuencia y fase del rizo, B = curvatura, hw = semiancho, aa = suavizado del borde (> 0).
-float he_strand(float a, float b, float L, float A, float K, float ph, float B, float hw, float aa) {
-  float ar = clamp(a / L, 0.0, 1.0);
-  float ramp = smoothstep(0.0, 0.25, ar);
-  float centre = A * ramp * sin(a * K + ph) + B * a * a;
-  float slope = A * ramp * K * cos(a * K + ph) + 2.0 * B * a;
-  float dist = abs(b - centre) * inversesqrt(1.0 + slope * slope);
-  float w = hw * (1.0 - 0.55 * ar);
-  float along = smoothstep(-aa, aa, a) * (1.0 - smoothstep(L * 0.82, L, a));
-  return (1.0 - smoothstep(w - aa, w + aa, dist)) * along;
-}
-
-// Una capa de pelos en una rejilla girada (rot) de hs celdas por unidad. Devuelve (pelo, sombra, poro).
-// shO = abajo de la pantalla en espacio de objeto; px = tamaño de un píxel en la esfera (> 0).
-vec3 he_hairLayer(vec3 p, mat3 rot, float hs, float dens, float len, float salt, vec3 shO, float px) {
-  vec3 pr = rot * p;
-  vec3 off = vec3(uSeed * 0.173, uSeed * 0.291, uSeed * 0.113) + 0.37 + salt;
-  vec3 gp = pr * hs + off;
-  vec3 c = floor(gp);
-  vec3 fc = gp - c;
-  float hP = sk_hash(c + 3.7 + salt);
-  vec3 hJ = sk_hash3(c + 7.1 + salt) - 0.5;
-  vec3 hD = sk_hash3(c + 29.1 + salt) - 0.5;
-  vec3 hK = sk_hash3(c + 41.9 + salt);
-  vec3 centerW = (c + 0.5 - off) / hs;
-  vec3 rr = centerW + hJ * (0.7 / hs);
-  float rl = length(rr);
-  vec3 rootW = rr / max(rl, 1e-4);                                   // raíz sobre la esfera
-  vec3 rg = rootW * hs + off - c;                                    // raíz en coordenadas de celda (0..1 dentro)
-  vec3 inC = abs(rg - 0.5);
-  float valid = step(max(inC.x, max(inC.y, inC.z)), 0.32) * step(hP, dens) * step(1e-3, rl);
-  // dirección tangente: hacia el centro de la celda más un giro aleatorio
-  vec3 toC = centerW - rootW;
-  toC -= dot(toC, rootW) * rootW;
-  vec3 rt = hD - dot(hD, rootW) * rootW;
-  vec3 dd = toC * hs + rt * 1.2;
-  float dl = length(dd);
-  valid *= step(1e-3, dl);
-  vec3 d = dd / max(dl, 1e-3);
-  vec3 ev = cross(rootW, d);
-  // largo: lo que cabe en la celda en línea recta desde la raíz (con margen), recortado al deseado
-  vec3 tq = mix(rg, 1.0 - rg, step(0.0, d)) / max(abs(d), vec3(1e-3));
-  float Lw = len * (0.75 + 0.5 * hK.x);
-  float L = min(Lw, 0.8 * min(tq.x, min(tq.y, tq.z)) / hs);
-  valid *= step(0.4 * Lw, L);
-  L = max(L, 0.02);
-  float A = L * (0.07 + 0.06 * hK.y);                                // rizo suave
-  float K = 6.2831853 * (1.3 + 1.2 * hK.z) / L;                      // 1,3-2,5 ondas a lo largo
-  float ph = 6.2831853 * fract(hK.x * 7.13 + hK.y * 3.7);
-  float B = (hK.z - 0.5) * 0.9;                                      // leve curvatura
-  vec3 v = pr - rootW;
-  float aa = px * 0.7;
-  float hw = max(HE_HAIR_W, px * 1.1) * 0.5;
-  float hair = he_strand(dot(v, d), dot(v, ev), L, A, K, ph, B, hw, aa);
-  hair *= clamp(HE_HAIR_W / (px * 1.1), 0.55, 1.0);                  // de lejos, algo más tenue: no se empasta
-  // sombra sobre la piel: el mismo pelo, desplazado hacia abajo en pantalla, más ancho y difuso
-  vec3 sr = rot * shO;
-  sr -= dot(sr, rootW) * rootW;
-  vec3 v2 = v - sr * 0.016;
-  float sh = he_strand(dot(v2, d), dot(v2, ev), L, A, K, ph, B, hw * 2.2, aa + 0.008);
-  float pore = 1.0 - smoothstep(0.003, 0.014, length(v));
-  // fundido junto a las paredes de la celda: nunca un corte seco
-  vec3 fw = min(fc, 1.0 - fc);
-  float wall = smoothstep(0.0, 0.06, min(fw.x, min(fw.y, fw.z)));
-  return vec3(hair, sh, pore) * (valid * wall);
 }
 
 void skinPattern(vec3 p, inout vec4 diffuse) {
@@ -160,19 +77,6 @@ void skinPattern(vec3 p, inout vec4 diffuse) {
   vec3 gV = dirV * (-6.0 * tv * (1.0 - tv) / vb) * sign(s1) * presence;
   sk_nPert -= gV * 0.004;
   sk_dRough -= 0.05 * vein;
-
-  // ---- pelos (dos rejillas) ----
-  vec3 shO = vec3(-vObjX.y, -vObjY.y, -vObjZ.y);
-  vec3 hA = he_hairLayer(p, HE_ROT_A, HE_HS_A, HE_DENS_A, HE_LEN_A, 0.0, shO, px);
-  vec3 hB = he_hairLayer(p, HE_ROT_B, HE_HS_B, HE_DENS_B, HE_LEN_B, 0.53, shO, px);
-  vec3 hC = he_hairLayer(p, transpose(HE_ROT_A), HE_HS_C, HE_DENS_C, HE_LEN_C, 1.07, shO, px);
-  float hair = max(hA.x, max(hB.x, hC.x));
-  float shadow = max(hA.y, max(hB.y, hC.y)) * (1.0 - hair);
-  float pore = max(hA.z, max(hB.z, hC.z));
-  skin *= 1.0 - 0.45 * shadow;
-  skin *= 1.0 - 0.25 * pore;
-  skin = mix(skin, vec3(0.014, 0.010, 0.009), hair);
-  sk_dRough -= 0.25 * hair;                                        // el pelo brilla más que la piel
 
   // ---- golpe, luz bajo la piel ----
   skin = mix(skin, uPalAccent * 1.1, clamp(uImpact, 0.0, 1.0) * 0.4);

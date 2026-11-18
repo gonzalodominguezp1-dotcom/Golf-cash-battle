@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import './skinInspector.css';
-import { createSkinMaterial } from '../game/render/ballSkins.js';
+import { attachSkinDecor, createSkinMaterial } from '../game/render/ballSkins.js';
 import { SkinFX } from '../game/render/skins/skinFx.js';
 import { BALL_R } from '../game/physics.js';
 import { QUALITY_LEVELS, QUALITY_NAMES, getQuality } from '../game/render/quality.js';
@@ -217,6 +217,8 @@ export function createSkinInspector(container, opts = {}) {
     handle = createSkinMaterial(skin, { quality: level, instance: { seed: instance.seed }, noEnv });
     ball.geometry = mirrorBall.geometry = geo;
     ball.material = mirrorBall.material = handle.material;
+    attachSkinDecor(ball, handle, R);
+    attachSkinDecor(mirrorBall, handle, R);
     tierColor.set(tierOf(skin).color);
     root.style.setProperty('--sk-tier', tierOf(skin).color);
     glow.material.color.copy(tierColor);
@@ -241,6 +243,7 @@ export function createSkinInspector(container, opts = {}) {
     stage3.add(strip, cup, wall);
     pScene.add(stage3);
     const pBall = new THREE.Mesh(geo, handle.material);
+    attachSkinDecor(pBall, handle, R);
     pScene.add(pBall);
     const pFxGroup = new THREE.Group(); // las partículas viven en unidades de juego
     pFxGroup.scale.setScalar(FX_K);
@@ -719,9 +722,11 @@ function createThumbRenderer(size = 144) {
     render(skin, inst, quality) {
       const h = createSkinMaterial(skin, { quality, instance: { seed: inst.seed } });
       mesh.material = h.material;
+      attachSkinDecor(mesh, h, R);
       h.update(1.2, 0.016, { speed: 0, impact: 0, state: 0 });
       renderer.render(scene, camera);
       const url = canvas.toDataURL('image/png');
+      attachSkinDecor(mesh, null);
       h.dispose();
       return url;
     },
