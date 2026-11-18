@@ -6,6 +6,13 @@ import { makeTree, makeRock, makeFlower } from '../../game/render/environment.js
 import { makeRoundTree } from '../../game/render/assets/roundTree.js';
 import { makePine } from '../../game/render/assets/pine.js';
 import { makePalm } from '../../game/render/assets/palm.js';
+import { makeShrub } from '../../game/render/assets/shrub.js';
+import { makeBush } from '../../game/render/flora.js';
+import { applyWind } from '../../game/render/assets/wind.js';
+import * as THREE from 'three';
+
+// «Antes» del arbusto: las mismas hojas facetadas que usa environment.js (leafMats no se exporta)
+const OLD_LEAVES = [0x2f9e44, 0x3bb54a, 0x25803a, 0x4cc25a].map((color) => applyWind(new THREE.MeshLambertMaterial({ color, flatShading: true }), { layer: 'canopy' }));
 
 registerAsset({
   id: 'tree-round',
@@ -27,6 +34,13 @@ registerAsset({
   makeOld: (rng) => makeTree('palm', rng, 0, 0, 0),
   // Paso 3: tronco curvo con anillos, hojas arqueadas con foliolos que aletean (paleta: preset.theme si viene)
   makeNew: (rng, preset) => makePalm(rng, preset),
+});
+registerAsset({
+  id: 'shrub',
+  label: 'Arbusto',
+  makeOld: (rng) => makeBush(rng, 0, 0, 0, OLD_LEAVES),
+  // Paso 4: 2-4 racimos lisos bajos y anchos, viento suave (paleta: preset.theme si viene)
+  makeNew: (rng, preset) => makeShrub(rng, preset),
 });
 registerAsset({
   id: 'rock',

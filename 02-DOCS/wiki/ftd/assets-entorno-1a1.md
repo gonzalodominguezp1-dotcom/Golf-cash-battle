@@ -153,8 +153,8 @@ los entornos tras la aprobación.
 - [x] Paso 0 — viento compartido (visto bueno del usuario 2026-11-15)
 - [x] Paso 1 — árbol redondo (visto bueno del usuario 2026-11-16; sustituido en entornos naturales)
 - [x] Paso 2 — pino (visto bueno del usuario 2026-11-16; sustituido en `environment.js` 2026-11-18, pendiente de verlo en pantalla)
-- [ ] Paso 3 — palmera (en laboratorio 2026-11-18, pendiente de visto bueno)
-- [ ] Paso 4 — arbustos
+- [x] Paso 3 — palmera (visto bueno del usuario 2026-11-18; sustituida en `environment.js`)
+- [ ] Paso 4 — arbustos (en laboratorio 2026-11-18, pendiente de visto bueno; aún NO sustituidos en `environment.js`)
 - [ ] Paso 5 — césped
 - [ ] Paso 6 — flores
 - [ ] Paso 7 — rocas
@@ -192,6 +192,12 @@ los entornos tras la aprobación.
 - Palmera: `src/game/render/assets/palm.js`, `tests/palm.test.js` 12/12 (5 mutaciones detectadas), registrada en el laboratorio. Triángulos máx. 200/594/1044 (presupuesto 250/600/1200); 2 llamadas de dibujo por grupo. Aún NO sustituida en `environment.js`: falta decidir escala frente a la palmera vieja.
 - Revisión de contexto limpio (`refuter-correctness`): sin bloqueantes ni should-fix. Nits: ancho del pino no cubierto por test; `opts.leaves` ya no admite color literal (documentar); `palm.js` crea muchos `Vector3` al construir (medir `buildEnvironment` al conectar ~100 palmeras).
 - `pnpm test` 361/366 (5 VFX ajenos). `pnpm build` ok. Sin verificar: GLSL en GPU real, vista en pantalla, previews sin recapturar.
+
+(2026-11-18) **Palmera sustituida en entornos + Paso 4 arbustos en laboratorio; sin commit.**
+- Palmera: `makePalm` sustituye a `makeTree('palm')` en `beach`/`beachNight`. `PALM_SCALE = 0,64` (altura media 2,64 m; ancho ~2,13 vs 2,84 m, más esbelta). 3 tiradas fijas de rng. `tests/palm-env.test.js` 6/6; mutación (quitar la rama `palm` de `natureTree`) verificada en rojo por el revisor.
+- Arbustos: `src/game/render/assets/shrub.js` (3 formas, viento suave), `tests/shrub.test.js` 11/11 (5 mutaciones). Triángulos máx. 114/300/598 (presupuesto 120/300/600); 1 llamada de dibujo por grupo. Pendiente: escala frente a `makeBush`/`makeLushBush` y sustitución. Aviso: forma `mata` en Bajo con racimos de ~20 triángulos (silueta angulosa).
+- Revisión de contexto limpio: sin bloqueantes ni should-fix. Nits: `palm-env` solo exige que alguna malla use la palmera nueva; GLSL de arbustos validado por texto.
+- `pnpm test` 378/383 (5 VFX ajenos). Sin verificar: vista en pantalla, GLSL en GPU real, tiempos en móvil real.
 
 ## Next step
 Ver «ESTADO PARA RETOMAR» arriba: sustituir el pino en `environment.js` y seguir con el Paso 3 (palmera).

@@ -6,6 +6,7 @@ import { applyWind, setWindField, updateWind } from './assets/wind.js';
 import { quality } from './quality.js';
 import { makeRoundTree } from './assets/roundTree.js';
 import { makePine } from './assets/pine.js';
+import { makePalm } from './assets/palm.js';
 import { lavaMaterial } from './lava.js';
 import { CUP_R } from '../physics.js';
 import {
@@ -648,10 +649,39 @@ export function makeNaturePine(rng, x, y, z, theme, level = quality().lod) {
   return g;
 }
 
-/** Árbol nuevo para el tipo pedido ('round' o 'pine'); null si el tipo sigue siendo el viejo. */
+// Palmera del decorado natural (assets/palm.js). Medido sobre 100 semillas: la vieja (makeTree palm, escala x0,8-1,7) mide de media 2,64 m de alto y 2,84 de ancho;
+// la nueva con PALM_SCALE 1 y factor x0,8-1,25, 4,12 de alto y 3,33 de ancho. 0,64 iguala la altura media (ancho ~2,13).
+export const PALM_SCALE = 0.64;
+
+/** Paleta de la palmera: hojas y corteza del tema, o las suyas por defecto. */
+export function palmPaletteOpts(theme) {
+  const o = {};
+  if (theme?.leaves?.length) o.leaves = theme.leaves;
+  if (theme?.bark !== undefined) o.bark = theme.bark;
+  return o;
+}
+
+/**
+ * Coloca una palmera. Gasta SIEMPRE tres tiradas del rng del hoyo (escala, giro y semilla);
+ * la forma (variante incluida) sale de un generador propio, sin depender de la calidad.
+ */
+export function makeNaturePalm(rng, x, y, z, theme, level = quality().lod) {
+  const s = PALM_SCALE * (0.8 + rng() * 0.45);
+  const rot = rng() * Math.PI * 2;
+  const seed = Math.floor(rng() * 4294967296);
+  const g = makePalm(mulberry32(seed), level, palmPaletteOpts(theme));
+  g.position.set(x, y - 0.05, z);
+  g.scale.setScalar(s);
+  g.rotation.y = rot;
+  g.userData.swayRoot = true;
+  return g;
+}
+
+/** Árbol nuevo para el tipo pedido ('round', 'pine' o 'palm'); null si el tipo sigue siendo el viejo. */
 function natureTree(kind, rng, x, y, z, theme, level) {
   if (kind === 'round') return makeNatureRoundTree(rng, x, y, z, theme, level);
   if (kind === 'pine') return makeNaturePine(rng, x, y, z, theme, level);
+  if (kind === 'palm') return makeNaturePalm(rng, x, y, z, theme, level);
   return null;
 }
 
