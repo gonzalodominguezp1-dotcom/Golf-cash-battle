@@ -1,6 +1,0 @@
-# Escrito por rsc: la capa de herramientas guarda credenciales.
-*/.env
-*/.env.*
-!*/.env.example
-*/keys/
-*/out/
