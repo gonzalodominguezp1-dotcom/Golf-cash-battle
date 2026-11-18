@@ -915,14 +915,15 @@ body.sk-noscroll { overflow: hidden; } /* lo usa skinReveal.js: no borrar */
   --mm-hot: #ff3d6e;
   --mm-stripes: repeating-linear-gradient(118deg, rgba(255, 255, 255, 0.1) 0 2px, transparent 2px 9px);
   --mm-glass: rgba(10, 12, 20, 0.9);
+  --mm-gap: clamp(14px, 2.5vh, 24px);
   max-width: 760px;
   min-height: 100dvh;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  gap: clamp(8px, 1.6vh, 16px);
-  padding: calc(env(safe-area-inset-top, 0px) + 8px) 16px calc(env(safe-area-inset-bottom, 0px) + 16px);
+  justify-content: center;
+  gap: var(--mm-gap);
+  padding: calc(env(safe-area-inset-top, 0px) + 12px) 16px calc(env(safe-area-inset-bottom, 0px) + 16px);
   text-align: center;
   isolation: isolate;
   /* sin transform: el fondo y el destello son position: fixed */
@@ -1048,12 +1049,11 @@ body.sk-noscroll { overflow: hidden; } /* lo usa skinReveal.js: no borrar */
 
 /* radar + bote */
 .mm-core {
-  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: clamp(10px, 1.8vh, 16px);
+  gap: var(--mm-gap);
   margin: 0;
   transition: transform 0.5s cubic-bezier(0.5, 0, 0.75, 0), opacity 0.42s ease;
 }
@@ -1064,14 +1064,14 @@ body.sk-noscroll { overflow: hidden; } /* lo usa skinReveal.js: no borrar */
     align-items: center;
     justify-items: stretch;
     gap: 32px;
-    margin: 8px 0;
+    margin: 0;
   }
   .mm-core .mm-radar { justify-self: center; }
 }
 
 .mm-radar {
   position: relative; contain: layout style;
-  width: min(clamp(200px, 58vw, 280px), 36vh); aspect-ratio: 1;
+  width: min(clamp(200px, 58vw, 290px), 35vh); aspect-ratio: 1;
   border-radius: 50%;
   background:
     radial-gradient(circle, transparent 0 32%, color-mix(in srgb, var(--mm-a) 18%, transparent) 32.4% 33%, transparent 33.4% 55%, color-mix(in srgb, var(--mm-a) 14%, transparent) 55.4% 56%, transparent 56.4%),
@@ -1079,7 +1079,7 @@ body.sk-noscroll { overflow: hidden; } /* lo usa skinReveal.js: no borrar */
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--mm-a) 35%, transparent), 0 0 40px var(--mm-g), 0 18px 40px rgba(0, 0, 0, 0.6), inset 0 0 30px rgba(0, 0, 0, 0.7);
 }
 @media (min-width: 700px) {
-  .mm-radar { width: clamp(240px, 28vw, 310px); }
+  .mm-radar { width: clamp(240px, 28vw, 320px); }
 }
 .mm.is-fresh .mm-radar { animation: mmRadarIn 0.7s var(--ease-out) 0.05s backwards; }
 @keyframes mmRadarIn { from { opacity: 0; transform: scale(0.82); } }
