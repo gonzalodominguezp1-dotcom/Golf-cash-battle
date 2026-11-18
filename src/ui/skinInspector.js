@@ -5,6 +5,7 @@ import { SkinFX } from '../game/render/skins/skinFx.js';
 import { BALL_R } from '../game/physics.js';
 import { QUALITY_LEVELS, QUALITY_NAMES, getQuality } from '../game/render/quality.js';
 import { SKINS, TIERS } from '../progress/skins.js';
+import { isSkinLabRequested } from '../game/render/perfGovernor.js';
 
 // Inspector 360° de skins v2 (P8).
 //   createSkinInspector(container, { skin, instance, mode: 'panel'|'fullscreen', quality? })
@@ -697,13 +698,7 @@ export function createSkinInspector(container, opts = {}) {
 
 // ======================================================================= Skin Lab (?skinlab=1)
 
-export const isSkinLabRequested = () => {
-  try {
-    return new URLSearchParams(location.search).get('skinlab') === '1';
-  } catch {
-    return false;
-  }
-};
+export { isSkinLabRequested };
 
 /** Miniaturas 3D con un único renderer compartido (rejilla del laboratorio). */
 function createThumbRenderer(size = 144) {

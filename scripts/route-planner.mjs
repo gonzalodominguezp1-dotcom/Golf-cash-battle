@@ -4,7 +4,7 @@
 // equilibrar los caminos de un hoyo: con --avoid se prohíben zonas.
 // Uso: node scripts/route-planner.mjs "<nombre del hoyo>" [--avoid x0,z0,x1,z1 ...] [--no-ramp i ...]
 import { COURSES } from '../src/game/courses.js';
-import { BALL_R, DT, WALL_HALF, inLava, insidePoly, isMoving, segmentsOf, shotVelocity, step } from '../src/game/physics.js';
+import { DT, inLava, insidePoly, isMoving, segmentsOf, shotVelocity, step } from '../src/game/physics.js';
 
 const args = process.argv.slice(2);
 const course = COURSES.find((c) => c.name === args[0]);

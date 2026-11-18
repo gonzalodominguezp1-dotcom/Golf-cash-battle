@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { COURSES, TIEBREAK_COURSE } from '../src/game/courses.js';
-import { DT, segmentsOf, step, isMoving, quantizeShot, shotVelocity } from '../src/game/physics.js';
+import { DT, segmentsOf, step, isMoving, shotVelocity } from '../src/game/physics.js';
 import { Progress } from '../src/progress/Progress.js';
 import { LocalWallet } from '../src/wallet/LocalWallet.js';
 

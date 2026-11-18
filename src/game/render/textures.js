@@ -421,21 +421,6 @@ export function dirtTexture(neon = false, rock = false) {
   });
 }
 
-export function ballTexture(color = '#ff4d4d') {
-  return canvasTexture(
-    256,
-    (g, n) => {
-      g.fillStyle = '#ffffff';
-      g.fillRect(0, 0, n, n);
-      g.fillStyle = color;
-      g.fillRect(0, n * 0.44, n, n * 0.12);
-      g.fillStyle = 'rgba(0,0,0,0.06)';
-      for (let y = 8; y < n; y += 14) for (let x = (y / 14) % 2 ? 7 : 0; x < n; x += 14) g.fillRect(x, y, 3, 3);
-    },
-    false,
-  );
-}
-
 /** Oscuridad del fondo de un agujero: casi transparente arriba y negra abajo. */
 export function abyssTexture() {
   return canvasTexture(64, (g, n) => {

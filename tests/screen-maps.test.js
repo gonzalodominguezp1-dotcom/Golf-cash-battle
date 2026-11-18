@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { fakeEnv } from './helpers/fakeEnv.js';
 import { createScope } from '../src/screens/lifecycle.js';
 import { createRoutes } from '../src/screens/routes.js';
-import { COURSES, TIEBREAK_COURSE } from '../src/game/courses.js';
+import { COURSES } from '../src/game/courses.js';
 import { mount } from '../src/screens/maps.js';
 
 // Raíz falsa: reconoce [data-x] sobre el HTML pintado y devuelve elementos estables.

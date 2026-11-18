@@ -48,6 +48,7 @@ import { createNavigator } from './screens/navigate.js';
 import { createGoHome } from './screens/playLifecycle.js';
 import { createThumbs } from './screens/skinThumbsHook.js';
 import { getQuality } from './game/render/quality.js';
+import { isSkinLabRequested } from './game/render/perfGovernor.js';
 import { createBoot, createHubPreloader, trackProgress, waitPainted } from './ui/splashBridge.js';
 import { mountNetStats } from './ui/netStats.js';
 import { startVersionCheck } from './ui/versionCheck.js';
@@ -1480,10 +1481,7 @@ export function showFreePlayHoleResult(courseIndex, course, strokes) {
 }
 
 installThumbObserver(app, (id) => progress.instance(id));
-let skinLab = false;
-try {
-  skinLab = new URLSearchParams(location.search).get('skinlab') === '1';
-} catch { }
+const skinLab = isSkinLabRequested();
 if (skinLab) {
   app.innerHTML = '';
   loadSkinInspector().then(({ mountSkinLab }) => mountSkinLab(app));
