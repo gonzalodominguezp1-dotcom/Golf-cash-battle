@@ -8,14 +8,14 @@ import './texts/common.js';
 const FILES = {
   hub: 'hub', tables: 'tables', achievements: 'achievements', friends: 'friends', ranking: 'ranking',
   skins: 'skins', skin: 'skinInspect', account: 'account', wallet: 'monedero', settings: 'settings', maps: 'maps',
-  matchmaking: 'matchmaking',
+  matchmaking: 'matchmaking', novedades: 'novedades',
 };
 
 // Glob por nombres literales: Vite tolera los que aún no existen (un import() literal fallaría).
 export const screenModules = () => import.meta.glob([
   './hub.js', './tables.js', './achievements.js', './friends.js', './ranking.js',
   './skins.js', './skinInspect.js', './account.js', './monedero.js', './settings.js', './maps.js',
-  './matchmaking.js',
+  './matchmaking.js', './novedades.js',
 ]);
 
 // Adaptador de legado o marcador «en construcción». `manages`: la pantalla pinta #app por su cuenta.
@@ -58,6 +58,7 @@ export function createRoutes({ root = 'hub', modules = screenModules() } = {}) {
     r('wallet', '#/monedero'),
     r('settings', '#/ajustes'),
     r('maps', '#/mapas'),
+    r('novedades', '#/novedades'),
     r('matchmaking', '#/emparejar', { restorable: false }), // sin sesión abierta no tiene nada que mostrar al recargar
   ];
 }

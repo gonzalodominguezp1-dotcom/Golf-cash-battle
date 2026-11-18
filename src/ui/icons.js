@@ -247,6 +247,7 @@ const ICONS = {
   sound: () => [speaker(), T('M29.5 18c3 2.6 3 9.4 0 12', 'cyan', 3.4), T('M34.5 12.5c6 4.5 6 18.5 0 23', 'cyan', 3.4), G(10, 21, 1.4)],
   mute: () => [speaker(), T('M30 18l11 12M41 18L30 30', 'red', 3.6), G(10, 21, 1.4)],
   fullscreen: () => ['M7 18V8h10', 'M31 8h10v10', 'M41 30v10H31', 'M17 40H7V30'].map((d) => T(d, 'white', 4.6)),
+  news: () => [T('M15 14h26', 'white', 4), T('M15 24h26', 'white', 4), T('M15 34h16', 'white', 4)],
   gear: () => {
     const pts = [];
     const teeth = 8;

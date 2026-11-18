@@ -30,6 +30,7 @@
 .hub-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; padding: var(--pad); }
 .hub-left { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
 .hub-tools { flex: none; display: flex; gap: 8px; }
+.hub-tools-col { display: flex; flex-direction: column; gap: 8px; }
 .hub-tool { --ico: var(--tool); --ico-svg: var(--tool-svg); }
 
 /* la etiqueta va FUERA del recuadro, sin fondo: sombra fuerte para leerse sobre la escena */

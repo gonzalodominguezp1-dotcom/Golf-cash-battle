@@ -13,6 +13,7 @@ register('hub', {
   settings: 'Ajustes',
   fullscreen: 'Pantalla',
   fullscreenLabel: 'Pantalla completa',
+  newsLabel: 'Novedades de cada versión',
   ranking: 'Ranking',
   achievements: 'Logros',
   skins: 'Skins',
