@@ -199,5 +199,11 @@ los entornos tras la aprobación.
 - Revisión de contexto limpio: sin bloqueantes ni should-fix. Nits: `palm-env` solo exige que alguna malla use la palmera nueva; GLSL de arbustos validado por texto.
 - `pnpm test` 378/383 (5 VFX ajenos). Sin verificar: vista en pantalla, GLSL en GPU real, tiempos en móvil real.
 
+(2026-11-18) **Arbustos rediseñados (commit 76e7be6) + Paso 5 césped nuevo en laboratorio; césped sin commit.**
+- Arbustos: `shrub.js` nuevo (tronquito, ramas, tarjetas de hojas), `SHRUB_SCALE = 1` en `environment.js`; revisados por contexto limpio sin bloqueantes. Faltan ≥5 mutaciones manuales de `shrub.js` y su evidencia.
+- Césped (Opus): `grass.js` reescrito (6 especies × 3 variantes, atlas pintado en JS, ≤5 llamadas de dibujo), `grassPatch.js`, entradas `grass-<especie>`, `decisions.md` 5 bis. Medido: 13 500/36 000/68 400 triángulos por campo, atlas 1,0 MB, 12/12 mutaciones detectadas. Se añadió una aserción de mip 4 a `tests/grass.test.js`.
+- Revisión de contexto limpio: sin bloqueantes. Should-fix corregidos (Sonnet): `dispose` de `InstancedMesh` en el laboratorio y en `addGrass`, test del `.clone()` por campo. Nits abiertos: fundido por distancia y tono ocre sin test; el «antes» del laboratorio usa `preset.grass` y el «después» no.
+- `pnpm test` 404 tests, 399 pasan (5 VFX ajenos). Sin verificar: GLSL en GPU real, subida de la textura no cuadrada con mipmaps propios, vista en pantalla/móvil. Césped aún NO sustituido en `environment.js`/`flora.js`.
+
 ## Next step
-Ver «ESTADO PARA RETOMAR» arriba: sustituir el pino en `environment.js` y seguir con el Paso 3 (palmera).
+Visto bueno visual del usuario a arbustos y césped en `assets-lab.html`; después sustituir el césped en `environment.js`/`flora.js` y seguir con el Paso 6 (flores).
