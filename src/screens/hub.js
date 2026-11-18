@@ -3,7 +3,7 @@
 // izquierda, Skins/Amigos a la derecha; Mapas · JUGAR · Práctica abajo). Fondo: escena 3D precargada (ctx.hubScene) o, sin ella, la imagen fija del CSS.
 // El CSS (hub.css) lo importa el arranque, no este módulo, para poder probarlo en Node.
 import { CHALLENGES } from '../progress/skins.js';
-import { esc } from './shared.js';
+import { esc, avatarHtml } from './shared.js';
 import { badge, reasonDialog } from './components.js';
 import { levelRing, badgeFor, achievementsBadge, computeLocks, nudgeVars } from './hubRules.js';
 import { seenSet } from './achievementsRules.js';
@@ -43,6 +43,13 @@ export async function mount(root, ctx) {
   const storage = ctx.storage ?? globalThis.localStorage;
 
   const ring = levelRing(progress.level);
+  // Foto de perfil y marco dentro del anillo de XP. Sin foto ni marco se queda el icono de siempre.
+  const picHtml = () => {
+    const av = ctx.avatar?.get?.() ?? null;
+    const frame = progress.prestige?.frame ?? null;
+    if (!av && !frame) return icon('user', { size: 40 });
+    return avatarHtml({ size: 'sm', frame, av, initial: ctx.backend?.account?.profile?.username ?? '?' });
+  };
   const accountLabel = t(guest ? 'hub.accountGuestLabel' : 'hub.accountLabel', { level: ring.label });
 
   const friendsNow = (c) => badgeFor((c?.friendRequests || 0) + (c?.partyInvites || 0));
@@ -78,7 +85,7 @@ export async function mount(root, ctx) {
     <header class="hub-top">
       <div class="hub-left">
         <button type="button" class="hub-user" data-hub="account" data-focus-key="account" style="--pct:${ring.pct}" aria-label="${esc(accountLabel)}">
-          <span class="hub-face" style="${nudgeVars('user')}">${icon('user', { size: 40 })}<b class="hub-lv" data-hub-lv="1" aria-hidden="true">${ring.level}</b></span>
+          <span class="hub-face" style="${nudgeVars('user')}"><span class="hub-pic" data-hub-pic="1">${picHtml()}</span><b class="hub-lv" data-hub-lv="1" aria-hidden="true">${ring.level}</b></span>
         </button>
         ${ctx.wallet ? `<button type="button" class="hub-wallet" data-hub="wallet" data-focus-key="wallet" aria-label="${esc(t('hub.wallet'))}">
           <span class="hub-wallet-ico" aria-hidden="true" style="${nudgeVars('coins')}">${icon('coins', { size: 26 })}</span>
@@ -110,6 +117,7 @@ export async function mount(root, ctx) {
     achievements: root.querySelector('[data-badge="achievements"]'),
     user: root.querySelector('[data-hub="account"]'),
     lv: root.querySelector('[data-hub-lv="1"]'),
+    pic: root.querySelector('[data-hub-pic="1"]'),
     wallet: root.querySelector('[data-hub="wallet"]'),
     balance: root.querySelector('[data-hub-balance="1"]'),
     nav: Object.fromEntries(Object.keys(NAV).filter((k) => root.querySelector(`[data-lock="${k}"]`)).map((k) => [k, { btn: root.querySelector(`[data-hub="${k}"]`), layer: root.querySelector(`[data-lock="${k}"]`) }])),
@@ -171,6 +179,7 @@ export async function mount(root, ctx) {
       refs.user.setAttribute?.('aria-label', t(isGuest() ? 'hub.accountGuestLabel' : 'hub.accountLabel', { level: r.label }));
     }
     if (refs.lv) refs.lv.textContent = String(r.level);
+    if (refs.pic) refs.pic.innerHTML = picHtml();
     fresh = false;
     readBalance();
   };
