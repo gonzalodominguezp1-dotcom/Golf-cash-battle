@@ -55,8 +55,8 @@
 .hub-pic { position: absolute; inset: 0; display: grid; place-items: center; }
 .hub-pic > svg { width: var(--face-svg); height: var(--face-svg); position: relative; }
 .hub-pic .pf { --s: calc(var(--face) - 12px); margin: 0; }
-/* el marco ilustrado cabe dentro del anillo: 4 px de anillo visibles alrededor (el hueco del marco da la foto) */
-.hub-pic .pf-illustrated { --box: calc(var(--face) - 8px); }
+/* marco ilustrado más grande que el anillo: su hueco (--hole) da el tamaño de la foto, que queda centrada dentro del marco */
+.hub-pic .pf-illustrated { --box: calc(var(--face) * 1.25); }
 .hub-face > svg { position: relative; } /* centrado exacto: el chip de nivel (abajo) queda libre porque el dibujo mide ~31 de 72 px */
 .hub-lv {
   position: absolute; bottom: -3px; left: 50%; transform: translateX(-50%); min-width: 24px; height: 20px; padding: 0 6px;
