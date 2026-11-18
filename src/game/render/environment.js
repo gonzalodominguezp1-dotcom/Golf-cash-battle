@@ -8,6 +8,7 @@ import { makeRoundTree } from './assets/roundTree.js';
 import { makePine } from './assets/pine.js';
 import { makePalm } from './assets/palm.js';
 import { makeShrub } from './assets/shrub.js';
+import { addGrass, grassGroundColor, grassMixOf } from './assets/grass.js';
 import { lavaMaterial } from './lava.js';
 import { CUP_R } from '../physics.js';
 import {
@@ -17,7 +18,7 @@ import {
   setupCyberpunkEnvironment,
   buildCyberCity,
 } from './cyberpunkEnvironment.js';
-import { addGrassField, floraOf, groundDetailTexture, makeLilyPad, makeReeds, makeRiver, TERRAIN_FOCUS, warpCoord } from './flora.js';
+import { floraOf, groundDetailTexture, makeLilyPad, makeReeds, makeRiver, TERRAIN_FOCUS, warpCoord } from './flora.js';
 import { lushMountains, makeGrassClump, makeLushCloud, makeLushRock, makeLushTree, meadowGroundTexture } from './lushEnvironment.js';
 
 // tiempo compartido por los sombreadores animados del agua (el viento va en assets/wind.js)
@@ -148,6 +149,11 @@ export function buildEnvironment(scene, course, theme, rng) {
   geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position;
   const volcano = theme.caldera ? volcanoShape(course) : null;
+  // césped nuevo (assets/grass.js): el reparto del tema decide (neón, ciudad, lava y caldera: sin hierba)
+  const newGrass = !isNeon && !volcano && !!grassMixOf(theme) && flora.grass > 0 && q.grass > 0;
+  const grassTint = flora.tint ?? [new THREE.Color(theme.groundMid).getHex(), new THREE.Color(theme.groundHigh).offsetHSL(0, 0.06, 0.1).getHex()];
+  const GRASS_REACH = 15;
+  const gtmp = new THREE.Color();
   // malla más fina cerca del hoyo y más gruesa hacia el horizonte (mismos triángulos)
   const focus = !isNeon && !volcano;
   if (focus) {
@@ -225,6 +231,11 @@ export function buildEnvironment(scene, course, theme, rng) {
     if (y < 2.5) c.copy(mid).lerp(high, THREE.MathUtils.clamp((y - 0.5) / 3, 0, 1));
     else c.copy(high).lerp(new THREE.Color(0x8a8f86), THREE.MathUtils.clamp((y - 4) / 4, 0, 0.7));
     c.lerp(low, 1 - shore);
+    // bajo el césped nuevo el suelo lleva su mismo tono (más oscuro): sin franjas claras entre matas
+    if (newGrass) {
+      const kg = 0.65 * shore * (1 - THREE.MathUtils.smoothstep(distToBounds(bounds, x, z), 6, GRASS_REACH)) * (1 - THREE.MathUtils.smoothstep(y, 2.5, 4));
+      if (kg > 0) c.lerp(grassGroundColor(x, z, grassTint, gtmp), kg);
+    }
     if (lawn) c.lerp(lawn, 0.85 * (1 - THREE.MathUtils.smoothstep(distToBounds(bounds, x, z), 1.5, 9)));
     // manchas grandes y suaves: prados más claros y más oscuros
     c.offsetHSL(0, 0, (noise(x * 0.15 + 3, z * 0.15) - 0.5) * 0.08 + (hash(x, z) - 0.5) * 0.015);
@@ -339,7 +350,8 @@ export function buildEnvironment(scene, course, theme, rng) {
     place(grounded ? 3.2 : 2, 22, 60, (x, y, z, d) => clear(x, z) && decor.add(makeNatureShrub(rng, x, y, z, theme, detail(d))));
     place(grounded ? 2.8 : 1.8, 30, 34, (x, y, z, d) => clear(x, z) && decor.add(makeLushRock(rng, x, y, z, theme.groundLow, detail(d))));
     if (theme.flowers) place(grounded ? 1.6 : 1.2, 12, 140, (x, y, z) => decor.add(makeFlower(rng, x, y, z)));
-    place(grounded ? 1.6 : 1, 16, 220, (x, y, z) => decor.add(makeGrassClump(rng, x, y, z, grass)));
+    // matas sueltas de hoy: solo si el césped nuevo no las sustituye (addGrass ya lleva matas altas)
+    if (!newGrass) place(grounded ? 1.6 : 1, 16, 220, (x, y, z) => decor.add(makeGrassClump(rng, x, y, z, grass)));
   } else {
     const leaves = theme.leaves?.map((color) => applyWind(new THREE.MeshLambertMaterial({ color, flatShading: true }), { layer: 'canopy' }));
     // a ras de suelo nada pisa el antegreen, y detrás del tee queda un claro para la cámara
@@ -361,7 +373,8 @@ export function buildEnvironment(scene, course, theme, rng) {
       for (let k = 0; k < 3; k++) decor.add(makeRock(rng, x + (rng() - 0.5) * 1.2, y - 0.05, z + (rng() - 0.5) * 1.2, 0.45));
     });
     if (theme.flowers) place(grounded ? 1.6 : 1.2, 12, 110, (x, y, z) => decor.add(makeFlower(rng, x, y, z)));
-    place(grounded ? 1.6 : 1, 14, 90, (x, y, z) => decor.add(makeTuft(rng, x, y, z, theme)));
+    // matas sueltas de hoy: solo en los temas sin césped nuevo (lava y caldera siguen como estaban)
+    if (!newGrass) place(grounded ? 1.6 : 1, 14, 90, (x, y, z) => decor.add(makeTuft(rng, x, y, z, theme)));
     if (theme.lanterns) {
       // farolillos alrededor de la pista; solo unos pocos llevan luz real (cada luz cuesta en el móvil)
       const spots = theme.lanterns === 'many' ? perimeterSpots(course, grounded ? 1.7 : 1.3, 3.2) : [];
@@ -410,14 +423,17 @@ export function buildEnvironment(scene, course, theme, rng) {
 
   // --- hierba: miles de briznas instanciadas alrededor de la pista ---
   const [tx0, tz0] = course.tee;
-  const grassField = !volcano && flora.grass > 0 && q.grass > 0
-    ? addGrassField(scene, {
+  const grassField = newGrass
+    ? addGrass(scene, {
         bounds,
         heightAt,
         rng,
-        density: flora.grass * q.grass,
-        tint: flora.tint ?? [new THREE.Color(theme.groundMid).getHex(), new THREE.Color(theme.groundHigh).offsetHSL(0, 0.06, 0.1).getHex()],
-        uniforms: windUniforms,
+        // el presupuesto de matas lo da la calidad (level); la densidad es la del tema
+        density: flora.grass,
+        level: q.lod,
+        theme,
+        reach: GRASS_REACH,
+        tint: grassTint,
         // fuera del agua y del cauce, y sin tapar el tee (la cámara está ahí detrás)
         ok: (x, z, y) => y > waterY + 0.18 && (!river || river.dist(x, z) > river.w + 0.3) && Math.hypot(x - tx0, z - tz0) > 1.2,
       })
@@ -527,6 +543,7 @@ export function buildEnvironment(scene, course, theme, rng) {
     update: (t, dt) => animated.forEach((f) => f(t, dt)),
     // trozos de hierba lejanos: fuera
     lod: (cam) => grassField?.update(cam),
+    dispose: () => grassField?.dispose(),
   };
 }
 

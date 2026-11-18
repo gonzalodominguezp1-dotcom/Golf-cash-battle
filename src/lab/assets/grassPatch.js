@@ -8,6 +8,9 @@ import { addGrassField, floraOf, groundDetailTexture } from '../../game/render/f
 import { makeGrassClump } from '../../game/render/lushEnvironment.js';
 import { applyWind } from '../../game/render/assets/wind.js';
 import { makeGrassField, grassGroundColor } from '../../game/render/assets/grass.js';
+import { makeFlowerField } from '../../game/render/assets/flower.js';
+import { makeFlower } from '../../game/render/environment.js';
+import { seededRng } from '../assetRegistry.js';
 import { BALL_R } from '../../game/physics.js';
 
 // pista de 2,5 x 6 m y 8 m de hierba alrededor
@@ -91,9 +94,10 @@ function oldClump(rng, x, y, z, theme) {
   return makeGrassClump(rng, x, y, z, lushClumpMats.get(theme.groundHigh));
 }
 
-function patch(theme, content, groundMesh) {
+function patch(theme, content, groundMesh, backdrop = null) {
   const g = new THREE.Group();
   g.add(groundMesh, markers(theme), content);
+  if (backdrop) g.add(backdrop);
   // el laboratorio mide solo la hierba, no toca sus sombras y mira desde más cerca
   g.userData.lab = { measure: content, keepShadows: true, dist: 12, target: [0, 0.3, 0] };
   return g;
@@ -117,11 +121,52 @@ export function oldGrassPatch(rng, preset) {
   return patch(theme, content, ground(theme, null));
 }
 
-/** «Después»: césped nuevo (una llamada de dibujo) sobre un suelo de su mismo color. */
-export function newGrassPatch(rng, preset) {
+/**
+ * «Después»: césped nuevo (una malla por especie, como mucho 5 llamadas) sobre un suelo
+ * de su mismo color. El reparto de especies sale del tema de la escena; `only` deja una
+ * sola especie (las mismas matas en los mismos sitios) para mirarla de cerca.
+ */
+export function newGrassPatch(rng, preset, { only } = {}) {
   const theme = preset.sceneTheme;
   const flora = floraOf(theme);
   const tint = themeTint(theme, flora);
-  const { group } = makeGrassField({ bounds: BOUNDS, heightAt, ok, rng, density: flora.grass * AREA, tint, reach: REACH, level: preset.level });
+  const { group } = makeGrassField({ bounds: BOUNDS, heightAt, ok, rng, density: flora.grass * AREA, tint, reach: REACH, level: preset.level, theme, only });
   return patch(theme, group, ground(theme, (x, z, out) => grassGroundColor(x, z, tint, out)));
+}
+
+// ---------- flores (paso 6) ----------
+
+/** Césped nuevo de fondo, igual en «antes» y «después» (rng propio: no toca el de las flores). */
+function flowerBackdrop(theme, preset, tint) {
+  const flora = floraOf(theme);
+  if (!(flora.grass > 0)) return null;
+  return makeGrassField({ bounds: BOUNDS, heightAt, ok, rng: seededRng(77), density: flora.grass * AREA, tint, reach: REACH, level: preset.level, theme }).group;
+}
+
+/** «Antes»: makeFlower de hoy (una flor = un grupo de mallas sueltas) en los temas con flores. */
+export function oldFlowerPatch(rng, preset) {
+  const theme = preset.sceneTheme;
+  const tint = themeTint(theme, floraOf(theme));
+  const content = new THREE.Group();
+  if (theme.flowers) {
+    // environment.js prueba 140 x decor sitios por hoyo (110 fuera de la pradera), a 1-14 m de la pista
+    const tries = Math.round(140 * preset.decor * AREA);
+    for (let i = 0; i < tries; i++) {
+      const x = (rng() - 0.5) * W, z = (rng() - 0.5) * D, d = distBox(x, z);
+      if (d < 1 || d > REACH) continue;
+      content.add(makeFlower(rng, x, 0, z));
+    }
+  }
+  return patch(theme, content, ground(theme, (x, z, out) => grassGroundColor(x, z, tint, out)), flowerBackdrop(theme, preset, tint));
+}
+
+/**
+ * «Después»: flores nuevas (una InstancedMesh por especie, como mucho 3 llamadas) sobre el
+ * mismo suelo y césped de fondo. La paleta sale del tema; `only` deja una sola especie.
+ */
+export function newFlowerPatch(rng, preset, { only } = {}) {
+  const theme = preset.sceneTheme;
+  const tint = themeTint(theme, floraOf(theme));
+  const { group } = makeFlowerField({ bounds: BOUNDS, heightAt, ok, rng, density: AREA, reach: REACH, level: preset.level, theme, only });
+  return patch(theme, group, ground(theme, (x, z, out) => grassGroundColor(x, z, tint, out)), flowerBackdrop(theme, preset, tint));
 }

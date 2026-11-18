@@ -120,6 +120,7 @@ let layout = [];
 function disposeScene(scene) {
   scene?.traverse((n) => {
     n.geometry?.dispose?.();
+    if (n.isInstancedMesh) n.dispose?.(); // libera instanceMatrix / instanceColor
     if (n.isLight) n.shadow?.map?.dispose();
   });
 }

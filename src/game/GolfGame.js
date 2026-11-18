@@ -484,6 +484,7 @@ export class GolfGame {
 
   #buildScene() {
     this.#disposeFx();
+    this.env?.dispose?.(); // césped del hoyo anterior (malla propia; material y atlas son compartidos)
     // la escena del hoyo anterior: se liberan sus geometrías (three las vuelve a subir si algo las reutiliza)
     this.scene?.traverse((o) => o.geometry?.dispose());
     const scene = new THREE.Scene();

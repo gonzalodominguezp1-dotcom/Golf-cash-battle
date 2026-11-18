@@ -2,13 +2,15 @@
 // Los pasos siguientes del plan (02-DOCS/wiki/ftd/assets-entorno-1a1.md) sustituyen el null
 // de makeNew por el diseño nuevo.
 import { registerAsset } from '../assetRegistry.js';
-import { makeTree, makeRock, makeFlower } from '../../game/render/environment.js';
+import { makeTree, makeRock } from '../../game/render/environment.js';
 import { makeRoundTree } from '../../game/render/assets/roundTree.js';
 import { makePine } from '../../game/render/assets/pine.js';
 import { makePalm } from '../../game/render/assets/palm.js';
 import { makeShrub } from '../../game/render/assets/shrub.js';
 import { makeBush } from '../../game/render/flora.js';
-import { oldGrassPatch, newGrassPatch } from './grassPatch.js';
+import { oldGrassPatch, newGrassPatch, oldFlowerPatch, newFlowerPatch } from './grassPatch.js';
+import { FLOWER_SPECIES, FLOWER_INFO } from '../../game/render/assets/flower.js';
+import { GRASS_SPECIES, GRASS_SPECIES_INFO } from '../../game/render/assets/grass.js';
 import { applyWind } from '../../game/render/assets/wind.js';
 import * as THREE from 'three';
 
@@ -46,11 +48,21 @@ registerAsset({
 registerAsset({
   id: 'grass',
   label: 'Césped (parche 19 x 22 m)',
-  // «Antes»: addGrassField + makeTuft/makeGrassClump de hoy; Paso 5: briznas curvas, manchas
-  // de color según el mundo, matas altas junto a la pista, 1 llamada de dibujo (assets/grass.js)
+  // «Antes»: addGrassField + makeTuft/makeGrassClump de hoy; Paso 5 bis: 6 especies x 3
+  // variantes con atlas de hojas (Medio/Alto), reparto según el tema, manchas de color según
+  // el mundo, matas altas junto a la pista, como mucho 5 llamadas de dibujo (assets/grass.js)
   makeOld: (rng, preset) => oldGrassPatch(rng, preset),
   makeNew: (rng, preset) => newGrassPatch(rng, preset),
 });
+// cada especie sola, en los mismos sitios (para mirarla de cerca frente al césped de hoy)
+for (const sp of GRASS_SPECIES) {
+  registerAsset({
+    id: `grass-${sp}`,
+    label: `Césped · solo ${GRASS_SPECIES_INFO[sp].label}`,
+    makeOld: (rng, preset) => oldGrassPatch(rng, preset),
+    makeNew: (rng, preset) => newGrassPatch(rng, preset, { only: sp }),
+  });
+}
 registerAsset({
   id: 'rock',
   label: 'Roca',
@@ -59,7 +71,19 @@ registerAsset({
 });
 registerAsset({
   id: 'flower',
-  label: 'Flor',
-  makeOld: (rng) => makeFlower(rng, 0, 0, 0),
-  makeNew: () => null,
+  label: 'Flores (parche 19 x 22 m)',
+  // «Antes»: makeFlower de hoy suelto; Paso 6: margarita, tulipán y campanilla instanciados
+  // (una malla por especie, como mucho 3 llamadas), manchas por especie, paleta del tema y
+  // tallo que se dobla con el viento (assets/flower.js). Los temas sin flores salen vacíos.
+  makeOld: (rng, preset) => oldFlowerPatch(rng, preset),
+  makeNew: (rng, preset) => newFlowerPatch(rng, preset),
 });
+// cada especie sola, en los mismos sitios (para mirarla de cerca)
+for (const sp of FLOWER_SPECIES) {
+  registerAsset({
+    id: `flower-${sp}`,
+    label: `Flores · solo ${FLOWER_INFO[sp].label}`,
+    makeOld: (rng, preset) => oldFlowerPatch(rng, preset),
+    makeNew: (rng, preset) => newFlowerPatch(rng, preset, { only: sp }),
+  });
+}
