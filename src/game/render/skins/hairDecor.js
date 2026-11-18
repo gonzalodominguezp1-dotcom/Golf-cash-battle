@@ -3,8 +3,8 @@ import * as THREE from 'three';
 // Pelos de verdad para las skins con `decor.hair`: tubos gruesos, oscuros, afilados y rizados de forma irregular que salen
 // de un bultito de folículo y SOBRESALEN de la silueta. Todo en una sola malla (un draw call) sobre la esfera unitaria;
 // el grupo se escala al radio de la bola y se cuelga de su malla, así que ruedan y se aplastan con ella.
-// Reparto: una parte junto al rafe (la misma curva que he_rapheX en patterns/huevo_mio.js), otra en grupitos de 2-3 y el
-// resto sueltos por toda la bola. Color por vértice: raíz color carne (el bultito), pelo casi negro y punta algo parda.
+// Reparto: aleatorio pero parejo (muestreo de «mejor candidato»: cada pelo elige, entre `spread` puntos al azar, el más
+// alejado de los ya puestos), así no hay zonas apelmazadas ni huecos. `seam` / `clump` (0 por defecto) permiten agrupar. Color por vértice: raíz color carne (el bultito), pelo casi negro y punta algo parda.
 // Determinista por `seed` (la semilla de la instancia): el mismo dueño ve siempre los mismos pelos.
 
 const SIDES = 4; // caras de cada tubo
@@ -30,7 +30,8 @@ const lerp = ([a, b], t) => a + (b - a) * t;
  * Rellena `geometry` con `count` pelos (position, normal, color e índices). Devuelve la geometría (misma instancia).
  * Forma: `length` (normal) y `longLength` para la fracción `longShare` de pelos largos, `thickness` en la raíz,
  * `lean` (radianes respecto a la normal), `turns` y `curl` (vueltas y radio del rizo, relativo al largo),
- * `seam` / `seamWidth` (fracción y dispersión de pelos junto al rafe), `clump` (fracción que sale en grupito con el anterior).
+ * `spread` (candidatos por pelo: 1 = azar puro, más = más parejo), `seam` / `seamWidth` (fracción y dispersión de pelos junto al rafe) y
+ * `clump` (fracción que sale en grupito con el anterior); ambos a 0 por defecto.
  */
 export function fillHairGeometry(geometry, {
   count,
@@ -42,9 +43,10 @@ export function fillHairGeometry(geometry, {
   lean = [0.45, 1.2],
   turns = [0.7, 1.5],
   curl = [0.1, 0.17],
-  seam = 0.26,
+  seam = 0,
   seamWidth = 0.1,
-  clump = 0.28,
+  clump = 0,
+  spread = 6,
   color = '#0c0807',
   rootColor = '#a8695c',
   tipColor = '#3a2418',
@@ -61,6 +63,7 @@ export function fillHairGeometry(geometry, {
   const u = new THREE.Vector3(), v = new THREE.Vector3(), bend = new THREE.Vector3(), tmp = new THREE.Vector3(), nn = new THREE.Vector3();
   const T = new THREE.Vector3(), U = new THREE.Vector3(), V = new THREE.Vector3(), ref = new THREE.Vector3();
   const pts = Array.from({ length: SEGS + 1 }, () => new THREE.Vector3());
+  const roots = new Float32Array(n * 3);
   const maxRoot = 0.04; // radio máximo del bultito: su anillo queda pegado a la piel (|p| ≈ 0,998)
 
   for (let i = 0; i < n; i++) {
@@ -74,11 +77,25 @@ export function fillHairGeometry(geometry, {
       const d = 0.02 + rnd() * 0.035;
       nrm.set(prev.x + (rnd() - 0.5) * 2 * d, prev.y + (rnd() - 0.5) * 2 * d, prev.z + (rnd() - 0.5) * 2 * d);
     } else {
-      const y = 1 - 2 * rnd(), th = rnd() * Math.PI * 2, r = Math.sqrt(Math.max(0, 1 - y * y));
-      nrm.set(r * Math.cos(th), y, r * Math.sin(th));
+      // mejor candidato: de `spread` puntos uniformes en la esfera, el más lejos de su vecino más cercano
+      const tries = i === 0 ? 1 : Math.max(1, Math.floor(spread));
+      let bx = 0, by = 1, bz = 0, bd = -1;
+      for (let c = 0; c < tries; c++) {
+        const y = 1 - 2 * rnd(), th = rnd() * Math.PI * 2, r = Math.sqrt(Math.max(0, 1 - y * y));
+        const cx = r * Math.cos(th), cz = r * Math.sin(th);
+        let md = 4;
+        for (let j = 0; j < i; j++) {
+          const dx = cx - roots[j * 3], dy = y - roots[j * 3 + 1], dz = cz - roots[j * 3 + 2];
+          const d = dx * dx + dy * dy + dz * dz;
+          if (d < md) md = d;
+        }
+        if (md > bd) { bd = md; bx = cx; by = y; bz = cz; }
+      }
+      nrm.set(bx, by, bz);
     }
     if (nrm.lengthSq() < 1e-8) nrm.set(0, 0, 1);
     nrm.normalize();
+    roots[i * 3] = nrm.x; roots[i * 3 + 1] = nrm.y; roots[i * 3 + 2] = nrm.z;
     prev.copy(nrm);
     ref.set(Math.abs(nrm.y) > 0.9 ? 1 : 0, Math.abs(nrm.y) > 0.9 ? 0 : 1, 0);
     t1.crossVectors(nrm, ref).normalize();

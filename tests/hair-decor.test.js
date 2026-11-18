@@ -29,21 +29,43 @@ test('muchos pelos no desbordan los índices (Uint32 si hace falta)', () => {
   assert.ok(max < g.getAttribute('position').count);
 });
 
-test('reparto: se agrupan junto al rafe (x ≈ 0, por delante) y la raíz es color carne, no negra', () => {
-  const n = 400;
-  const g = fillHairGeometry(new THREE.BufferGeometry(), { count: n, seed: 5 });
-  const a = g.getAttribute('position').array, c = g.getAttribute('color').array;
-  let near = 0;
+// raíz de cada pelo = media de los 4 vértices de su anillo 0 (el bultito), normalizada
+const rootsOf = (g, n) => {
+  const a = g.getAttribute('position').array, out = [];
   for (let i = 0; i < n; i++) {
-    const o = i * 11 * 4 * 3; // centro del anillo 0 (bultito) = raíz
+    const o = i * 11 * 4 * 3;
     let x = 0, y = 0, z = 0;
     for (let j = 0; j < 4; j++) { x += a[o + j * 3]; y += a[o + j * 3 + 1]; z += a[o + j * 3 + 2]; }
     const r = Math.hypot(x, y, z);
-    if (Math.abs(x / r) < 0.15 && z / r > -0.2) near++;
-    assert.ok(c[o] > c[o + 3 * 4 * 5], 'la raíz es más clara que el pelo');
+    out.push([x / r, y / r, z / r]);
   }
-  // al azar solo caería ~15 % en esa franja; con el rafe, bastante más
-  assert.ok(near / n > 0.3, `junto al rafe: ${near}/${n}`);
+  return out;
+};
+const minNN = (pts) => {
+  let m = 4;
+  for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) m = Math.min(m, Math.hypot(pts[i][0] - pts[j][0], pts[i][1] - pts[j][1], pts[i][2] - pts[j][2]));
+  return m;
+};
+
+test('reparto parejo: sin zonas apelmazadas ni huecos, y la raíz es color carne', () => {
+  const n = 340;
+  const g = fillHairGeometry(new THREE.BufferGeometry(), { count: n, seed: 5 });
+  const pts = rootsOf(g, n);
+  // cada octante de la esfera recibe cerca de n/8 pelos
+  const oct = new Array(8).fill(0);
+  for (const [x, y, z] of pts) oct[(x > 0 ? 1 : 0) + (y > 0 ? 2 : 0) + (z > 0 ? 4 : 0)]++;
+  for (const c of oct) assert.ok(Math.abs(c - n / 8) < (n / 8) * 0.3, `octante con ${c} pelos (esperado ~${n / 8}): ${oct}`);
+  // y ninguna pareja casi encima (al azar puro sí ocurre)
+  const even = minNN(pts), plain = minNN(rootsOf(fillHairGeometry(new THREE.BufferGeometry(), { count: n, seed: 5, spread: 1 }), n));
+  assert.ok(even > plain * 2, `mejor candidato ${even.toFixed(3)} vs azar puro ${plain.toFixed(3)}`);
+  const c = g.getAttribute('color').array;
+  for (let i = 0; i < n; i++) assert.ok(c[i * 132] > c[i * 132 + 3 * 4 * 5], 'la raíz es más clara que el pelo');
+});
+
+test('con seam y clump se pueden agrupar (opciones conservadas)', () => {
+  const n = 300;
+  const pts = rootsOf(fillHairGeometry(new THREE.BufferGeometry(), { count: n, seed: 5, seam: 0.5, clump: 0.2 }), n);
+  assert.ok(pts.filter(([x, , z]) => Math.abs(x) < 0.15 && z > -0.2).length / n > 0.3);
 });
 
 test('los pelos SOBRESALEN de la esfera: raíces en la piel y puntas claramente fuera', () => {
