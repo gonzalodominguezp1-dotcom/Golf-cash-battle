@@ -4,6 +4,7 @@ import './screens/hub.css';
 import './screens/tables.css';
 import './screens/friends.css';
 import './screens/ranking.css';
+import './screens/novedades.css';
 import './screens/skins.css';
 import './screens/skinInspect.css';
 import './screens/account.css';

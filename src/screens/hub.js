@@ -7,7 +7,6 @@ import { esc } from './shared.js';
 import { badge, reasonDialog } from './components.js';
 import { levelRing, badgeFor, achievementsBadge, computeLocks, nudgeVars } from './hubRules.js';
 import { seenSet } from './achievementsRules.js';
-import { maybeShowWhatsNew, whatsNewDue } from '../ui/whatsNew.js';
 import { t } from './texts/index.js';
 import './texts/common.js';
 import './texts/hub.js';
@@ -88,7 +87,10 @@ export async function mount(root, ctx) {
       </div>
       <div class="hub-tools">
         <button type="button" class="hub-nav hub-tool" data-hub="settings" data-focus-key="settings" aria-label="${esc(t('hub.settings'))}"><span class="hub-ico hub-ico--tool" style="${nudgeVars('gear')}">${icon('gear')}</span></button>
-        <button type="button" class="hub-nav hub-tool" data-hub="fullscreen" aria-label="${esc(t('hub.fullscreenLabel'))}"><span class="hub-ico hub-ico--tool" style="${nudgeVars('fullscreen')}">${icon('fullscreen')}</span></button>
+        <div class="hub-tools-col">
+          <button type="button" class="hub-nav hub-tool" data-hub="fullscreen" aria-label="${esc(t('hub.fullscreenLabel'))}"><span class="hub-ico hub-ico--tool" style="${nudgeVars('fullscreen')}">${icon('fullscreen')}</span></button>
+          <button type="button" class="hub-nav hub-tool" data-hub="news" data-focus-key="news" aria-label="${esc(t('hub.newsLabel'))}"><span class="hub-ico hub-ico--tool" style="${nudgeVars('news')}">${icon('news')}</span></button>
+        </div>
       </div>
     </header>
     <nav class="hub-mid" aria-label="${esc(t('hub.title'))}">
@@ -174,7 +176,7 @@ export async function mount(root, ctx) {
   };
 
   const go = (id) => { ctx.sfx?.tap?.(); router.push(id); };
-  const ACTIONS = { play: () => go('tables'), account: () => go('account'), wallet: () => { ctx.sfx?.tap?.(); router.push('wallet'); }, settings: () => go('settings'), fullscreen: () => ctx.actions.toggleFullscreen() };
+  const ACTIONS = { play: () => go('tables'), account: () => go('account'), wallet: () => { ctx.sfx?.tap?.(); router.push('wallet'); }, settings: () => go('settings'), news: () => go('novedades'), fullscreen: () => ctx.actions.toggleFullscreen() };
   for (const [key, n] of Object.entries(NAV)) ACTIONS[key] = n.go ? () => go(n.go) : () => { ctx.sfx?.tap?.(); ctx.actions[n.act](); };
   // Popup con el requisito de un acceso bloqueado; solo uno a la vez y se cierra con el hub.
   let dlg = null;
@@ -237,7 +239,6 @@ export async function mount(root, ctx) {
   ctx.actions.claimRewards();
   // llegada al hub sin escena (tras una partida): se recrea en segundo plano; el hub ya está pintado con la imagen fija
   if (!scene) reviveScene();
-  if (whatsNewDue({ storage })) scope.timeout(() => { try { maybeShowWhatsNew({ scope, storage, returnTo: root.querySelector?.('[data-focus-key="play"]') }); } catch (err) { console.warn('whatsNew', err?.message ?? err); } }, 0); // tras el primer render; no bloquea el hub
 
   return {
     title: t('hub.title'),
