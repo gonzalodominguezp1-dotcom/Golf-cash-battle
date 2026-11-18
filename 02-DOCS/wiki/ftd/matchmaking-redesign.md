@@ -1,7 +1,7 @@
 ---
 author: Chakets
 branch: matchmaking-redesign
-status: in-progress
+status: done
 ---
 
 # Rediseño de la pantalla de matchmaking
@@ -55,3 +55,10 @@ Esperar al subagente de UI, revisar el diff y pasar tests.
   - Radar con límite `30vh` (`32vh` en desktop) y pot con padding compacto (`7px 18px`).
 - [x] Sincronización en tiempo real y commits en ambas ramas (`continuar_rediseno_claude` y `matchmaking-redesign`).
 - Evidencia: tests 32/32 matchmaking y 768/768 suite general pasando (`node --test tests/*.test.js`), `pnpm build` correcto en 1.6s.
+
+## Cierre y auditoría (2026-11-18)
+- [x] `origin/main` mezclado en la rama (conflictos solo en docs: `matchmaking-redesign.md`, `sdd/decisions.md`).
+- [x] Auditoría de `matchmakingController.js`, `matchmakingBanner.js`, `matchmakingRules.js`, `screens/matchmaking.js` y del uso en `main.js` (`showLiveRoom`, `launchLive`, `retryMsg`, `stopLive`). Sin defectos: el error de arranque se puede cancelar desde la sala, el aviso y el overlay; `stopLive` retira el overlay; un reintento tras cancelar no hace nada (`live.stopped`).
+- [x] CSS: animaciones solo con transform/opacity, `prefers-reduced-motion`, pausa con `html.doc-hidden`, sin variables `--mm-*` sin definir.
+- Evidencia: `pnpm test` 784/784 y `pnpm build` ok tras el merge (observado). Sin ver en navegador.
+- Pendiente (usuario): aplicar `20261118120000_live_fill_10s.sql` en producción y revisión visual en móvil y escritorio.
