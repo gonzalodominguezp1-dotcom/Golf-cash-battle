@@ -80,7 +80,7 @@ function conifer(hex) {
 function pinePalette(quality, opts) {
   const theme = opts.theme ?? (quality && typeof quality === 'object' ? quality.theme : null) ?? null;
   let leaves;
-  if (opts.leaves?.length) leaves = opts.leaves.map((h) => new THREE.Color(h));
+  if (opts.leaves?.length) leaves = opts.leaves.map(conifer);
   else if (theme?.leaves?.length) leaves = theme.leaves.map(conifer);
   else leaves = PINE_DEFAULTS.leaves.map((h) => new THREE.Color(h));
   const bark = new THREE.Color(opts.bark ?? theme?.bark ?? PINE_DEFAULTS.bark);
@@ -358,7 +358,7 @@ function fit(plan, level, palette) {
  * - rng: generador con semilla (todas las formas salen de él)
  * - quality: 'low' | 'medium' | 'high', el preset del laboratorio ({ level, theme? }), { lod } o 0/1/2
  * - opts: { variant?: 0..3, leaves?: [hex], bark?: hex, theme?: { leaves, bark }, snow?: bool | 0..1, snowColor?: hex }
- *   Paleta: opts.leaves/bark, si no opts.theme o quality.theme (los verdes del tema se
+ *   Paleta: opts.leaves/bark, si no opts.theme o quality.theme (los verdes de opts.leaves y del tema se
  *   oscurecen a verde de pino), si no PINE_DEFAULTS.
  */
 export function makePine(rng, quality = 'medium', opts = {}) {

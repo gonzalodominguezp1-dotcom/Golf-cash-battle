@@ -152,8 +152,8 @@ los entornos tras la aprobación.
 - [x] Paso L — laboratorio (visto bueno del usuario 2026-11-15; parpadeo en «Después» en arreglo)
 - [x] Paso 0 — viento compartido (visto bueno del usuario 2026-11-15)
 - [x] Paso 1 — árbol redondo (visto bueno del usuario 2026-11-16; sustituido en entornos naturales)
-- [x] Paso 2 — pino (visto bueno del usuario 2026-11-16; AÚN NO sustituido en `environment.js`)
-- [ ] Paso 3 — palmera
+- [x] Paso 2 — pino (visto bueno del usuario 2026-11-16; sustituido en `environment.js` 2026-11-18, pendiente de verlo en pantalla)
+- [ ] Paso 3 — palmera (en laboratorio 2026-11-18, pendiente de visto bueno)
 - [ ] Paso 4 — arbustos
 - [ ] Paso 5 — césped
 - [ ] Paso 6 — flores
@@ -186,6 +186,12 @@ los entornos tras la aprobación.
 (2026-11-16) **Paso 1: sustitución en entornos.** `makeRoundTree` sustituye al árbol redondo viejo en pradera (`lushEnv`) y rama natural normal de `environment.js`; neón y temas sin árbol redondo no cambian. `ROUND_TREE_SCALE = 0.95` (medido: viejo 2,2 m, nuevo 2,4 m sin escalar). Consume 3 tiradas fijas del rng del hoyo: el resto del decorado de esos temas cambia de sitio, sigue determinista; colisiones/`place`/`clear`/`heightAt` intactos. Sol = primera luz direccional en todos los hoyos (test). Laboratorio pasa el tema al árbol. `tests/round-tree-env.test.js` (7). Sin ver en pantalla.
 
 (2026-11-16) **Paso 2 — pino entregado en el laboratorio, pendiente de visto bueno.** `src/game/render/assets/pine.js` + `treeKit.js`, `tests/pine.test.js` (14/14, 5 mutaciones manuales detectadas). 4 variantes; triángulos máx. 218/500/998 (presupuesto 220/500/1000); 2 llamadas de dibujo por bosque; opción `snow` solo en color de vértice (pino nevado completo en Paso 9). Revisión limpia: sin bloqueantes; nit: `treeKit.js` duplica `withRim/treeLevel` de `roundTree.js` (unificar en el cierre); `pinePalette` solo oscurece verdes del tema si llegan por `theme`. `pnpm test` 342/347 (5 VFX ajenos), `pnpm build` ok. Aún NO sustituido en `environment.js`.
+
+(2026-11-18) **Pino sustituido en entornos + Paso 3 palmera en laboratorio; sin commit, pendientes de visto bueno visual.**
+- Pino: `makePine` sustituye al viejo en pradera (`lushEnv`) y rama natural normal. `PINE_SCALE = 0,76` iguala la altura media (2,37 m); queda más esbelto (ancho ~1,84 m vs 2,32 m, a juzgar a ojo). 3 tiradas fijas de rng. `opts.leaves` ahora se oscurece como el tema. `tests/pine-env.test.js` 7/7 (mutación detectada).
+- Palmera: `src/game/render/assets/palm.js`, `tests/palm.test.js` 12/12 (5 mutaciones detectadas), registrada en el laboratorio. Triángulos máx. 200/594/1044 (presupuesto 250/600/1200); 2 llamadas de dibujo por grupo. Aún NO sustituida en `environment.js`: falta decidir escala frente a la palmera vieja.
+- Revisión de contexto limpio (`refuter-correctness`): sin bloqueantes ni should-fix. Nits: ancho del pino no cubierto por test; `opts.leaves` ya no admite color literal (documentar); `palm.js` crea muchos `Vector3` al construir (medir `buildEnvironment` al conectar ~100 palmeras).
+- `pnpm test` 361/366 (5 VFX ajenos). `pnpm build` ok. Sin verificar: GLSL en GPU real, vista en pantalla, previews sin recapturar.
 
 ## Next step
 Ver «ESTADO PARA RETOMAR» arriba: sustituir el pino en `environment.js` y seguir con el Paso 3 (palmera).

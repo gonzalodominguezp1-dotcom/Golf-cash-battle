@@ -5,6 +5,7 @@ import { bakeStatic } from './batch.js';
 import { applyWind, setWindField, updateWind } from './assets/wind.js';
 import { quality } from './quality.js';
 import { makeRoundTree } from './assets/roundTree.js';
+import { makePine } from './assets/pine.js';
 import { lavaMaterial } from './lava.js';
 import { CUP_R } from '../physics.js';
 import {
@@ -329,7 +330,7 @@ export function buildEnvironment(scene, course, theme, rng) {
     place(grounded ? 4.5 : 2.2, 40, 140, (x, y, z, d) => {
       if (!clear(x, z)) return;
       const kind = theme.trees[Math.floor(rng() * theme.trees.length)];
-      const tree = kind === 'round' ? makeNatureRoundTree(rng, x, y, z, theme, detail(d)) : makeLushTree(kind, rng, x, y, z, leaves, detail(d));
+      const tree = natureTree(kind, rng, x, y, z, theme, detail(d)) ?? makeLushTree(kind, rng, x, y, z, leaves, detail(d));
       tree.userData.swayRoot = true;
       decor.add(tree);
     });
@@ -345,7 +346,7 @@ export function buildEnvironment(scene, course, theme, rng) {
     place(grounded ? 4.5 : 2.2, 40, 140, (x, y, z, d) => {
       if (!clear(x, z)) return;
       const kind = theme.trees[Math.floor(rng() * theme.trees.length)];
-      const tree = kind === 'round' ? makeNatureRoundTree(rng, x, y, z, theme, detail(d)) : makeTree(kind, rng, x, y, z, leaves);
+      const tree = natureTree(kind, rng, x, y, z, theme, detail(d)) ?? makeTree(kind, rng, x, y, z, leaves);
       // los árboles se mecen con el viento (en el sombreador, ver assets/wind.js)
       tree.userData.swayRoot = true;
       decor.add(tree);
@@ -616,6 +617,42 @@ export function makeNatureRoundTree(rng, x, y, z, theme, level = quality().lod) 
   g.rotation.y = rot;
   g.userData.swayRoot = true;
   return g;
+}
+
+// Pino del decorado natural (assets/pine.js). Medido sobre 100 semillas: el viejo (makeTree 'pine', con su
+// escala x0,8-1,7) mide de media 2,37 m de alto y 2,32 de ancho; el nuevo, con el factor x0,8-1,25 y sin
+// PINE_SCALE, 3,12 m de alto y 2,41 de ancho. 0,76 iguala la altura media (~2,37 m; ancho ~1,84: más esbelto).
+export const PINE_SCALE = 0.76;
+
+/** Paleta del pino: las hojas del tema (el pino las oscurece a verde de pino) o las suyas por defecto. */
+export function pinePaletteOpts(theme) {
+  const o = {};
+  if (theme?.leaves?.length) o.leaves = theme.leaves;
+  if (theme?.bark !== undefined) o.bark = theme.bark;
+  return o;
+}
+
+/**
+ * Coloca un pino. Gasta SIEMPRE tres tiradas del rng del hoyo (escala, giro y semilla);
+ * la forma sale de un generador propio, sin depender de la calidad.
+ */
+export function makeNaturePine(rng, x, y, z, theme, level = quality().lod) {
+  const s = PINE_SCALE * (0.8 + rng() * 0.45);
+  const rot = rng() * Math.PI * 2;
+  const seed = Math.floor(rng() * 4294967296);
+  const g = makePine(mulberry32(seed), level, pinePaletteOpts(theme));
+  g.position.set(x, y - 0.05, z);
+  g.scale.setScalar(s);
+  g.rotation.y = rot;
+  g.userData.swayRoot = true;
+  return g;
+}
+
+/** Árbol nuevo para el tipo pedido ('round' o 'pine'); null si el tipo sigue siendo el viejo. */
+function natureTree(kind, rng, x, y, z, theme, level) {
+  if (kind === 'round') return makeNatureRoundTree(rng, x, y, z, theme, level);
+  if (kind === 'pine') return makeNaturePine(rng, x, y, z, theme, level);
+  return null;
 }
 
 export function makeTree(kind, rng, x, y, z, leaves = leafMats) {

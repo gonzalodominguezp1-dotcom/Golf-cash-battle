@@ -5,6 +5,7 @@ import { registerAsset } from '../assetRegistry.js';
 import { makeTree, makeRock, makeFlower } from '../../game/render/environment.js';
 import { makeRoundTree } from '../../game/render/assets/roundTree.js';
 import { makePine } from '../../game/render/assets/pine.js';
+import { makePalm } from '../../game/render/assets/palm.js';
 
 registerAsset({
   id: 'tree-round',
@@ -19,6 +20,13 @@ registerAsset({
   makeOld: (rng) => makeTree('pine', rng, 0, 0, 0),
   // Paso 2: pisos lisos con borde ondulado, tronco a la vista, punta fina (paleta: preset.theme si viene)
   makeNew: (rng, preset) => makePine(rng, preset),
+});
+registerAsset({
+  id: 'palm',
+  label: 'Palmera',
+  makeOld: (rng) => makeTree('palm', rng, 0, 0, 0),
+  // Paso 3: tronco curvo con anillos, hojas arqueadas con foliolos que aletean (paleta: preset.theme si viene)
+  makeNew: (rng, preset) => makePalm(rng, preset),
 });
 registerAsset({
   id: 'rock',
