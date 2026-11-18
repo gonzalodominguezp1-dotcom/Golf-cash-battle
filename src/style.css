@@ -2789,6 +2789,20 @@ body.sk-noscroll { overflow: hidden; } /* lo usa skinReveal.js: no borrar */
 .friend-msg.err { color: #ff6b8a; }
 .friend-msg.ok { color: var(--muted); }
 
+/* móvil: amigos en cuadrícula de 2 columnas, tarjeta centrada (foto arriba, nombre y acciones abajo) */
+@media (max-width: 640px) {
+  .friend-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .friend {
+    flex-direction: column; align-items: center; justify-content: center; text-align: center;
+    gap: 8px; padding: 14px 8px 12px; min-width: 0;
+  }
+  .friend-name { justify-items: center; width: 100%; }
+  .friend-name b { max-width: 100%; }
+  .friend-actions { flex-direction: column; align-items: stretch; width: 100%; }
+  .friend > .chip-btn { width: 100%; justify-content: center; }
+  .friend-actions .chip-btn { width: 100%; justify-content: center; }
+}
+
 /* ---------- grupos ---------- */
 .party-box:empty { display: none; }
 .party-card { display: grid; gap: 10px; margin: 0 0 18px; padding: 14px; border-radius: 18px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); }
