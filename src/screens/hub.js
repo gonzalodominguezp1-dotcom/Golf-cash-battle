@@ -84,12 +84,8 @@ export async function mount(root, ctx) {
     <h1 class="sr-only">${esc(t('hub.logoAlt'))}</h1>
     <header class="hub-top">
       <div class="hub-left">
-        <button type="button" class="hub-xp" data-hub="progress" data-focus-key="progress" style="--pct:${ring.pct}" aria-label="${esc(ring.label)}">
-          <b class="hub-xp-lv" data-hub-lv="1">${ring.level}</b>
-          <span class="hub-xp-bar" aria-hidden="true"><i></i></span>
-        </button>
         <button type="button" class="hub-user" data-hub="account" data-focus-key="account" style="--pct:${ring.pct}" aria-label="${esc(accountLabel)}">
-          <span class="hub-face" style="${nudgeVars('user')}"><span class="hub-pic" data-hub-pic="1">${picHtml()}</span></span>
+          <span class="hub-face" style="${nudgeVars('user')}"><span class="hub-pic" data-hub-pic="1">${picHtml()}</span><b class="hub-lv" data-hub-lv="1" aria-hidden="true">${ring.level}</b></span>
         </button>
         ${ctx.wallet ? `<button type="button" class="hub-wallet" data-hub="wallet" data-focus-key="wallet" aria-label="${esc(t('hub.wallet'))}">
           <span class="hub-wallet-ico" aria-hidden="true" style="${nudgeVars('coins')}">${icon('coins', { size: 26 })}</span>
@@ -121,7 +117,6 @@ export async function mount(root, ctx) {
     achievements: root.querySelector('[data-badge="achievements"]'),
     user: root.querySelector('[data-hub="account"]'),
     lv: root.querySelector('[data-hub-lv="1"]'),
-    xp: root.querySelector('[data-hub="progress"]'),
     pic: root.querySelector('[data-hub-pic="1"]'),
     wallet: root.querySelector('[data-hub="wallet"]'),
     balance: root.querySelector('[data-hub-balance="1"]'),
@@ -184,14 +179,13 @@ export async function mount(root, ctx) {
       refs.user.setAttribute?.('aria-label', t(isGuest() ? 'hub.accountGuestLabel' : 'hub.accountLabel', { level: r.label }));
     }
     if (refs.lv) refs.lv.textContent = String(r.level);
-    if (refs.xp) { refs.xp.style?.setProperty?.('--pct', String(r.pct)); refs.xp.setAttribute?.('aria-label', r.label); }
     if (refs.pic) refs.pic.innerHTML = picHtml();
     fresh = false;
     readBalance();
   };
 
   const go = (id) => { ctx.sfx?.tap?.(); router.push(id); };
-  const ACTIONS = { play: () => go('tables'), account: () => go('account'), progress: () => { ctx.sfx?.tap?.(); router.push('account', { tab: 'progreso' }); }, wallet: () => { ctx.sfx?.tap?.(); router.push('wallet'); }, settings: () => go('settings'), news: () => go('novedades'), fullscreen: () => ctx.actions.toggleFullscreen() };
+  const ACTIONS = { play: () => go('tables'), account: () => go('account'), wallet: () => { ctx.sfx?.tap?.(); router.push('wallet'); }, settings: () => go('settings'), news: () => go('novedades'), fullscreen: () => ctx.actions.toggleFullscreen() };
   for (const [key, n] of Object.entries(NAV)) ACTIONS[key] = n.go ? () => go(n.go) : () => { ctx.sfx?.tap?.(); ctx.actions[n.act](); };
   // Popup con el requisito de un acceso bloqueado; solo uno a la vez y se cierra con el hub.
   let dlg = null;
