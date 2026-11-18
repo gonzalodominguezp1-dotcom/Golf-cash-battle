@@ -1,16 +1,14 @@
 // El Huevo Mío (skin por código): bola de carne húmeda, mate-satinada, sin bordes duros.
 //   - Carne: tono de baja frecuencia, veteado tipo marmoleado (vetas pálidas y rojizas), rubor que late con uTime
 //     y relieve de ondulaciones anchas y blandas (normal de poca intensidad, sin crestas).
-//   - Arriba: un surco largo y difuso a lo largo de un meridiano junto al polo +Y del objeto, y otro más tenue al
-//     lado (perfil gaussiano: ni trazo ni contorno).
 //   - Venas azul-violáceas/rojizas, ramificadas, de grosor medio constante en el mundo (la distancia a la vena se
 //     normaliza con el gradiente del ruido), borde suavizado con el tamaño de píxel y ligeramente abultadas.
-//   - Pelos negros ligeramente rizados en dos rejillas 3D de distinta escala y giro. Cada celda con raíz sobre la
+//   - Pelos negros ligeramente rizados en tres rejillas 3D de distinta escala y giro. Cada celda con raíz sobre la
 //     esfera lleva como mucho un pelo; su largo se recorta a lo que cabe en la celda en línea recta y se funde junto
 //     a las paredes, así que nunca se corta en seco. Llevan sombra suave sobre la piel y un poro en la raíz. Son
-//     pintura: no rompen la silueta. ~48 pelos en la rejilla A y ~55 en la B (≈50 visibles a la vez).
+//     pintura: no rompen la silueta. Tres rejillas (A, B, C): unos 300 pelos (≈150 visibles a la vez).
 //   Con «reducir movimiento» (uTime fijo) el rubor no late. Al recibir un golpe (uImpact) la piel se enrojece.
-// Coste: 22 ruidos 3D en alta (fine = 1), 17 en media; los pelos solo usan hashes. Baja no ejecuta shader (canvas `flesh`).
+// Coste: 23 ruidos 3D en alta (fine = 1), 18 en media; los pelos solo usan hashes. Baja no ejecuta shader (canvas `flesh`).
 // Ajustes a ojo: quality.*.bump (relieve), wfreq (tamaño de las ondulaciones); en el GLSL HE_VEIN_W (grosor de
 //   vena), HE_HS_* / HE_DENS_* / HE_LEN_* (densidad y largo de pelo), HE_HAIR_W (grosor del pelo).
 export default {
@@ -18,14 +16,16 @@ export default {
 const mat3 HE_ROT_A = mat3(0.8, 0.6, 0.0, -0.48, 0.64, 0.6, 0.36, -0.48, 0.8);
 const mat3 HE_ROT_B = mat3(0.6, 0.0, 0.8, 0.64, 0.6, -0.48, -0.48, 0.8, 0.36);
 const float HE_HS_A = 3.0;      // celdas por unidad (rejilla de pelos largos)
-const float HE_DENS_A = 0.85;   // fracción de celdas válidas con pelo
+const float HE_DENS_A = 1.0;    // fracción de celdas válidas con pelo
 const float HE_LEN_A = 0.22;    // largo deseado (se recorta a lo que cabe en la celda)
-const float HE_HS_B = 4.4;      // rejilla de pelos cortos
-const float HE_DENS_B = 0.45;
-const float HE_LEN_B = 0.15;
+const float HE_HS_B = 5.0;      // rejilla de pelos cortos
+const float HE_DENS_B = 0.9;
+const float HE_LEN_B = 0.13;
+const float HE_HS_C = 6.8;      // tercera rejilla: pelos cortos y muy abundantes
+const float HE_DENS_C = 0.9;
+const float HE_LEN_C = 0.10;
 const float HE_HAIR_W = 0.0075; // grosor del pelo en la esfera unitaria (mínimo: un píxel)
 const float HE_VEIN_W = 0.024;  // semiancho de la vena principal en la esfera unitaria
-const vec3 HE_FURROW_N = vec3(0.98058, 0.0, 0.19612); // normal del plano del surco superior (pasa por el polo +Y)
 
 // relieve blando: ondulaciones anchas (sin abs ni crestas)
 float he_relief(vec3 x) {
@@ -132,20 +132,6 @@ void skinPattern(vec3 p, inout vec4 diffuse) {
   skin *= 0.92 + 0.1 * hc;                                         // valles apenas más oscuros
   sk_dRough += 0.06 - 0.12 * hc;                                   // lomas algo más satinadas
 
-  // ---- surco(s) de arriba: gaussianas anchas a lo largo de un meridiano que pasa por el polo +Y ----
-  float wob = (sk_noise3(q * 2.6 + 21.0) - 0.5) * 0.07;
-  float d1 = dot(p, HE_FURROW_N) + wob;
-  float f1 = exp(-d1 * d1 * 330.0) * smoothstep(0.35, 0.8, p.y);
-  float d2 = d1 - 0.17;
-  float f2 = exp(-d2 * d2 * 500.0) * smoothstep(0.6, 0.92, p.y) * 0.6;
-  float fur = f1 + f2;
-  vec3 gF = HE_FURROW_N * (f1 * d1 * 660.0 + f2 * d2 * 1000.0);  // gradiente de la altura (-fur)
-  gF -= dot(gF, p) * p;
-  sk_nPert -= gF * 0.009;
-  skin *= 1.0 - 0.2 * fur;
-  skin = mix(skin, uPalAccent * 0.9, 0.18 * fur);
-  sk_dRough += 0.08 * fur;
-
   // ---- venas: isolínea 0,5 de un ruido; distancia en el mundo = |n - 0,5| / |gradiente| ----
   vec3 vq = q * 1.9 + (tone - 0.5) * vec3(1.4, -1.0, 0.8);
   float n1 = sk_noise3(vq);
@@ -161,8 +147,8 @@ void skinPattern(vec3 p, inout vec4 diffuse) {
   float aa2 = fwidth(n2) * 0.8 + 1e-4;
   float nearV = 1.0 - smoothstep(0.0, 0.17, abs(s1));              // las ramas nacen junto a una vena gruesa
   float vBr = (1.0 - smoothstep(0.012, 0.036 + aa2, abs(n2 - 0.5))) * nearV;
-  float presence = smoothstep(0.22, 0.52, sk_noise3(q * 0.95 + 2.2));
-  float vein = max(vMain, vBr * 0.85) * presence;
+  float presence = smoothstep(0.5, 0.66, sk_noise3(q * 0.95 + 2.2)) * smoothstep(0.42, 0.58, sk_noise3(q * 2.4 + 8.0)); // zonas sueltas y tramos cortos
+  float vein = max(vMain, vBr * 0.5) * presence;
   float halo = (1.0 - smoothstep(0.0, vw * 3.0, distW)) * presence;
   vec3 veinCol = mix(vec3(0.10, 0.12, 0.34), vec3(0.30, 0.07, 0.15), smoothstep(0.35, 0.65, marb));
   skin = mix(skin, skin * vec3(0.84, 0.82, 1.0), halo * 0.4);     // velo azulado bajo la piel
@@ -179,9 +165,10 @@ void skinPattern(vec3 p, inout vec4 diffuse) {
   vec3 shO = vec3(-vObjX.y, -vObjY.y, -vObjZ.y);
   vec3 hA = he_hairLayer(p, HE_ROT_A, HE_HS_A, HE_DENS_A, HE_LEN_A, 0.0, shO, px);
   vec3 hB = he_hairLayer(p, HE_ROT_B, HE_HS_B, HE_DENS_B, HE_LEN_B, 0.53, shO, px);
-  float hair = max(hA.x, hB.x);
-  float shadow = max(hA.y, hB.y) * (1.0 - hair);
-  float pore = max(hA.z, hB.z);
+  vec3 hC = he_hairLayer(p, transpose(HE_ROT_A), HE_HS_C, HE_DENS_C, HE_LEN_C, 1.07, shO, px);
+  float hair = max(hA.x, max(hB.x, hC.x));
+  float shadow = max(hA.y, max(hB.y, hC.y)) * (1.0 - hair);
+  float pore = max(hA.z, max(hB.z, hC.z));
   skin *= 1.0 - 0.45 * shadow;
   skin *= 1.0 - 0.25 * pore;
   skin = mix(skin, vec3(0.014, 0.010, 0.009), hair);
