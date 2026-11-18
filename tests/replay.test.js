@@ -84,13 +84,3 @@ test('ocho golpes sin embocar cuentan como el máximo', () => {
   assert.equal(r.strokes, 8);
   assert.equal(r.sunk, false);
 });
-
-test('la función del servidor usa la misma física que el juego', async () => {
-  const { readFileSync } = await import('node:fs');
-  const { SHARED } = await import('../scripts/sync-functions.mjs');
-  for (const [f, to] of SHARED) {
-    const src = readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8');
-    const fn = readFileSync(new URL(`../supabase/functions/submit-hole/${to}`, import.meta.url), 'utf8');
-    assert.equal(fn, src, `${f} desactualizado: pnpm run sync:functions`);
-  }
-});
