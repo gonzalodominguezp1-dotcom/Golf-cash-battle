@@ -127,7 +127,8 @@ function disposeScene(scene) {
 function rebuild() {
   const theme = THEMES[state.themeId];
   // la paleta del tema llega a los assets por el preset (preset.theme; la lee roundTree.js)
-  const preset = { level: state.level, ...qualityPreset(state.level), theme: roundTreePalette(theme) };
+  // sceneTheme: el tema entero, para los assets que necesitan más que la paleta (césped: suelo y briznas)
+  const preset = { level: state.level, ...qualityPreset(state.level), theme: roundTreePalette(theme), sceneTheme: theme };
   const asset = getAsset(state.assetId);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, preset.pixelRatio));
   renderer.shadowMap.enabled = preset.shadows;
@@ -149,7 +150,8 @@ function rebuild() {
     }
     s.asset = obj;
     if (obj) {
-      obj.traverse((n) => {
+      // obj.userData.lab (parches como el césped): { measure, keepShadows, dist, target }
+      if (!obj.userData.lab?.keepShadows) obj.traverse((n) => {
         if (n.isMesh) {
           n.castShadow = true;
           n.receiveShadow = true;
@@ -163,7 +165,11 @@ function rebuild() {
     }
     s.stats = null;
   }
-  if (!box.isEmpty()) {
+  const view = sides.find((s) => s.asset?.userData.lab?.dist)?.asset.userData.lab;
+  if (view) {
+    orbit.target.set(...(view.target ?? [0, 0, 0]));
+    orbit.dist = view.dist;
+  } else if (!box.isEmpty()) {
     const size = box.getSize(new THREE.Vector3());
     box.getCenter(orbit.target);
     orbit.dist = Math.max(size.x, size.y, size.z, 0.3) * 2.3;
@@ -266,11 +272,13 @@ function measure(s, r, canvasH) {
     drawSide(s, r, canvasH);
     return null;
   }
-  s.asset.visible = false;
+  // un parche (césped) puede pedir que solo se mida una parte (la hierba, sin suelo ni pista)
+  const target = s.asset.userData.lab?.measure ?? s.asset;
+  target.visible = false;
   renderer.info.reset();
   drawSide(s, r, canvasH);
   const base = snap();
-  s.asset.visible = true;
+  target.visible = true;
   renderer.info.reset();
   drawSide(s, r, canvasH);
   return diffStats(base, snap());

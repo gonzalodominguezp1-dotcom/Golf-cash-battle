@@ -7,6 +7,7 @@ import { quality } from './quality.js';
 import { makeRoundTree } from './assets/roundTree.js';
 import { makePine } from './assets/pine.js';
 import { makePalm } from './assets/palm.js';
+import { makeShrub } from './assets/shrub.js';
 import { lavaMaterial } from './lava.js';
 import { CUP_R } from '../physics.js';
 import {
@@ -16,8 +17,8 @@ import {
   setupCyberpunkEnvironment,
   buildCyberCity,
 } from './cyberpunkEnvironment.js';
-import { addGrassField, floraOf, groundDetailTexture, makeBush, makeLilyPad, makeReeds, makeRiver, TERRAIN_FOCUS, warpCoord } from './flora.js';
-import { lushMountains, makeGrassClump, makeLushCloud, makeLushBush, makeLushRock, makeLushTree, meadowGroundTexture } from './lushEnvironment.js';
+import { addGrassField, floraOf, groundDetailTexture, makeLilyPad, makeReeds, makeRiver, TERRAIN_FOCUS, warpCoord } from './flora.js';
+import { lushMountains, makeGrassClump, makeLushCloud, makeLushRock, makeLushTree, meadowGroundTexture } from './lushEnvironment.js';
 
 // tiempo compartido por los sombreadores animados del agua (el viento va en assets/wind.js)
 const windUniforms = { uTime: { value: 0 } };
@@ -335,7 +336,7 @@ export function buildEnvironment(scene, course, theme, rng) {
       tree.userData.swayRoot = true;
       decor.add(tree);
     });
-    place(grounded ? 3.2 : 2, 22, 60, (x, y, z, d) => clear(x, z) && decor.add(makeLushBush(rng, x, y, z, leaves, detail(d))));
+    place(grounded ? 3.2 : 2, 22, 60, (x, y, z, d) => clear(x, z) && decor.add(makeNatureShrub(rng, x, y, z, theme, detail(d))));
     place(grounded ? 2.8 : 1.8, 30, 34, (x, y, z, d) => clear(x, z) && decor.add(makeLushRock(rng, x, y, z, theme.groundLow, detail(d))));
     if (theme.flowers) place(grounded ? 1.6 : 1.2, 12, 140, (x, y, z) => decor.add(makeFlower(rng, x, y, z)));
     place(grounded ? 1.6 : 1, 16, 220, (x, y, z) => decor.add(makeGrassClump(rng, x, y, z, grass)));
@@ -354,7 +355,7 @@ export function buildEnvironment(scene, course, theme, rng) {
     });
     place(grounded ? 2.8 : 1.8, 30, 40, (x, y, z) => clear(x, z) && decor.add(makeRock(rng, x, y, z)));
     // arbustos y grupitos de piedras junto a la pista: el paisaje no queda pelado
-    if (flora.ground === 'grass') place(grounded ? 2.2 : 1.4, 14, 55, (x, y, z) => clear(x, z) && decor.add(makeBush(rng, x, y, z, leaves ?? leafMats)));
+    if (flora.ground === 'grass') place(grounded ? 2.2 : 1.4, 14, 55, (x, y, z, d) => clear(x, z) && decor.add(makeNatureShrub(rng, x, y, z, theme, detail(d))));
     place(grounded ? 2.2 : 1.3, 10, 16, (x, y, z) => {
       if (!clear(x, z)) return;
       for (let k = 0; k < 3; k++) decor.add(makeRock(rng, x + (rng() - 0.5) * 1.2, y - 0.05, z + (rng() - 0.5) * 1.2, 0.45));
@@ -671,6 +672,35 @@ export function makeNaturePalm(rng, x, y, z, theme, level = quality().lod) {
   const seed = Math.floor(rng() * 4294967296);
   const g = makePalm(mulberry32(seed), level, palmPaletteOpts(theme));
   g.position.set(x, y - 0.05, z);
+  g.scale.setScalar(s);
+  g.rotation.y = rot;
+  g.userData.swayRoot = true;
+  return g;
+}
+
+// Arbusto del decorado natural (assets/shrub.js, mediterráneo de 4 formas). Medido sobre 200 semillas con rng bien repartido
+// (mulberry32, como en el juego), caja girada, alto x ancho medios: el viejo liso (makeLushBush) 0,72 x 1,61 m; el facetado
+// (makeBush) 1,08 x 1,33; el nuevo con SHRUB_SCALE 1 y factor x0,8-1,25, 1,02 x 1,43 (el alto ~1,4 m, el bajo ~0,6 m).
+// Con 1 las dos medidas quedan entre las de los dos viejos: no hace falta escalar.
+export const SHRUB_SCALE = 1;
+
+/** Paleta del arbusto: las hojas del tema o las suyas por defecto. */
+export function shrubPaletteOpts(theme) {
+  const o = {};
+  if (theme?.leaves?.length) o.leaves = theme.leaves;
+  return o;
+}
+
+/**
+ * Coloca un arbusto. Gasta SIEMPRE tres tiradas del rng del hoyo (escala, giro y semilla);
+ * la forma (variante incluida) sale de un generador propio, sin depender de la calidad.
+ */
+export function makeNatureShrub(rng, x, y, z, theme, level = quality().lod) {
+  const s = SHRUB_SCALE * (0.8 + rng() * 0.45);
+  const rot = rng() * Math.PI * 2;
+  const seed = Math.floor(rng() * 4294967296);
+  const g = makeShrub(mulberry32(seed), level, shrubPaletteOpts(theme));
+  g.position.set(x, y - 0.04, z);
   g.scale.setScalar(s);
   g.rotation.y = rot;
   g.userData.swayRoot = true;

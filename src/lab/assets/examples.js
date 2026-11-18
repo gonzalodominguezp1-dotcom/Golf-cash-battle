@@ -8,6 +8,7 @@ import { makePine } from '../../game/render/assets/pine.js';
 import { makePalm } from '../../game/render/assets/palm.js';
 import { makeShrub } from '../../game/render/assets/shrub.js';
 import { makeBush } from '../../game/render/flora.js';
+import { oldGrassPatch, newGrassPatch } from './grassPatch.js';
 import { applyWind } from '../../game/render/assets/wind.js';
 import * as THREE from 'three';
 
@@ -41,6 +42,14 @@ registerAsset({
   makeOld: (rng) => makeBush(rng, 0, 0, 0, OLD_LEAVES),
   // Paso 4: 2-4 racimos lisos bajos y anchos, viento suave (paleta: preset.theme si viene)
   makeNew: (rng, preset) => makeShrub(rng, preset),
+});
+registerAsset({
+  id: 'grass',
+  label: 'Césped (parche 19 x 22 m)',
+  // «Antes»: addGrassField + makeTuft/makeGrassClump de hoy; Paso 5: briznas curvas, manchas
+  // de color según el mundo, matas altas junto a la pista, 1 llamada de dibujo (assets/grass.js)
+  makeOld: (rng, preset) => oldGrassPatch(rng, preset),
+  makeNew: (rng, preset) => newGrassPatch(rng, preset),
 });
 registerAsset({
   id: 'rock',
