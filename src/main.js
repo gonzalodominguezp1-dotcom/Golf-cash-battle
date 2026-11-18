@@ -1365,6 +1365,8 @@ async function showLiveResults(live) {
     if (gained) {
       const mine = all.find((r) => r.id === 'me');
       const won = cancelled ? mine?.position === 1 : me.position === 1 || me.payout > 0;
+      // antes del overlay: stopLive quita cualquier .overlay abierto y se llevaría el resultado recién pintado
+      stopLive();
       showEndOverlay({
         onRematch: () => startMatch(tier, match.id),
         won,
@@ -1376,7 +1378,6 @@ async function showLiveResults(live) {
         holes: me.scores.map((strokes, i) => ({ strokes, par: COURSES[match.courses[i]].par })),
         gained,
       });
-      stopLive();
       if (won && !cancelled) sfx.coins();
       return;
     }
