@@ -84,3 +84,10 @@ Options   — material: (a) compartir los de `roundTreeMaterials()` (una llamada
 Decision  — (b), (b) y (b). Piezas comunes copiadas a `src/game/render/assets/treeKit.js` (`treeLevel`, `withRim`, `vertexLambert`, `TriBuilder`, `tube`); roundTree.js sigue con sus copias. `TriBuilder.tri` elige el orden de los vértices hacia una dirección de cara dada (material de una cara). Los ángulos del borde arrancan en la cresta de un lóbulo para que en Bajo (2 vértices por lóbulo) la silueta mida lo mismo que en Alto. Los verdes del tema (`opts.theme` o `quality.theme`) se oscurecen a verde de pino (l x0,72, s x0,9); `opts.leaves` y los valores por defecto se usan tal cual. Nieve (`opts.snow`: true o 0..1) solo en el color de vértice de la cara de arriba, sin tirar del rng.
 Why       — con la normal compartida el borde quedaba mirando hacia abajo (n.y ≈ -0,6): oscuro al sol; la falda es fina y su borde es una arista real, y el color ya cambia ahí. El reverso que sube hacia el tronco deja hueco bajo cada falda (el tronco se ve) y cuesta solo N triángulos por piso. Materiales propios: no se depende de un fichero que otro agente está cambiando; el bosque de pinos sigue en 2 llamadas.
 Open      — Unificar materiales de tronco/copa entre árbol redondo y pino al sustituir en los entornos (bosques mixtos: 5 llamadas → 3), y que roundTree.js use treeKit.js. El balanceo por piso (capa canopy, fases que suben 0,25 rad por piso) no se ha visto en GPU: con ráfaga fuerte el tronco podría asomar por el cuello de un piso.
+
+## 2026-11-16 · amigos-mesas-grupo-conectados
+Context   — Amigos no mostraba las invitaciones de grupo; Mesas invitaba a amigos desconectados.
+Options   — (a) Solo texto en Mesas; (b) invitaciones en Amigos + presencia por latido y filtro `online` en Mesas.
+Decision  — (b). Latido cada 30 s (`touch_presence`), conectado = latido en 90 s (`my_friends.online`). Mesas relee amigos cada 30 s.
+Why       — la presencia global no existía; el latido es el mínimo sin websockets.
+Open      — la spec se escribió tras implementar (gate tier 2 bloqueó el push de la migración); pendiente de revisión humana. Ver `sdd/specs/amigos-mesas-grupo-conectados.md`.
