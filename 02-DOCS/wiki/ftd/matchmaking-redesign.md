@@ -25,3 +25,11 @@ _(pendiente)_
 
 ## Next
 Esperar al subagente de UI, revisar el diff y pasar tests.
+
+## Iteración 2 (2026-11-18)
+- [x] Gradientes de Mesas (`.tier--*`) y Skins (`.rarity-*`) reutilizados vía variables; práctica usa `.rarity-uncommon`.
+- [x] Animación solo con transform/opacity (test sobre `@keyframes`), anillo de cuenta atrás con una animación CSS, pausa con pestaña oculta.
+- [x] Botones «Cancelar emparejamiento» y «Volver al lobby» bajo los jugadores; texto legal en botón «i».
+- [x] Búsqueda en segundo plano: `src/match/matchmakingController.js` + aviso superior `src/ui/matchmakingBanner.js`.
+- Evidencia: `pnpm test` 765/765 y `pnpm build` ok (observado). Sin ver en navegador.
+- Abierto: si `tournaments.start` falla y el usuario sale de la sala antes de «Reintentar», la búsqueda queda en «¡Partida encontrada!» sin poder cancelarse.
