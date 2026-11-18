@@ -170,6 +170,7 @@ test('hub tapado: al destapar repinta badges, anillo y aria-label con los datos 
   user.style = { setProperty: (k, v) => { props[k] = v; } };
   const friends = base.querySelector('[data-badge="friends"]');
   const ach = base.querySelector('[data-badge="achievements"]');
+  const lv = base.querySelector('[data-hub-lv="1"]');
   assert.equal(friends.innerHTML, '');
   screen.onCover(); detached = true;
   notifier.counts = { friendRequests: 1, partyInvites: 0 };
@@ -183,6 +184,7 @@ test('hub tapado: al destapar repinta badges, anillo y aria-label con los datos 
   assert.match(ach.innerHTML, /1 novedad/);
   assert.equal(props['--pct'], '50');
   assert.match(attrs['aria-label'], /Nivel 4/);
+  assert.equal(lv.textContent, '4');
 });
 
 // Mutación manual hecha a mano: quitando el `scope.on(doc, 'visibilitychange', ...)` de hub.js el test de 20 ciclos

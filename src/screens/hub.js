@@ -85,6 +85,7 @@ export async function mount(root, ctx) {
     <header class="hub-top">
       <div class="hub-left">
         <button type="button" class="hub-xp" data-hub="progress" data-focus-key="progress" style="--pct:${ring.pct}" aria-label="${esc(ring.label)}">
+          <b class="hub-xp-lv" data-hub-lv="1">${ring.level}</b>
           <span class="hub-xp-bar" aria-hidden="true"><i></i></span>
         </button>
         <button type="button" class="hub-user" data-hub="account" data-focus-key="account" style="--pct:${ring.pct}" aria-label="${esc(accountLabel)}">
@@ -119,6 +120,7 @@ export async function mount(root, ctx) {
     friends: root.querySelector('[data-badge="friends"]'),
     achievements: root.querySelector('[data-badge="achievements"]'),
     user: root.querySelector('[data-hub="account"]'),
+    lv: root.querySelector('[data-hub-lv="1"]'),
     xp: root.querySelector('[data-hub="progress"]'),
     pic: root.querySelector('[data-hub-pic="1"]'),
     wallet: root.querySelector('[data-hub="wallet"]'),
@@ -181,6 +183,7 @@ export async function mount(root, ctx) {
       refs.user.style?.setProperty?.('--pct', String(r.pct));
       refs.user.setAttribute?.('aria-label', t(isGuest() ? 'hub.accountGuestLabel' : 'hub.accountLabel', { level: r.label }));
     }
+    if (refs.lv) refs.lv.textContent = String(r.level);
     if (refs.xp) { refs.xp.style?.setProperty?.('--pct', String(r.pct)); refs.xp.setAttribute?.('aria-label', r.label); }
     if (refs.pic) refs.pic.innerHTML = picHtml();
     fresh = false;
