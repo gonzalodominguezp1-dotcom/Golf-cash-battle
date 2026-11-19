@@ -10,6 +10,8 @@ import { makeShrub } from '../../game/render/assets/shrub.js';
 import { makeRock as makeNewRock, ROCK_TYPES, ROCK_TYPE_INFO } from '../../game/render/assets/rock.js';
 import { makeBush } from '../../game/render/flora.js';
 import { oldGrassPatch, newGrassPatch, oldFlowerPatch, newFlowerPatch } from './grassPatch.js';
+import { oldLakePatch, newLakePatch, oldRiverPatch, newRiverPatch } from './waterPatch.js';
+import { fishLakePatch, fishRiverPatch } from './fishPatch.js';
 import { FLOWER_SPECIES, FLOWER_INFO } from '../../game/render/assets/flower.js';
 import { GRASS_SPECIES, GRASS_SPECIES_INFO } from '../../game/render/assets/grass.js';
 import { applyWind } from '../../game/render/assets/wind.js';
@@ -121,6 +123,39 @@ registerAsset({
   // tallo que se dobla con el viento (assets/flower.js). Los temas sin flores salen vacíos.
   makeOld: (rng, preset) => oldFlowerPatch(rng, preset),
   makeNew: (rng, preset) => newFlowerPatch(rng, preset),
+});
+// Paso 8: agua lisa con normal-map que se desplaza, reflejo del cielo (fresnel), brillo del sol,
+// espuma en la orilla por distancia a la costa y río que corre por su cauce; lago y río con un
+// material compartido; juncos y nenúfares con el viento compartido (assets/water.js). El «antes»
+// es el agua de hoy (plano facetado con olas de seno) con los juncos/nenúfares de flora.js.
+// Aún NO sustituye nada en environment.js / flora.js (va tras el visto bueno).
+registerAsset({
+  id: 'water-lake',
+  label: 'Agua · lago (parche 44 x 44 m)',
+  makeOld: (rng, preset) => oldLakePatch(rng, preset),
+  makeNew: (rng, preset) => newLakePatch(rng, preset),
+});
+registerAsset({
+  id: 'water-river',
+  label: 'Agua · río (parche 44 x 44 m)',
+  makeOld: (rng, preset) => oldRiverPatch(rng, preset),
+  makeNew: (rng, preset) => newRiverPatch(rng, preset),
+});
+// Pez (entre los pasos 8 y 9): 1–2 peces que asoman la aleta y saltan con salpicadura sobre el agua
+// actual; en el laboratorio saltan cada 2–3 s (fast) para no esperar (en el juego, cada 6–19 s).
+// «Antes» = el mismo parche sin peces. Temas sin peces (neón, lava, caldera, glaciar): el agua sola.
+// Aún NO está en environment.js (va tras el visto bueno).
+registerAsset({
+  id: 'fish',
+  label: 'Pez · lago (salta cada 2–3 s)',
+  makeOld: (rng, preset) => fishLakePatch(rng, preset, { fish: false }),
+  makeNew: (rng, preset) => fishLakePatch(rng, preset),
+});
+registerAsset({
+  id: 'fish-river',
+  label: 'Pez · río (salta cada 2–3 s)',
+  makeOld: (rng, preset) => fishRiverPatch(rng, preset, { fish: false }),
+  makeNew: (rng, preset) => fishRiverPatch(rng, preset),
 });
 // cada especie sola, en los mismos sitios (para mirarla de cerca)
 for (const sp of FLOWER_SPECIES) {

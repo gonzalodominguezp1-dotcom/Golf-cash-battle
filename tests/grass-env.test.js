@@ -108,9 +108,10 @@ test('césped: env.dispose() quita el grupo, libera las geometrías y no el mate
   assert.doesNotThrow(() => env.dispose());
 });
 
+// el suelo es la única malla con índice: el decorado juntado por bakeStatic (árboles, rocas) va sin índice y puede tener más vértices
 const groundOf = (scene) => {
   let best = null;
-  scene.children.forEach((o) => o.isMesh && o.receiveShadow && o.material.vertexColors && o.geometry.attributes.color && (!best || o.geometry.attributes.position.count > best.geometry.attributes.position.count) && (best = o));
+  scene.children.forEach((o) => o.isMesh && o.receiveShadow && o.material.vertexColors && o.geometry.index && o.geometry.attributes.color && (!best || o.geometry.attributes.position.count > best.geometry.attributes.position.count) && (best = o));
   return best.geometry;
 };
 // mismo tema con la hierba apagada por el propio tema (flora.grass = 0): referencia sin tinte

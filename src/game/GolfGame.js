@@ -473,6 +473,7 @@ export class GolfGame {
     this.resizeObserver.disconnect();
     this.#unbindInput?.();
     this.#disposeFx();
+    this.env?.dispose?.(); // anillos del material de agua (compartido) y mallas del hoyo
     this.perf = null;
     this.composer.dispose();
     this.renderer.dispose();

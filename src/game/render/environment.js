@@ -2,13 +2,15 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { roughTone, softDotTexture } from './textures.js';
 import { bakeStatic } from './batch.js';
-import { applyWind, setWindField, updateWind } from './assets/wind.js';
+import { applyWind, setWindField, updateWind, windUniforms as windShared } from './assets/wind.js';
 import { quality } from './quality.js';
 import { makeRoundTree } from './assets/roundTree.js';
 import { makePine } from './assets/pine.js';
 import { makePalm } from './assets/palm.js';
 import { makeShrub } from './assets/shrub.js';
 import { addGrass, grassGroundColor, grassMixOf } from './assets/grass.js';
+import { addFlowers } from './assets/flower.js';
+import { makeRock as makeStoneRock } from './assets/rock.js';
 import { lavaMaterial } from './lava.js';
 import { CUP_R } from '../physics.js';
 import {
@@ -18,11 +20,15 @@ import {
   setupCyberpunkEnvironment,
   buildCyberCity,
 } from './cyberpunkEnvironment.js';
-import { floraOf, groundDetailTexture, makeLilyPad, makeReeds, makeRiver, TERRAIN_FOCUS, warpCoord } from './flora.js';
-import { lushMountains, makeGrassClump, makeLushCloud, makeLushRock, makeLushTree, meadowGroundTexture } from './lushEnvironment.js';
+import { floraOf, groundDetailTexture, makeRiver, TERRAIN_FOCUS, warpCoord } from './flora.js';
+import { addWater, makeLilyPad, makeReeds, waterSupported, WATER_RIPPLES, WATER_TIME_WRAP } from './assets/water.js';
+import { addFish, FISH_REACH } from './assets/fish.js';
+import { lushMountains, makeGrassClump, makeLushCloud, makeLushTree, meadowGroundTexture } from './lushEnvironment.js';
 
 // tiempo compartido por los sombreadores animados del agua (el viento va en assets/wind.js)
 const windUniforms = { uTime: { value: 0 } };
+const RIPPLE_WINDOW = WATER_RIPPLES.life; // s de vida de un anillo del agua
+const WIND_WRAP = WATER_TIME_WRAP; // vuelta de la hora del viento (3600 s)
 // altura del terreno junto a una pista a ras de suelo (el green está a 0)
 const GROUND_Y = -0.04;
 
@@ -262,6 +268,7 @@ export function buildEnvironment(scene, course, theme, rng) {
   scene.add(terrain);
 
   // --- agua ---
+  let water = null, fish = null;
   if (volcano) {
     // dentro del volcán hay un lago de lava de verdad (costra que se mueve y se
     // rompe); fuera, nada de agua
@@ -272,6 +279,28 @@ export function buildEnvironment(scene, course, theme, rng) {
     disc.position.set(volcano.cx, theme.waterLevel, volcano.cz);
     scene.add(disc);
     animated.push((t) => (lake.uniforms.uTime.value = t));
+  } else if (waterSupported(theme)) {
+    // agua nueva (assets/water.js): rejilla con la MISMA malla que el terreno (seg y warp) para que la espuma caiga en la
+    // orilla, cinta para el río, un material compartido; el tiempo es el del viento. A ras de suelo solo se dibuja con río.
+    // rng: 0 tiradas (el agua es determinista por el terreno).
+    if (!grounded || river) {
+      water = addWater(scene, { size, y: waterY, heightAt, river, level: q.lod, theme, warp: focus ? warpCoord : null, seg });
+      // peces (assets/fish.js): solo con agua dibujada; 1 tirada fija del rng del hoyo (también sin sitios)
+      if (water) {
+        const cxF = (bounds.minX + bounds.maxX) / 2, czF = (bounds.minZ + bounds.maxZ) / 2;
+        fish = addFish(scene, {
+          rng,
+          y: waterY,
+          heightAt,
+          river,
+          courseDist: (x, z) => distToBounds(bounds, x, z),
+          tee: course.tee,
+          area: { x: cxF, z: czF, r: Math.max((bounds.maxX - bounds.minX) / 2, (bounds.maxZ - bounds.minZ) / 2) + FISH_REACH },
+          theme,
+          level: q.lod,
+        });
+      }
+    }
   } else {
     // las olas se mueven en la tarjeta gráfica (antes se recalculaban en el procesador)
     const waterGeo = new THREE.PlaneGeometry(size, size, 90, 90);
@@ -291,7 +320,7 @@ export function buildEnvironment(scene, course, theme, rng) {
         })
       : new THREE.MeshPhongMaterial({ color: theme.water ?? (theme.sunIntensity < 2 ? 0x1b5f86 : 0x2bb3e6), shininess: 110, specular: 0xffffff, transparent: true, opacity: 0.86, flatShading: true });
     waterShader(waterMat, theme);
-    const water = new THREE.Mesh(waterGeo, waterMat);
+    const water = new THREE.Mesh(waterGeo, waterMat); // (plano viejo: solo neón, ciudad y lava)
     water.position.y = theme.waterLevel;
     // a ras de suelo el terreno no baja hasta el agua: no se dibuja (salvo por el cauce del río)
     if (river?.grounded) water.position.y = river.y;
@@ -343,13 +372,14 @@ export function buildEnvironment(scene, course, theme, rng) {
     place(grounded ? 4.5 : 2.2, 40, 140, (x, y, z, d) => {
       if (!clear(x, z)) return;
       const kind = theme.trees[Math.floor(rng() * theme.trees.length)];
+      if (kind === 'rockpile' && d < ROCK_PILE_MIN_D) return; // el montón es ancho (radio hasta ~2,7 m): más lejos de la pista
       const tree = natureTree(kind, rng, x, y, z, theme, detail(d)) ?? makeLushTree(kind, rng, x, y, z, leaves, detail(d));
       tree.userData.swayRoot = true;
       decor.add(tree);
     });
     place(grounded ? 3.2 : 2, 22, 60, (x, y, z, d) => clear(x, z) && decor.add(makeNatureShrub(rng, x, y, z, theme, detail(d))));
-    place(grounded ? 2.8 : 1.8, 30, 34, (x, y, z, d) => clear(x, z) && decor.add(makeLushRock(rng, x, y, z, theme.groundLow, detail(d))));
-    if (theme.flowers) place(grounded ? 1.6 : 1.2, 12, 140, (x, y, z) => decor.add(makeFlower(rng, x, y, z)));
+    place(grounded ? 2.8 : 1.8, 30, 34, (x, y, z, d) => clear(x, z) && decor.add(makeNatureRock(rng, x, y, z, theme, detail(d))));
+    // las flores (assets/flower.js) se añaden con el césped, más abajo
     // matas sueltas de hoy: solo si el césped nuevo no las sustituye (addGrass ya lleva matas altas)
     if (!newGrass) place(grounded ? 1.6 : 1, 16, 220, (x, y, z) => decor.add(makeGrassClump(rng, x, y, z, grass)));
   } else {
@@ -360,19 +390,16 @@ export function buildEnvironment(scene, course, theme, rng) {
     place(grounded ? 4.5 : 2.2, 40, 140, (x, y, z, d) => {
       if (!clear(x, z)) return;
       const kind = theme.trees[Math.floor(rng() * theme.trees.length)];
+      if (kind === 'rockpile' && d < ROCK_PILE_MIN_D) return; // el montón es ancho (radio hasta ~2,7 m): más lejos de la pista
       const tree = natureTree(kind, rng, x, y, z, theme, detail(d)) ?? makeTree(kind, rng, x, y, z, leaves);
       // los árboles se mecen con el viento (en el sombreador, ver assets/wind.js)
       tree.userData.swayRoot = true;
       decor.add(tree);
     });
-    place(grounded ? 2.8 : 1.8, 30, 40, (x, y, z) => clear(x, z) && decor.add(makeRock(rng, x, y, z)));
+    place(grounded ? 2.8 : 1.8, 30, 40, (x, y, z, d) => clear(x, z) && decor.add(makeNatureRock(rng, x, y, z, theme, detail(d))));
     // arbustos y grupitos de piedras junto a la pista: el paisaje no queda pelado
     if (flora.ground === 'grass') place(grounded ? 2.2 : 1.4, 14, 55, (x, y, z, d) => clear(x, z) && decor.add(makeNatureShrub(rng, x, y, z, theme, detail(d))));
-    place(grounded ? 2.2 : 1.3, 10, 16, (x, y, z) => {
-      if (!clear(x, z)) return;
-      for (let k = 0; k < 3; k++) decor.add(makeRock(rng, x + (rng() - 0.5) * 1.2, y - 0.05, z + (rng() - 0.5) * 1.2, 0.45));
-    });
-    if (theme.flowers) place(grounded ? 1.6 : 1.2, 12, 110, (x, y, z) => decor.add(makeFlower(rng, x, y, z)));
+    place(grounded ? 2.2 : 1.9, 10, 16, (x, y, z, d) => clear(x, z) && decor.add(makeNatureRock(rng, x, y, z, theme, detail(d), 'group')));
     // matas sueltas de hoy: solo en los temas sin césped nuevo (lava y caldera siguen como estaban)
     if (!newGrass) place(grounded ? 1.6 : 1, 14, 90, (x, y, z) => decor.add(makeTuft(rng, x, y, z, theme)));
     if (theme.lanterns) {
@@ -398,7 +425,7 @@ export function buildEnvironment(scene, course, theme, rng) {
   // --- orillas del río: piedras, juncos y nenúfares (solo cerca: de lejos no se ven) ---
   if (river) {
     const greenBank = flora.ground === 'grass';
-    const rockAt = (x, y, z) => (lush ? makeLushRock(rng, x, y, z, theme.groundLow, 0) : makeRock(rng, x, y, z, 0.7));
+    const rockAt = (x, y, z) => makeNatureRock(rng, x, y, z, theme, 0, 'rock', ROCK_RIVER_FACTOR);
     const reach = 46 * Math.max(0.6, q.decor);
     for (let t = -reach; t < reach; t += 1.6) {
       for (const sideK of [-1, 1]) {
@@ -410,13 +437,13 @@ export function buildEnvironment(scene, course, theme, rng) {
         const y = heightAt(x, z);
         const before = decor.children.length;
         if (r < 0.22) decor.add(rockAt(x, Math.max(y, river.y - 0.1), z));
-        else if (greenBank && y > river.y - 0.05) decor.add(makeReeds(rng, x, y, z));
+        else if (greenBank && y > river.y - 0.05) decor.add(makeReeds(rng, x, y, z, { level: detail(d) }));
         if (d > FAR) for (let k = before; k < decor.children.length; k++) decor.children[k].traverse((o) => (o.castShadow = false));
       }
       // nenúfares en los remansos
       if (greenBank && rng() < 0.16 * q.decor + 0.04) {
         const [x, z] = river.along(t, (rng() - 0.5) * (river.w * 1.2));
-        decor.add(makeLilyPad(rng, x, river.y, z));
+        decor.add(makeLilyPad(rng, x, river.y, z, { level: q.lod }));
       }
     }
   }
@@ -438,6 +465,23 @@ export function buildEnvironment(scene, course, theme, rng) {
         ok: (x, z, y) => y > waterY + 0.18 && (!river || river.dist(x, z) > river.w + 0.3) && Math.hypot(x - tx0, z - tz0) > 1.2,
       })
     : null;
+
+  // --- flores: una InstancedMesh por especie (assets/flower.js); sin flores si el tema no las trae ---
+  const flowerField =
+    !isNeon && !volcano && theme.flowers
+      ? addFlowers(scene, {
+          bounds,
+          heightAt,
+          rng,
+          density: FLOWER_GAME_DENSITY,
+          level: q.lod,
+          theme,
+          reach: FLOWER_REACH,
+          // como las flores de antes: ni bajo el agua ni en el cauce, y a ras de suelo algo más lejos de la pista
+          ok: (x, z, y, d) =>
+            d >= (grounded ? 1.6 : 1.2) && y >= waterY + 0.25 && (!river || river.dist(x, z) >= river.w + 1.1) && Math.hypot(x - tx0, z - tz0) > 1.2,
+        })
+      : null;
 
   if (volcano) volcanoShell(scene, course, volcano, animated);
   else if (theme.lava) volcanoBackdrop(scene, course, bounds, heightAt, animated, rng);
@@ -541,9 +585,27 @@ export function buildEnvironment(scene, course, theme, rng) {
     shadowAnchor,
     river,
     update: (t, dt) => animated.forEach((f) => f(t, dt)),
-    // trozos de hierba lejanos: fuera
-    lod: (cam) => grassField?.update(cam),
-    dispose: () => grassField?.dispose(),
+    // trozos de hierba y de flores lejanos: fuera
+    lod: (cam) => {
+      grassField?.update(cam);
+      flowerField?.update(cam);
+      if (fish) {
+        // oculta el pez a > FISH_FAR y, con la cámara, el gancho automático la reutiliza
+        fish.update(undefined, cam);
+        // ondas de salpicadura: los saltos de los últimos RIPPLE_WINDOW s de todos los grupos de peces, UNA llamada
+        // que reemplaza (setRipples no fusiona); la vuelta de la hora del viento la resuelve el intervalo
+        const t = windShared.uWind.value.w;
+        water?.setRipples(fish.splashEvents(((t - RIPPLE_WINDOW) % WIND_WRAP + WIND_WRAP) % WIND_WRAP, t), t);
+      }
+    },
+    dispose: () => {
+      fish?.dispose();
+      water?.setRipples([]); // el material es compartido: sin anillos colgados del hoyo anterior
+      water?.dispose();
+      fish = water = null;
+      grassField?.dispose();
+      flowerField?.dispose();
+    },
   };
 }
 
@@ -724,11 +786,54 @@ export function makeNatureShrub(rng, x, y, z, theme, level = quality().lod) {
   return g;
 }
 
-/** Árbol nuevo para el tipo pedido ('round', 'pine' o 'palm'); null si el tipo sigue siendo el viejo. */
-function natureTree(kind, rng, x, y, z, theme, level) {
+// Flores del decorado natural (assets/flower.js). El campo nuevo saca 3-4,6 veces más flores que el viejo con la
+// misma densidad (Alto 88 frente a 29 en el laboratorio); FLOWER_GAME_DENSITY es la fracción del tope de la calidad
+// (FLOWER_MAX 200/320/420) que se pide en el juego. AJUSTABLE: 0,13 deja la cantidad media aceptada igual a la de las
+// flores viejas (medido en 5 semillas x los 5 hoyos con flores: viejo 25,6/41,8/56,4 en Bajo/Medio/Alto).
+export const FLOWER_GAME_DENSITY = 0.13;
+export const FLOWER_REACH = 12; // m desde la pista (el viejo `place` llegaba a 12)
+
+// Rocas del decorado natural (assets/rock.js). Escalas medidas (ancho x alto medios, caja precisa, Medio) frente al viejo:
+// makeRock(size 1) 1,28 x 1,19 m, size 0,7 0,93 x 0,87, grupo de 3 (size 0,45) 1,23 x 0,69; makeLushRock 1,31 x 0,83;
+// rockpile 3,21 x 2,90. Sin escalar el canto mide 0,93 x 0,68 m, la losa 1,28 x 0,19, el grupo 1,46 x 0,55 y el montón
+// 2,52 x 2,11. Escalas: canto 1,4 (1,30 x 0,93), losa 1 (queda baja a propósito), grupo 0,85 (1,23 x 0,46), montón 1,3 (3,28 x 2,74).
+export const ROCK_SCALE = { boulder: 1.4, slab: 1, group: 0.85, pile: 1.3 };
+export const ROCK_PILE_MIN_D = 3.4; // m mínimos de la pista al centro de un montón (radio máx. medido 2,68 m + 0,7 m de margen)
+export const ROCK_SLAB_SHARE = 0.3; // de las rocas sueltas, la parte que son losas planas (el resto, cantos rodados)
+export const ROCK_RIVER_FACTOR = 0.7; // las piedras de la orilla del río, como el `size` 0,7 de antes
+export const ROCK_JITTER = [0.85, 1.15]; // variación de tamaño por roca
+export const ROCK_RNG_DRAWS = 1; // tiradas del rng del hoyo por roca (la semilla de su rng propio)
+
+/** Piedra del tema: arenisca en suelo de arena (cañón, playa), pelada en nieve y ceniza, gris (con musgo si el tema es verde) en hierba. */
+export function rockMaterialOf(theme) {
+  const ground = floraOf(theme).ground;
+  return ground === 'sand' ? 'sandstone' : ground === 'grass' ? 'gray' : 'bare';
+}
+
+/**
+ * Coloca una roca de assets/rock.js. kind: 'rock' (canto rodado o losa, al azar), 'group' o 'pile' (el `rockpile`).
+ * Gasta SIEMPRE una tirada del rng del hoyo (ROCK_RNG_DRAWS): la semilla del rng propio de la roca, que decide
+ * tipo, giro, tamaño y forma (la roca gasta 259 tiradas propias). factor escala el tamaño (orilla del río).
+ */
+export function makeNatureRock(rng, x, y, z, theme, level = quality().lod, kind = 'rock', factor = 1) {
+  const seed = Math.floor(rng() * 4294967296);
+  const r = mulberry32(seed);
+  const type = kind === 'rock' ? (r() < ROCK_SLAB_SHARE ? 'slab' : 'boulder') : kind;
+  const rot = r() * Math.PI * 2;
+  const jitter = ROCK_JITTER[0] + r() * (ROCK_JITTER[1] - ROCK_JITTER[0]);
+  const g = makeStoneRock(r, level, { type, theme: roundTreePalette(theme), sceneTheme: theme, material: rockMaterialOf(theme) });
+  g.position.set(x, y - 0.04, z);
+  g.scale.setScalar(ROCK_SCALE[type] * jitter * factor);
+  g.rotation.y = rot;
+  return g;
+}
+
+/** Árbol nuevo para el tipo pedido ('round', 'pine', 'palm' o el montón 'rockpile'); null si el tipo sigue siendo el viejo. */
+export function natureTree(kind, rng, x, y, z, theme, level) {
   if (kind === 'round') return makeNatureRoundTree(rng, x, y, z, theme, level);
   if (kind === 'pine') return makeNaturePine(rng, x, y, z, theme, level);
   if (kind === 'palm') return makeNaturePalm(rng, x, y, z, theme, level);
+  if (kind === 'rockpile') return makeNatureRock(rng, x, y, z, theme, level, 'pile');
   return null;
 }
 
