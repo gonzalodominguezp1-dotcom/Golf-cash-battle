@@ -238,3 +238,5 @@ Propuesta (2026-11-19) para rediseñar SOLO el entorno de `neon`, `neonPink` y `
 Revisión de contexto limpio de esta sustitución y visto bueno visual del usuario (flores y rocas en el juego); luego Pasos 4 (arbustos: visto bueno/sustitución), 8, 9 y F.
 
 > Nota: agua y pez sustituidos en entornos, sin ver en pantalla.
+
+> Nota (2026-11-19): paso 9 sustituido en entornos: pino nevado (x0,85), cactus (x0,97) y árbol seco (x1,115) por `natureTree`; sin ver en pantalla. Detalle en `decisions.md`.
