@@ -19,8 +19,10 @@ aprobando cada uno antes de pasar al siguiente, para que el campo se vea vivo y 
   calidad Alta añade detalle; la Baja lo quita.
 - **Revisión:** cada asset se revisa en una página laboratorio (`assets-lab.html`) antes de entrar en
   los hoyos. El usuario hace las comprobaciones visuales; el agente no abre el navegador.
-- **Alcance:** cada asset nuevo sustituye al viejo en **todos los entornos naturales**. Neón y
-  cyberpunk no se tocan.
+- **Alcance:** cada asset nuevo sustituye al viejo en **todos los entornos naturales**.
+  Desde 2026-11-19 neón/cyberpunk SÍ entran: temas `neon`, `neonPink`, `cyber2078`; solo entorno;
+  sin agua; pista/atracciones fuera (decisión del usuario; antes: «Neón y cyberpunk no se tocan»).
+  Ver el apartado «Neón / Cyberpunk (N0–NF)».
 - **Orden:** viento → árbol redondo → pino → palmera → arbustos → césped → flores → rocas → agua →
   especiales (pino nevado, cactus, árbol seco, montón de rocas).
 
@@ -156,11 +158,22 @@ los entornos tras la aprobación.
 - [x] Paso 3 — palmera (visto bueno del usuario 2026-11-18; sustituida en `environment.js`)
 - [ ] Paso 4 — arbustos (en laboratorio 2026-11-18, pendiente de visto bueno; aún NO sustituidos en `environment.js`)
 - [x] Paso 5 — césped (visto bueno del usuario 2026-11-18; sustituido en `environment.js`, sin commit)
-- [ ] Paso 6 — flores (en laboratorio 2026-11-18, revisadas sin bloqueantes; pendiente de visto bueno y de decidir densidad; NO sustituidas en `environment.js`)
-- [ ] Paso 7 — rocas (en laboratorio 2026-11-18: canto rodado, losa plana y grupo; pendiente de visto bueno y de decidir `rockpile`; NO sustituidas en `environment.js`)
+- [x] Paso 6 — flores (visto bueno en laboratorio; sustituidas en `environment.js` 2026-11-19 con `FLOWER_GAME_DENSITY` 0,13 ajustable; sin ver en pantalla)
+- [x] Paso 7 — rocas (visto bueno en laboratorio; canto, losa, grupo y `rockpile`->`pile` sustituidos en `environment.js` 2026-11-19; sin ver en pantalla)
+  - 2026-11-19: añadido el tipo `pile` (rediseño del `rockpile`, 5-8 piedras, ~2 x 2,5 m) con piedra gris, sin musgo y de arenisca (`material`); en laboratorio como `rockpile`, `rockpile-bare`, `rockpile-sandstone`. Sustituir `rockpile` en entornos: propuesta sí, pendiente de visto bueno.
+  - 2026-11-19: roca suelta de arenisca (`material: 'sandstone'` en canto rodado y losa); en laboratorio como `rock-sandstone` y `rock-slab-sandstone`; pendiente de verla en pantalla.
 - [ ] Paso 8 — agua
 - [ ] Paso 9 — especiales
 - [ ] Paso F — cierre, tests y previews
+
+## Neón / Cyberpunk (N0–NF)
+Propuesta (2026-11-19) para rediseñar SOLO el entorno de `neon`, `neonPink` y `cyber2078` (hoyo 15 incluido): ciudad lejana, cielo, suelo/montañas, pilones y cristales. Sin agua. Pista y atracciones no se tocan; la física tampoco.
+- [x] N0 — preparación y agua fuera: textura de fachada determinista (`drawSkyscraperFacade`, rng con semilla) y sin plano de agua en neón (`environment.js`); tests `*-env` de neón actualizados.
+- [ ] N2 — ciudad lejana rediseñada (Opus).
+- [ ] N3 — pilones y cristales (Sonnet).
+- [ ] N4 — suelo y montañas.
+- [ ] NF — cierre y previews.
+- N5 (pista/atracciones) descartado por el usuario. (No hay N1: su contenido, quitar el agua, ya está en N0.)
 
 ## Reglas que se respetan
 - Solo la física decide el juego: el decorado nunca cambia colisiones ni la simulación.
@@ -210,5 +223,20 @@ los entornos tras la aprobación.
 - Flores: `flower.js` (3 especies instanciadas, 3 llamadas de dibujo), `tests/flower.test.js` 16/16, 11 mutaciones detectadas. Triángulos por flor máx. 20/65/100; por campo máx. 3 764/16 040/29 358. Revisión limpia: sin bloqueantes. Should-fix abierto: el campo nuevo saca 3–4,6× más flores que el viejo (Alto 88 vs 29 en el laboratorio) → decidir densidad. Nits: `update(cam)` casi nunca oculta (esfera de todo el campo); `only` no es subconjunto exacto del campo mixto; test de viento no suma la inclinación del tallo.
 - `pnpm test` 423/428 (5 VFX ajenos). Sin verificar: GLSL en GPU real, vista en pantalla/móvil.
 
+(2026-11-19) **Flores y rocas sustituidas en entornos; sin commit, sin ver en pantalla.**
+- Flores: `addFlowers` en `environment.js` (`env.lod`/`env.dispose`), `FLOWER_GAME_DENSITY` 0,13 (ajustable): 26/42/55 flores frente a 25,6/41,8/56,4 de las viejas. `tests/flower-env.test.js` 8/8; 4 mutaciones detectadas (densidad, dispose, lod, claro de pista).
+- Rocas: `makeNatureRock` (1 tirada del hoyo por roca) sustituye a `makeRock`/`makeLushRock`/grupo de 3/río/`rockpile`; `ROCK_SCALE` canto 1,4, losa 1, grupo 0,85, montón 1,3; arenisca en cañón/playa, `bare` en nieve/ceniza, musgo solo en verdes. `tests/rock-env.test.js` 10/10; 4 mutaciones detectadas más una equivalente (quitar `sceneTheme`).
+- `pnpm test` 465/470 (5 VFX ajenos); `pnpm build` ok, `assets-lab.html` no entra en `dist`. Sin verificar: vista en pantalla/GPU, rendimiento en móvil (hasta 25 000 triángulos de roca en Alto en el cañón), revisión de contexto limpio pendiente.
+
+(2026-11-19) **Flores, rocas, agua y pez sustituidos en entornos; commit de cierre de los Pasos 6–8.**
+- Flores (`addFlowers`) y rocas (`makeNatureRock`, `pile` para `rockpile`, arenisca/sin musgo por tema) sustituyen a las viejas en `environment.js`; el montón se aleja ≥ 3,4 m de la pista (`ROCK_PILE_MIN_D`). `tests/flower-env.test.js`, `tests/rock-env.test.js`.
+- Agua nueva (`water.js`: lisa, normal-map procedural, fresnel, espuma por profundidad de vértice, oleaje 0/2/3 cm, ondas de salpicadura) y pez que salta (`fish.js`, 2–3 por hoyo) integrados en `environment.js`. Triángulos de agua máx. 1 131/2 038/3 491 (Bajo/Medio/Alto) frente a 16 200 fijos; 1 llamada de dibujo. `tests/water.test.js`, `tests/water-env.test.js`, `tests/fish.test.js`, `tests/fish-env.test.js`. `GolfGame.dispose` limpia el entorno.
+- Revisiones de contexto limpio: sin bloqueantes; should-fix corregidos. Abierto: extremo oblicuo de la cinta del río en el borde del mapa (≤1 m, a 110 m).
+- `pnpm test` 568/573 (5 VFX ajenos). `pnpm build` ok. Sin verificar: GLSL en GPU real, vista en pantalla, rendimiento en móvil (+~70 ms de `buildEnvironment` en Alto).
+
 ## Next step
-Visto bueno visual del usuario a las flores en `assets-lab.html` y decidir su densidad; después sustituirlas en `environment.js` y seguir con el Paso 7 (rocas).
+Revisión de contexto limpio de esta sustitución y visto bueno visual del usuario (flores y rocas en el juego); luego Pasos 4 (arbustos: visto bueno/sustitución), 8, 9 y F.
+
+> Nota: agua y pez sustituidos en entornos, sin ver en pantalla.
+
+> Nota (2026-11-19): paso 9 sustituido en entornos: pino nevado (x0,85), cactus (x0,97) y árbol seco (x1,115) por `natureTree`; sin ver en pantalla. Detalle en `decisions.md`.
