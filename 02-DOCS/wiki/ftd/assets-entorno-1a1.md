@@ -157,7 +157,9 @@ los entornos tras la aprobación.
 - [ ] Paso 4 — arbustos (en laboratorio 2026-11-18, pendiente de visto bueno; aún NO sustituidos en `environment.js`)
 - [x] Paso 5 — césped (visto bueno del usuario 2026-11-18; sustituido en `environment.js`, sin commit)
 - [ ] Paso 6 — flores (en laboratorio 2026-11-18, revisadas sin bloqueantes; pendiente de visto bueno y de decidir densidad; NO sustituidas en `environment.js`)
-- [ ] Paso 7 — rocas
+- [ ] Paso 7 — rocas (en laboratorio 2026-11-18: canto rodado, losa plana y grupo; pendiente de visto bueno y de decidir `rockpile`; NO sustituidas en `environment.js`)
+  - 2026-11-19: añadido el tipo `pile` (rediseño del `rockpile`, 5-8 piedras, ~2 x 2,5 m) con piedra gris, sin musgo y de arenisca (`material`); en laboratorio como `rockpile`, `rockpile-bare`, `rockpile-sandstone`. Sustituir `rockpile` en entornos: propuesta sí, pendiente de visto bueno.
+  - 2026-11-19: roca suelta de arenisca (`material: 'sandstone'` en canto rodado y losa); en laboratorio como `rock-sandstone` y `rock-slab-sandstone`; pendiente de verla en pantalla.
 - [ ] Paso 8 — agua
 - [ ] Paso 9 — especiales
 - [ ] Paso F — cierre, tests y previews

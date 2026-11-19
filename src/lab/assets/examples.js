@@ -7,6 +7,7 @@ import { makeRoundTree } from '../../game/render/assets/roundTree.js';
 import { makePine } from '../../game/render/assets/pine.js';
 import { makePalm } from '../../game/render/assets/palm.js';
 import { makeShrub } from '../../game/render/assets/shrub.js';
+import { makeRock as makeNewRock, ROCK_TYPES, ROCK_TYPE_INFO } from '../../game/render/assets/rock.js';
 import { makeBush } from '../../game/render/flora.js';
 import { oldGrassPatch, newGrassPatch, oldFlowerPatch, newFlowerPatch } from './grassPatch.js';
 import { FLOWER_SPECIES, FLOWER_INFO } from '../../game/render/assets/flower.js';
@@ -63,12 +64,55 @@ for (const sp of GRASS_SPECIES) {
     makeNew: (rng, preset) => newGrassPatch(rng, preset, { only: sp }),
   });
 }
-registerAsset({
-  id: 'rock',
-  label: 'Roca',
-  makeOld: (rng) => makeRock(rng, 0, 0, 0, 2),
-  makeNew: () => null,
-});
+// Paso 7: tres tipos lisos con color por capas (musgo arriba solo en temas verdes, base oscura),
+// una llamada de dibujo por roca y sin viento (assets/rock.js). El «antes» es la roca facetada
+// de hoy; el montón de rocas de hoy; el montón grande de hoy (rockpile) se compara con el montón nuevo (`pile`) en tres piedras.
+// Aún NO sustituyen nada en environment.js (decisión pendiente tras el visto bueno).
+for (const type of ROCK_TYPES.filter((t) => t !== 'pile')) {
+  registerAsset({
+    id: type === 'boulder' ? 'rock' : `rock-${type}`,
+    label: `Roca · ${ROCK_TYPE_INFO[type].label.toLowerCase()}`,
+    // tamaño 1 = el representativo de environment.js (usa 1, 0.7 y 0.45): diámetro medio
+    // 2*(0.3+0.9u) = 1.5 m. Las rocas nuevas miden de media (30 semillas, Medio): canto 1.02 x 0.64 x
+    // 0.87 m, losa 1.52 x 0.18 x 1.00 m, grupo 1.60 x 0.54 x 1.47 m.
+    makeOld: (rng) => makeRock(rng, 0, 0, 0, 1),
+    makeNew: (rng, preset) => makeNewRock(rng, preset, { type }),
+  });
+}
+// Rocas sueltas de arenisca (canto rodado y losa): mismo «antes» y misma escala que `rock` / `rock-slab`.
+for (const type of ['boulder', 'slab']) {
+  registerAsset({
+    id: type === 'boulder' ? 'rock-sandstone' : 'rock-slab-sandstone',
+    label: `Roca · ${ROCK_TYPE_INFO[type].label.toLowerCase()} · arenisca`,
+    makeOld: (rng) => makeRock(rng, 0, 0, 0, 1),
+    makeNew: (rng, preset) => makeNewRock(rng, preset, { type, material: 'sandstone' }),
+  });
+}
+// Rediseño del rockpile (montón grande de makeTree): `pile` de rock.js, 5-8 piedras apiladas.
+// makeTree escala cada montón al azar con 0.8 + rng()*0.9 (0.8 a 1.7, media 1.25), lo que haría el
+// «antes» incomparable entre semillas: se fija en 1.25 (la media del juego). Medido (30 semillas): el viejo
+// a 1.25 mide 2.5-3.3 m de alto (media 2.9) y 3.1-4.9 m de ancho (media 3.9) (sin escalar: ~2.3 x 3.1 m de
+// media, con las bolas desordenadas). El nuevo se muestra SIN escalar: 1.8-2.4 m de alto y 2.0-3.0 m de ancho
+// (30 semillas, 3 variantes, 3 calidades), así que junto al viejo a 1.25 se ve ~25 % menor; al sustituir en
+// environment.js hará falta una escala medida (~1.2 para igualar la media). Tres piedras: gris (musgo según
+// el tema), sin musgo y arenisca.
+const PILE_ENTRIES = [
+  { id: 'rockpile', label: 'Montón de rocas (antes: rockpile)', material: 'gray' },
+  { id: 'rockpile-bare', label: 'Montón de rocas · sin musgo', material: 'bare' },
+  { id: 'rockpile-sandstone', label: 'Montón de rocas · arenisca', material: 'sandstone' },
+];
+for (const { id, label, material } of PILE_ENTRIES) {
+  registerAsset({
+    id,
+    label,
+    makeOld: (rng) => {
+      const g = makeTree('rockpile', rng, 0, 0, 0);
+      g.scale.setScalar(1.25);
+      return g;
+    },
+    makeNew: (rng, preset) => makeNewRock(rng, preset, { type: 'pile', material }),
+  });
+}
 registerAsset({
   id: 'flower',
   label: 'Flores (parche 19 x 22 m)',
