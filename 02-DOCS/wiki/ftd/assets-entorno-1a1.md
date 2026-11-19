@@ -157,7 +157,7 @@ los entornos tras la aprobación.
 - [ ] Paso 4 — arbustos (en laboratorio 2026-11-18, pendiente de visto bueno; aún NO sustituidos en `environment.js`)
 - [x] Paso 5 — césped (visto bueno del usuario 2026-11-18; sustituido en `environment.js`, sin commit)
 - [ ] Paso 6 — flores (en laboratorio 2026-11-18, revisadas sin bloqueantes; pendiente de visto bueno y de decidir densidad; NO sustituidas en `environment.js`)
-- [ ] Paso 7 — rocas
+- [ ] Paso 7 — rocas (en laboratorio 2026-11-18: canto rodado, losa plana y grupo; pendiente de visto bueno y de decidir `rockpile`; NO sustituidas en `environment.js`)
 - [ ] Paso 8 — agua
 - [ ] Paso 9 — especiales
 - [ ] Paso F — cierre, tests y previews
