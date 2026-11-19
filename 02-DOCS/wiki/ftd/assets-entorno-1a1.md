@@ -19,8 +19,10 @@ aprobando cada uno antes de pasar al siguiente, para que el campo se vea vivo y 
   calidad Alta añade detalle; la Baja lo quita.
 - **Revisión:** cada asset se revisa en una página laboratorio (`assets-lab.html`) antes de entrar en
   los hoyos. El usuario hace las comprobaciones visuales; el agente no abre el navegador.
-- **Alcance:** cada asset nuevo sustituye al viejo en **todos los entornos naturales**. Neón y
-  cyberpunk no se tocan.
+- **Alcance:** cada asset nuevo sustituye al viejo en **todos los entornos naturales**.
+  Desde 2026-11-19 neón/cyberpunk SÍ entran: temas `neon`, `neonPink`, `cyber2078`; solo entorno;
+  sin agua; pista/atracciones fuera (decisión del usuario; antes: «Neón y cyberpunk no se tocan»).
+  Ver el apartado «Neón / Cyberpunk (N0–NF)».
 - **Orden:** viento → árbol redondo → pino → palmera → arbustos → césped → flores → rocas → agua →
   especiales (pino nevado, cactus, árbol seco, montón de rocas).
 
@@ -163,6 +165,15 @@ los entornos tras la aprobación.
 - [ ] Paso 8 — agua
 - [ ] Paso 9 — especiales
 - [ ] Paso F — cierre, tests y previews
+
+## Neón / Cyberpunk (N0–NF)
+Propuesta (2026-11-19) para rediseñar SOLO el entorno de `neon`, `neonPink` y `cyber2078` (hoyo 15 incluido): ciudad lejana, cielo, suelo/montañas, pilones y cristales. Sin agua. Pista y atracciones no se tocan; la física tampoco.
+- [x] N0 — preparación y agua fuera: textura de fachada determinista (`drawSkyscraperFacade`, rng con semilla) y sin plano de agua en neón (`environment.js`); tests `*-env` de neón actualizados.
+- [ ] N2 — ciudad lejana rediseñada (Opus).
+- [ ] N3 — pilones y cristales (Sonnet).
+- [ ] N4 — suelo y montañas.
+- [ ] NF — cierre y previews.
+- N5 (pista/atracciones) descartado por el usuario. (No hay N1: su contenido, quitar el agua, ya está en N0.)
 
 ## Reglas que se respetan
 - Solo la física decide el juego: el decorado nunca cambia colisiones ni la simulación.
