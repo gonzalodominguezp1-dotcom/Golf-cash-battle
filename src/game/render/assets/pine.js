@@ -77,7 +77,7 @@ function conifer(hex) {
   return c.setHSL(hsl.h + 0.01, hsl.s * 0.9, hsl.l * 0.72);
 }
 
-function pinePalette(quality, opts) {
+export function pinePalette(quality, opts) {
   const theme = opts.theme ?? (quality && typeof quality === 'object' ? quality.theme : null) ?? null;
   let leaves;
   if (opts.leaves?.length) leaves = opts.leaves.map(conifer);
@@ -90,7 +90,7 @@ function pinePalette(quality, opts) {
 
 // ---------- plan: todas las tiradas del rng (no dependen de la calidad) ----------
 
-function planPine(rng, opts) {
+export function planPine(rng, opts) {
   const vr = rng();
   const variant = Number.isInteger(opts.variant) ? ((opts.variant % PINE_VARIANTS) + PINE_VARIANTS) % PINE_VARIANTS : Math.floor(vr * PINE_VARIANTS);
   const V = VARIANTS[variant];
@@ -171,7 +171,7 @@ function planPine(rng, opts) {
 // ---------- forma de un piso ----------
 
 /** Punto de la cara de arriba del piso T: t = 0 (cuello, en el eje) .. 1 (borde), ángulo a. */
-function topPoint(T, t, a, out = new THREE.Vector3()) {
+export function topPoint(T, t, a, out = new THREE.Vector3()) {
   const u = T.lobes * (a - T.ph);
   const wv = 0.75 * Math.cos(u) + 0.25 * Math.cos(2 * u + T.ph2);
   const lobe = 0.5 + 0.5 * Math.cos(u);
@@ -181,7 +181,7 @@ function topPoint(T, t, a, out = new THREE.Vector3()) {
 }
 
 /** ¿Está p dentro del piso T (encogido)? Cota prudente: tiene en cuenta ondas y caída del borde. */
-function insideTier(p, T) {
+export function insideTier(p, T) {
   const d = Math.hypot(p.x - T.x, p.z - T.z);
   if (d > CULL * T.R * (1 - T.wa)) return false;
   const tt = d / T.R;
@@ -191,13 +191,13 @@ function insideTier(p, T) {
   return p.y < yTop && p.y > yUnder;
 }
 
-const hiddenIn = (tri, tiers, skip) => tiers.some((T) => T !== skip && tri.every((v) => insideTier(v.p, T)));
+export const hiddenIn = (tri, tiers, skip) => tiers.some((T) => T !== skip && tri.every((v) => insideTier(v.p, T)));
 
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _d = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0), DOWN = new THREE.Vector3(0, -1, 0);
 
 /** Normal geométrica de la cara de arriba (hacia arriba). */
-function topSurfaceNormal(T, t, a, out) {
+export function topSurfaceNormal(T, t, a, out) {
   const e = 1e-3;
   const tt = Math.max(0.02, t);
   topPoint(T, Math.min(1, tt + e), a, _a).sub(topPoint(T, tt - e, a, _b)); // radial
@@ -331,9 +331,9 @@ function build(plan, level, palette, state, count = false) {
  * anillos de las faldas (de la más pequeña a la más grande), luego vértices del
  * borde por lóbulo y, al final, detalle del tronco. Los pisos nunca se quitan.
  */
-function fit(plan, level, palette) {
+function fit(plan, level, palette, budgetOverride) {
   const D = DETAIL[level];
-  const budget = PINE_BUDGET[level];
+  const budget = budgetOverride ?? PINE_BUDGET[level];
   const state = { m: plan.tiers.map(() => D.m), rings: plan.tiers.map(() => D.rings), trunk: [...D.trunk] };
   const order = plan.tiers.map((_, i) => i).sort((a, b) => plan.tiers[a].R - plan.tiers[b].R);
   const lower = (key, min) => {
@@ -357,7 +357,8 @@ function fit(plan, level, palette) {
  * userData.swayRoot; quien lo usa lo coloca, gira y escala.
  * - rng: generador con semilla (todas las formas salen de él)
  * - quality: 'low' | 'medium' | 'high', el preset del laboratorio ({ level, theme? }), { lod } o 0/1/2
- * - opts: { variant?: 0..3, leaves?: [hex], bark?: hex, theme?: { leaves, bark }, snow?: bool | 0..1, snowColor?: hex }
+ * - opts: { variant?: 0..3, leaves?: [hex], bark?: hex, theme?: { leaves, bark }, snow?: bool | 0..1, snowColor?: hex, budget?: triángulos }
+ *   (budget: sustituye al PINE_BUDGET de la calidad; lo usa el pino nevado, que reparte el presupuesto con la nieve)
  *   Paleta: opts.leaves/bark, si no opts.theme o quality.theme (los verdes de opts.leaves y del tema se
  *   oscurecen a verde de pino), si no PINE_DEFAULTS.
  */
@@ -365,7 +366,7 @@ export function makePine(rng, quality = 'medium', opts = {}) {
   const level = treeLevel(quality);
   const palette = pinePalette(quality, opts);
   const plan = planPine(rng, opts);
-  const { built } = fit(plan, level, palette);
+  const { built, state } = fit(plan, level, palette, Number.isFinite(opts.budget) ? opts.budget : undefined);
   const g = built.make();
   g.userData.swayRoot = true;
   g.userData.pine = {
@@ -375,6 +376,8 @@ export function makePine(rng, quality = 'medium', opts = {}) {
     height: plan.h,
     snow: palette.snow,
     triangles: built.tris,
+    // malla de cada falda tras ajustar al presupuesto (vértices por lóbulo y anillos): la nieve se posa sobre ella
+    grid: plan.tiers.map((_, i) => ({ m: state.m[i], rings: state.rings[i] })),
     tiers: plan.tiers.map((T) => ({ x: T.x, z: T.z, r: T.R, rim: T.rim, top: T.top, hub: T.hub, lobes: T.lobes })),
   };
   return g;

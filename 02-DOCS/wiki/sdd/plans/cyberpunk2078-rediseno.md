@@ -1,6 +1,6 @@
 ---
 name: cyberpunk2078-rediseno-plan
-status: draft
+status: done
 spec: 02-DOCS/wiki/sdd/specs/cyberpunk2078-rediseno.md
 supersedes: 02-DOCS/wiki/sdd/plans/cyberpunk2078.md
 ---

@@ -95,8 +95,7 @@ test('rockpile: natureTree lo sustituye por el montón nuevo; los demás tipos v
   const g = natureTree('rockpile', lcg(5), 1, 0.5, 2, THEMES.canyon, 1);
   assert.equal(g.userData.rock.type, 'pile');
   assert.ok(g.userData.rock.stones >= 5 && g.userData.rock.stones <= 8);
-  assert.equal(natureTree('cactus', lcg(5), 0, 0, 0, THEMES.canyon, 1), null);
-  assert.equal(natureTree('deadtree', lcg(5), 0, 0, 0, THEMES.volcano, 1), null);
+  assert.equal(natureTree('lush-unknown', lcg(5), 0, 0, 0, THEMES.canyon, 1), null);
 });
 
 test('rocas: ninguna a menos de 0,5 m de la pista (por vértice) con 20 semillas x 3 calidades; a ras de suelo, el claro del tee', () => {

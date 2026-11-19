@@ -8,6 +8,7 @@ import { makeRoundTree } from './assets/roundTree.js';
 import { makePine } from './assets/pine.js';
 import { makePalm } from './assets/palm.js';
 import { makeShrub } from './assets/shrub.js';
+import { makeSnowPine, makeCactus, makeDeadTree } from './assets/specials.js';
 import { addGrass, grassGroundColor, grassMixOf } from './assets/grass.js';
 import { addFlowers } from './assets/flower.js';
 import { makeRock as makeStoneRock } from './assets/rock.js';
@@ -301,32 +302,21 @@ export function buildEnvironment(scene, course, theme, rng) {
         });
       }
     }
-  } else {
-    // las olas se mueven en la tarjeta gráfica (antes se recalculaban en el procesador)
+  } else if (!isNeon) {
+    // neón/cyber2078 (2026-11-19): sin agua en el entorno (la física no cambia; los canales `water` los dibuja course.js).
+    // plano viejo: solo ciudad y lava. Las olas se mueven en la tarjeta gráfica (antes se recalculaban en el procesador)
     const waterGeo = new THREE.PlaneGeometry(size, size, 90, 90);
     waterGeo.rotateX(-Math.PI / 2);
     const waterMat = theme.lava
       ? new THREE.MeshPhongMaterial({ color: theme.water, emissive: 0xff3a0a, emissiveIntensity: 0.9, shininess: 30, flatShading: true })
-      : isNeon
-      ? new THREE.MeshPhongMaterial({
-          color: 0x07091e,
-          emissive: theme.neon[1],
-          emissiveIntensity: 0.22,
-          shininess: 90,
-          specular: theme.neon[0],
-          transparent: true,
-          opacity: 0.88,
-          flatShading: true,
-        })
       : new THREE.MeshPhongMaterial({ color: theme.water ?? (theme.sunIntensity < 2 ? 0x1b5f86 : 0x2bb3e6), shininess: 110, specular: 0xffffff, transparent: true, opacity: 0.86, flatShading: true });
     waterShader(waterMat, theme);
-    const water = new THREE.Mesh(waterGeo, waterMat); // (plano viejo: solo neón, ciudad y lava)
+    const water = new THREE.Mesh(waterGeo, waterMat); // (plano viejo: solo ciudad y lava)
     water.position.y = theme.waterLevel;
     // a ras de suelo el terreno no baja hasta el agua: no se dibuja (salvo por el cauce del río)
     if (river?.grounded) water.position.y = river.y;
     if (!grounded || river) scene.add(water);
     if (theme.lava) animated.push((t) => (water.material.emissiveIntensity = 0.9 + Math.sin(t * 1.7) * 0.25));
-    else if (isNeon) animated.push((t) => (water.material.emissiveIntensity = 0.22 + Math.sin(t * 2.2) * 0.06));
   }
 
   // --- decorado ---
@@ -634,10 +624,10 @@ function waterShader(material, theme) {
         '#include <dithering_fragment>',
         `#include <dithering_fragment>
         // crestas más claras
-        gl_FragColor.rgb += vec3(${theme.lava ? '0.25, 0.08, 0.0' : theme.neon ? '0.25, 0.05, 0.3' : '0.12, 0.16, 0.18'}) * smoothstep(0.35, 0.8, vWave);`,
+        gl_FragColor.rgb += vec3(${theme.lava ? '0.25, 0.08, 0.0' : '0.12, 0.16, 0.18'}) * smoothstep(0.35, 0.8, vWave);`,
       );
   };
-  material.customProgramCacheKey = () => 'water' + (theme.lava ? 'lava' : theme.neon ? 'neon' : '');
+  material.customProgramCacheKey = () => 'water' + (theme.lava ? 'lava' : '');
 }
 
 // viento (assets/wind.js): el tronco se dobla, la copa además se balancea y aletea;
@@ -828,11 +818,42 @@ export function makeNatureRock(rng, x, y, z, theme, level = quality().lod, kind 
   return g;
 }
 
-/** Árbol nuevo para el tipo pedido ('round', 'pine', 'palm' o el montón 'rockpile'); null si el tipo sigue siendo el viejo. */
+// Especiales del decorado natural (assets/specials.js). Medido sobre 100 semillas (Medio, sin escalar; el viejo ya con su x0,8-1,7):
+// (rng bien repartido, caja girada a 0) pino nevado viejo 3,46 m de alto, nuevo con SCALE 1 y factor x0,8-1,25 4,08; cactus viejo 2,30, nuevo 2,35; árbol seco viejo 2,38, nuevo 2,13.
+// Las escalas igualan la altura media (el factor x0,8-1,25 por árbol ya la reparte).
+export const SNOW_PINE_SCALE = 0.85;
+export const CACTUS_SCALE = 0.97;
+export const DEAD_TREE_SCALE = 1.115;
+
+function makeNatureSpecial(make, scale, opts) {
+  return (rng, x, y, z, theme, level = quality().lod) => {
+    const s = scale * (0.8 + rng() * 0.45);
+    const rot = rng() * Math.PI * 2;
+    const seed = Math.floor(rng() * 4294967296);
+    const g = make(mulberry32(seed), level, opts(theme));
+    g.position.set(x, y - 0.05, z);
+    g.scale.setScalar(s);
+    g.rotation.y = rot;
+    g.userData.swayRoot = true;
+    return g;
+  };
+}
+
+/** Coloca un pino nevado (paleta del tema, como el pino). Gasta SIEMPRE tres tiradas del rng del hoyo (escala, giro, semilla). */
+export const makeNatureSnowPine = makeNatureSpecial(makeSnowPine, SNOW_PINE_SCALE, pinePaletteOpts);
+/** Coloca un cactus. Gasta SIEMPRE tres tiradas del rng del hoyo. */
+export const makeNatureCactus = makeNatureSpecial(makeCactus, CACTUS_SCALE, () => ({}));
+/** Coloca un árbol seco. Gasta SIEMPRE tres tiradas del rng del hoyo. */
+export const makeNatureDeadTree = makeNatureSpecial(makeDeadTree, DEAD_TREE_SCALE, () => ({}));
+
+/** Árbol nuevo para el tipo pedido ('round', 'pine', 'palm', 'snowpine', 'cactus', 'deadtree' o el montón 'rockpile'); null si el tipo sigue siendo el viejo. */
 export function natureTree(kind, rng, x, y, z, theme, level) {
   if (kind === 'round') return makeNatureRoundTree(rng, x, y, z, theme, level);
   if (kind === 'pine') return makeNaturePine(rng, x, y, z, theme, level);
   if (kind === 'palm') return makeNaturePalm(rng, x, y, z, theme, level);
+  if (kind === 'snowpine') return makeNatureSnowPine(rng, x, y, z, theme, level);
+  if (kind === 'cactus') return makeNatureCactus(rng, x, y, z, theme, level);
+  if (kind === 'deadtree') return makeNatureDeadTree(rng, x, y, z, theme, level);
   if (kind === 'rockpile') return makeNatureRock(rng, x, y, z, theme, level, 'pile');
   return null;
 }

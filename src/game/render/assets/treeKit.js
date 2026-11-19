@@ -160,4 +160,5 @@ export function tube(b, curve, radius, radial, rings, shade, hidden = () => fals
       }
     }
   }
+  return ringsPts; // los anillos de vértices (para cerrar la punta)
 }

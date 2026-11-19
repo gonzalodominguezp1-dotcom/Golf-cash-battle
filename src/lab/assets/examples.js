@@ -6,6 +6,7 @@ import { makeTree, makeRock } from '../../game/render/environment.js';
 import { makeRoundTree } from '../../game/render/assets/roundTree.js';
 import { makePine } from '../../game/render/assets/pine.js';
 import { makePalm } from '../../game/render/assets/palm.js';
+import { makeSnowPine, makeCactus, makeDeadTree } from '../../game/render/assets/specials.js';
 import { makeShrub } from '../../game/render/assets/shrub.js';
 import { makeRock as makeNewRock, ROCK_TYPES, ROCK_TYPE_INFO } from '../../game/render/assets/rock.js';
 import { makeBush } from '../../game/render/flora.js';
@@ -40,6 +41,47 @@ registerAsset({
   makeOld: (rng) => makeTree('palm', rng, 0, 0, 0),
   // Paso 3: tronco curvo con anillos, hojas arqueadas con foliolos que aletean (paleta: preset.theme si viene)
   makeNew: (rng, preset) => makePalm(rng, preset),
+});
+// Paso 9: especiales. El «antes» es makeTree('snowpine'|'cactus'|'deadtree') de hoy (ya con su escala x0,8-1,7).
+// Escala del «después» para ir a la par con el juego: medido sobre 100 semillas (Medio), el viejo mide de media
+// 3,36 m de alto y 3,32 de ancho (pino nevado), 2,23 x 1,15 (cactus) y 2,31 x 1,34 (árbol seco); el nuevo sin escalar,
+// 3,94 x 2,52, 2,39 x 1,25 y 2,14 x 1,25. Se escalan por la altura media: x0,85, x0,93 y x1,08.
+const SNOW_PINE_LAB_SCALE = 0.85, CACTUS_LAB_SCALE = 0.93, DEAD_TREE_LAB_SCALE = 1.08;
+const scaled = (g, s) => (g.scale.setScalar(s), g);
+registerAsset({
+  id: 'snowpine',
+  label: 'Pino nevado',
+  makeOld: (rng) => makeTree('snowpine', rng, 0, 0, 0),
+  // nieve de verdad (capa por piso, borde que cae, gorra) sobre el pino del Paso 2; no se mece
+  makeNew: (rng, preset) => scaled(makeSnowPine(rng, preset), SNOW_PINE_LAB_SCALE),
+});
+registerAsset({
+  id: 'cactus',
+  label: 'Cactus',
+  makeOld: (rng) => makeTree('cactus', rng, 0, 0, 0),
+  // saguaro de 1-3 brazos con costillas suaves y flor opcional, o nopal de palas; casi rígido
+  makeNew: (rng, preset) => scaled(makeCactus(rng, preset), CACTUS_LAB_SCALE),
+});
+registerAsset({
+  id: 'cactus-nopal',
+  label: 'Cactus · nopal (solo palas)',
+  // el juego de hoy no tiene nopal: el «antes» es su único cactus (un saguaro) solo como referencia de tamaño, no es comparable forma a forma
+  makeOld: (rng) => makeTree('cactus', rng, 0, 0, 0),
+  makeNew: (rng, preset) => scaled(makeCactus(rng, preset, { variant: 3 }), CACTUS_LAB_SCALE),
+});
+registerAsset({
+  id: 'deadtree',
+  label: 'Árbol seco',
+  makeOld: (rng) => makeTree('deadtree', rng, 0, 0, 0),
+  // muerto en pie, retorcido, partido o tocón con raíces; sin hojas, casi rígido
+  makeNew: (rng, preset) => scaled(makeDeadTree(rng, preset), DEAD_TREE_LAB_SCALE),
+});
+registerAsset({
+  id: 'deadtree-stump',
+  label: 'Árbol seco · tocón con raíces',
+  // el juego de hoy no tiene tocón: el «antes» es su único árbol seco (de pie) solo como referencia de tamaño, no es comparable forma a forma
+  makeOld: (rng) => makeTree('deadtree', rng, 0, 0, 0),
+  makeNew: (rng, preset) => scaled(makeDeadTree(rng, preset, { variant: 3 }), DEAD_TREE_LAB_SCALE),
 });
 registerAsset({
   id: 'shrub',
