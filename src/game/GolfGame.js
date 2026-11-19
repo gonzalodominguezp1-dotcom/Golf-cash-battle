@@ -13,11 +13,12 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { getQuality, quality } from './render/quality.js';
+import { inputFactors, settings } from '../settings/settings.js';
 import { PerfGovernor } from './render/perfGovernor.js';
 import { ResolutionGovernor } from './render/resolutionGovernor.js';
 import { AimDots, Particles, Shockwaves } from './render/effects.js';
 import { labelTexture, softDotTexture } from './render/textures.js';
-import { createSkinMaterial } from './render/ballSkins.js';
+import { attachSkinDecor, createSkinMaterial } from './render/ballSkins.js';
 import { SkinFX } from './render/skins/skinFx.js';
 import { SKINS } from '../progress/skins.js';
 import { HOLE_TIME_LIMIT, maxStrokesOf } from '../config.js';
@@ -394,7 +395,7 @@ export class GolfGame {
     this.#cancelAim();
     this.exitPointerLock();
     sfx.lip();
-    navigator.vibrate?.([60, 40, 60]);
+    this.#vibrate([60, 40, 60]);
     this.onTimeUp?.(this.strokes);
   }
 
@@ -465,6 +466,8 @@ export class GolfGame {
   }
 
   dispose() {
+    if (this.disposed) return; // idempotente: pausa→salir llama dos veces (game.dispose y goHome→releasePlay)
+    this.disposed = true;
     setCharge(0);
     stopAmbient();
     stopRolling();
@@ -477,6 +480,8 @@ export class GolfGame {
     this.perf = null;
     this.composer.dispose();
     this.renderer.dispose();
+    // suelta ya el contexto WebGL (si no, vive hasta el GC y se acumula uno por partida; el hub crea el suyo justo después)
+    try { this.renderer.forceContextLoss?.(); } catch { /* ya perdido */ }
     this.renderer.domElement.remove();
     this.cupMarker?.remove();
   }
@@ -519,6 +524,7 @@ export class GolfGame {
       this.skinHandle.material,
     );
     this.ballMesh.castShadow = true;
+    attachSkinDecor(this.ballMesh, this.skinHandle, BALL_R); // pelos y otros extras de la skin
     // la bola va dentro de un grupo para poder aplastarla sin que gire el aplastamiento
     this.ballRoot = new THREE.Group();
     this.ballRoot.add(this.ballMesh);
@@ -870,8 +876,26 @@ export class GolfGame {
     this.squash = 0.2 + power * 0.25;
     this.fovKick = power * 7;
     this.#addShake(power * power * 0.45);
-    navigator.vibrate?.(15);
+    this.#vibrate(15);
     this.onStroke?.(this.strokes);
+  }
+
+  /** Controles elegidos en Ajustes (invertir, sensibilidad, rueda, vibración). Se leen en cada gesto. */
+  #controls() {
+    // se llama en cada movimiento del ratón: solo se recalcula cuando cambian los ajustes
+    const c = settings.peek().controls;
+    if (c !== this.#ctlSrc) {
+      this.#ctlSrc = c;
+      this.#ctl = inputFactors(c);
+    }
+    return this.#ctl;
+  }
+  #ctlSrc = null;
+  #ctl = null;
+
+  /** Vibra solo si el jugador no la ha quitado en Ajustes. */
+  #vibrate(pattern) {
+    if (settings.peek().controls.vibration) navigator.vibrate?.(pattern);
   }
 
   #bindInput() {
@@ -962,12 +986,13 @@ export class GolfGame {
         // solo se carga el tiro si el dedo empieza en la bola; si no, es la cámara
         const shoot = !isMoving(this.ball) && this.#touchesBall(e.clientX, e.clientY);
         this.drag = { id: e.pointerId, shoot, x: e.clientX, y: e.clientY, yaw: this.yaw, zoom: this.zoomLevel ?? 1, lastTick: this.yaw, start: this.tick, turns: 0, dir: 0 };
-        if (shoot) navigator.vibrate?.(6);
+        if (shoot) this.#vibrate(6);
       }
     };
 
     this.#onPointerMove = (e) => {
       if (this.paused) return;
+      const f = this.#controls();
       const isMouse = e.pointerType === 'mouse';
       if (isMouse) {
         const isLocked = typeof document !== 'undefined' && document.pointerLockElement === el;
@@ -976,17 +1001,17 @@ export class GolfGame {
           const dy = e.movementY ?? (this.lastMouseY != null ? e.clientY - this.lastMouseY : 0);
           this.lastMouseX = e.clientX;
           this.lastMouseY = e.clientY;
-          this.overviewYaw = (this.overviewYaw || 0) + dx * 0.004;
-          this.overviewPitch = THREE.MathUtils.clamp((this.overviewPitch ?? 0.85) - dy * 0.003, 0.25, 1.35);
+          this.overviewYaw = (this.overviewYaw || 0) + dx * 0.004 * f.camX;
+          this.overviewPitch = THREE.MathUtils.clamp((this.overviewPitch ?? 0.85) - dy * 0.003 * f.camY, 0.25, 1.35);
           return;
         }
         if (this.orbiting) {
           const mx = e.movementX ?? 0;
           if (isLocked) {
-            this.orbitYaw = (this.orbitYaw || 0) + (mx * 2.8) / (el.clientWidth || 1);
+            this.orbitYaw = (this.orbitYaw || 0) + (mx * 2.8 * f.camX) / (el.clientWidth || 1);
           } else {
             const dx = e.clientX - this.orbitAnchorX;
-            this.orbitYaw = (dx * 2.8) / (el.clientWidth || 1);
+            this.orbitYaw = (dx * 2.8 * f.camX) / (el.clientWidth || 1);
           }
           return;
         }
@@ -1003,7 +1028,7 @@ export class GolfGame {
           if (Math.abs(isLocked ? ca.dragY : dy) > 3) {
             ca.userAdjusted = true;
             const baseP = ca.startPower || 0;
-            this.power = THREE.MathUtils.clamp(baseP + (dy / (h * 0.32)), 0, 1);
+            this.power = THREE.MathUtils.clamp(baseP + (dy * f.power) / (h * 0.32), 0, 1);
           }
 
           // Ajuste simultáneo de dirección horizontal con el ratón
@@ -1013,7 +1038,7 @@ export class GolfGame {
               if (ca.dir) this.mouseTurns = (this.mouseTurns || 0) + 1;
               ca.dir = Math.sign(mx);
             }
-            ca.baseYaw += (mx * 2.2 * (1 - 0.65 * this.power)) / w;
+            ca.baseYaw += (mx * 2.2 * (1 - 0.65 * this.power) * f.aim) / w;
             ca.px = e.clientX;
             this.yaw = ca.baseYaw;
           }
@@ -1038,7 +1063,7 @@ export class GolfGame {
               if (this.mouseDir) this.mouseTurns = (this.mouseTurns || 0) + 1;
               this.mouseDir = Math.sign(dx);
             }
-            const sens = 0.0032;
+            const sens = 0.0032 * f.aim;
             this.yaw += dx * sens;
             if (Math.abs(this.yaw - this.lastMouseTick) > 0.08) {
               this.lastMouseTick = this.yaw;
@@ -1052,8 +1077,8 @@ export class GolfGame {
         const h = el.clientHeight || 1, w = el.clientWidth || 1;
         if (this.overview) {
           // en la vista de mapa el dedo gira la maqueta (no toca el apuntado)
-          this.overviewYaw = (this.overviewYaw || 0) - (e.clientX - (d.px ?? d.x)) * (5 / w);
-          this.overviewPitch = THREE.MathUtils.clamp((this.overviewPitch ?? 0.85) + (e.clientY - (d.py ?? d.y)) * (2.5 / h), 0.25, 1.35);
+          this.overviewYaw = (this.overviewYaw || 0) - (e.clientX - (d.px ?? d.x)) * (5 / w) * f.camX;
+          this.overviewPitch = THREE.MathUtils.clamp((this.overviewPitch ?? 0.85) + (e.clientY - (d.py ?? d.y)) * (2.5 / h) * f.camY, 0.25, 1.35);
           d.px = e.clientX;
           d.py = e.clientY;
           return;
@@ -1065,10 +1090,10 @@ export class GolfGame {
             if (d.dir) this.camTurns++;
             d.dir = Math.sign(dx);
           }
-          d.yaw -= (dx * 3.2) / w;
+          d.yaw -= (dx * 3.2 * f.camX) / w;
           d.px = e.clientX;
           this.yaw = d.yaw;
-          this.zoomLevel = THREE.MathUtils.clamp(d.zoom - (e.clientY - d.y) / (h * 0.8), 0.65, 1.55);
+          this.zoomLevel = THREE.MathUtils.clamp(d.zoom - ((e.clientY - d.y) * f.camY) / (h * 0.8), 0.65, 1.55);
           if (Math.abs(this.yaw - d.lastTick) > 0.12) {
             d.lastTick = this.yaw;
             sfx.tick();
@@ -1076,13 +1101,13 @@ export class GolfGame {
           return;
         }
         const canShoot = !isMoving(this.ball);
-        this.power = canShoot ? THREE.MathUtils.clamp((e.clientY - d.y) / (h * 0.32), 0, 1) : 0;
+        this.power = canShoot ? THREE.MathUtils.clamp(((e.clientY - d.y) * f.power) / (h * 0.32), 0, 1) : 0;
         const dx = e.clientX - (d.px ?? d.x);
         if (dx && Math.sign(dx) !== d.dir) {
           if (d.dir) d.turns++;
           d.dir = Math.sign(dx);
         }
-        d.yaw += (dx * 2.4 * (1 - 0.65 * this.power)) / w;
+        d.yaw += (dx * 2.4 * (1 - 0.65 * this.power) * f.aim) / w;
         d.px = e.clientX;
         this.yaw = d.yaw;
         if (Math.abs(this.yaw - d.lastTick) > 0.08) {
@@ -1092,7 +1117,7 @@ export class GolfGame {
         setCharge(this.power);
         if (this.power >= 1 && !this.fullPower) {
           sfx.full();
-          navigator.vibrate?.(12);
+          this.#vibrate(12);
         }
         this.fullPower = this.power >= 1;
         this.onAim?.(this.power);
@@ -1162,8 +1187,9 @@ export class GolfGame {
         this.zoomLevel = THREE.MathUtils.clamp((this.zoomLevel ?? 1) + delta, 0.55, 1.9);
         return;
       }
-      // Si el usuario mantiene pulsado Ctrl o Alt, o la bola está en movimiento, la rueda hace zoom de cámara:
-      if (e.ctrlKey || e.altKey || isMoving(this.ball) || this.sunk || this.intro < 1) {
+      const f = this.#controls();
+      // Ctrl o Alt pulsado, la bola en movimiento o la rueda puesta en «solo zoom» (Ajustes): zoom de cámara
+      if (!f.wheelPower || e.ctrlKey || e.altKey || isMoving(this.ball) || this.sunk || this.intro < 1) {
         const delta = Math.sign(e.deltaY) * 0.08;
         this.zoomLevel = THREE.MathUtils.clamp((this.zoomLevel ?? 1) + delta, 0.65, 1.55);
         return;
@@ -1177,7 +1203,7 @@ export class GolfGame {
         const h = el.clientHeight || 1;
         const isLocked = typeof document !== 'undefined' && document.pointerLockElement === el;
         const dy = isLocked ? (this.chargeAnchor.dragY || 0) : ((this.lastMouseY ?? this.chargeAnchor.y) - this.chargeAnchor.y);
-        this.chargeAnchor.startPower = THREE.MathUtils.clamp(this.power - (dy / (h * 0.32)), 0, 1);
+        this.chargeAnchor.startPower = THREE.MathUtils.clamp(this.power - (dy * f.power) / (h * 0.32), 0, 1);
       }
       setCharge(this.power);
       this.onAim?.(this.power);
@@ -1377,7 +1403,7 @@ export class GolfGame {
         this.camPos?.add(jump);
         this.camLook?.add(jump);
         this.#addShake(0.25);
-        navigator.vibrate?.(20);
+        this.#vibrate(20);
       }
       if (r.launch) {
         // sale volando por el labio de la rampa
@@ -1385,7 +1411,7 @@ export class GolfGame {
         this.particles.puff(pos, 0xffb020, 10, 1.4, 0.16);
         this.squash = Math.max(this.squash, 0.2);
         this.#addShake(0.15);
-        navigator.vibrate?.(12);
+        this.#vibrate(12);
       }
       if (r.landed && !r.lava) {
         sfx.wall(Math.min(9, r.impact * 1.6));
@@ -1400,7 +1426,7 @@ export class GolfGame {
         this.particles.puff(new THREE.Vector3(lx, 0, lz), 0x6b5a4a, 14, 1.6, 0.2);
         this.waves.emit(this.ball.x, this.ball.z, 0xffffff, 1.2, 2);
         this.#addShake(0.25);
-        navigator.vibrate?.([20, 30, 20]);
+        this.#vibrate([20, 30, 20]);
         this.onFall?.();
       } else if (r.outside) {
         // saltó por encima del muro de fuera: vuelve a su sitio
@@ -1408,7 +1434,7 @@ export class GolfGame {
         sfx.fall();
         this.particles.puff(new THREE.Vector3(lx, 0, lz), 0x8fbf5a, 12, 1.6, 0.18);
         this.#addShake(0.2);
-        navigator.vibrate?.([20, 30, 20]);
+        this.#vibrate([20, 30, 20]);
         this.onOut?.();
       } else if (r.water) {
         // cae al río: salpica y vuelve a su sitio
@@ -1417,7 +1443,7 @@ export class GolfGame {
         this.particles.puff(new THREE.Vector3(lx, 0, lz), 0x9fe8ff, 18, 2, 0.16);
         this.waves.emit(lx, lz, 0x7fdcff, 1.2, 2.2);
         this.#addShake(0.25);
-        navigator.vibrate?.([20, 30, 20]);
+        this.#vibrate([20, 30, 20]);
         this.onWater?.();
       } else if (r.lava) {
         // se quema en la lava: chispas y humo donde ha caído y vuelve a su sitio
@@ -1428,7 +1454,7 @@ export class GolfGame {
         this.particles.puff(at.clone().setY(0.2), 0x3a3036, 10, 1.2, 0.35);
         this.waves.emit(lx, lz, 0xff6a1a, 1.2, 2.2);
         this.#addShake(0.35);
-        navigator.vibrate?.([40, 30, 40]);
+        this.#vibrate([40, 30, 40]);
         this.onLava?.();
       }
       if (r.bumper >= 0) {
@@ -1451,7 +1477,7 @@ export class GolfGame {
         if (this.genericFx.wall) this.particles.puff(pos, 0xf3e3c3, 5, 0.8, 0.14);
         this.squash = Math.max(this.squash, Math.min(0.25, r.hit * 0.03));
         if (r.hit > 4) {
-          navigator.vibrate?.(8);
+          this.#vibrate(8);
           this.#addShake(Math.min(0.35, (r.hit - 4) * 0.06));
         }
       }
@@ -1498,7 +1524,7 @@ export class GolfGame {
         this.waves.emit(this.course.cup[0], this.course.cup[1], 0xffe066, 2.4, 1.4);
         this.waves.emit(this.course.cup[0], this.course.cup[1], 0xffffff, 1.4, 2);
         this.#addShake(0.3);
-        navigator.vibrate?.([30, 40, 60]);
+        this.#vibrate([30, 40, 60]);
         setTimeout(() => this.onSunk?.(this.strokes), 2200);
       } else if (wasMoving && !isMoving(this.ball)) this.onRest?.(this.strokes);
     }

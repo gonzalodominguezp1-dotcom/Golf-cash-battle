@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createSkinMaterial as buildSkinMaterial } from './skins/skinMaterial.js';
 import { ballPreview, fbm3D, paintBall, skinCanvas, uvToSphere } from './ballPaint.js';
+import { createHairDecor } from './skins/hairDecor.js';
 
 // El pintado 2D vive en ballPaint.js (sin three.js); se reexporta por compatibilidad.
 export { ballPreview, paintBall };
@@ -163,7 +164,43 @@ const deps = { canvas: skinCanvas, legacy: setupSkinAnimation };
  * `theme` (para elegir el env de estudio claro u oscuro).
  */
 export function createSkinMaterial(skin, opts = {}) {
-  return buildSkinMaterial(skin, opts, deps);
+  const handle = buildSkinMaterial(skin, opts, deps);
+  // pelos de verdad (geometría) en calidad media y alta; en baja se queda la textura 2D con los pelos pintados
+  const cfg = skin.decor?.hair;
+  const count = cfg && handle.quality !== 'low' ? cfg[handle.quality] ?? 0 : 0;
+  if (count > 0) {
+    const decor = createHairDecor({ count, seed: opts.instance?.seed ?? 0, color: cfg.color });
+    handle.decor = decor;
+    const { dispose, setReveal, setInstance } = handle;
+    handle.dispose = () => {
+      decor.dispose();
+      dispose();
+    };
+    handle.setReveal = (v) => {
+      setReveal(v);
+      decor.setOpacity(v);
+    };
+    handle.setInstance = (inst = {}) => {
+      setInstance(inst);
+      decor.setSeed(inst.seed ?? 0);
+    };
+  }
+  return handle;
+}
+
+/**
+ * Cuelga de `mesh` los extras de la skin (pelos) escalados al radio de la bola, quitando los de antes.
+ * Con `handle` null (o sin extras) solo limpia. Cada malla recibe un clon que comparte geometría y material,
+ * así que sirve igual para el espejo del inspector y para los paneles de efectos.
+ */
+export function attachSkinDecor(mesh, handle, radius = 1) {
+  mesh.userData.skinDecor?.removeFromParent();
+  mesh.userData.skinDecor = null;
+  if (!handle?.decor) return;
+  const g = handle.decor.group.clone();
+  g.scale.setScalar(radius);
+  mesh.add(g);
+  mesh.userData.skinDecor = g;
 }
 
 /**

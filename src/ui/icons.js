@@ -156,6 +156,27 @@ const personParts = (ox, oy, s, t) => [
   S(blob(ox, oy - 10 * s, 7.2 * s, 7.8 * s), t),
 ];
 
+// Cadena: eslabones alternos (ovalado de frente / de canto) a lo largo de una diagonal, con solape entre vecinos.
+// (x0,y0)→(x1,y1) son los centros del primer y último eslabón; `frontFirst` decide si el primero va de frente.
+const chainParts = (x0, y0, x1, y1, n, frontFirst) => {
+  const ux = (x1 - x0) / Math.hypot(x1 - x0, y1 - y0);
+  const uy = (y1 - y0) / Math.hypot(x1 - x0, y1 - y0);
+  const rot = (u, v, cx, cy) => [cx + ux * u - uy * v, cy + uy * u + ux * v]; // u a lo largo, v de través
+  const out = [];
+  for (let k = 0; k < n; k++) {
+    const cx = x0 + ((x1 - x0) * k) / (n - 1);
+    const cy = y0 + ((y1 - y0) * k) / (n - 1);
+    if ((k % 2 === 0) === frontFirst) {
+      const ring = [];
+      for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; ring.push(rot(Math.cos(a) * 4.6, Math.sin(a) * 2.9, cx, cy)); }
+      out.push(T(smooth(ring, true, 0), 'silver', 1.9));
+    } else {
+      out.push(S(rpoly([rot(-3.4, -1.3, cx, cy), rot(3.4, -1.3, cx, cy), rot(3.4, 1.3, cx, cy), rot(-3.4, 1.3, cx, cy)], 1, 0.15), 'gray'));
+    }
+  }
+  return out;
+};
+
 const speaker = () => S(rpoly([[6, 18], [14, 18], [24, 9], [24, 39], [14, 30], [6, 30]], 2.5), 'white');
 
 const ICONS = {
@@ -226,6 +247,23 @@ const ICONS = {
   sound: () => [speaker(), T('M29.5 18c3 2.6 3 9.4 0 12', 'cyan', 3.4), T('M34.5 12.5c6 4.5 6 18.5 0 23', 'cyan', 3.4), G(10, 21, 1.4)],
   mute: () => [speaker(), T('M30 18l11 12M41 18L30 30', 'red', 3.6), G(10, 21, 1.4)],
   fullscreen: () => ['M7 18V8h10', 'M31 8h10v10', 'M41 30v10H31', 'M17 40H7V30'].map((d) => T(d, 'white', 4.6)),
+  // libro abierto de frente: tapa roja asomando por debajo y dos páginas que se juntan en el lomo (eje de simetría x = X).
+  // La cara (sin extrusión) va de x 4,8 a 42,8 y de y 6,1 a 40,7, centro (23,8; 23,4): la extrusión alarga el dibujo 1,3 a la
+  // derecha y 2,6 hacia abajo, y así la caja VISIBLE (contorno y extrusión incluidos) cae en el centro del lienzo (24,5; 24,5),
+  // el mismo criterio que ICON_NUDGE, sin necesitar entrada allí.
+  news: () => {
+    const X = 23.8;
+    const y = (v) => r1(v - 2.7);
+    const page = (s) => rpoly([[X, y(13)], [X + s * 4, y(10)], [X + s * 9, y(8.8)], [X + s * 14.5, y(9.2)], [X + s * 14.5, y(35.2)], [X + s * 9, y(34.8)], [X + s * 4, y(35.4)], [X, y(37.8)]], 1.4, 0.2);
+    const lines = (s) => [15.5, 20.5, 25.5, 30.5].map((v, i) => `M${r1(X + s * 4.2)} ${y(v + 1.6)}L${r1(X + s * (i === 3 ? 8.5 : 11))} ${y(v)}`).join('');
+    return [
+      S(rpoly([[X, y(16)], [X + 19, y(13)], [X + 19, y(40.5)], [X + 6, y(40.8)], [X, y(43.4)], [X - 6, y(40.8)], [X - 19, y(40.5)], [X - 19, y(13)]], 2.2, 0.2), 'red'),
+      S(page(-1), 'paper'),
+      S(page(1), 'paper'),
+      L(lines(-1) + lines(1), 1.5, INK, 0.4),
+      G(13.3, y(14), 1.5),
+    ];
+  },
   gear: () => {
     const pts = [];
     const teeth = 8;
@@ -256,6 +294,8 @@ const ICONS = {
     F('M24 27a3.2 3.2 0 0 0-1.8 5.8l-.9 4.7h5.4l-.9-4.7A3.2 3.2 0 0 0 24 27z', TONES.dark[1], 0),
     G(14, 25, 1.6),
   ],
+  // dos cadenas cruzadas en X de esquina a esquina (para el estado bloqueado del hub); la segunda pasa por encima
+  chains: () => [...chainParts(2, 2, 47, 47, 11, true), ...chainParts(47, 2, 2, 47, 11, false)],
   check: (t = 'green') => [T('M9 25l9.5 9.5L39 13', t, 6.5)],
   close: (t = 'red') => [T('M13 13l22 22M35 13L13 35', t, 6.5)],
   plus: (t = 'green') => [T('M24 9v30M9 24h30', t, 6.5)],

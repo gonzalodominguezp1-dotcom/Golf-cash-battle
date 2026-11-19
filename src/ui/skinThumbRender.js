@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createSkinMaterial } from '../game/render/ballSkins.js';
+import { attachSkinDecor, createSkinMaterial } from '../game/render/ballSkins.js';
 
 // Render 3D de UNA miniatura de skin, fuera de pantalla, a imagen (WebP; PNG si el navegador no
 // codifica WebP). Solo lo importa skinThumbs.js con import() cuando falta una miniatura en caché,
@@ -69,6 +69,7 @@ export async function renderThumb(skin, { seed = 0, quality = 'high', px = 144 }
   out.width = out.height = px;
   try {
     g.mesh.material = handle.material;
+    attachSkinDecor(g.mesh, handle, R);
     handle.update(1.2, 0.016, CTX);
     // compilación paralela si el driver la admite: no congela la interfaz mientras compila
     try {
@@ -79,6 +80,7 @@ export async function renderThumb(skin, { seed = 0, quality = 'high', px = 144 }
     // copia síncrona: el búfer de WebGL no se conserva tras devolver el control
     out.getContext('2d').drawImage(g.renderer.domElement, 0, 0);
   } finally {
+    attachSkinDecor(g.mesh, null);
     handle.dispose();
   }
   let blob = await toBlob(out, 'image/webp', 0.9);

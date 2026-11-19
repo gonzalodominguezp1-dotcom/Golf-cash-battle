@@ -1,5 +1,6 @@
 import { CHALLENGES, SKINS, skinById } from './skins.js';
-import { bumpCounter, ensureInstances, sanitizeInventory } from './inventory.js';
+import { MAX_INVENTORY, bumpCounter, createInstance, ensureInstances, sanitizeInventory } from './inventory.js';
+import { skinForCode } from './codes.js';
 import { MAX_STROKES_PER_HOLE } from '../config.js';
 import { frameFor, framesUnlocked } from './prestige.js';
 
@@ -148,15 +149,23 @@ export class Progress {
   /** Marcos de prestigio alcanzados y el que se luce ahora (null si aún no hay ninguno). */
   get prestige() {
     const level = this.level.level;
-    return { unlocked: framesUnlocked(level), frame: frameFor(level, this.state.framePick) };
+    const done = (id) => this.challenge(id).done;
+    return { unlocked: framesUnlocked(level, done), frame: frameFor(level, this.state.framePick, done) };
   }
 
   /** Elige el marco que se luce. save(id) lo guarda en la cuenta; id desconocido o sin alcanzar no vale. */
   equipFrame(id) {
-    if (!framesUnlocked(this.level.level).some((f) => f.id === id)) return false;
+    if (!this.prestige.unlocked.some((f) => f.id === id)) return false;
+    const before = this.state.framePick;
     this.state.framePick = id;
     this.#persistLocal();
-    this.frameSaver?.(id)?.catch?.(() => {});
+    // si el servidor no lo guarda, se vuelve al marco anterior: si no, el siguiente my_ranking lo pisaría sin avisar
+    this.frameSaver?.(id)?.catch?.((err) => {
+      if (this.state.framePick !== id) return;
+      this.state.framePick = before;
+      this.#persistLocal();
+      this.onFrameSaveError?.(err);
+    });
     return true;
   }
 
@@ -171,10 +180,27 @@ export class Progress {
     this.#persistLocal();
   }
 
+  /**
+   * Canjea un código. Devuelve { status: 'ok' | 'already' | 'invalid' | 'full', skin? }.
+   * 'ok' deja la skin pendiente de abrir (claimable) y la guarda en la cuenta.
+   */
+  redeemCode(raw) {
+    const id = skinForCode(raw);
+    const skin = id && SKINS.find((s) => s.id === id);
+    if (!skin) return { status: 'invalid' };
+    if (this.state.inventory[skin.id]) return { status: 'already', skin };
+    if (Object.keys(this.state.inventory).length >= MAX_INVENTORY) return { status: 'full', skin };
+    this.state.inventory[skin.id] = createInstance(this.#ownerKey, skin);
+    this.#save();
+    return { status: 'ok', skin };
+  }
+
   /** Progreso hacia desbloquear la skin, de 0 a 1, con el texto del requisito. */
   requirement(skin) {
     const u = skin.unlock;
     if (!u) return { text: 'De serie', ratio: 1 };
+    // por código: desbloqueada si ya tiene instancia (el inventario sí viaja a la cuenta)
+    if (u.code) return { text: 'Código secreto', ratio: this.state.inventory[skin.id] ? 1 : 0 };
     if (u.level) return { text: `Nivel ${u.level}`, ratio: Math.min(1, this.level.level / u.level) };
     if (u.wins) return { text: `${u.wins} victoria${u.wins > 1 ? 's' : ''}`, ratio: Math.min(1, this.state.wins / u.wins) };
     const c = this.challenge(u.challenge);

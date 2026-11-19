@@ -30,6 +30,7 @@ export const PATTERN_IDS = [
   'anima_errante',
   'cronometro_laton',
   'abyssal_tide',
+  'huevo_mio',
 ];
 
 function stub(id) {

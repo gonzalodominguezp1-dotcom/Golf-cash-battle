@@ -1,0 +1,241 @@
+/* Hub (T025). Boceto aprobado + decisión T024 (ajustada por el humano: logo centrado en pantalla, saldo junto al perfil,
+   barra inferior con tres botones de color y la misma altura, tiles de icono con degradado). Etiqueta visible bajo cada icono. */
+.hub {
+  /* --ico: lado del recuadro del icono; --ico-svg: tamaño del icono dentro; las herramientas de arriba y el avatar usan los suyos;
+     --bigh / --big-svg: alto común de los tres botones de la barra inferior y su icono; --pill: alto de la píldora de saldo */
+  --ico: 84px; --ico-svg: 62px; --tool: 68px; --tool-svg: 48px; --face: 72px; --face-svg: 42px; --pad: 12px;
+  --bigh: 88px; --big-svg: 34px; --pill: 48px; --lift: 18px; --display-btn: var(--display);
+  position: fixed; inset: 0; overflow: hidden; z-index: 0;
+  background: #6fb07a url('/splash/hub-fallback.webp') center / cover no-repeat;
+  display: grid; grid-template-rows: auto 1fr auto; color: var(--text);
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+/* velo oscuro arriba y abajo para el contraste AA de los controles sobre la escena */
+.hub::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(8, 14, 24, 0.55) 0%, rgba(8, 14, 24, 0) 30%),
+    linear-gradient(0deg, rgba(8, 14, 24, 0.66) 0%, rgba(8, 14, 24, 0) 32%),
+    /* viñeta: oscurece los cuatro bordes y las esquinas de forma gradual; el centro queda limpio */
+    radial-gradient(ellipse farthest-corner at center, rgba(4, 8, 14, 0) 55%, rgba(4, 8, 14, 0.5) 100%);
+}
+.hub > * { position: relative; }
+/* escena 3D detrás de todo (bajo el velo ::before); sin escena queda vacío y se ve la imagen fija del fondo */
+.hub > .hub-scene { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
+.hub-scene canvas { display: block; width: 100%; height: 100%; }
+.hub button { font: inherit; color: inherit; cursor: pointer; border: 0; padding: 0; }
+.hub button:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+
+/* barra superior: UNA fila en todos los formatos, [perfil + saldo] a la izquierda y [Ajustes + pantalla completa] a la derecha.
+   NOTA: el logo vuelve como banderín en la escena (tarea aparte); aquí solo queda un h1 sr-only */
+.hub > .sr-only { position: absolute; }
+.hub-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; padding: var(--pad); }
+/* margin-top: el centro del botón de perfil (--face) cae en la misma línea que el del botón de ajustes (--tool); las monedas se centran con el perfil */
+.hub-left { display: flex; align-items: flex-start; gap: 8px; min-width: 0; margin-top: calc((var(--tool) - var(--face)) / 2); }
+.hub-tools { flex: none; display: flex; gap: 8px; }
+.hub-tools-col { display: flex; flex-direction: column; gap: 8px; }
+.hub-tool { --ico: var(--tool); --ico-svg: var(--tool-svg); }
+
+/* la etiqueta va FUERA del recuadro, sin fondo: sombra fuerte para leerse sobre la escena */
+.hub-nav-t {
+  font: 800 14px/1.1 var(--display); color: #fff; letter-spacing: 0.01em; text-align: center;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 10px rgba(0, 0, 0, 0.7);
+}
+
+/* usuario con anillo de nivel (conic-gradient) */
+.hub-user {
+  --pct: 0; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  min-width: var(--face); min-height: 56px; background: transparent; flex: none;
+}
+.hub-face > svg { width: var(--face-svg); height: var(--face-svg); }
+.hub-face {
+  position: relative; width: var(--face); height: var(--face); border-radius: 50%; display: grid; place-items: center;
+  background: conic-gradient(var(--emerald) calc(var(--pct) * 1%), rgba(255, 255, 255, 0.3) 0);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+}
+.hub-face::before { content: ''; position: absolute; inset: 4px; border-radius: 50%; background: #15202e; }
+/* .hub-pic centra lo que haya dentro (icono de invitado o foto con marco) */
+.hub-pic { position: relative; display: grid; place-items: center; width: 100%; height: 100%; }
+/* pista fija del tamaño del botón: sin ella la rejilla crece hasta el marco (más grande que el botón) y empuja la foto abajo y a la derecha */
+.hub-face--pic .hub-pic { grid-template: 100% / 100%; }
+.hub-pic > svg { width: var(--face-svg); height: var(--face-svg); }
+/* con sesión: sin anillo de XP. La foto y el marco son capas separadas: el marco se dimensiona desde su hueco para que la foto
+   encaje justo en él (--hole = hueco / lado de la imagen) y la ilustración puede asomar un poco por fuera del botón.
+   --btn guarda el tamaño del botón: --face lo redefine .pf-illustrated para la foto y no se puede leer aquí. */
+.hub-face--pic { background: none; box-shadow: none; --btn: var(--face); }
+.hub-face--pic::before { display: none; }
+/* sin chip de nivel con foto (el nivel sigue en el nombre accesible del botón) */
+.hub-face--pic .hub-lv { display: none; }
+/* el marco asoma ~10 % del botón por cada lado: la separación con las monedas lo compensa para que no se pisen */
+.hub-left:has(.hub-face--pic) { gap: calc(8px + var(--face) * 0.1 + 8px); }
+/* el marco es más grande que el botón: se centra a mano (la rejilla alinea arriba lo que desborda y bajaba la foto ~0,1 × el botón) */
+.hub-face--pic .pf { --s: calc(var(--btn) * 0.88); margin: 0; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+.hub-face--pic .pf-illustrated { --box: calc(var(--btn) * 1.2); --face: calc(var(--box) * var(--hole, 0.5) * 1.03); width: var(--box); height: var(--box); }
+.hub-face > svg { position: relative; } /* centrado exacto: el chip de nivel (abajo) queda libre porque el dibujo mide ~31 de 72 px */
+.hub-lv {
+  position: absolute; bottom: -3px; left: 50%; transform: translateX(-50%); min-width: 24px; height: 20px; padding: 0 6px;
+  box-sizing: border-box; border-radius: 999px; display: grid; place-items: center; background: var(--gold); color: #1a1405;
+  font: 800 12px/1 var(--display); border: 2px solid #0b0f15; font-variant-numeric: tabular-nums;
+}
+
+/* píldora de saldo: UN botón (monedas · cantidad · monedero), centrado en vertical con el avatar */
+.hub-wallet {
+  height: var(--pill); min-height: 44px; min-width: 96px; box-sizing: border-box; padding: 0 14px; margin-top: calc((var(--face) - var(--pill)) / 2);
+  /* la caja crece con las cifras (1.000 → 10.000 → 100.000 …): no se encoge (flex: none) y mide lo que mide su contenido.
+     Padding simétrico a ambos lados; el icono se separa del número con gap, y ambos van centrados en vertical */
+  display: flex; align-items: center; justify-content: center; gap: 8px; flex: none; width: max-content; border-radius: 999px;
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.92), rgba(11, 15, 21, 0.92)); color: #fff;
+  border: 1.5px solid rgba(212, 175, 55, 0.75); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+.hub-wallet-ico { flex: none; display: grid; place-items: center; }
+.hub-wallet-ico > svg { width: 24px; height: 24px; }
+.hub-wallet-n {
+  white-space: nowrap; text-align: right; flex: none; /* nunca se trunca: un número cortado engaña (hasta 10 M va completo, luego «12,3 M») */
+  font: 800 16px/1 var(--body); font-variant-numeric: tabular-nums lining-nums; color: #fff; line-height: 1; padding-bottom: 1px;
+}
+/* feedback solo al pulsar o con foco de teclado (sin estado de ratón) */
+.hub-wallet:active { transform: scale(0.97); }
+.hub-wallet:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+
+/* columnas laterales y accesos */
+.hub-mid { display: flex; justify-content: space-between; align-items: center; padding: 0 var(--pad); min-height: 0; }
+.hub-col { display: flex; flex-direction: column; gap: 14px; }
+/* el botón es transparente: el único recuadro es .hub-ico (solo el icono); el texto queda debajo */
+.hub-nav {
+  position: relative; min-width: var(--ico); padding: 0; box-sizing: border-box; background: transparent;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 6px;
+}
+/* tile con degradado propio por destino, brillo superior (gloss), borde interior y sombra con color */
+.hub-ico {
+  --t1: #4b5563; --t2: #1f2937; --tg: rgba(31, 41, 55, 0.55);
+  position: relative; width: var(--ico); height: var(--ico); box-sizing: border-box; border-radius: 22px;
+  display: grid; place-items: center;
+  background: linear-gradient(155deg, var(--t1) 0%, var(--t2) 100%);
+  border: 1.5px solid rgba(255, 255, 255, 0.38);
+  box-shadow: 0 8px 18px -4px var(--tg), 0 2px 5px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.55), inset 0 -4px 8px rgba(0, 0, 0, 0.28);
+}
+.hub-ico::before { /* gloss: media luna de luz en la mitad superior */
+  content: ''; position: absolute; left: 4px; right: 4px; top: 4px; height: 46%; border-radius: 18px 18px 50% 50% / 18px 18px 22% 22%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.04)); pointer-events: none;
+}
+.hub-ico--ranking { --t1: #e0b13a; --t2: #7a5410; --tg: rgba(224, 177, 58, 0.55); }
+.hub-ico--achievements { --t1: #fb923c; --t2: #9a3412; --tg: rgba(251, 146, 60, 0.5); }
+.hub-ico--skins { --t1: #8b5cf6; --t2: #4c1d95; --tg: rgba(139, 92, 246, 0.55); }
+.hub-ico--friends { --t1: #3b82f6; --t2: #1e3a8a; --tg: rgba(59, 130, 246, 0.55); }
+.hub-ico--tool { --t1: #5b6676; --t2: #1f2733; --tg: rgba(15, 23, 42, 0.6); }
+/* svg y marca de novedades comparten UNA celda: si el span vacío del badge ocupara una 2.ª fila, el sobrante del recuadro se
+   repartiría entre las dos filas y el icono quedaría ~5 px por encima del centro (medido con scripts/measure-hub-icons.mjs) */
+.hub-ico > svg, .hub-ico > [data-badge] { grid-area: 1 / 1; }
+.hub-ico > svg { position: relative; width: var(--ico-svg); height: var(--ico-svg); filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35)); }
+.hub-nav:active .hub-ico { transform: scale(0.96); }
+/* centrado óptico: --nx/--ny (unidades del viewBox de 51, ver ICON_NUDGE en hubRules.js) mueven el DIBUJO al centro exacto de su caja;
+   el porcentaje de translate es el del propio svg, así escala con cualquier tamaño de pantalla */
+.hub-ico > svg, .hub-face > svg, .hub-wallet-ico > svg, .hub-padlock > svg, .hub-chains > svg {
+  transform: translate(calc(var(--nx, 0) * 100% / 51), calc(var(--ny, 0) * 100% / 51));
+}
+/* acceso bloqueado: mismo tile, mismo borde y misma opacidad que los demás; solo se apaga un poco el icono y encima van las cadenas y el candado */
+.hub-nav[data-locked] .hub-ico > svg { filter: saturate(0.55) brightness(0.78) drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35)); }
+.hub-lock { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; }
+.hub-chains { position: absolute; inset: 0; }
+.hub-chains > svg { display: block; width: 100%; height: 100%; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55)); }
+.hub-padlock {
+  /* candado SIN fondo ni borde, grande, centrado en el cruce de las cadenas; el contorno oscuro del propio icono + una sombra lo separan de ellas */
+  position: absolute; left: 50%; top: 50%; width: 76%; height: 76%; margin: -38% 0 0 -38%; box-sizing: border-box;
+  display: grid; place-items: center; background: none; border: 0; box-shadow: none;
+}
+.hub-padlock > svg { display: block; width: 100%; height: 100%; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.75)); }
+.hub-ico .scr-badge { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; }
+.hub-ico .scr-badge-dot { width: 18px; height: 18px; border: 2px solid #fff; box-sizing: border-box; box-shadow: none; }
+
+/* barra inferior: Mapas · JUGAR · Práctica, los tres con la MISMA altura (--bigh), color propio y el texto dentro */
+.hub-bottom { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr); align-items: end; gap: 10px; padding: var(--pad) var(--pad) 14px; }
+.hub-big, .hub-play {
+  height: var(--bigh); box-sizing: border-box; min-width: 0; overflow: hidden; text-overflow: clip; border-radius: 20px; padding: 0 6px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  font-family: var(--display-btn); font-weight: 800; text-transform: uppercase; text-align: center; /* la misma fuente (Outfit 800) que las etiquetas de los accesos laterales, en mayúsculas */
+  border: 1.5px solid rgba(255, 255, 255, 0.45);
+}
+.hub-big > svg, .hub-play > svg { position: relative; flex: none; width: var(--big-svg); height: var(--big-svg); filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.3)); }
+/* cuenta (Outfit 800 mayúsculas ≈ 0,68 em/letra + 0,03 em): «PRÁCTICA» (8) ≈ 5,7 em: a 360 px (font 14 px) ≈ 80 px en caja útil de ~91; 375 = 83/95; 390 = 86/99; 1280 (22 px, caja de ~165) = 125 */
+.hub-big-t { font-size: clamp(12px, 3.9vw, 16px); line-height: 1.1; letter-spacing: 0.03em; white-space: nowrap; }
+.hub-big:active, .hub-play:active { transform: scale(0.97); }
+/* contrastes (AA): blanco sobre #4258f0 = 5,4; #2a1500 sobre #fbbf24..#f59e0b = 8,4..11; #04251a sobre #4ade9f..#10b981 = 6,4..9 */
+.hub-maps {
+  color: #fff; text-shadow: 0 1px 2px rgba(10, 12, 60, 0.6);
+  background: linear-gradient(180deg, #4258f0, #312e81);
+  box-shadow: 0 8px 20px rgba(49, 46, 129, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+.hub-practice {
+  color: #2a1500;
+  background: linear-gradient(180deg, #fcd34d, #f59e0b);
+  box-shadow: 0 8px 20px rgba(245, 158, 11, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+/* JUGAR sube --lift sobre Mapas y Práctica (margen, no transform: el pulso ya usa transform); su alto es el mismo */
+.hub-play {
+  position: relative; overflow: hidden; color: #04251a; margin-bottom: var(--lift);
+  background: linear-gradient(180deg, #4ade9f, var(--emerald));
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.35), 0 0 0 3px rgba(255, 255, 255, 0.35) inset;
+  animation: hub-pulse 2.4s ease-in-out infinite; /* ciclo 2,4 s = 0,42 Hz, por debajo del límite de 2 Hz */
+}
+.hub-play-t { position: relative; font-weight: 800; font-size: 30px; line-height: 1; letter-spacing: 0.04em; padding-left: 0.04em; }
+/* destello que cruza el botón cada 3,2 s (solo transform/opacity) */
+.hub-shine {
+  position: absolute; top: -10%; bottom: -10%; left: 0; width: 38%; pointer-events: none; opacity: 0;
+  background: linear-gradient(100deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0));
+  transform: translateX(-170%) skewX(-18deg); animation: hub-shine 3.2s ease-in-out infinite;
+}
+@keyframes hub-pulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 8px 24px rgba(16, 185, 129, 0.35), 0 0 0 3px rgba(255, 255, 255, 0.35) inset; }
+  50% { transform: scale(1.035); box-shadow: 0 10px 32px rgba(52, 211, 153, 0.7), 0 0 0 3px rgba(255, 255, 255, 0.5) inset; }
+}
+@keyframes hub-shine {
+  0%, 55% { transform: translateX(-170%) skewX(-18deg); opacity: 0; }
+  62% { opacity: 1; }
+  85% { transform: translateX(400%) skewX(-18deg); opacity: 1; }
+  100% { transform: translateX(400%) skewX(-18deg); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-play { animation: none; }
+  .hub-shine { animation: none; display: none; }
+  .hub-wallet:active { transform: none; }
+}
+
+@media (max-width: 420px) {
+  .hub { --ico: 78px; --ico-svg: 56px; --tool: 62px; --tool-svg: 44px; --face: 66px; --face-svg: 38px; --pad: 10px; }
+  .hub-play-t { font-size: 26px; } /* «JUGAR» (Outfit 800 mayúsculas ≈ 0,68 em/letra + 0,04 em) ≈ 91 px en caja de ~105 útiles a 360 px */
+  .hub-wallet-n { font-size: 15px; }
+}
+
+@media (max-width: 380px) {
+  .hub-wallet { padding: 0 10px; gap: 6px; }
+  .hub-wallet-n { font-size: 14px; }
+  .hub-wallet-ico > svg { width: 22px; height: 22px; }
+}
+/* pantallas bajas (móvil apaisado o 360x640): el icono se reduce lo justo para que quepan las dos filas */
+@media (max-height: 700px) {
+  .hub { --ico: 70px; --ico-svg: 50px; --tool: 58px; --tool-svg: 40px; --face: 62px; --face-svg: 36px; --pill: 46px; }
+  .hub-col { gap: 10px; }
+}
+/* horizontal */
+@media (min-aspect-ratio: 1/1) {
+  .hub { --ico: 104px; --ico-svg: 76px; --tool: 84px; --tool-svg: 60px; --face: 84px; --face-svg: 48px; --pad: 20px; --bigh: 104px; --big-svg: 44px; --pill: 56px; }
+  .hub-wallet-n { font-size: 20px; }
+  .hub-wallet-ico > svg { width: 28px; height: 28px; }
+  .hub-col { gap: 20px; }
+  .hub-nav-t { font-size: 16px; }
+  .hub-bottom { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+  .hub-maps, .hub-practice { width: 180px; }
+  .hub-maps { justify-self: start; }
+  .hub-practice { justify-self: end; }
+  .hub-play { width: 300px; }
+  .hub-big-t { font-size: 22px; }
+  .hub-play-t { font-size: 40px; }
+}
+@media (min-aspect-ratio: 1/1) and (max-height: 520px) {
+  .hub { --ico: 76px; --ico-svg: 54px; --tool: 62px; --tool-svg: 44px; --face: 62px; --face-svg: 36px; --bigh: 80px; --big-svg: 30px; --pill: 46px; --lift: 12px; }
+  .hub-big-t { font-size: 19px; }
+  .hub-wallet-n { font-size: 17px; }
+  .hub-wallet-ico > svg { width: 22px; height: 22px; }
+  .hub-play { width: 240px; }
+  .hub-play-t { font-size: 32px; }
+}

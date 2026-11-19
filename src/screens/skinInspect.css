@@ -1,0 +1,78 @@
+/* Inspector de skin (T033): pantalla apilada. El visor 3D lo pinta src/ui/skinInspector.js dentro de .sk-view-canvas.
+   Diseño del visor: sin marcos; título, flechas, candado y acciones flotan sobre la bola, transparentes. */
+.sk-inspect { display: flex; flex-direction: column; height: 100dvh; max-height: 100dvh; overflow-x: hidden; overflow-y: auto; background: #080b10; }
+.sk-inspect .sk-view-stage { position: relative; flex: 1 1 auto; min-height: 260px; display: flex; overflow: hidden; }
+.sk-inspect .sk-view-canvas { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; }
+.sk-inspect .sk-view-canvas > .sk-insp { flex: 1 1 auto; min-width: 0; border-radius: 0; }
+/* nombre de la skin en el centro, con su categoría debajo */
+.sk-inspect .sk-view-title { position: absolute; top: 12px; left: 64px; right: 64px; z-index: 4; display: flex; flex-direction: column; align-items: center; min-width: 0; text-align: center; pointer-events: none; }
+.sk-inspect .sk-view-title b { font: 900 clamp(26px, 6vw, 34px)/1.05 var(--display); color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; text-shadow: 0 2px 16px rgba(0, 0, 0, 0.6); }
+/* categoría: degradado en el color del tier que recorre el texto en bucle */
+.sk-inspect .sk-view-title small {
+  margin-top: 6px; font: 900 clamp(14px, 3.4vw, 18px)/1.2 var(--body); letter-spacing: 0.2em; text-transform: uppercase;
+  background: linear-gradient(90deg, var(--tier, #fff) 0%, #ffffff 30%, var(--tier, #fff) 60%, var(--tier, #fff) 100%);
+  background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--tier, #fff) 60%, transparent));
+  animation: sk-tier-shine 2.4s linear infinite;
+}
+@keyframes sk-tier-shine { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+/* flechas anterior/siguiente: ocultas si solo hay una skin; foco visible con teclado */
+.sk-inspect .sk-view-nav { position: absolute; top: 50%; transform: translateY(-50%); z-index: 5; width: 44px; height: 44px; border-radius: 999px; display: grid; place-items: center; padding: 0; border: 1px solid var(--edge, #fff); background: rgba(8, 10, 16, 0.8); color: var(--edge, #fff); cursor: pointer; }
+.sk-inspect .sk-view-nav svg { width: 22px; height: 22px; }
+.sk-inspect .sk-view-nav.prev { left: 10px; }
+.sk-inspect .sk-view-nav.next { right: 10px; }
+.sk-inspect .sk-view-nav[hidden] { display: none; }
+/* imagen estática mientras se descarga el visor 3D */
+.sk-inspect .sk-view-poster { margin: auto; width: min(56vmin, 300px); aspect-ratio: 1; object-fit: contain; border-radius: 50%; filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.55)); }
+.sk-inspect .sk-view-loading { position: absolute; left: 0; right: 0; bottom: 72px; z-index: 3; margin: 0; text-align: center; color: var(--muted); font: 700 13px var(--body); pointer-events: none; }
+.sk-inspect .sk-view-loading[hidden] { display: none; }
+/* bloqueada: candado sobre la bola y el progreso para desbloquearla */
+.sk-inspect .sk-view-lock { position: absolute; inset: 0; z-index: 3; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding: 16px 16px 120px; box-sizing: border-box; gap: 10px; }
+.sk-inspect .sk-view-lock[hidden] { display: none; }
+.sk-inspect .sk-view-lock .sk-lock-big { position: static; transform: none; width: 64px; height: 64px; padding: 16px; }
+.sk-inspect .sk-view-req { display: grid; gap: 6px; width: min(360px, 100%); }
+.sk-inspect .sk-view-req small { font: 700 13px var(--body); color: #fff; text-align: center; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8); }
+.sk-inspect .sk-view-req .bar { height: 6px; }
+/* canje por código (skins con unlock.code): el bloqueo deja de ser solo visual, así que el formulario recibe los clics */
+.sk-inspect .sk-code { pointer-events: auto; display: flex; gap: 8px; width: min(360px, 100%); box-sizing: border-box; }
+.sk-inspect .sk-code-input { flex: 1; min-width: 0; min-height: 44px; padding: 0 12px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.45); background: rgba(8, 10, 16, 0.8); color: #fff; font: inherit; text-transform: uppercase; letter-spacing: 0.12em; }
+.sk-inspect .sk-code-input:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.sk-inspect .sk-code-btn { pointer-events: auto; min-height: 44px; min-width: 44px; padding: 0 16px; }
+.sk-inspect .sk-code-msg { margin: 0; min-height: 1.2em; width: min(360px, 100%); text-align: center; font: 700 13px var(--body); color: #fff; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8); }
+.sk-inspect .sk-code-msg[data-kind='error'] { color: #ff8a8a; }
+.sk-inspect .sk-code-msg[data-kind='info'] { color: #7dffd8; }
+/* acciones flotando sobre la bola, sin fondo */
+.sk-inspect .sk-view-actions { position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; display: flex; justify-content: center; align-items: center; padding: 10px calc(env(safe-area-inset-right, 0px) + 14px) calc(10px + env(safe-area-inset-bottom, 0px)) calc(env(safe-area-inset-left, 0px) + 14px); pointer-events: none; }
+.sk-inspect .sk-view-actions .primary { pointer-events: auto; min-width: 150px; min-height: 44px; }
+/* sin bloque de estado ni de «cómo conseguirla»: el visor ocupa toda la pantalla; el texto de estado queda solo para lectores de pantalla */
+.sk-inspect .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* el botón de atrás va fijo abajo a la izquierda: los botones de abajo dejan ese hueco para no solaparse */
+.sk-inspect .sk-view-actions { padding-left: calc(env(safe-area-inset-left, 0px) + 76px); padding-right: calc(env(safe-area-inset-right, 0px) + 76px); }
+/* con «Probar efectos» las flechas caerían sobre las celdas: se ocultan */
+.sk-inspect .sk-view-stage:has(.sk-fxon) .sk-view-nav { display: none; }
+.sk-inspect .scr-back:focus-visible, .sk-inspect .primary:focus-visible, .sk-inspect .scr-btn:focus-visible, .sk-inspect .sk-view-nav:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+@media (max-height: 520px) {
+  .sk-inspect .sk-view-lock { padding-bottom: 64px; }
+  .sk-inspect .sk-view-lock .sk-lock-big { width: 44px; height: 44px; padding: 10px; }
+  .sk-inspect .sk-view-poster { width: min(40vmin, 200px); }
+}
+/* pantalla completa, móvil y escritorio: .screen (style.css) pone tope de ancho y padding (520px en móvil, 1140px en
+   escritorio); aquí se anulan para que el visor ocupe todo el ancho y alto sin márgenes */
+.sk-inspect.screen { max-width: none; width: 100%; margin: 0; padding: 0; box-sizing: border-box; }
+@media (min-width: 900px) {
+  .sk-inspect .sk-view-canvas > .sk-insp { height: 100%; min-height: 0; }
+}
+/* «Probar efectos» en móvil: las 4 celdas caben en el visor; la etiqueta puede partirse en dos líneas y no se sale de su celda */
+.sk-inspect .sk-fx-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
+.sk-inspect .sk-fx-cap {
+  top: 10px; max-width: calc(100% - 20px); white-space: normal; text-align: center; line-height: 1.15;
+  padding: 4px 10px; font-size: clamp(11px, 3vw, 13px); letter-spacing: 0.04em;
+}
+@media (max-width: 480px) {
+  .sk-inspect .sk-fx-cell::before { inset: 4px; }
+  .sk-inspect .sk-fx-cap { top: 8px; padding: 3px 7px; font-size: 10px; letter-spacing: 0.02em; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk-inspect .sk-view-title small { animation: none; -webkit-background-clip: border-box; background-clip: border-box; color: var(--tier, #fff); background: none; }
+  .sk-inspect .sk-fx-grid, .sk-inspect .sk-fx-cap { transition: none; animation: none; }
+}

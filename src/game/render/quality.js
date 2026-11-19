@@ -1,8 +1,10 @@
 // Calidad gráfica: Bajo, Medio o Alto. Solo cambia cómo se dibuja, nunca la
-// física. Se guarda en este dispositivo; por defecto Medio en el móvil y Alto
-// en el ordenador.
+// física. Se guarda con los demás ajustes (settings.js), en el dispositivo y en
+// la cuenta, aparte para el móvil y para el ordenador. Sin elegir: Medio en el
+// móvil (Bajo si es modesto) y Alto en el ordenador.
 
-const KEY = 'gcb.quality';
+import { deviceKind, settings } from '../../settings/settings.js';
+
 export const QUALITY_LEVELS = ['low', 'medium', 'high'];
 export const QUALITY_NAMES = { low: 'Bajo', medium: 'Medio', high: 'Alto' };
 
@@ -62,19 +64,21 @@ export function defaultQuality() {
   return isWeakMobile() ? 'low' : 'medium';
 }
 
-export function getQuality() {
-  try {
-    const q = localStorage.getItem(KEY);
-    if (QUALITY_LEVELS.includes(q)) return q;
-  } catch {}
-  return defaultQuality();
+/** La elegida para este tipo de dispositivo; si no hay ninguna, la automática. */
+export function getQuality(store = settings) {
+  const q = store.peek().quality[deviceKind()];
+  return QUALITY_LEVELS.includes(q) ? q : defaultQuality();
 }
 
-export function setQuality(q) {
-  if (!QUALITY_LEVELS.includes(q)) return;
-  try {
-    localStorage.setItem(KEY, q);
-  } catch {}
+/** q = 'low' | 'medium' | 'high', o null para volver a la automática. */
+export function setQuality(q, store = settings) {
+  if (q !== null && !QUALITY_LEVELS.includes(q)) return;
+  store.patch({ quality: { [deviceKind()]: q } });
+}
+
+/** true si el jugador no ha elegido calidad en este tipo de dispositivo. */
+export function isAutoQuality(store = settings) {
+  return !QUALITY_LEVELS.includes(store.peek().quality[deviceKind()]);
 }
 
 /** Ajustes de la calidad elegida. */

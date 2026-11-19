@@ -51,9 +51,19 @@ export class AccountService {
     return this.#rpc('set_avatar', { p_avatar: wire });
   }
 
-  /** { friends: [{ name, avatar, level, frame }], incoming: [{ name }], outgoing: [{ name }] } */
+  /** Ajustes del jugador (sonido, calidad, controles; ver settings/settings.js). */
+  setSettings(settings) {
+    return this.#rpc('set_settings', { p_settings: settings });
+  }
+
+  /** { friends: [{ name, avatar, level, frame, online }], incoming: [{ name }], outgoing: [{ name }] } */
   friends() {
     return this.#rpc('my_friends');
+  }
+
+  /** Latido de presencia: marca al jugador como conectado durante 90 s. */
+  touchPresence() {
+    return this.#rpc('touch_presence');
   }
 
   /** Devuelve 'pending' o 'accepted'. */

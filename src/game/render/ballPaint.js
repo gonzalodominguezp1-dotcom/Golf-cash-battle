@@ -1,6 +1,6 @@
 // Pintado 2D de las bolas (sin three.js): textura equirrectangular de cada skin y la
 // imagen sombreada `ballPreview` que usa la interfaz como marcador de posición. Vive aparte
-// de ballSkins.js para que lobby, desafíos y pantalla de skins no carguen three.js.
+// de ballSkins.js para que lobby, logros y pantalla de skins no carguen three.js.
 
 // Colores como THREE.Color: el hex (sRGB) pasa a lineal; `mix` mezcla en lineal y vuelve a sRGB.
 const s2l = (c) => (c < 0.04045 ? c * 0.0773993808 : Math.pow(c * 0.9478672986 + 0.0521327014, 2.4));
@@ -106,6 +106,9 @@ export function paintBall(g, n, skin, opts = {}) {
       break;
     case 'abyss_veins':
       paintAbyssVeins(g, w, h, skin);
+      break;
+    case 'flesh':
+      paintFlesh(g, w, h, skin);
       break;
     default:
       break;
@@ -633,6 +636,198 @@ function paintAbyssVeins(g, w, h, skin) {
   sheen.addColorStop(1, rgba('#e6f4ff', 0));
   g.fillStyle = sheen;
   g.fillRect(0, 0, w, h * 0.5);
+}
+
+/** El Huevo Mío (calidad baja y miniaturas): piel con moteado, rugosidad de arruguitas transversales al rafe y otras
+ * sueltas lejos de él (cada una es un valle rojizo y una loma pálida translúcidos: nunca un contorno ni una línea negra),
+ * rafe vertical en el centro de la miniatura, 3 pliegues verticales blandos, pocas venas verdosas finas y ramificadas,
+ * folículos y pelos negros rizados (más junto al rafe y en grupitos). Lo que cruza el borde izquierdo/derecho se repite
+ * al otro lado (sin costura). */
+function paintFlesh(g, w, h, skin) {
+  const { base, accent, secondary, glow } = paletteOf(skin);
+  const rnd = seeded(0x6e55);
+  const wrap = (draw) => {
+    for (const dx of [0, -w, w]) {
+      g.save();
+      g.translate(dx, 0);
+      draw();
+      g.restore();
+    }
+  };
+  // curva que serpentea con giro suave (el rumbo cambia poco a poco: sin quiebros)
+  const meander = (x, y, a, n, step, turn) => {
+    const pts = [[x, y]];
+    let da = 0;
+    for (let k = 0; k < n; k++) {
+      da = da * 0.8 + (rnd() - 0.5) * turn;
+      a += da;
+      x += Math.cos(a) * step;
+      y += Math.sin(a) * step;
+      pts.push([x, y]);
+    }
+    return pts;
+  };
+  const gauss = () => rnd() + rnd() + rnd() - 1.5; // ~normal, desviación 0,5
+  const blob = (x, y, r, col) =>
+    wrap(() => {
+      const gg = g.createRadialGradient(x, y, 0, x, y, r);
+      gg.addColorStop(0, col);
+      gg.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gg;
+      g.fillRect(x - r, y - r, r * 2, r * 2);
+    });
+  // degradado vertical que se desvanece arriba y abajo (para trazos largos)
+  const fadeV = (col, y0, y1) => {
+    const f = g.createLinearGradient(0, y0, 0, y1);
+    f.addColorStop(0, rgba(col, 0));
+    f.addColorStop(0.25, rgba(col, 1));
+    f.addColorStop(0.75, rgba(col, 1));
+    f.addColorStop(1, rgba(col, 0));
+    return f;
+  };
+  const cx = w / 2; // rafe: en el centro de la miniatura
+  const rapheX = (y) => cx + 5 * Math.sin(y * 0.045 + 1.1) + 2.5 * Math.sin(y * 0.13 + 0.4);
+  const deep = mix(accent, secondary, 0.25);
+
+  // fondo: algo más rojizo hacia los polos
+  const gr = g.createLinearGradient(0, 0, 0, h);
+  gr.addColorStop(0, mix(base, accent, 0.25));
+  gr.addColorStop(0.45, base);
+  gr.addColorStop(1, mix(base, accent, 0.3));
+  g.fillStyle = gr;
+  g.fillRect(0, 0, w, h);
+  // manchas grandes (rubor, zonas pálidas y pardas) y moteado fino irregular
+  for (let i = 0; i < 16; i++) {
+    const col = i % 3 === 0 ? rgba(glow, 0.2) : i % 3 === 1 ? rgba(secondary, 0.09) : rgba(accent, 0.16);
+    blob(rnd() * w, (0.05 + rnd() * 0.9) * h, h * (0.12 + rnd() * 0.18), col);
+  }
+  for (let i = 0; i < 110; i++) {
+    const col = i % 3 === 0 ? rgba(glow, 0.18) : i % 3 === 1 ? rgba(secondary, 0.1) : rgba(accent, 0.16);
+    blob(rnd() * w, (0.06 + rnd() * 0.88) * h, 4 + rnd() * 10, col);
+  }
+  // pliegues verticales anchos y blandos (a los lados y detrás, lejos del rafe)
+  for (const [fx, k] of [[0, 0.7], [0.22, 1], [0.78, 1]]) {
+    const x0 = w * fx, y0 = h * 0.16, y1 = h * 0.84, pts = [];
+    for (let y = y0; y <= y1; y += 4) pts.push([x0 + Math.sin(y * 0.045 + fx * 9) * 3.5, y]);
+    const f = fadeV(mix(accent, secondary, 0.4), y0, y1);
+    wrap(() => strokeLayers(g, pts, [[f, 15, 0.07 * k], [f, 8, 0.1 * k], [f, 3.5, 0.08 * k]]));
+  }
+  // venas finas y ramificadas, verdosas: halo, cuerpo, núcleo y un brillo central tenue (abultadas)
+  const veinCols = ['#2f5d47', '#3a6046', '#2a5a58'];
+  for (let i = 0; i < 4; i++) {
+    const col = veinCols[i % 3];
+    const main = meander(w * 0.1 + rnd() * w * 0.8, (0.2 + rnd() * 0.6) * h, rnd() * Math.PI * 2, 9 + Math.floor(rnd() * 6), 6, 0.35);
+    const branches = [];
+    for (let b = 0; b < 3; b++) {
+      const k = 2 + Math.floor(rnd() * (main.length - 4));
+      const head = Math.atan2(main[k + 1][1] - main[k - 1][1], main[k + 1][0] - main[k - 1][0]);
+      const side = rnd() < 0.5 ? -1 : 1;
+      branches.push(meander(main[k][0], main[k][1], head + side * (0.5 + rnd() * 0.5), 3 + Math.floor(rnd() * 4), 4, 0.4));
+    }
+    wrap(() => {
+      for (const br of branches) strokeLayers(g, br, [[col, 4.5, 0.06], [col, 2.2, 0.26], [col, 1.2, 0.42]]);
+      strokeLayers(g, main, [[col, 7, 0.07], [col, 4, 0.26], [col, 2.4, 0.5], [glow, 0.8, 0.1]]);
+    });
+  }
+  // rugosidad: filas de arruguitas transversales al rafe (en galón al alejarse), onduladas y cortadas en tramos.
+  // Cada tramo: valle rojizo ancho y translúcido + loma pálida justo encima. Las ondas son periódicas en w (sin costura).
+  const rows = 26, sp = (h * 0.86) / rows, TAU = Math.PI * 2;
+  for (let r = 0; r < rows; r++) {
+    const y0 = h * 0.07 + (r + 0.5) * sp + (rnd() - 0.5) * sp * 0.4;
+    const p1 = rnd() * TAU, p2 = rnd() * TAU, p3 = rnd() * TAU, a1 = 2 + rnd() * 1.5;
+    const yAt = (x) => y0 + a1 * Math.sin((TAU * 2 * x) / w + p1) + 1.3 * Math.sin((TAU * 5 * x) / w + p2) + 0.7 * Math.sin((TAU * 11 * x) / w + p3) - 10 * ((x - cx) / cx) ** 2;
+    const pole = Math.sin((Math.PI * y0) / h) ** 0.7; // más tenues hacia los polos
+    for (let x = rnd() * 20; x < w; ) {
+      const L = 22 + rnd() * 55, x1 = Math.min(x + L, w + 12), pts = [];
+      for (let xx = x; xx <= x1; xx += 4) pts.push([xx, yAt(xx)]);
+      const xm = (x + x1) / 2, f = pole * (1 + 0.5 * Math.exp(-(((xm - cx) / (0.12 * w)) ** 2)));
+      const top = pts.map(([px, py]) => [px, py - 2.4]);
+      if (pts.length > 1)
+        wrap(() => {
+          strokeLayers(g, pts, [[deep, 5, 0.08 * f], [deep, 2.6, 0.12 * f]]);
+          strokeLayers(g, top, [[glow, 2.4, 0.13 * f]]);
+        });
+      x = x1 + 3 + rnd() * 10;
+    }
+  }
+  // arruguitas sueltas en otras direcciones lejos del rafe (la red "contraída")
+  for (let i = 0; i < 140; i++) {
+    let x = rnd() * w;
+    if (Math.abs(x - cx) < w * 0.16) x = (x + w / 2) % w;
+    const pts = meander(x, (0.12 + rnd() * 0.76) * h, (rnd() - 0.5) * 2.4 + (rnd() < 0.5 ? 0 : Math.PI), 4 + Math.floor(rnd() * 4), 4, 0.5);
+    const top = pts.map(([px, py]) => [px, py - 2.2]);
+    wrap(() => {
+      strokeLayers(g, pts, [[deep, 4.5, 0.07], [deep, 2.4, 0.1]]);
+      strokeLayers(g, top, [[glow, 2.2, 0.11]]);
+    });
+  }
+  // rafe: cresta blanda y algo más oscura de polo a polo, con brillo a un lado
+  {
+    const y0 = h * 0.03, y1 = h * 0.97, pts = [];
+    for (let y = y0; y <= y1; y += 4) pts.push([rapheX(y), y]);
+    const shine = pts.map(([px, py]) => [px + 2.6, py]);
+    const dark = fadeV(mix(accent, secondary, 0.5), y0, y1);
+    strokeLayers(g, pts, [[dark, 12, 0.1], [dark, 4, 0.3], [dark, 2, 0.2]]);
+    strokeLayers(g, shine, [[fadeV(glow, y0, y1), 3, 0.18]]);
+  }
+  // folículos: bultitos pálidos con sombra debajo; algunos con la raíz oscura (más junto al rafe)
+  for (let i = 0; i < 240; i++) {
+    const x = rnd() < 0.35 ? cx + gauss() * w * 0.14 : rnd() * w, y = (0.08 + rnd() * 0.84) * h, dot = rnd() < 0.5;
+    wrap(() => {
+      g.fillStyle = rgba(accent, 0.12);
+      circle(g, x + 0.4, y + 0.9, 2.3);
+      g.fillStyle = rgba(glow, 0.2);
+      circle(g, x, y, 1.9);
+      if (dot) {
+        g.fillStyle = rgba(secondary, 0.4);
+        circle(g, x, y, 0.7);
+      }
+    });
+  }
+  // pelos negros rizados (~240): una parte junto al rafe, otros en grupitos con el anterior y el resto sueltos
+  const hairs = [];
+  let px0 = cx, py0 = h / 2;
+  for (let i = 0; i < 240; i++) {
+    const kind = rnd();
+    let x0, y0;
+    if (kind < 0.2) {
+      y0 = (0.06 + rnd() * 0.88) * h;
+      x0 = rapheX(y0) + gauss() * w * 0.16;
+    } else if (kind < 0.36) {
+      x0 = px0 + (rnd() - 0.5) * 14;
+      y0 = Math.min(h * 0.94, Math.max(h * 0.06, py0 + (rnd() - 0.5) * 10));
+    } else {
+      x0 = rnd() * w;
+      y0 = (0.08 + rnd() * 0.84) * h;
+    }
+    px0 = x0;
+    py0 = y0;
+    const a0 = rnd() * Math.PI * 2, len = 12 + rnd() * 18;
+    const K = (Math.PI * 2 * (1 + rnd() * 1.1)) / len, A = 1.6 + rnd() * 1.6, ph = rnd() * Math.PI * 2, bend = (rnd() - 0.5) * 0.012;
+    const pts = [], sh = [];
+    for (let s = 0; s <= len; s += 1.5) {
+      const c = A * Math.sin(s * K + ph) * Math.min(1, s / (len * 0.25)) + bend * s * s;
+      const x = x0 + Math.cos(a0) * s - Math.sin(a0) * c, y = y0 + Math.sin(a0) * s + Math.cos(a0) * c;
+      pts.push([x, y]);
+      sh.push([x + 1.5, y + 2.4]);
+    }
+    hairs.push({ x0, y0, pts, sh });
+  }
+  // primero todas las sombras, luego raíces y pelos: ninguna sombra tapa un pelo
+  wrap(() => {
+    for (const { sh } of hairs) strokeLayers(g, sh, [['#3a140c', 5, 0.08], ['#3a140c', 2.8, 0.14]]);
+    for (const { x0, y0 } of hairs) {
+      g.fillStyle = rgba(accent, 0.22);
+      circle(g, x0, y0, 3);
+      g.fillStyle = rgba(secondary, 0.25);
+      circle(g, x0, y0, 1.5);
+    }
+    for (const { pts } of hairs) {
+      strokeLayers(g, pts, [['#0b0807', 1.9, 0.92]]);
+      strokeLayers(g, pts.slice(0, Math.ceil(pts.length * 0.5)), [['#0b0807', 2.5, 0.9]]); // raíz más gruesa
+      strokeLayers(g, pts.slice(Math.floor(pts.length * 0.7)), [['#3a2418', 1.4, 0.5]]); // punta algo parda
+    }
+  });
 }
 
 function mix(a, b, t) {

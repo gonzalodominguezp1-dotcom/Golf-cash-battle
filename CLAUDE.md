@@ -13,3 +13,7 @@ Cada persona trabaja en su propia rama y desde ahí se sube a `main`:
 - Antes de cambiar nada, ponte en esa rama y baja sus últimos cambios: `git fetch origin <rama> && git checkout <rama> && git pull origin <rama>`.
 - Haz los commits y pushes en esa rama (`git push -u origin <rama>`).
 - No hagas push a la rama del otro ni a `main` salvo que se pida expresamente.
+
+## Gestor de paquetes
+
+Usa siempre **pnpm** (`pnpm install`, `pnpm test`, `pnpm exec`, `pnpm dlx`). Nunca `npm` ni `npx`; no crees `package-lock.json`. Detalle en `02-DOCS/wiki/harness/decisions.md`.

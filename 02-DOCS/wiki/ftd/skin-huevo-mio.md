@@ -18,6 +18,8 @@ Skin de bola de carne con arrugas y pelos negros rizados, que solo se consigue c
 - [x] Sin canjear sigue bloqueada aunque haya nivel de sobra — idem
 - [x] El canje se guarda en la cuenta (inventario) y sobrevive a recargar — idem
 - [x] `pnpm test` 768 pass, `pnpm build` ok
+- [x] Canje también en el visor 3D de la skin (`skinInspect.js`) — `tests/screen-skin-inspect.test.js`
+- [x] Rediseño: piel suave sin bordes, surco superior, venas marcadas, ~50 pelos visibles
 - [ ] Aspecto del shader en alta/media/baja (lo comprueba la persona, en navegador)
 
 ## Evidence

@@ -1,0 +1,10 @@
+/* Mesas (T028). Las clases .tier, .tiers, .play y .party-box vienen de style.css; aquí solo lo propio de la pantalla. */
+.tables .tables-body { padding: 0 calc(env(safe-area-inset-right, 0px) + 12px) calc(env(safe-area-inset-bottom, 0px) + 16px) calc(env(safe-area-inset-left, 0px) + 12px); }
+.tables .scr-balance { min-height: 44px; padding: 0 4px; }
+.tables .tier-last {
+  display: inline-block; justify-self: start; margin-top: 4px; padding: 2px 8px; border-radius: 999px;
+  font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--gold); border: 1px solid var(--gold);
+}
+.tables .tier[data-last] { outline: 2px solid var(--gold); outline-offset: 2px; }
+.tables .tier .play { min-height: 44px; }

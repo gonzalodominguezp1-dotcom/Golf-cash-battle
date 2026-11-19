@@ -1,0 +1,33 @@
+import { register } from './index.js';
+
+// Pantalla Monedero (ruta #/monedero). Las claves wallet* vivían en texts/account.js; se mantienen con su mismo nombre.
+register('wallet', {
+  title: 'Monedero',
+  walletBalance: 'Saldo Disponible',
+  walletPrizes: 'Premios Ganados',
+  walletMatches: 'Torneos Jugados',
+  walletHolder: 'Titular',
+  walletHolderName: 'GOLF CASH PRO',
+  walletDepositTitle: 'Recarga Rápida de Créditos Demo',
+  walletAdd: '+{n}',
+  walletCredits: 'Créditos',
+  walletCryptoTitle: 'Depositar en Cripto',
+  walletCryptoTag: 'pruebas',
+  walletCryptoAmount: '{n} USD',
+  walletCryptoLegal: 'Pago con NOWPayments (USDT, BTC, ETH…). Modo de pruebas: no se cobra dinero real.',
+  walletHistory: 'Historial de Movimientos',
+  walletEmpty: 'Sin movimientos todavía',
+  walletTxBonus: 'Bienvenida',
+  walletTxWithdrawal: 'Retirada',
+  walletTxDeposit: 'Recarga',
+  walletTxEntry: 'Entrada',
+  walletTxPrize: 'Premio',
+  walletTxRefund: 'Devolución',
+  walletDepositNote: 'Recarga demo',
+  walletDailyCap: 'Has llegado al límite de recargas demo de hoy.',
+  walletDepositError: 'No se ha podido hacer la recarga. Prueba otra vez.',
+  walletBadAmount: 'El importe no es válido.',
+  walletCryptoOff: 'Los depósitos en cripto todavía no están activados.',
+  walletCryptoError: 'No se ha podido crear el pago. Prueba otra vez.',
+  walletLoadError: 'No se pudo cargar tu monedero. Inténtalo de nuevo.',
+});

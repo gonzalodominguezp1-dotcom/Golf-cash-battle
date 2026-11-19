@@ -1,0 +1,6 @@
+/* Pantalla Novedades: una tarjeta por versión. */
+.novedades-body { padding: var(--pad); display: flex; flex-direction: column; gap: 14px; max-width: 640px; margin: 0 auto; }
+.novedades-sub, .novedades-empty { color: #fff; margin: 0; opacity: 0.9; }
+.novedades-ver { background: rgba(22, 32, 42, 0.82); border-radius: 12px; padding: 14px 16px; color: #fff; }
+.novedades-ver h2 { font: 800 18px/1.2 var(--display); margin: 0 0 8px; }
+.novedades-ver ul { margin: 0; padding-left: 1.2em; font: 500 15px/1.4 system-ui, sans-serif; }

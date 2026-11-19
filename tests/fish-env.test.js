@@ -15,15 +15,22 @@ const { THEMES } = await import('../src/game/themes.js');
 
 // Peces en los entornos naturales (entre los pasos 8 y 9, integrados): ver environment.js y assets/fish.js.
 
-const real = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+// calidad del juego: sale del almacén de ajustes (settings); se fija y se restaura
+const { setQuality, isAutoQuality, getQuality } = await import('../src/game/render/quality.js');
 function withQuality(level, fn) {
-  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: () => level, setItem() {} } });
+  const prev = isAutoQuality() ? null : getQuality();
+  setQuality(level);
+  const restore = () => setQuality(prev);
+  let out;
   try {
-    return fn();
-  } finally {
-    if (real) Object.defineProperty(globalThis, 'localStorage', real);
-    else delete globalThis.localStorage;
+    out = fn();
+  } catch (e) {
+    restore();
+    throw e;
   }
+  if (out && typeof out.then === 'function') return out.finally(restore);
+  restore();
+  return out;
 }
 function lcg(seed) {
   let s = seed;
