@@ -217,6 +217,12 @@ los entornos tras la aprobación.
 - Rocas: `makeNatureRock` (1 tirada del hoyo por roca) sustituye a `makeRock`/`makeLushRock`/grupo de 3/río/`rockpile`; `ROCK_SCALE` canto 1,4, losa 1, grupo 0,85, montón 1,3; arenisca en cañón/playa, `bare` en nieve/ceniza, musgo solo en verdes. `tests/rock-env.test.js` 10/10; 4 mutaciones detectadas más una equivalente (quitar `sceneTheme`).
 - `pnpm test` 465/470 (5 VFX ajenos); `pnpm build` ok, `assets-lab.html` no entra en `dist`. Sin verificar: vista en pantalla/GPU, rendimiento en móvil (hasta 25 000 triángulos de roca en Alto en el cañón), revisión de contexto limpio pendiente.
 
+(2026-11-19) **Flores, rocas, agua y pez sustituidos en entornos; commit de cierre de los Pasos 6–8.**
+- Flores (`addFlowers`) y rocas (`makeNatureRock`, `pile` para `rockpile`, arenisca/sin musgo por tema) sustituyen a las viejas en `environment.js`; el montón se aleja ≥ 3,4 m de la pista (`ROCK_PILE_MIN_D`). `tests/flower-env.test.js`, `tests/rock-env.test.js`.
+- Agua nueva (`water.js`: lisa, normal-map procedural, fresnel, espuma por profundidad de vértice, oleaje 0/2/3 cm, ondas de salpicadura) y pez que salta (`fish.js`, 2–3 por hoyo) integrados en `environment.js`. Triángulos de agua máx. 1 131/2 038/3 491 (Bajo/Medio/Alto) frente a 16 200 fijos; 1 llamada de dibujo. `tests/water.test.js`, `tests/water-env.test.js`, `tests/fish.test.js`, `tests/fish-env.test.js`. `GolfGame.dispose` limpia el entorno.
+- Revisiones de contexto limpio: sin bloqueantes; should-fix corregidos. Abierto: extremo oblicuo de la cinta del río en el borde del mapa (≤1 m, a 110 m).
+- `pnpm test` 568/573 (5 VFX ajenos). `pnpm build` ok. Sin verificar: GLSL en GPU real, vista en pantalla, rendimiento en móvil (+~70 ms de `buildEnvironment` en Alto).
+
 ## Next step
 Revisión de contexto limpio de esta sustitución y visto bueno visual del usuario (flores y rocas en el juego); luego Pasos 4 (arbustos: visto bueno/sustitución), 8, 9 y F.
 
