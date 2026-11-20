@@ -4,7 +4,7 @@ import { DT, isMoving, quantizeShot, segmentsOf, shotVelocity, step } from '../s
 import { replayHole } from '../src/game/replay.js';
 import { COURSES } from '../src/game/courses.js';
 import { RemoteBall, cleanShots, mergeShots, newFeed } from '../src/game/remoteBall.js';
-import { buildRoster, humanLeaders, liveStandings, seededRng } from '../src/match/liveRules.js';
+import { buildRoster, humanLeaders, liveStandings, roundComplete, roundReady, seededRng } from '../src/match/liveRules.js';
 
 // Juega un hoyo como lo haría alguien: tira hacia el hoyo cuando la bola se para.
 function playStraight(course, k, max = 8) {
@@ -128,4 +128,46 @@ test('marcador: los bots no cuentan para el empate de cabeza', () => {
   assert.equal(rows[0].isBot, true);
   assert.equal(rows[0].total, 2);
   assert.equal(rows.find((r) => r.id === 'me').position, 2);
+});
+
+test('desempate: no se decide hasta que todos hayan cerrado su ronda (o se desconecten)', () => {
+  // A acaba primero: B aún juega el último hoyo, así que A no sabe si empata
+  const aWaitsB = [
+    { id: 'me', seat: 0, scores: [2, 3], total: 5, online: true },
+    { id: 'b', seat: 1, scores: [3], total: 3, online: true },
+  ];
+  assert.equal(roundReady(aWaitsB, 2), false);
+  // B se desconecta: no bloquea a nadie
+  aWaitsB[1].online = false;
+  assert.equal(roundReady(aWaitsB, 2), true);
+  // ambos han cerrado: se decide con los dos totales
+  const done = [
+    { id: 'me', seat: 0, scores: [2, 3], total: 5, online: true },
+    { id: 'b', seat: 1, scores: [2, 3], total: 5, online: true },
+  ];
+  assert.equal(roundReady(done, 2), true);
+  assert.deepEqual(humanLeaders(done, 2).map((p) => p.id), ['me', 'b']);
+});
+
+test('desempate: la tarjeta solo lista a quien tiene la ronda cerrada y está empatado en cabeza', () => {
+  // A y yo a 50, B aún jugando con 46: B no cuenta todavía y no hay empate con B
+  const players = [
+    { id: 'me', seat: 0, scores: [25, 25], total: 50, online: true },
+    { id: 'a', seat: 1, scores: [25, 25], total: 50, online: true },
+    { id: 'b', seat: 2, scores: [23], total: 23, online: true },
+  ];
+  assert.equal(roundComplete(players[2], 2), false);
+  assert.deepEqual(humanLeaders(players, 2).map((p) => p.id), ['me', 'a']);
+  // cuando B cierra con 46 gana él y ya no hay empate para ti
+  players[2] = { id: 'b', seat: 2, scores: [23, 23], total: 46, online: true };
+  assert.deepEqual(humanLeaders(players, 2).map((p) => p.id), ['b']);
+});
+
+test('desempate: un jugador terminado en el servidor cuenta como ronda cerrada', () => {
+  const players = [
+    { id: 'me', seat: 0, scores: [2, 2], total: 4, online: true },
+    { id: 'a', seat: 1, scores: [2], total: 4, finished: true, online: false },
+  ];
+  assert.equal(roundReady(players, 2), true);
+  assert.deepEqual(humanLeaders(players, 2).map((p) => p.id), ['me', 'a']);
 });
