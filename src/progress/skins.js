@@ -14,8 +14,6 @@ export const TIERS = {
 /** Alias retrocompatible: antes eran Bronce…Esmeralda, ahora son los tiers. */
 export const RARITIES = TIERS;
 
-export const TIER_IDS = Object.keys(TIERS);
-
 // Acabado, efectos y sonido por defecto de cada tier (el «upgrade base»).
 const TIER_FINISH = {
   common: { preset: 'satin', roughness: 0.42, metalness: 0, clearcoat: 0 },

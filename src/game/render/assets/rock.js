@@ -35,11 +35,6 @@ export const ROCK_TYPE_INFO = {
   pile: { label: 'Montón de piedras' },
 };
 export const ROCK_STONES = ['gray', 'bare', 'sandstone'];
-export const ROCK_STONE_INFO = {
-  gray: { label: 'gris (musgo en temas verdes)' },
-  bare: { label: 'sin musgo' },
-  sandstone: { label: 'arenisca' },
-};
 export const ROCK_VARIANTS = 3;
 export const ROCK_BUDGET = { low: 100, medium: 240, high: 480 }; // triángulos por roca (canto, losa y grupo)
 export const ROCK_BUDGET_PILE = { low: 160, medium: 360, high: 720 }; // el montón: hasta 8 piedras (8 x 20 = 160 en Bajo)
