@@ -23,11 +23,11 @@ Fuera de alcance: el desempate del modo no en vivo (`afterLastHole`, `simulateTi
 - `humanLeaders` solo contaba a quien ya había terminado en la vista del cliente, así que la tarjeta podía listar empatados que no lo eran.
 
 ## Checklist
-- [x] `roundComplete` / `roundReady` / `humanLeaders` nuevos en `liveRules.js` — prueba: `tests/live.test.js` (pendiente de ejecutar)
-- [ ] `liveAfterRound` espera a `roundReady` antes de decidir, con latido (`onStatus`) y sin llamar a `finish` a quien aún puede empatar — prueba: test de la lógica de decisión y revisión manual del flujo
-- [ ] La tarjeta lista solo a los empatados con la ronda completa; avatar con «Tú» — prueba: test de `humanLeaders` con tres jugadores
-- [ ] Los rivales del desempate salen de los empatados, aunque falte la entrada en `live.roster` — prueba: revisión de código
-- [ ] `pnpm test` pasa — prueba: salida de `pnpm test`
+- [x] `roundComplete` / `roundReady` / `humanLeaders` nuevos en `liveRules.js` — prueba: `tests/live.test.js` (9/9 pasan)
+- [x] `liveAfterRound` espera a `roundReady` antes de decidir, con latido (`onStatus`) y sin llamar a `finish` a quien aún puede empatar — prueba: test de `roundReady` (tests/live.test.js) y revisión del flujo; partida real pendiente
+- [x] La tarjeta lista solo a los empatados con la ronda completa; avatar con «Tú» — prueba: test de `humanLeaders` con tres jugadores (tests/live.test.js)
+- [x] Los rivales del desempate salen de los empatados, aunque falte la entrada en `live.roster` — prueba: revisión de código (no cubierto por tests)
+- [ ] `pnpm test` pasa — prueba: salida de `pnpm test` (NO pasa: 4 fallos ajenos en vfx-runtime, ver Evidence)
 
 ## Evidence
 - `node --test tests/live.test.js`: 9/9 pasan (incluidos 3 casos nuevos de ronda y empate).
