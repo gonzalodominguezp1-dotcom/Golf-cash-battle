@@ -29,7 +29,7 @@ import { showSkinReveal } from './ui/skinReveal.js';
 import { installThumbObserver, thumbCached, upgradeImg, warmThumbs } from './ui/skinThumbs.js';
 import { mountAuth } from './ui/authScreen.js';
 import { LiveRoom } from './match/LiveRoom.js';
-import { buildRoster, humanLeaders, liveStandings, seededRng } from './match/liveRules.js';
+import { buildRoster, humanLeaders, liveStandings, roundComplete, roundReady, seededRng } from './match/liveRules.js';
 import { notify } from './ui/notifyPopup.js';
 import { createNotifier } from './ui/notifier.js';
 import { createPartyWatch } from './match/partyWatch.js';
@@ -1240,12 +1240,36 @@ async function finishLiveHole(live, index, course, result) {
   }, LIVE_NEXT_MS);
 }
 
-/** Tras el último hoyo: desempate si empatas en cabeza con otro jugador real; si no, has terminado. */
-async function liveAfterRound(live) {
-  const { match } = live;
+/**
+ * Tras el último hoyo: no decides hasta que todos los jugadores reales hayan cerrado
+ * su ronda (o se hayan desconectado). Así el que acaba primero también ve si empata.
+ */
+function liveAfterRound(live) {
   app.querySelector('.overlay')?.remove();
+  live.roundWait = null;
+  live.decided = false;
+  live.fast = true;
+  live.onStatus = () => decideAfterRound(live);
+  decideAfterRound(live);
+}
+
+async function decideAfterRound(live) {
+  if (live.stopped || live.decided) return;
+  const { match } = live;
+  if (match.status !== 'open') {
+    live.decided = true;
+    return showLiveResults(live);
+  }
+  if (!roundReady(match.players, match.holes)) return showRoundWait(live);
+  live.decided = true;
+  live.roundWait?.remove();
+  live.roundWait = null;
   const tied = humanLeaders(match.players, match.holes);
-  if (tied.length >= 2 && tied.some((p) => p.id === 'me')) return liveTiebreak(live, tied);
+  // si empatas y aún no has jugado el desempate, lo juegas (el servidor solo lo admite con la partida abierta)
+  if (tied.length >= 2 && tied.some((p) => p.id === 'me') && match.me.tiebreak === undefined) {
+    live.onStatus = null;
+    return liveTiebreak(live, tied);
+  }
   live.finished = true;
   try {
     await backend.tournaments.finish(match);
@@ -1253,15 +1277,34 @@ async function liveAfterRound(live) {
   showLiveResults(live);
 }
 
+/** Mientras esperamos al resto: quién falta por cerrar su ronda. */
+function showRoundWait(live) {
+  const { match } = live;
+  live.fast = true;
+  const left = match.players.filter((p) => p.id !== 'me' && p.online && !roundComplete(p, match.holes)).map((p) => p.name);
+  if (!live.roundWait) {
+    live.roundWait = h(`
+      <div class="overlay">
+        <div class="card">
+          <h2>Esperando a los demás</h2>
+          <p class="sub"></p>
+          <p class="legal">Si hay empate, jugáis el desempate.</p>
+        </div>
+      </div>`);
+    app.append(live.roundWait);
+  }
+  live.roundWait.querySelector('.sub').textContent = left.length ? `Están terminando: ${left.join(', ')}` : 'Cerrando la partida…';
+}
+
 function liveTiebreak(live, tied) {
   const { match } = live;
-  const names = tied.map((p) => (p.id === 'me' ? 'Tú' : esc(p.name)));
+  const label = (p) => (p.id === 'me' ? 'Tú' : p.name);
   const overlay = h(`
     <div class="overlay">
       <div class="card tiebreak-card">
-        <div class="vs">${tied.map((p) => `<span class="avatar" style="--c:${p.color}">${esc((p.id === 'me' ? 'Tú' : p.name)[0])}</span>`).join('<em>VS</em>')}</div>
+        <div class="vs">${tied.map((p) => `<span class="avatar" style="--c:${p.color}">${esc(label(p)[0])}</span>`).join('<em>VS</em>')}</div>
         <h2 class="score-title">¡Empate a ${tied[0].total}!</h2>
-        <p class="sub">${names.join(', ')} vais al desempate. Hoyo sin agujero: un solo tiro y gana quien deje la bola más cerca de la diana.</p>
+        <p class="sub">${tied.map((p) => esc(label(p))).join(', ')} vais al desempate. Hoyo sin agujero: un solo tiro y gana quien deje la bola más cerca de la diana.</p>
         <button class="primary next">Jugar desempate${icon('next')}</button>
       </div>
     </div>`);
@@ -1271,11 +1314,13 @@ function liveTiebreak(live, tied) {
     const hole = match.holes;
     live.hole = hole;
     const me = live.roster.find((r) => r.id === 'me');
+    // los rivales salen de los empatados: si falta alguno en el roster, se monta con sus datos del servidor
     const rivals = tied
       .filter((p) => p.id !== 'me')
-      .map((p) => live.roster.find((r) => r.id === p.id))
-      .filter(Boolean)
-      .map((r) => ({ ...r, remote: live.room.feed(r.seat, hole) }));
+      .map((p) => ({
+        ...(live.roster.find((r) => r.id === p.id) ?? { id: p.id, seat: p.seat, name: p.name, color: p.color, human: true }),
+        remote: live.room.feed(p.seat, hole),
+      }));
     playScreen(match, {
       course: TIEBREAK_COURSE,
       title: 'Desempate',

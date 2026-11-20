@@ -48,9 +48,23 @@ export function buildRoster(match) {
   return roster;
 }
 
-/** Jugadores reales empatados en cabeza tras los hoyos (los bots no cuentan). */
+/** Ha cerrado su ronda: jugó todos los hoyos o ya se le dio por terminado en el servidor. */
+export function roundComplete(p, holes) {
+  return !!p.finished || (p.scores?.length ?? 0) >= holes;
+}
+
+/**
+ * Se puede decidir si hay desempate: cada jugador real ha cerrado su ronda o se
+ * ha desconectado (el servidor le da el máximo en lo que le falte). Hasta
+ * entonces, quien acabó primero no sabe quién empata con él.
+ */
+export function roundReady(players, holes) {
+  return players.every((p) => roundComplete(p, holes) || !p.online);
+}
+
+/** Jugadores reales empatados en cabeza con la ronda cerrada (los bots no cuentan). */
 export function humanLeaders(players, holes) {
-  const done = players.filter((p) => (p.scores?.length ?? 0) >= holes);
+  const done = players.filter((p) => roundComplete(p, holes));
   if (!done.length) return [];
   const best = Math.min(...done.map((p) => p.total));
   return done.filter((p) => p.total === best);
