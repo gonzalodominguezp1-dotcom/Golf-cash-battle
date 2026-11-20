@@ -19,7 +19,7 @@ export function mount(root, ctx) {
   const tiebreak = ctx.tiebreak ?? TIEBREAK_COURSE;
   let gone = false, run = 0, sc = null;
 
-  ctx.legacy?.enterMaps?.(); // lo que el shell hacía al entrar: cerrar final y sala en vivo, liberar la partida
+  ctx.leavePlay?.(); // al entrar: cerrar final y sala en vivo, liberar la partida
   root.innerHTML = `<main class="screen freeplay-select" aria-label="${esc(t('maps.title'))}">${header({ title: t('maps.title'), back: false })}<div class="maps-host" data-maps-host></div>${lobbyButton()}</main>`;
   bindLobby(root, { ...ctx, scope });
   const host = root.querySelector('[data-maps-host]');

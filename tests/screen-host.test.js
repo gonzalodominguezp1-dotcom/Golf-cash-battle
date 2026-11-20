@@ -33,14 +33,22 @@ const settle = () => new Promise((r) => setTimeout(r, 0))
 // deja que acabe la carga y la transición
 const calm = async (env) => { await settle(); env.timers.advance(300) }
 
-function setup({ root = 'hub', modules = {}, legacy = {}, reduced = false, hash = '' } = {}) {
+// Pantalla de prueba: un montaje que ejecuta `fn` (puede tardar) y no pinta nada más
+function stubScreen(fn) {
+  return { manages: true, async mount(root, ctx, params) { await fn(params); return { destroy() {} } } }
+}
+
+// stubs: id de pantalla -> función; se sirven como módulos de pantalla (montajes lentos o rápidos a propósito)
+function setup({ root = 'hub', modules = {}, stubs = {}, reduced = false, hash = '' } = {}) {
   const env = fakeEnv()
   const win = fakeWin(hash)
-  const routes = createRoutes({ root, modules })
+  const screens = { ...modules }
+  for (const [id, fn] of Object.entries(stubs)) screens[`./${id}.js`] ??= async () => stubScreen(fn)
+  const routes = createRoutes({ root, modules: screens })
   const notices = []
   let host
   const router = createRouter({ routes, root, win, isBusy: () => host.isBusy() })
-  const ctx = createContext({ router, legacy, reducedMotion: () => reduced })
+  const ctx = createContext({ router, reducedMotion: () => reduced })
   const el = env.el('main')
   host = createHost({ router, routes, root: el, ctx, notify: (n) => notices.push(n), win: env.win, doc: env.doc, timers: env.timers })
   host.attach()
@@ -61,7 +69,7 @@ test('createRoutes declara todas las rutas y la raíz lleva #/', () => {
 
 test('un load() que rechaza avisa y vuelve a la raíz', async () => {
   const modules = { './ranking.js': () => Promise.reject(new Error('chunk roto')) }
-  const { router, host, notices, env } = setup({ modules, legacy: { hub: () => {} } })
+  const { router, host, notices, env } = setup({ modules, stubs: { hub: () => {} } })
   router.start(); await calm(env)
   assert.equal(router.push('ranking'), true)
   await calm(env)
@@ -72,9 +80,9 @@ test('un load() que rechaza avisa y vuelve a la raíz', async () => {
   assert.equal(host.isBusy(), false)
 })
 
-test('una ruta sin archivo cae al legado; sin legado, al marcador', async () => {
+test('una ruta sin archivo muestra el marcador «en construcción»', async () => {
   const calls = []
-  const { router, el, env } = setup({ legacy: { hub: () => calls.push('hub'), ranking: (p) => calls.push(['ranking', p]) } })
+  const { router, el, env } = setup({ stubs: { hub: () => calls.push('hub'), ranking: (p) => calls.push(['ranking', p]) } })
   router.start(); await calm(env)
   router.push('ranking'); await calm(env)
   assert.deepEqual(calls, ['hub', ['ranking', {}]])
@@ -86,7 +94,7 @@ test('una ruta sin archivo cae al legado; sin legado, al marcador', async () => 
 
 test('la transición dura 200 ms y 80 ms con reduced-motion; el doble toque se ignora', async () => {
   for (const [reduced, ms] of [[false, 200], [true, 80]]) {
-    const { router, host, env } = setup({ reduced, legacy: { hub: () => {}, ranking: () => {} } })
+    const { router, host, env } = setup({ reduced, stubs: { hub: () => {}, ranking: () => {} } })
     router.start(); await calm(env)
     assert.equal(host.isBusy(), false)
     assert.equal(router.push('ranking'), true)
@@ -107,7 +115,7 @@ test('al cambiar de pantalla se llama a destroy y el scope queda a 0', async () 
       mount(_root, ctx) { ctx.scope.timeout(() => {}, 1000); ctx.scope.on(ctx.scope.win, 'resize', () => {}); return { destroy() { destroyed++ } } },
     }),
   }
-  const { router, env } = setup({ modules, legacy: { hub: () => {} } })
+  const { router, env } = setup({ modules, stubs: { hub: () => {} } })
   router.start(); await calm(env)
   for (let i = 0; i < 5; i++) {
     router.push('ranking'); await settle()
@@ -123,7 +131,7 @@ test('una carga lenta superada por otra navegación se destruye sin pintarse', a
   let release
   let destroyed = 0
   const modules = { './ranking.js': () => new Promise((r) => { release = () => r({ mount() { return { destroy() { destroyed++ } } } }) }) }
-  const { router, env } = setup({ modules, legacy: { hub: () => {} } })
+  const { router, env } = setup({ modules, stubs: { hub: () => {} } })
   router.start(); await calm(env)
   router.push('ranking'); await settle()
   router.reset('hub'); await calm(env)
@@ -132,15 +140,15 @@ test('una carga lenta superada por otra navegación se destruye sin pintarse', a
   assert.equal(router.top.id, 'hub')
 })
 
-test('un montaje legado lento que caduca no pinta encima de la pantalla vigente', async () => {
+test('un montaje lento que caduca no pinta encima de la pantalla vigente', async () => {
   const paints = []
   let release
-  const legacy = {
+  const stubs = {
     hub: () => paints.push('hub'),
     ranking: () => new Promise((r) => { release = () => { paints.push('ranking'); r() } }),
     skins: () => paints.push('skins'),
   }
-  const { router, env } = setup({ legacy })
+  const { router, env } = setup({ stubs })
   router.start(); await calm(env)
   router.push('ranking'); await settle()
   router.replace('skins'); await settle()
@@ -153,13 +161,13 @@ test('un montaje legado lento que caduca no pinta encima de la pantalla vigente'
 test('un montaje caducado que aún no había empezado no pinta nada', async () => {
   const paints = []
   let release
-  const legacy = {
+  const stubs = {
     hub: () => paints.push('hub'),
     ranking: () => new Promise((r) => { release = () => { paints.push('ranking'); r() } }),
     skins: () => paints.push('skins'),
     maps: () => paints.push('maps'),
   }
-  const { router, env } = setup({ legacy })
+  const { router, env } = setup({ stubs })
   router.start(); await calm(env)
   router.push('ranking'); await settle()
   router.replace('skins'); await settle()
