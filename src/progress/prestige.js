@@ -9,6 +9,9 @@ const FRAME_DIR = `${import.meta.env?.BASE_URL ?? '/'}assets/frames`;
 
 const art = (id, hole) => ({ hd: `${FRAME_DIR}/${id}.webp`, thumb: `${FRAME_DIR}/${id}.thumb.webp`, hole });
 
+// build de portal: fuera el marco de ruleta de casino (nada de imaginería de apuestas en un portal familiar)
+const PORTAL = Boolean(import.meta.env?.VITE_PORTAL || globalThis.__GB_PORTAL_TEST__);
+
 export const FRAMES = [
   // por nivel
   { id: 'f_rustic', level: 5, name: 'Roble rústico', color: '#a4552f', glow: '#8fd14f', art: art('f_rustic', 0.6101) },
@@ -30,7 +33,7 @@ export const FRAMES = [
   { id: 'f_astral', challenge: 'aces3', name: 'Halo astral', color: '#f3e3a8', glow: '#ffffff', art: art('f_astral', 0.4257) },
   { id: 'f_phoenix', challenge: 'rankWeekTop10', name: 'Fénix ardiente', color: '#ffa31a', glow: '#ffe08a', art: art('f_phoenix', 0.4414) },
   { id: 'f_void', challenge: 'rankHistTop100', name: 'Vacío violeta', color: '#9b4dff', glow: '#e0b3ff', art: art('f_void', 0.4517) },
-];
+].filter((f) => !(PORTAL && f.id === 'f_roulette'));
 
 export const frameById = (id) => FRAMES.find((f) => f.id === id) ?? null;
 
