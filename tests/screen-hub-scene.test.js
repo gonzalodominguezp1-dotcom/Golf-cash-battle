@@ -22,20 +22,6 @@ function fakeRoot(env) {
   };
 }
 
-function fakeScene() {
-  const log = [];
-  return {
-    log, paused: true,
-    attach(el) { log.push('attach'); this.box = el; },
-    resume() { log.push('resume'); this.paused = false; },
-    pause() { log.push('pause'); this.paused = true; },
-    setQuality(q) { log.push(`q:${q}`); },
-    resize() { log.push('resize'); },
-    dispose() { log.push('dispose'); },
-    stats: { renderCalls: 0 },
-  };
-}
-
 function setup(env, over = {}) {
   const actions = [];
   const ctx = createContext({
@@ -55,92 +41,121 @@ function setup(env, over = {}) {
   return { ctx, mctx, actions };
 }
 
-test('hub escena: attach + resume al montar', async () => {
+// Vídeo de fondo: el elemento falso registra play/pause; el win falso decide la orientación.
+function fakeVideo(root) {
+  const v = root.querySelector('[data-hub-video="1"]');
+  v.log = [];
+  v.play = () => { v.log.push('play'); return Promise.resolve(); };
+  v.pause = () => { v.log.push('pause'); };
+  v.load = () => { v.log.push('load'); };
+  return v;
+}
+const portraitWin = (env, state) => { env.win.matchMedia = (q) => ({ matches: q.includes('portrait') && state.portrait }); };
+const tick = () => new Promise((r) => setTimeout(r, 0));
+
+test('hub vídeo: lleva los atributos pedidos, webm antes que mp4 y póster 16x9 en horizontal', async () => {
   const env = fakeEnv();
-  const sc = fakeScene();
-  const { ctx, mctx } = setup(env, { hubScene: sc });
+  portraitWin(env, { portrait: false });
+  const { mctx } = setup(env);
   const root = fakeRoot(env);
   await mount(root, mctx, {});
-  assert.deepEqual(sc.log.filter((x) => x !== 'resize' && !x.startsWith('q:')), ['attach', 'resume']);
-  assert.equal(sc.box, root.querySelector('[data-hub-scene="1"]'));
-  assert.ok(sc.log.includes('q:low'));
-  assert.ok(ctx);
+  const html = root.innerHTML;
+  const tag = html.match(/<video[^>]*>/)[0];
+  for (const a of ['muted', 'loop', 'playsinline', 'autoplay', 'preload="auto"', 'disablepictureinpicture', 'aria-hidden="true"', 'poster="/hub/lobby-poster-16x9.webp"']) assert.ok(tag.includes(a), a);
+  assert.ok(html.indexOf('lobby-loop-16x9.webm') > 0 && html.indexOf('lobby-loop-16x9.webm') < html.indexOf('lobby-loop-16x9.mp4'));
+  assert.doesNotMatch(html, /9x16/);
 });
 
-test('hub escena: pausa al taparse y al ocultar la pestaña; reanuda al destapar', async () => {
+test('hub vídeo: en vertical usa los ficheros 9x16', async () => {
   const env = fakeEnv();
-  const sc = fakeScene();
-  const { mctx, actions } = setup(env, { hubScene: sc });
+  portraitWin(env, { portrait: true });
+  const { mctx } = setup(env);
+  const root = fakeRoot(env);
+  await mount(root, mctx, {});
+  assert.match(root.innerHTML, /lobby-loop-9x16\.webm[\s\S]*lobby-loop-9x16\.mp4/);
+  assert.match(root.innerHTML, /poster="\/hub\/lobby-poster-9x16\.webp"/);
+  assert.doesNotMatch(root.innerHTML, /16x9/);
+});
+
+test('hub vídeo: al girar recarga solo si cambia la variante', async () => {
+  const env = fakeEnv();
+  const st = { portrait: false };
+  portraitWin(env, st);
+  const { mctx } = setup(env);
+  const root = fakeRoot(env);
+  await mount(root, mctx, {});
+  const v = fakeVideo(root);
+  env.win.emit('resize'); // mismo formato: nada
+  assert.deepEqual(v.log, []);
+  st.portrait = true; env.win.emit('orientationchange');
+  assert.equal(v.log.filter((x) => x === 'load').length, 1);
+  assert.equal(v.poster, '/hub/lobby-poster-9x16.webp');
+  assert.match(v.innerHTML, /lobby-loop-9x16\.webm[\s\S]*lobby-loop-9x16\.mp4/);
+  env.win.emit('resize'); // sigue vertical: no recarga
+  assert.equal(v.log.filter((x) => x === 'load').length, 1);
+});
+
+test('hub vídeo: pausa al taparse y con la pestaña oculta; reanuda al destapar', async () => {
+  const env = fakeEnv();
+  const { mctx, actions } = setup(env);
   env.doc.hidden = false;
   const root = fakeRoot(env);
   const screen = await mount(root, mctx, {});
+  const v = fakeVideo(root);
   screen.onCover();
-  assert.equal(sc.paused, true);
+  assert.equal(v.log.at(-1), 'pause');
   env.doc.hidden = true; env.doc.emit('visibilitychange');
   env.doc.hidden = false; env.doc.emit('visibilitychange'); // tapado: no reanuda
-  assert.equal(sc.paused, true);
+  assert.equal(v.log.at(-1), 'pause');
   const claims = actions.length;
   screen.onUncover('ranking');
-  assert.equal(sc.paused, false);
+  await tick();
+  assert.equal(v.log.at(-1), 'play');
   assert.equal(root.querySelector('[data-focus-key="ranking"]').focused, 1);
   assert.equal(actions.length, claims + 1);
   env.doc.hidden = true; env.doc.emit('visibilitychange');
-  assert.equal(sc.paused, true);
+  assert.equal(v.log.at(-1), 'pause');
   env.doc.hidden = false; env.doc.emit('visibilitychange');
-  assert.equal(sc.paused, false);
+  assert.equal(v.log.at(-1), 'play');
 });
 
-test('hub escena: sin escena (null) usa la imagen fija y no falla', async () => {
+test('hub vídeo: un play() rechazado no rompe nada', async () => {
   const env = fakeEnv();
-  const { mctx } = setup(env, { hubScene: null });
+  const { mctx } = setup(env);
   const root = fakeRoot(env);
   const screen = await mount(root, mctx, {});
-  screen.onCover(); screen.onUncover('skins');
-  screen.destroy();
-  assert.doesNotMatch(root.innerHTML, /error/i);
+  const v = fakeVideo(root);
+  v.play = () => Promise.reject(new Error('NotAllowedError'));
+  screen.onCover(); screen.onUncover();
+  await tick();
 });
 
-test('hub escena: llega tarde (ctx.setHubScene) y se libera (null) sin romper', async () => {
+test('hub vídeo: movimiento reducido deja solo el póster (sin autoplay y siempre pausado)', async () => {
   const env = fakeEnv();
-  const sc = fakeScene();
-  const { ctx, mctx } = setup(env);
+  const { mctx } = setup(env, { reducedMotion: () => true });
   const root = fakeRoot(env);
   const screen = await mount(root, mctx, {});
-  ctx.setHubScene(sc);
-  assert.equal(sc.paused, false);
-  ctx.setHubScene(null); // partida: la escena se libera
-  screen.onCover(); screen.onUncover('play'); // al volver no toca la escena liberada
-  assert.equal(sc.log.filter((x) => x === 'resume').length, 1);
-  ctx.setHubScene(sc); // nueva escena llega mientras hay hub
-  assert.equal(sc.log.filter((x) => x === 'attach').length, 2);
+  assert.doesNotMatch(root.innerHTML.match(/<video[^>]*>/)[0], /autoplay/);
+  const v = fakeVideo(root);
+  screen.onCover(); screen.onUncover();
+  env.doc.hidden = false; env.doc.emit('visibilitychange');
+  assert.equal(v.log.includes('play'), false);
 });
 
-test('hub escena: tapado, una escena que llega se coloca al destapar', async () => {
+test('hub vídeo: destroy pausa; 20 mount/destroy sin fugas', async () => {
   const env = fakeEnv();
-  const sc = fakeScene();
-  const { ctx, mctx } = setup(env);
-  const screen = await mount(fakeRoot(env), mctx, {});
-  screen.onCover();
-  ctx.setHubScene(sc);
-  assert.deepEqual(sc.log, []);
-  screen.onUncover('ranking');
-  assert.equal(sc.paused, false);
-});
-
-test('hub escena: destroy pausa y libera; 20 mount/destroy sin fugas', async () => {
-  const env = fakeEnv();
-  const sc = fakeScene();
-  const { ctx } = setup(env, { hubScene: sc });
+  const { ctx } = setup(env);
+  let last;
   for (let i = 0; i < 20; i++) {
     const scope = createScope({ win: env.win, doc: env.doc, timers: env.timers });
-    const screen = await mount(fakeRoot(env), { ...ctx, scope }, {});
+    const root = fakeRoot(env);
+    const screen = await mount(root, { ...ctx, scope }, {});
+    last = fakeVideo(root);
     screen.destroy();
     scope.dispose();
   }
-  assert.equal(sc.paused, true);
-  assert.equal(sc.log.includes('dispose'), false); // la escena es del contexto, no del hub
+  assert.equal(last.log.at(-1), 'pause');
   assert.equal(env.liveListeners() + env.liveTimers(), 0);
-  ctx.setHubScene(null);
 });
 
 test('hub tapado: al destapar repinta badges, anillo y aria-label con los datos actuales (DOM guardado fuera de la raíz)', async () => {
@@ -189,52 +204,3 @@ test('hub tapado: al destapar repinta badges, anillo y aria-label con los datos 
 
 // Mutación manual hecha a mano: quitando el `scope.on(doc, 'visibilitychange', ...)` de hub.js el test de 20 ciclos
 // falla (liveListeners > 0); se comprobó y se restauró.
-
-// ---------- recreación de la escena al llegar (ctx.actions.reviveHubScene) ----------
-function reviveSetup(env, over = {}) {
-  const calls = [];
-  const s = setup(env, { actions: { claimRewards() {}, reviveHubScene: () => calls.push('revive') }, ...over });
-  return { ...s, calls };
-}
-
-test('hub llegada: sin escena pide recrearla una vez al montar, no por repintado', async () => {
-  const env = fakeEnv();
-  const { mctx, calls } = reviveSetup(env, { hubScene: null });
-  const screen = await mount(fakeRoot(env), mctx, {});
-  assert.deepEqual(calls, ['revive']);
-  screen.onCover();
-  assert.deepEqual(calls, ['revive']); // tapado no dispara
-  screen.onUncover('skins');
-  assert.deepEqual(calls, ['revive', 'revive']); // destapar sin escena: una por llegada
-});
-
-test('hub llegada: con escena viva no pide nada, ni al montar ni al destapar', async () => {
-  const env = fakeEnv();
-  const { mctx, calls } = reviveSetup(env, { hubScene: fakeScene() });
-  const screen = await mount(fakeRoot(env), mctx, {});
-  screen.onCover(); screen.onUncover();
-  assert.deepEqual(calls, []);
-});
-
-test('hub llegada: pestaña oculta que vuelve a verse sin escena la pide; tapado no', async () => {
-  const env = fakeEnv();
-  const { mctx, calls } = reviveSetup(env, { hubScene: null });
-  env.doc.hidden = false;
-  const screen = await mount(fakeRoot(env), mctx, {});
-  calls.length = 0;
-  screen.onCover();
-  env.doc.emit('visibilitychange');
-  assert.deepEqual(calls, []);
-  screen.onUncover();
-  calls.length = 0;
-  env.doc.hidden = true; env.doc.emit('visibilitychange');
-  assert.deepEqual(calls, []);
-  env.doc.hidden = false; env.doc.emit('visibilitychange');
-  assert.deepEqual(calls, ['revive']);
-});
-
-test('hub llegada: una acción que lanza no tumba el hub', async () => {
-  const env = fakeEnv();
-  const { mctx } = setup(env, { hubScene: null, actions: { claimRewards() {}, reviveHubScene() { throw new Error('x'); } } });
-  await assert.doesNotReject(mount(fakeRoot(env), mctx, {}));
-});

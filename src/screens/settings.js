@@ -16,7 +16,7 @@ export function mount(root, ctx) {
   const { backend } = ctx;
   let gone = false, run = 0, sc = null, panel = null;
 
-  ctx.legacy?.enterSettings?.(); // lo que showSettings hacía al entrar: cerrar final y sala en vivo
+  ctx.leavePlay?.(); // al entrar: cerrar final y sala en vivo, liberar la partida
   root.innerHTML = `<main class="screen settings-screen" aria-label="${esc(t('settings.title'))}"><div class="settings-host" data-settings-host></div>${lobbyButton()}</main>`;
   bindLobby(root, { ...ctx, scope });
   const host = root.querySelector('[data-settings-host]');

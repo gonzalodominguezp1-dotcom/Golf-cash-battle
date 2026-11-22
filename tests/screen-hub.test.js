@@ -96,16 +96,29 @@ test('hub: composición C10 con textos en español y sin saldo ni silencio', asy
   const root = fakeRoot(env);
   const { ctx } = makeCtx(env);
   await mount(root, ctx, {});
-  assert.doesNotMatch(root.innerHTML, /balance|saldo|mute|silencio/i); // sin wallet el hub no muestra saldo
+  assert.doesNotMatch(root.innerHTML, /balance|saldo|\bmute\b|silencio/i); // sin wallet el hub no muestra saldo
   for (const key of ['account', 'settings', 'fullscreen', 'ranking', 'achievements', 'skins', 'friends', 'maps', 'play', 'practice']) {
     assert.match(root.innerHTML, new RegExp(`data-hub="${key}"`), key);
   }
   for (const txt of ['Ranking', 'Logros', 'Skins', 'Amigos', 'Mapas', 'JUGAR', 'Práctica', 'Ajustes']) assert.ok(root.innerHTML.includes(txt), txt);
   assert.match(root.innerHTML, /Nivel 7, 40 % al siguiente/);
   assert.match(root.innerHTML, /--pct:40/);
-  assert.doesNotMatch(root.innerHTML, /mute|silencio/i);
+  assert.doesNotMatch(root.innerHTML, /\bmute\b|silencio/i);
   // iconos del set existente
-  for (const n of ['trophy', 'medal', 'skins', 'users', 'map', 'robot', 'gear', 'fullscreen', 'user']) assert.ok(root.innerHTML.includes(`data-icon="${n}"`), n);
+  for (const n of ['trophy', 'medal', 'skins', 'users', 'map', 'robot', 'gear', 'fullscreen']) assert.ok(root.innerHTML.includes(`data-icon="${n}"`), n);
+  // con sesión, el botón de cuenta lleva la foto de perfil con su marco (como en Cuenta › Perfil), no el icono de usuario
+  assert.match(root.innerHTML, /class="hub-face hub-face--pic"/);
+  assert.match(root.innerHTML, /class="pf pf-sm/);
+  assert.ok(!root.innerHTML.includes('data-icon="user"'));
+});
+
+test('hub: el invitado conserva el icono de usuario en el botón de cuenta', async () => {
+  const env = fakeEnv();
+  const root = fakeRoot(env);
+  const { ctx } = makeCtx(env, { backend: { user: { id: 'g' }, account: { profile: { is_anonymous: true } } } });
+  await mount(root, ctx, {});
+  assert.ok(root.innerHTML.includes('data-icon="user"'));
+  assert.doesNotMatch(root.innerHTML, /hub-face--pic|class="pf /);
 });
 
 // NOTA: el logo vuelve como banderín en la escena (tarea aparte); la barra del hub no lleva imagen de logo.

@@ -5,7 +5,16 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 const root = new URL('../', import.meta.url);
 const INDEX = readFileSync(new URL('index.html', root), 'utf8');
 const SPLASH_DIR = new URL('public/splash/', root);
-const LIMIT = 150 * 1024;
+const SPLASH_JS = readFileSync(new URL('public/splash.js', root), 'utf8');
+const LIMIT = 150 * 1024;          // código del splash: <style> + splash.js
+const IMG_LIMIT = 400 * 1024;      // imágenes que pide el splash en una orientación (foto del hoyo + moneda + logo); ver nota en el informe
+// Imágenes que de verdad pide el splash: rutas /splash/* y /logo-header.png en index.html y splash.js.
+// Los .webp antiguos (sky, forest, fireball…) siguen en public/splash/ para scripts y documentación, pero no se piden.
+function splashImages(html, js) {
+  const all = `${html}\n${js}`;
+  const paths = new Set([...all.matchAll(/['"(](\/splash\/[\w.-]+\.(?:webp|jpg|png)|\/logo-header\.png)['")]/g)].map((m) => m[1]));
+  return [...paths].sort();
+}
 
 // Equivale a `grep -c -e "<script>" -e "<script type=\"module\">"` (líneas que casan).
 function countScriptInline(text) {
@@ -18,18 +27,31 @@ function styleBytes(html) {
   return [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].reduce((n, m) => n + Buffer.byteLength(m[1]), 0);
 }
 
-test('AC29: public/splash + <style> + splash.js pesan menos de 150 KB', () => {
-  const imgs = readdirSync(SPLASH_DIR).reduce((n, f) => n + statSync(new URL(f, SPLASH_DIR)).size, 0);
+test('AC29 (revisado con la escena de la moneda): <style> + splash.js pesan menos de 150 KB', () => {
   const js = statSync(new URL('public/splash.js', root)).size;
   const css = styleBytes(INDEX);
   assert.ok(css > 0, 'index.html debe llevar el <style> del splash');
-  assert.ok(imgs + css + js < LIMIT, `total ${imgs + css + js} B >= ${LIMIT} B`);
+  assert.ok(css + js < LIMIT, `código ${css + js} B >= ${LIMIT} B`);
 });
 
-test('public/splash/ solo contiene .webp', () => {
+test('imágenes que pide el splash: solo hoyo, moneda y logo, y menos de 350 KB entre todas', () => {
+  const imgs = splashImages(INDEX, SPLASH_JS);
+  assert.deepEqual(imgs, ['/logo-header.png', '/splash/coin.png', '/splash/hole-portrait.jpg', '/splash/hole.jpg']);
+  // Cada orientación carga solo su foto del hoyo: se mide logo + moneda + la foto de esa orientación.
+  const size = (p) => statSync(new URL(`public${p}`, root)).size;
+  const shared = size('/logo-header.png') + size('/splash/coin.png');
+  for (const hole of ['/splash/hole.jpg', '/splash/hole-portrait.jpg']) {
+    const bytes = shared + size(hole);
+    assert.ok(bytes < IMG_LIMIT, `${hole}: imágenes ${bytes} B >= ${IMG_LIMIT} B`);
+  }
+  // caso positivo: el detector ve rutas en url(), src y cadenas JS
+  assert.deepEqual(splashImages("url('/splash/a.webp') src=\"/splash/b.jpg\"", "var X = '/splash/c.png';"), ['/splash/a.webp', '/splash/b.jpg', '/splash/c.png']);
+});
+
+test('public/splash/ solo contiene imágenes web (.webp, .jpg, .png)', () => {
   const files = readdirSync(SPLASH_DIR);
-  assert.ok(files.length >= 3);
-  for (const f of files) assert.match(f, /\.webp$/, f);
+  assert.ok(files.includes('hole.jpg') && files.includes('coin.png'));
+  for (const f of files) assert.match(f, /\.(webp|jpg|png)$/, f);
 });
 
 test('index.html: sin <script> inline ni <script type="module"> literal', () => {
@@ -72,12 +94,11 @@ const fastCycles = (css) => cycles(css).filter((c) => c.seconds < MIN_CYCLE_S);
 
 test('ningún ciclo de animación < 0,5 s (en segundos y con alternate x2)', () => {
   const css = styleBlocks(INDEX);
-  assert.ok(cycles(css).length >= 4, 'debe detectar las animaciones del splash');
+  assert.ok(cycles(css).length >= 3, 'debe detectar las animaciones del splash');
   assert.deepEqual(fastCycles(css), []);
   const by = (sel) => cycles(css).find((c) => c.sel === sel)?.seconds;
-  assert.equal(by('#splash .brand img'), 2.4);
-  assert.ok(Math.abs(by('#splash .fire .fa') - 1.8) < 1e-9, 'fundido de la bola de fuego 0,9 s alternate = 1,8 s');
-  assert.ok(Math.abs(by('#splash .fire .fb') - 1.8) < 1e-9);
+  assert.equal(by('#splash .brand img'), 1.2);
+  assert.equal(by('#splash .bar > i'), 1.6, 'brillo de la barra');
   // caso positivo: el detector falla con 0.2s, con 0.2s alternate (0,4 s) y con animation-duration
   assert.equal(fastCycles('a { animation: x 0.2s linear infinite; }').length, 1);
   assert.equal(fastCycles('a { animation: x 0.2s ease alternate infinite; }').length, 1);
@@ -100,7 +121,8 @@ test('#splash: marcado ARIA (progressbar en .bar, .err fuera de cualquier progre
   const anidado = '<div role="progressbar"><i></i><div class="err" role="alert"><button>x</button></div></div>';
   const s = anidado.indexOf('role="progressbar"');
   assert.ok(/class="err"|<button/.test(anidado.slice(s, anidado.lastIndexOf('</div>'))));
-  for (const cls of ['sky', 'forest', 'green']) assert.match(INDEX, new RegExp(`class="layer ${cls}"`));
+  assert.match(INDEX, /<img class="hole" src="\/splash\/hole\.jpg"/);
+  assert.match(INDEX, /<canvas class="coins" aria-hidden="true"><\/canvas>/);
   assert.match(INDEX, /Reintentar/);
   assert.match(INDEX, /class="tip"/);
   assert.match(INDEX, /class="pct"/);

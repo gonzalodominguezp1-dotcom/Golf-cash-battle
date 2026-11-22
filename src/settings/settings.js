@@ -13,7 +13,6 @@ const LEGACY_QUALITY_KEY = 'gcb.quality';
 
 export const QUALITY_VALUES = ['low', 'medium', 'high'];
 export const WHEEL_MODES = ['power', 'zoom'];
-export const DEVICES = ['mobile', 'desktop'];
 
 export const DEFAULT_SETTINGS = Object.freeze({
   sound: Object.freeze({ muted: false, master: 100, ambient: 60 }),

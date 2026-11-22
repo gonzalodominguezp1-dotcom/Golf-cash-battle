@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { applyWind } from './assets/wind.js';
 
 // Naturaleza alrededor del hoyo: textura del suelo, hierba instanciada, ríos y
 // vegetación de orilla. Todo es dibujo: la física del hoyo no lo ve.
@@ -166,16 +167,6 @@ export function makeRiver(bounds, theme, rng, { grounded, enabled }) {
   return { dist, carve, y, w, along, grounded };
 }
 
-/** Agua de río a ras de suelo: un plano con olas suaves que solo asoma por el cauce. */
-export function riverWaterPlane(size, river, theme) {
-  const geo = new THREE.PlaneGeometry(size, size, 1, 1);
-  geo.rotateX(-Math.PI / 2);
-  const mat = new THREE.MeshPhongMaterial({ color: theme.water ?? 0x2bb3e6, shininess: 110, specular: 0xffffff, transparent: true, opacity: 0.88 });
-  const m = new THREE.Mesh(geo, mat);
-  m.position.y = river.y;
-  m.receiveShadow = true;
-  return m;
-}
 
 // ---------- hierba instanciada ----------
 
@@ -213,29 +204,21 @@ function tuftGeometry() {
   return g;
 }
 
-/** Briznas que se mecen con el viento según su altura y su sitio (todo en la tarjeta gráfica). */
-function grassMaterial(uniforms) {
+/**
+ * Briznas que se mecen con el viento compartido (assets/wind.js): la altura es la
+ * local de la brizna y la fase sale del sitio de cada mata (todo en la tarjeta gráfica).
+ */
+function grassMaterial() {
   const m = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
   m.onBeforeCompile = (sh) => {
-    sh.uniforms.uTime = uniforms.uTime;
     // las dos caras de la brizna con la normal hacia arriba (si no, la cara de atrás sale negra)
     sh.fragmentShader = sh.fragmentShader.replace(
       '#include <normal_fragment_begin>',
       'float faceDirection = gl_FrontFacing ? 1.0 : -1.0;\nvec3 normal = normalize(vNormal);\nvec3 nonPerturbedNormal = normal;',
     );
-    sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform float uTime;')
-      .replace(
-        '#include <begin_vertex>',
-        `#include <begin_vertex>
-        vec3 ip = vec3(instanceMatrix[3][0], 0.0, instanceMatrix[3][2]);
-        float sway = position.y * position.y * 3.0;
-        transformed.x += (sin(uTime * 1.8 + ip.x * 0.45 + ip.z * 0.3) * 0.6 + sin(uTime * 3.1 + ip.z * 1.3) * 0.25) * 0.09 * sway;
-        transformed.z += cos(uTime * 1.4 + ip.x * 0.35) * 0.05 * sway;`,
-      );
   };
   m.customProgramCacheKey = () => 'gcb-grass';
-  return m;
+  return applyWind(m, { layer: 'grass', source: 'y' });
 }
 
 const CHUNK = 16;
@@ -244,11 +227,12 @@ const CHUNK = 16;
  * `ok(x, z, y)` dice si cabe en ese punto (fuera del agua, del río, del tee...).
  * Devuelve { update(cam) } para esconder los trozos lejanos.
  */
-export function addGrassField(scene, { bounds, heightAt, ok, rng, density, tint, uniforms, reach = 15 }) {
+// `uniforms` ya no se usa (el viento es el compartido); se acepta por compatibilidad
+export function addGrassField(scene, { bounds, heightAt, ok, rng, density, tint, reach = 15 }) {
   const count = Math.round(5200 * density);
   if (count <= 0) return null;
   const geo = tuftGeometry();
-  const mat = grassMaterial(uniforms);
+  const mat = grassMaterial();
   const minX = bounds.minX - reach, maxX = bounds.maxX + reach, minZ = bounds.minZ - reach, maxZ = bounds.maxZ + reach;
   const nx = Math.max(1, Math.ceil((maxX - minX) / CHUNK)), nz = Math.max(1, Math.ceil((maxZ - minZ) / CHUNK));
   const cells = Array.from({ length: nx * nz }, () => []);
@@ -299,8 +283,9 @@ export function addGrassField(scene, { bounds, heightAt, ok, rng, density, tint,
 
 // ---------- orillas ----------
 
-const reedMat = new THREE.MeshLambertMaterial({ color: 0x6f8f3a, flatShading: true });
-const cattailMat = new THREE.MeshLambertMaterial({ color: 0x6b4423, flatShading: true });
+// juncos y espadañas se mecen juntos (capa 'flower', hasta 1 m de alto): la espadaña no se despega del tallo
+const reedMat = applyWind(new THREE.MeshLambertMaterial({ color: 0x6f8f3a, flatShading: true }), { layer: 'flower', height: 1 });
+const cattailMat = applyWind(new THREE.MeshLambertMaterial({ color: 0x6b4423, flatShading: true }), { layer: 'flower', height: 1 });
 const padMat = new THREE.MeshLambertMaterial({ color: 0x3f9a3a, flatShading: true, side: THREE.DoubleSide });
 const lotusMat = new THREE.MeshLambertMaterial({ color: 0xffb6d5, flatShading: true });
 

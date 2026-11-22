@@ -34,7 +34,6 @@ function makeCtx(env, extra = {}) {
     scope: createScope({ win: env.win, doc: env.doc, timers: env.timers }),
     icon: () => '<i></i>',
     actions: { playFreePlay: (i) => played.push(i) },
-    legacy: {},
     ...extra,
   };
   return { ctx, played, back };
@@ -113,10 +112,10 @@ test('mapas: el lobby flotante existe y lleva al hub (router.reset), no atrás',
   assert.equal(back.n, 0);
 });
 
-test('mapas: al entrar avisa al legado (cierra final y sala en vivo)', () => {
+test('mapas: al entrar cierra final y sala en vivo (leavePlay)', () => {
   const env = fakeEnv();
   let n = 0;
-  const { ctx } = makeCtx(env, { legacy: { enterMaps: () => { n++; } } });
+  const { ctx } = makeCtx(env, { leavePlay: () => { n++; } });
   mount(fakeRoot(env), ctx, {});
   assert.equal(n, 1);
 });

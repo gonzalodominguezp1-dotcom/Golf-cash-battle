@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { applyWind } from './assets/wind.js';
 
 // Decorado "suave" para los temas con lushEnv: copas redondas y abultadas con
 // sombreado liso, rocas pulidas con musgo, matas de hierba de hojas curvas y
@@ -48,7 +49,8 @@ function shadeByHeight(geo, bottom, top, y0, y1) {
 }
 
 const shaded = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, vertexColors: true, roughness: 0.85, ...extra });
-const barkMat = shaded(0x8a5a33, { roughness: 0.95 });
+// el tronco se dobla con el viento igual que la copa (assets/wind.js): no se separan
+const barkMat = applyWind(shaded(0x8a5a33, { roughness: 0.95 }), { layer: 'trunk' });
 const rockMat = shaded(0xffffff, { roughness: 0.9 });
 
 /** Copa: varias esferas lisas fundidas, con sombra por debajo y luz por arriba. */

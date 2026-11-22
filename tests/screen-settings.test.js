@@ -156,11 +156,11 @@ test('ajustes: destroy baja el panel; 20 montajes no dejan fugas (medido antes d
   assert.equal(env.liveTimers(), 0);
 });
 
-test('ajustes: la pantalla avisa a main.js al entrar (cierra final y sala en vivo)', () => {
+test('ajustes: al entrar cierra final y sala en vivo (leavePlay)', () => {
   const env = fakeEnv();
   const { ctx } = makeCtx(env);
   let n = 0;
-  ctx.legacy = { enterSettings: () => { n++; } };
+  ctx.leavePlay = () => { n++; };
   mount(fakeRoot(env), ctx, {});
   assert.equal(n, 1);
 });

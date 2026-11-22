@@ -15,13 +15,12 @@ const BALANCE_TIMEOUT_MS = 8000; // un monedero que no responde no deja la panta
 export async function mount(root, ctx) {
   const { router, backend } = ctx;
   const scope = ctx.scope.child(); // todo lo de la pantalla cuelga de aquí: destroy lo libera entero
-  const legacy = ctx.legacy ?? {};
   const icon = (n, o = {}) => ctx.icon(n, o);
   const storage = ctx.storage ?? globalThis.localStorage;
   const device = t(scope.win?.matchMedia?.('(pointer: coarse)')?.matches ? 'tables.deviceMobile' : 'tables.deviceComputer');
   let gone = false, run = 0, sc = null, party = null; // sc: scope hijo de lo pintado; party: panel de grupo montado
 
-  legacy.enterTables?.(); // lo que showLobby hacía al entrar: cerrar final y sala en vivo, liberar la partida
+  ctx.leavePlay?.(); // al entrar: cerrar final y sala en vivo, liberar la partida
 
   const paidBlock = backend?.account?.profile?.paid_block;
   const tierCard = (tier, balance, last) => {

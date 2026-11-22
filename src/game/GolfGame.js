@@ -22,8 +22,17 @@ import { attachSkinDecor, createSkinMaterial } from './render/ballSkins.js';
 import { SkinFX } from './render/skins/skinFx.js';
 import { SKINS } from '../progress/skins.js';
 import { HOLE_TIME_LIMIT, maxStrokesOf } from '../config.js';
+import { PERF, perf } from './perfProbe.js';
+import { INTRO_SKIP } from './loadingFlags.js';
+import { introSkipAction } from './introSkip.js';
+import { chunk, collectTextures, keyOf, runSteps, withCap, yieldToMain } from './warmupRules.js';
+import { collectSceneResources, disposeSceneResources } from './render/sceneDisposal.js';
+import { setWindField } from './render/assets/wind.js';
 import { setAmbient, setCharge, setRolling, sfx, stopAmbient, stopRolling, unlockAudio } from './audio.js';
 
+// Interruptor de rollback: false devuelve la carga anterior (compileAsync sin esperar y bucle directo).
+export const WARM_GPU = true;
+const WARM_CAP_MS = 6000;
 const INTRO_SECONDS = 2.2;
 const FOLLOW_DIST = 3.2;
 const FOLLOW_HEIGHT = 1.45;
@@ -43,6 +52,15 @@ const pickRandomSkins = (n) => {
     return pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
   });
 };
+// zona de ráfagas del viento compartido para un hoyo (la misma cuenta que buildEnvironment)
+const windFieldOf = (b) => ({ x: (b.minX + b.maxX) / 2, z: (b.minZ + b.maxZ) / 2, radius: Math.hypot(b.maxX - b.minX, b.maxZ - b.minZ) / 2 + 40 });
+// lo que el tema cambia en el material de la bola (estudio claro u oscuro y su tinte; ver skinMaterial.js)
+const ballLook = (theme) => {
+  const dark = !!theme && !!(theme.dark || theme.neon || theme.lava || (theme.sunIntensity !== undefined && theme.sunIntensity < 2));
+  return `${dark}|${String(theme?.rim ?? '')}`;
+};
+// trabajo que no debe sumarse a la tarea del intercambio de escenas
+const whenIdle = (fn) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(fn, { timeout: 500 }) : setTimeout(fn, 0));
 
 /**
  * Hoyo en 3D con cámara en tercera persona detrás de la bola.
@@ -56,6 +74,7 @@ const pickRandomSkins = (n) => {
 export class GolfGame {
   #onContextMenu = null;
   #onPointerDown = null;
+  #skipClick = false;
   #onPointerMove = null;
   #onPointerUp = null;
   #onPointerCancel = null;
@@ -66,6 +85,8 @@ export class GolfGame {
   #onPointerLockError = null;
   #onClickCanvas = null;
   #onBlur = null;
+  #loadToken = 0;
+  ready = Promise.resolve();
   // vectores reutilizados por los efectos de skin (sin asignar en cada golpe o choque)
   #fxPos = new THREE.Vector3();
   #fxDir = new THREE.Vector3();
@@ -76,25 +97,25 @@ export class GolfGame {
   #aimColor = new THREE.Color();
   #cupV = new THREE.Vector3();
 
-  constructor(container, { onStroke, onSunk, onAim, onRest, onCup, onRival, onLip, onLava, onWater, onOut, onFall, onOpenSettings, onOverviewChange, onTimer, onTimeUp } = {}) {
-    this.onLava = onLava;
-    this.onFall = onFall;
+  #inputBound = false;
+  /** F3: escena del hoyo siguiente preparada con prepareNext() ({ scene, env, courseView, cyberFx, course, theme, bounds, statics, key, ... }). */
+  #next = null;
+  /** Hijos de la escena activa que son del hoyo (entorno y pista); el resto (bola y efectos) pasa a la escena siguiente. */
+  #statics = null;
+  /** Ya arrancó un hoyo (load): el siguiente load reutiliza el renderer. */
+  #played = false;
+  /** Clave del hoyo preparado con prepare() (keyOf): load() con la misma clave toma el camino rápido. */
+  preparedKey = null;
+  /** Contenedor oculto de la preparación (lo pone el preloader); attach() lo quita. */
+  holder = null;
+
+  constructor(container, handlers = {}) {
     this.container = container;
-    this.onTimer = onTimer;
-    this.onTimeUp = onTimeUp;
-    this.onStroke = onStroke;
-    this.onSunk = onSunk;
-    this.onAim = onAim;
-    this.onRest = onRest;
-    this.onCup = onCup;
-    this.onRival = onRival;
-    this.onLip = onLip;
-    this.onWater = onWater;
-    this.onOut = onOut;
-    this.onOpenSettings = onOpenSettings;
-    this.onOverviewChange = onOverviewChange;
+    this.setHandlers(handlers);
     // en Bajo, sin antialias: en un móvil modesto cada píxel cuenta
-    this.renderer = new THREE.WebGLRenderer({ antialias: getQuality() !== 'low', powerPreference: 'high-performance' });
+    // el antialias se elige al crear el contexto: con otro, la pantalla siguiente no reutiliza este juego (F3)
+    this.antialias = getQuality() !== 'low';
+    this.renderer = new THREE.WebGLRenderer({ antialias: this.antialias, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, quality().pixelRatio));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = quality().softShadows ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
@@ -104,6 +125,20 @@ export class GolfGame {
     this.renderer.toneMappingExposure = 1.05;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(this.renderer.domElement);
+    if (PERF) {
+      perf.setRenderer(this.renderer);
+      perf.mark('ctx:create');
+      perf.count('contextos_creados');
+      this.renderer.domElement.addEventListener('webglcontextlost', () => { perf.mark('ctx:lost'); perf.count('contextos_perdidos'); });
+    }
+    // contexto perdido (móvil sin memoria): three lo recupera solo, como antes; lo preparado del hoyo siguiente no vale
+    // y el reflejo PMREM (una imagen dibujada en la GPU) se vuelve a generar en el hoyo siguiente
+    this.renderer.domElement.addEventListener('webglcontextlost', () => { if (!this.disposed) this.cancelNext(); });
+    this.renderer.domElement.addEventListener('webglcontextrestored', () => {
+      if (this.disposed) return;
+      this.envMap = null;
+      this.renderer.shadowMap.needsUpdate = true;
+    });
     // indicador del hoyo: se ve a través de las paredes y, si queda fuera de pantalla, apunta hacia él
     this.cupMarker = document.createElement('div');
     this.cupMarker.className = 'cup-marker';
@@ -139,7 +174,8 @@ export class GolfGame {
       getSkinFx: () => this.skinFx,
       busy: () => !!this.ball && isMoving(this.ball),
     });
-    this.#bindInput();
+    // la entrada (Esc, Espacio, puntero) se enlaza al arrancar el hoyo (#ensureInput en load):
+    // un juego preparado oculto durante la sala no debe robar teclas
     // ?perf=1: expone el juego para medir (pruebas de rendimiento)
     try {
       if (new URLSearchParams(location.search).get('perf') === '1') window.__golf = this;
@@ -153,11 +189,200 @@ export class GolfGame {
    * que ya han jugado este hoyo (arranca el contador desde ese momento).
    */
   load(course, { bots = [], skin = SKINS[0], instance = null, firstSunkTick = null, timeLimit = HOLE_TIME_LIMIT, live = false } = {}) {
+    if (PERF) { perf.mark('load:start'); this.perfFirst = true; this.perfPlayable = true; }
+    // renderer reutilizado (F3): el sonido del hoyo anterior se corta como al liberar el juego
+    if (this.#played) {
+      setCharge(0);
+      stopAmbient();
+      stopRolling();
+    }
+    const fast = this.preparedKey != null && this.preparedKey === keyOf(course, skin, instance, getQuality());
+    this.preparedKey = null; // una preparación vale para un solo arranque
+    // F3: hoyo siguiente preparado con la misma clave (hoyo, skin, acabado y calidad) → intercambio de escenas
+    const next = this.#takeNext(fast ? null : keyOf(course, skin, instance, getQuality()));
     this.botPlayers = bots;
     // en vivo: los rivales siguen jugando cuando terminas, los bots empiezan en un paso fijo
     // (todos los móviles ven lo mismo) y solo los jugadores reales arrancan el contador
     this.live = live;
     this.botStartTick = live ? Math.round(INTRO_SECONDS / DT) : null;
+    if (fast) {
+      // camino rápido: entorno, pista, bola, réplicas y shaders ya están (prepare); solo falta el estado de juego
+      if (PERF) perf.mark('load:fast');
+      this.#resetPlayState(course, firstSunkTick, timeLimit);
+      this.#buildBots();
+      this.#prevPose.ok = false;
+      this.#shadowAt.x = NaN;
+      this.perf.reset();
+      this.#resize();
+      this.intro = 0;
+      this.#ensureInput();
+      this.#placeCamera(1, true);
+      if (PERF) perf.mark('load:end');
+      ++this.#loadToken; // nada de una carga anterior en vuelo toca este arranque
+      this.renderer.domElement.style.visibility = '';
+      this.ready = Promise.resolve();
+      this.#played = true;
+      if (!this.running) this.#startLoop();
+      return;
+    }
+    if (next) {
+      // intercambio (F3): la escena preparada pasa a activa con la bola y sus efectos; el bucle no se para
+      if (PERF) perf.mark('swap:start', { next: course.name });
+      this.#swapStage(next);
+      this.#resetPlayState(course, firstSunkTick, timeLimit);
+      this.#resetFx();
+      this.#buildBots();
+      this.#prevPose.ok = false;
+      this.#shadowAt.x = NaN;
+      this.perf.reset();
+      this.#resize();
+      this.intro = 0;
+      this.#ensureInput();
+      this.#placeCamera(1, true);
+      this.renderer.shadowMap.needsUpdate = true;
+      ++this.#loadToken;
+      this.renderer.domElement.style.visibility = '';
+      this.ready = Promise.resolve();
+      this.#played = true;
+      if (PERF) { perf.mark('swap:end'); perf.mark('load:end'); }
+      if (!this.running) this.#startLoop();
+      return;
+    }
+    this.#played = true;
+    this.#applyCourseVisuals(course, skin, instance);
+    this.#resetPlayState(course, firstSunkTick, timeLimit);
+    this.#buildScene();
+    this.#prevPose.ok = false;
+    this.#shadowAt.x = NaN;
+    this.perf.reset();
+    this.#resize();
+    this.intro = 0;
+    this.#ensureInput();
+    this.#placeCamera(1, true);
+    if (PERF) perf.mark('load:end');
+    if (!WARM_GPU) {
+      if (!this.running) this.#startLoop();
+      return;
+    }
+    // calienta la GPU con la canvas oculta y arranca el bucle (y con él la intro) al tener imagen
+    const token = ++this.#loadToken;
+    if (this.running) {
+      this.running = false;
+      this.renderer.setAnimationLoop(null);
+    }
+    const canvas = this.renderer.domElement;
+    canvas.style.visibility = 'hidden';
+    const sig = { cancelled: false };
+    this.ready = withCap(this.#warmGpu(token, sig), WARM_CAP_MS)
+      .then((r) => { if (!r.ok) sig.cancelled = true; })
+      .catch(() => { sig.cancelled = true; })
+      .finally(() => {
+        if (this.disposed || token !== this.#loadToken) return;
+        canvas.style.visibility = '';
+        if (!this.running) this.#startLoop();
+      });
+  }
+
+  /** Asigna los avisos a la interfaz (on*). Un juego preparado se crea sin ellos y los recibe al mostrarse. */
+  setHandlers({ onStroke, onSunk, onAim, onRest, onCup, onRival, onLip, onLava, onWater, onOut, onFall, onOpenSettings, onOverviewChange, onTimer, onTimeUp } = {}) {
+    this.onLava = onLava;
+    this.onFall = onFall;
+    this.onTimer = onTimer;
+    this.onTimeUp = onTimeUp;
+    this.onStroke = onStroke;
+    this.onSunk = onSunk;
+    this.onAim = onAim;
+    this.onRest = onRest;
+    this.onCup = onCup;
+    this.onRival = onRival;
+    this.onLip = onLip;
+    this.onWater = onWater;
+    this.onOut = onOut;
+    this.onOpenSettings = onOpenSettings;
+    this.onOverviewChange = onOverviewChange;
+  }
+
+  /** Pasa la canvas (y la marca del hoyo) a otro contenedor. Mover la canvas en el DOM no pierde el contexto. */
+  attach(container) {
+    if (!container || container === this.container) return;
+    const prev = this.container;
+    container.appendChild(this.renderer.domElement);
+    container.appendChild(this.cupMarker);
+    this.resizeObserver.disconnect();
+    this.resizeObserver.observe(container);
+    this.container = container;
+    if (this.holder && prev === this.holder) {
+      this.holder.remove();
+      this.holder = null;
+    }
+    this.#resize();
+  }
+
+  /**
+   * F3: suelta la canvas (y la marca del hoyo) de su contenedor sin liberar nada, antes de que la pantalla se vacíe
+   * entre hoyos. attach() la pone en la pantalla nueva. Mover la canvas en el DOM no pierde el contexto.
+   */
+  detach() {
+    this.resizeObserver.disconnect();
+    this.exitPointerLock();
+    this.renderer.domElement.remove();
+    this.cupMarker?.remove();
+  }
+
+  /** Enlaza la entrada una sola vez por instancia, al arrancar el hoyo. */
+  #ensureInput() {
+    if (this.#inputBound) return;
+    this.#inputBound = true;
+    this.#bindInput();
+  }
+
+  /**
+   * Prepara un hoyo sin arrancarlo (F2, durante la sala): curso, tema, calidad, escena, bola, réplicas
+   * (skins elegidas aquí) y GPU caliente con un frame dibujado. Sin estado de juego: ni tick, ni bola de
+   * física, ni golpes, ni bots, ni bucle, ni audio. load() con la misma clave arranca en el camino rápido.
+   * Resuelve true si quedó listo, false si se canceló. Un error se propaga.
+   */
+  async prepare(course, { skin = SKINS[0], instance = null, ghosts = 0, signal = null, onProgress, onStep } = {}) {
+    const token = ++this.#loadToken;
+    // cancelado desde fuera, liberado o reemplazado por otra carga
+    const stale = () => !!signal?.cancelled || this.disposed || token !== this.#loadToken;
+    const live = { get cancelled() { return stale(); } };
+    const quality = getQuality();
+    this.preparedKey = null;
+    this.renderer.domElement.style.visibility = 'hidden';
+    // el preloader deja la marca warm:step:<nombre> con onStep
+    const named = (name, fn) => async () => { onStep?.(name); await fn(); };
+    let probes = [];
+    const steps = [
+      named('visuals', () => this.#applyCourseVisuals(course, skin, instance)),
+      named('static', () => this.#buildStatic()),
+      named('ball', () => {
+        this.#buildBall();
+        if (PERF) perf.mark('ball:end');
+      }),
+      named('ghosts', () => { probes = this.#prepareGhosts(ghosts); }),
+      named('gpu', async () => {
+        this.#resize();
+        this.#placePreviewCamera();
+        if (WARM_GPU) await withCap(this.#warmGpu(token, live, { prepared: true }), WARM_CAP_MS);
+      }),
+    ];
+    let r;
+    try {
+      r = await runSteps(steps, { signal: live, onProgress });
+    } finally {
+      // las réplicas de prueba solo servían para compilar sus materiales
+      for (const o of probes) o.removeFromParent();
+      for (const o of probes) if (o.isSprite) { o.material.map?.dispose(); o.material.dispose(); }
+    }
+    if (r.cancelled || stale()) return false;
+    this.preparedKey = keyOf(course, skin, instance, quality);
+    onStep?.('ready');
+    return true;
+  }
+
+  /** Curso, tema, resplandor, calidad y skin propia: lo visual del hoyo, sin estado de juego. */
+  #applyCourseVisuals(course, skin, instance) {
     this.skin = skin;
     // instance: { seed, ... } de la skin equipada (progress.instance(id)); sin ella, el acabado base
     this.instance = instance;
@@ -166,16 +391,311 @@ export class GolfGame {
     this.genericFx = { hit: fx.hit === 'generic', wall: fx.wall === 'generic', lip: !fx.lip, sink: fx.sink === 'generic' };
     this.course = course;
     this.theme = THEMES[course.theme] ?? THEMES.meadow;
-    // El bloom nunca supera el 15% (0.14 en mapas nocturnos/neón/lava, 0.08 en día)
-    const glowy = this.theme.sunIntensity < 2 || this.theme.lava || this.theme.neon;
+    this.#applyBloom(this.theme);
+    this.#applyQuality();
+  }
+
+  /** El bloom nunca supera el 15% (0.14 en mapas nocturnos/neón/lava, 0.08 en día). */
+  #applyBloom(theme) {
+    const glowy = theme.sunIntensity < 2 || theme.lava || theme.neon;
     this.bloom.strength = glowy ? 0.14 : 0.08;
     this.bloom.threshold = glowy ? 0.85 : 0.95;
+  }
+
+  /** Cámara de la vista general (el primer frame de la intro): no necesita la bola de física. */
+  #placePreviewCamera() {
+    const a = this.#overviewTarget();
+    this.camPos = a.pos.clone();
+    this.camLook = a.look.clone();
+    this.camera.position.copy(this.camPos);
+    this.camera.lookAt(this.camLook);
+  }
+
+  /**
+   * Réplicas de la preparación: skins rivales elegidas ya y sus materiales creados, más mallas y una
+   * etiqueta de prueba para compilarlos. Devuelve esas piezas de prueba (se quitan tras compilar).
+   */
+  #prepareGhosts(n) {
+    this.ghostGeo = new THREE.SphereGeometry(BALL_R, 20, 14);
+    this.ghostHandles = new Map();
+    this.ghostSkins = pickRandomSkins(Math.max(0, n | 0));
+    const probes = [];
+    for (const skin of this.ghostSkins) {
+      if (this.ghostHandles.has(skin.id)) continue;
+      const handle = this.#ghostHandle(skin);
+      this.ghostHandles.set(skin.id, handle);
+      const mesh = new THREE.Mesh(this.ghostGeo, handle.material);
+      mesh.position.set(this.course.tee[0], -50, this.course.tee[1]);
+      probes.push(mesh);
+    }
+    if (this.ghostSkins.length) {
+      const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTexture('', '#ffffff'), transparent: true, depthWrite: false }));
+      label.renderOrder = 10;
+      label.position.set(this.course.tee[0], -50, this.course.tee[1]);
+      probes.push(label);
+    }
+    for (const o of probes) this.scene.add(o);
+    return probes;
+  }
+
+  #ghostHandle(skin, theme = this.theme) {
+    const handle = createSkinMaterial(skin, { quality: 'low', instance: {}, theme });
+    handle.material.transparent = true;
+    handle.material.opacity = 0.75;
+    return handle;
+  }
+
+  // ---------- hoyo siguiente (F3) ----------
+
+  /**
+   * Construye la escena del hoyo siguiente sobre el mismo renderer mientras se ve el resultado del actual:
+   * entorno, pista, efectos del hoyo, réplicas de los rivales (skins elegidas aquí) y GPU caliente
+   * (compileAsync con su destino de dibujo e initTexture por trozos). No dibuja en pantalla. Sin estado de juego:
+   * ni tick, ni bola de física, ni golpes, ni bots, ni bucle, ni audio. Solo un hoyo por delante: otra llamada
+   * cancela la anterior. load() con la misma clave hace el intercambio. Resuelve true si quedó lista.
+   */
+  async prepareNext(course, { ghosts = 0, signal = null } = {}) {
+    if (this.disposed || !course || !this.skin) return false;
+    this.cancelNext();
+    const n = {
+      course,
+      theme: THEMES[course.theme] ?? THEMES.meadow,
+      key: keyOf(course, this.skin, this.instance, getQuality()),
+      sig: { cancelled: false },
+      running: true,
+      ok: false,
+      released: false,
+    };
+    let settle;
+    n.ready = new Promise((r) => (settle = r));
+    this.#next = n;
+    const stale = () => n.sig.cancelled || !!signal?.cancelled || this.disposed || this.#next !== n;
+    const live = { get cancelled() { return stale(); } };
+    if (PERF) perf.mark('next:prepare:start', { next: course.name });
+    let probes = [];
+    const steps = [
+      () => yieldToMain(), // nada en la tarea del final del hoyo
+      () => {
+        this.#stageEnv(n);
+        // buildEnvironment mueve el viento compartido al hoyo nuevo: vuelve al actual hasta el intercambio
+        if (this.bounds) setWindField(windFieldOf(this.bounds));
+      },
+      () => this.#stageCourse(n),
+      () => this.#stageFinish(n),
+      () => { probes = this.#nextProbes(n, ghosts); },
+      () => this.#warmNext(n, probes, live),
+    ];
+    let r = { cancelled: true };
+    try {
+      r = await runSteps(steps, { signal: live });
+    } catch (e) {
+      if (PERF) perf.mark('next:prepare:error', { message: String(e?.message ?? e) });
+    } finally {
+      for (const o of probes) o.removeFromParent();
+      for (const o of probes) if (o.isSprite) { o.material.map?.dispose(); o.material.dispose(); }
+      n.running = false;
+    }
+    const ok = !r.cancelled && !stale();
+    if (ok) n.ok = true;
+    else {
+      if (this.#next === n) this.#next = null;
+      this.#releaseStage(n);
+    }
+    if (PERF) perf.mark('next:prepare:end', { ok, next: course.name });
+    settle(ok);
+    return ok;
+  }
+
+  /** Promesa del hoyo siguiente en preparación (true si quedó listo) o null si no hay ninguno. */
+  whenNextReady() {
+    return this.#next?.ready ?? null;
+  }
+
+  /** Cancela y libera el hoyo siguiente preparado (o en preparación). */
+  cancelNext() {
+    const n = this.#next;
+    if (!n) return;
+    this.#next = null;
+    n.sig.cancelled = true;
+    if (PERF) perf.mark('next:cancel', { next: n.course?.name });
+    if (!n.running) this.#releaseStage(n);
+  }
+
+  /** El hoyo siguiente si está listo y su clave coincide; si no, se libera y se sigue por el camino normal. */
+  #takeNext(key) {
+    const n = this.#next;
+    if (!n) return null;
+    this.#next = null;
+    if (key != null && n.ok && n.key === key && !this.disposed) {
+      if (PERF) perf.mark('next:hit', { next: n.course.name });
+      return n;
+    }
+    if (PERF) perf.mark('next:miss', { next: n.course?.name, reason: !n.ok ? 'pending' : 'key' });
+    n.sig.cancelled = true;
+    if (!n.running) this.#releaseStage(n);
+    return null;
+  }
+
+  /** Bola, halo, sombra, partículas, SkinFX, puntos de apuntado y ondas: lo de la escena activa que no es del hoyo ni de los rivales. */
+  #dynamicObjects() {
+    const scene = this.scene;
+    if (!scene) return [];
+    const st = this.#statics;
+    const rivals = new Set();
+    for (const b of this.bots ?? []) {
+      if (b.mesh) rivals.add(b.mesh);
+      if (b.label) rivals.add(b.label);
+    }
+    return scene.children.filter((o) => !st?.has(o) && !rivals.has(o));
+  }
+
+  /**
+   * La escena preparada pasa a activa: se le mueven la bola y sus efectos (scene.add los quita de la anterior),
+   * se quitan los rivales del hoyo anterior y la escena vieja se libera en un rato libre (sin sumar a esta tarea).
+   */
+  #swapStage(n) {
+    const old = { scene: this.scene, env: this.env };
+    this.#disposeBots();
+    for (const o of this.#dynamicObjects()) n.scene.add(o);
+    if (this.skinFx) this.skinFx.scene = n.scene; // lo que SkinFX cree más tarde (estela, aura…) va a la escena nueva
+    if (n.skinHandle && this.ballMesh) {
+      // el tema cambia los reflejos de la bola: material nuevo (ya compilado en prepareNext), misma malla y efectos
+      const prev = this.skinHandle;
+      this.skinHandle = n.skinHandle;
+      n.skinHandle = null;
+      this.ballMesh.material = this.skinHandle.material;
+      attachSkinDecor(this.ballMesh, this.skinHandle, BALL_R);
+      prev?.dispose();
+    }
+    this.course = n.course;
+    this.theme = n.theme;
+    this.scene = n.scene;
+    this.env = n.env;
+    this.courseView = n.courseView;
+    this.cyberFx = n.cyberFx;
+    this.bounds = n.bounds;
+    this.#statics = n.statics;
+    this.ghostHandles = n.ghostHandles;
+    this.ghostSkins = n.ghostSkins;
+    n.ghostHandles = null;
+    n.ghostSkins = null;
+    n.released = true; // ya es la escena activa: la libera el siguiente intercambio o dispose()
+    setWindField(windFieldOf(this.bounds));
+    this.#applyBloom(this.theme);
     this.#applyQuality();
+    this.renderer.shadowMap.needsUpdate = true;
+    this.#retireScene(old.scene, old.env);
+  }
+
+  /** Libera una escena preparada que no se va a usar (cancelada, otra clave o sin terminar a tiempo). */
+  #releaseStage(n) {
+    if (!n || n.released) return;
+    n.released = true;
+    n.sig.cancelled = true;
+    for (const h of n.ghostHandles?.values() ?? []) h.dispose();
+    n.ghostHandles = null;
+    n.ghostSkins = null;
+    n.skinHandle?.dispose();
+    n.skinHandle = null;
+    if (n.scene) this.#retireScene(n.scene, n.env);
+  }
+
+  /**
+   * Libera una escena que ya no se dibuja, en un rato libre: su entorno (césped, flores, peces, agua) y sus
+   * geometrías, texturas, mapas de sombra e InstancedMesh. Se conservan los materiales, el reflejo PMREM y todo
+   * lo que usen la escena activa y la preparada (texturas y geometrías compartidas entre hoyos).
+   */
+  #retireScene(scene, env) {
+    if (!scene) return;
+    whenIdle(() => {
+      if (this.disposed) return; // el contexto ya se soltó entero
+      if (PERF) perf.mark('dispose:old:start');
+      env?.dispose?.();
+      const keep = new Set();
+      if (this.envMap) keep.add(this.envMap);
+      for (const s of [this.scene, this.#next?.scene]) {
+        if (!s || s === scene) continue;
+        const res = collectSceneResources(s);
+        for (const g of res.geometries) keep.add(g);
+        for (const t of res.textures) keep.add(t);
+      }
+      const counts = disposeSceneResources(scene, { keep });
+      if (PERF) perf.mark('dispose:old:end', { ...counts, gl: perf.gl(this.renderer, 'dispose:old') });
+    });
+  }
+
+  /** Réplicas de prueba del hoyo siguiente (sus skins y materiales) y, si el tema cambia los reflejos, el material nuevo de la bola. */
+  #nextProbes(n, ghosts) {
+    const probes = [];
+    const [tx, tz] = n.course.tee;
+    n.ghostHandles = new Map();
+    n.ghostSkins = pickRandomSkins(Math.max(0, ghosts | 0));
+    this.ghostGeo ??= new THREE.SphereGeometry(BALL_R, 20, 14);
+    for (const skin of n.ghostSkins) {
+      if (n.ghostHandles.has(skin.id)) continue;
+      const handle = this.#ghostHandle(skin, n.theme);
+      n.ghostHandles.set(skin.id, handle);
+      const mesh = new THREE.Mesh(this.ghostGeo, handle.material);
+      mesh.position.set(tx, -50, tz);
+      probes.push(mesh);
+    }
+    if (n.ghostSkins.length) {
+      const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTexture('', '#ffffff'), transparent: true, depthWrite: false }));
+      label.renderOrder = 10;
+      label.position.set(tx, -50, tz);
+      probes.push(label);
+    }
+    if (this.ballMesh && ballLook(n.theme) !== ballLook(this.theme)) {
+      n.skinHandle = createSkinMaterial(this.skin, { quality: getQuality(), instance: this.instance ?? {}, theme: n.theme });
+      const mesh = new THREE.Mesh(this.ballMesh.geometry, n.skinHandle.material);
+      mesh.position.set(tx, -50, tz);
+      probes.push(mesh);
+    }
+    return probes;
+  }
+
+  /**
+   * GPU caliente para la escena siguiente sin dibujar: la bola y sus efectos se pasan un instante a esa escena
+   * (en la misma tarea, sin ningún frame en medio) para que los programas salgan con sus luces y su entorno,
+   * se lanza compileAsync con el destino de dibujo que tendrá, y vuelven. Después, texturas por trozos.
+   */
+  async #warmNext(n, probes, live) {
+    const r = this.renderer;
+    const back = this.scene;
+    const moved = this.#dynamicObjects();
+    const prev = r.getRenderTarget();
+    let p, textures;
+    try {
+      for (const o of moved) n.scene.add(o);
+      for (const o of probes) n.scene.add(o);
+      r.setRenderTarget(this.#wantsPost(n.theme) ? this.composer.renderTarget1 : null);
+      p = r.compileAsync(n.scene, this.camera);
+      textures = [...collectTextures(n.scene)];
+    } finally {
+      r.setRenderTarget(prev);
+      for (const o of moved) back.add(o);
+      for (const o of probes) o.removeFromParent();
+    }
+    await withCap(p, 4000);
+    if (live.cancelled) return;
+    for (const part of chunk(textures, 4)) {
+      part.forEach((t) => r.initTexture(t));
+      await yieldToMain();
+      if (live.cancelled) return;
+    }
+  }
+
+  /** Estado de juego del hoyo: bola de física, golpes, contador, cámara. Solo en load(). */
+  #resetPlayState(course, firstSunkTick, timeLimit) {
     this.segs = segmentsOf(course);
     this.ball = { x: course.tee[0], z: course.tee[1], vx: 0, vz: 0 };
     this.strokes = 0;
     this.sunk = false;
     this.timedOut = false;
+    // con el renderer reutilizado (F3) viene del hoyo anterior: la pantalla lo bloquea al acabar
+    this.locked = false;
+    this.lipped = false;
+    this.inDrop = false;
     this.endTick = null; // paso en el que se acabó el tiempo (se manda al servidor)
     this.sunkTick = null; // paso en el que embocaste
     this.firstSunkTick = course.noCup ? null : firstSunkTick;
@@ -212,18 +732,54 @@ export class GolfGame {
     this.yaw = Math.atan2(course.cup[0] - course.tee[0], -(course.cup[1] - course.tee[1]));
     if (course.aimYaw !== undefined) this.yaw = course.aimYaw;
     this.camYaw = this.yaw;
-    this.#buildScene();
-    this.#prevPose.ok = false;
-    this.#shadowAt.x = NaN;
-    this.perf.reset();
-    this.#resize();
-    this.intro = 0;
-    this.#placeCamera(1, true);
-    if (!this.running) {
-      this.running = true;
-      this.clock.start();
-      this.renderer.setAnimationLoop(() => this.#frame());
+  }
+
+  #startLoop() {
+    this.running = true;
+    this.clock.start();
+    this.renderer.setAnimationLoop(() => this.#frame());
+  }
+
+  #compileTarget() {
+    return this.usePost ? this.composer.renderTarget1 : null;
+  }
+
+  /** Compila con el mismo render target que usará el juego, sube texturas por trozos y hace el primer render oculto. */
+  async #warmGpu(token, sig, { prepared = false } = {}) {
+    const stale = () => sig.cancelled || this.disposed || token !== this.#loadToken;
+    // preparando en la sala: el frame oculto no es el primero del hoyo (ese lo marca #frame al mostrarse)
+    const marks = PERF && !prepared;
+    const renderer = this.renderer;
+    if (PERF) perf.mark('compile:start');
+    const prev = renderer.getRenderTarget();
+    renderer.setRenderTarget(this.#compileTarget());
+    let p;
+    try {
+      p = renderer.compileAsync(this.scene, this.camera);
+    } finally {
+      renderer.setRenderTarget(prev);
     }
+    await withCap(p, 4000);
+    if (PERF) perf.mark('compile:end');
+    if (stale()) return;
+    for (const part of chunk([...collectTextures(this.scene)], 4)) {
+      part.forEach((t) => renderer.initTexture(t));
+      await yieldToMain();
+      if (stale()) return;
+    }
+    if (marks) {
+      this.perfFirst = false;
+      perf.mark('frame1:start', { gl: perf.gl(renderer, 'frame1:start') });
+    } else if (PERF) perf.mark('warm:frame:start');
+    if (this.usePost) {
+      this.renderPass.scene = this.scene;
+      this.composer.render(0);
+    } else renderer.render(this.scene, this.camera);
+    if (marks) {
+      perf.mark('frame1:end', { gl: perf.gl(renderer, 'frame1:end') });
+      this.perfHole = perf.hole();
+      perf.startFrames(`hole${this.perfHole}`);
+    } else if (PERF) perf.mark('warm:frame:end', { gl: perf.gl(renderer, 'warm:frame:end') });
   }
 
   /**
@@ -262,9 +818,7 @@ export class GolfGame {
       this.#resize();
     }
     this.bloom.enabled = q.bloom;
-    // de día el resplandor apenas se nota: en Medio no se paga (solo en Alto)
-    const glowy = !this.theme || this.theme.sunIntensity < 2 || this.theme.lava || this.theme.neon;
-    this.usePost = q.bloom && (glowy || getQuality() === 'high');
+    this.usePost = this.#wantsPost(this.theme);
     this.renderer.shadowMap.enabled = q.shadows;
     const type = q.softShadows ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
     if (this.renderer.shadowMap.type !== type) this.renderer.shadowMap.type = type;
@@ -272,6 +826,12 @@ export class GolfGame {
     const max = Math.min(window.devicePixelRatio, q.pixelRatio);
     this.resGov.configure(Math.min(max, q.minPixelRatio), max);
     this.#setPixelRatio(max);
+  }
+
+  /** ¿Se dibuja con resplandor (composer)? De día apenas se nota: en Medio no se paga (solo en Alto). */
+  #wantsPost(theme) {
+    const glowy = !theme || theme.sunIntensity < 2 || theme.lava || theme.neon;
+    return !!quality().bloom && (!!glowy || getQuality() === 'high');
   }
 
   /** Cambia la calidad en caliente: resolución y resplandor al momento, el resto al volver a cargar el hoyo. */
@@ -468,6 +1028,10 @@ export class GolfGame {
   dispose() {
     if (this.disposed) return; // idempotente: pausa→salir llama dos veces (game.dispose y goHome→releasePlay)
     this.disposed = true;
+    // hoyo siguiente en preparación: se corta (su GPU se va con el contexto, abajo)
+    if (this.#next) this.#next.sig.cancelled = true;
+    this.#next = null;
+    if (PERF) { perf.stopFrames(`hole${this.perfHole ?? 0}`); perf.mark('dispose:start'); }
     setCharge(0);
     stopAmbient();
     stopRolling();
@@ -476,6 +1040,7 @@ export class GolfGame {
     this.resizeObserver.disconnect();
     this.#unbindInput?.();
     this.#disposeFx();
+    this.env?.dispose?.(); // anillos del material de agua (compartido) y mallas del hoyo
     this.perf = null;
     this.composer.dispose();
     this.renderer.dispose();
@@ -483,28 +1048,76 @@ export class GolfGame {
     try { this.renderer.forceContextLoss?.(); } catch { /* ya perdido */ }
     this.renderer.domElement.remove();
     this.cupMarker?.remove();
+    this.holder?.remove(); // juego preparado que no llegó a mostrarse
+    this.holder = null;
+    if (PERF) perf.mark('dispose:end');
   }
 
   // ---------- escena ----------
 
+  /** El camino de siempre: escena entera (entorno y pista, bola y efectos, réplicas de los rivales). */
   #buildScene() {
+    this.#buildStatic();
+    this.#buildBall();
+    this.#buildBots();
+    if (PERF) perf.mark('ball:end'); // «ball» envuelve a «bots», como espera derive() en perfProbe
+    // compila los shaders de bola, réplicas y efectos durante la intro, para no tirar el primer golpe
+    if (!WARM_GPU) {
+      if (PERF) perf.mark('compile:start');
+      const compiling = this.renderer.compileAsync(this.scene, this.camera).catch(() => {});
+      if (PERF) compiling.then(() => perf.mark('compile:end'));
+    }
+  }
+
+  /** Entorno, pista, efectos del hoyo 15, reflejos (PMREM) y recorte de luces. Libera la escena anterior. */
+  #buildStatic() {
     this.#disposeFx();
-    // la escena del hoyo anterior: se liberan sus geometrías (three las vuelve a subir si algo las reutiliza)
-    this.scene?.traverse((o) => o.geometry?.dispose());
+    this.env?.dispose?.(); // césped del hoyo anterior (malla propia; material y atlas son compartidos)
+    // la escena del hoyo anterior (renderer reutilizado o preparación descartada): geometrías, texturas y sombras
+    // en un rato libre, sin los materiales (three vuelve a subir lo que algo reutilice)
+    this.#retireScene(this.scene, null);
+    const st = { course: this.course, theme: this.theme };
+    this.#stageEnv(st, PERF);
+    this.#stageCourse(st, PERF);
+    this.#stageFinish(st, PERF);
+    this.scene = st.scene;
+    this.env = st.env;
+    this.courseView = st.courseView;
+    this.cyberFx = st.cyberFx;
+    this.bounds = st.bounds;
+    this.#statics = st.statics;
+  }
+
+  /** Escena nueva y entorno del hoyo de `st` (st.course, st.theme). No toca la escena activa. */
+  #stageEnv(st, marks = false) {
     const scene = new THREE.Scene();
-    this.scene = scene;
-    let seed = [...this.course.name].reduce((a, c) => a * 31 + c.charCodeAt(0), 7) % 2147483647;
+    st.scene = scene;
+    let seed = [...st.course.name].reduce((a, c) => a * 31 + c.charCodeAt(0), 7) % 2147483647;
     const rng = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-    this.env = buildEnvironment(scene, this.course, this.theme, rng);
-    this.courseView = buildCourse(scene, this.course, this.theme);
-    // efectos del hoyo 15 (solo visuales: leen la bola y los eventos, no escriben la simulación)
-    this.cyberFx = this.theme.cyberCity ? createCyberFx(scene, this.course) : null;
+    if (marks) perf.mark('env:start');
+    st.env = buildEnvironment(scene, st.course, st.theme, rng);
+    if (marks) perf.mark('env:end');
+  }
+
+  /** Pista y efectos del hoyo 15 (solo visuales: leen la bola y los eventos, no escriben la simulación). */
+  #stageCourse(st, marks = false) {
+    if (marks) perf.mark('course:start');
+    st.courseView = buildCourse(st.scene, st.course, st.theme);
+    st.cyberFx = st.theme.cyberCity ? createCyberFx(st.scene, st.course) : null;
+    if (marks) perf.mark('course:end');
+  }
+
+  /** Reflejos (PMREM, uno por partida), recorte de luces, límites y lo que es del hoyo (statics). */
+  #stageFinish(st, marks = false) {
+    const scene = st.scene;
     const q = quality();
     // reflejos suaves de un estudio: los plásticos y metales dejan de verse apagados
     // (de noche y en neón no: los metales oscuros reflejarían un estudio blanco y brillarían de más)
-    const glowy = this.theme.sunIntensity < 2 || this.theme.lava || this.theme.neon;
+    const glowy = st.theme.sunIntensity < 2 || st.theme.lava || st.theme.neon;
     if (q.env && !glowy) {
+      if (marks) perf.mark('pmrem:start', { cached: !!this.envMap });
       this.envMap ??= new THREE.PMREMGenerator(this.renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+      if (marks) perf.mark('pmrem:end');
       scene.environment = this.envMap;
       scene.environmentIntensity = 0.12;
     }
@@ -513,8 +1126,16 @@ export class GolfGame {
     scene.traverse((o) => o.isPointLight && points.push(o));
     points.sort((a, b) => b.intensity * b.distance - a.intensity * a.distance);
     points.forEach((l, i) => (l.visible = i < q.maxLights));
+    st.bounds = courseBounds(st.course);
+    st.statics = new Set(scene.children);
+  }
 
+  /** Bola propia: skin, malla, sombra de contacto, halo, partículas, efectos de skin, puntos de apuntado y ondas. */
+  #buildBall() {
+    const scene = this.scene;
+    const q = quality();
     const fxLevel = getQuality();
+    if (PERF) perf.mark('ball:start');
     const skinOpts = { quality: fxLevel, instance: this.instance ?? {}, theme: this.theme };
     this.skinHandle = createSkinMaterial(this.skin, skinOpts);
     this.ballMesh = new THREE.Mesh(
@@ -542,20 +1163,33 @@ export class GolfGame {
     this.ballGlow.rotation.x = -Math.PI / 2;
     scene.add(this.ballGlow);
 
-    // rivales: réplicas fantasma con una skin al azar cada uno (sin repetir mientras haya skins) y su nombre encima.
-    // Solo el acabado: material 'low' por skin (mapa horneado, sin shader ni update) y sin SkinFX.
-    this.ghostGeo = new THREE.SphereGeometry(BALL_R, 20, 14);
-    this.ghostHandles = new Map();
-    const botSkins = pickRandomSkins(this.botPlayers.length);
+    this.particles = new Particles(scene);
+    // efectos de la skin: estela, impactos, aura y embocada (sustituyen al Trail genérico)
+    this.skinFx = new SkinFX(scene, this.skin, { quality: fxLevel });
+    this.fxCtx = { pos: this.ballRoot.position, speed: 0, moving: false, camera: this.camera };
+    this.matCtx = { speed: 0, impact: 0, state: 0 };
+    this.aimDots = new AimDots(scene);
+    this.waves = new Shockwaves(scene);
+  }
+
+  /**
+   * Rivales: réplicas fantasma con una skin al azar cada uno (sin repetir mientras haya skins) y su nombre encima.
+   * Solo el acabado: material 'low' por skin (mapa horneado, sin shader ni update) y sin SkinFX.
+   * Si prepare() ya eligió skins y creó sus materiales, se reutilizan en orden (sus shaders ya están compilados).
+   */
+  #buildBots() {
+    const scene = this.scene;
+    this.ghostGeo ??= new THREE.SphereGeometry(BALL_R, 20, 14);
+    this.ghostHandles ??= new Map();
+    if (PERF) perf.mark('bots:start');
+    const n = this.botPlayers.length;
+    const pre = this.ghostSkins ?? [];
+    this.ghostSkins = null;
+    const botSkins = pre.length >= n ? pre.slice(0, n) : [...pre, ...pickRandomSkins(n - pre.length)];
     this.bots = this.botPlayers.map((p, i) => {
       const bot = p.remote ? new RemoteBall(p, this.course, this.segs, p.remote) : new Bot(p, this.course, this.segs, p.rng ?? Math.random);
       const skin = botSkins[i];
-      if (!this.ghostHandles.has(skin.id)) {
-        const handle = createSkinMaterial(skin, { quality: 'low', instance: {}, theme: this.theme });
-        handle.material.transparent = true;
-        handle.material.opacity = 0.75;
-        this.ghostHandles.set(skin.id, handle);
-      }
+      if (!this.ghostHandles.has(skin.id)) this.ghostHandles.set(skin.id, this.#ghostHandle(skin));
       const mesh = new THREE.Mesh(this.ghostGeo, this.ghostHandles.get(skin.id).material);
       const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTexture(p.name, p.color), transparent: true, depthWrite: false }));
       label.scale.set(0.9, 0.225, 1);
@@ -564,19 +1198,7 @@ export class GolfGame {
       Object.assign(bot, { mesh, label, sinkT: 0 });
       return bot;
     });
-
-    this.particles = new Particles(scene);
-    // efectos de la skin: estela, impactos, aura y embocada (sustituyen al Trail genérico)
-    this.skinFx = new SkinFX(scene, this.skin, { quality: fxLevel });
-    this.fxCtx = { pos: this.ballRoot.position, speed: 0, moving: false, camera: this.camera };
-    this.matCtx = { speed: 0, impact: 0, state: 0 };
-    this.aimDots = new AimDots(scene);
-    this.waves = new Shockwaves(scene);
-
-    const b = courseBounds(this.course);
-    this.bounds = b;
-    // compila los shaders de bola, réplicas y efectos durante la intro, para no tirar el primer golpe
-    this.renderer.compileAsync(scene, this.camera).catch(() => {});
+    if (PERF) perf.mark('bots:end');
   }
 
   /** Efectos de la skin al volver al tee: se vacían; la estela se recoge sola. */
@@ -586,22 +1208,29 @@ export class GolfGame {
     if (this.skinFx.pointTrail) this.skinFx.pointTrail.count = 0;
   }
 
-  /** Libera material, efectos y réplicas de la partida anterior (o de esta, al cerrar). */
-  #disposeFx() {
+  /** Rivales del hoyo: réplicas y nombres fuera de la escena, sus etiquetas y materiales liberados (la geometría común se queda). */
+  #disposeBots() {
     for (const b of this.bots ?? []) {
       b.mesh?.removeFromParent();
       b.label?.removeFromParent();
       b.label?.material.map?.dispose();
       b.label?.material.dispose();
     }
+    // this.bots se queda: finishBots() puede leer los golpes tras liberar el juego (vivo); #buildBots lo reemplaza
+    for (const h of this.ghostHandles?.values() ?? []) h.dispose();
+    this.ghostHandles = null;
+    this.ghostSkins = null;
+  }
+
+  /** Libera material, efectos y réplicas de la partida anterior (o de esta, al cerrar). */
+  #disposeFx() {
+    this.#disposeBots();
     this.ghostGeo?.dispose();
     this.ghostGeo = null;
     this.skinFx?.dispose();
     this.skinFx = null;
     this.skinHandle?.dispose();
     this.skinHandle = null;
-    for (const h of this.ghostHandles?.values() ?? []) h.dispose();
-    this.ghostHandles = null;
     this.ballMesh?.geometry.dispose();
     for (const m of [this.ballShadow, this.ballGlow]) {
       if (!m) continue;
@@ -919,6 +1548,7 @@ export class GolfGame {
     }
 
     this.#onClickCanvas = () => {
+      if (this.#skipClick) { this.#skipClick = false; return; } // el toque que saltó la intro no hace nada más
       if (!this.sunk && !this.locked && this.intro >= 1) {
         this.requestPointerLock();
       }
@@ -930,6 +1560,13 @@ export class GolfGame {
       if (!this.ambientOn) {
         this.ambientOn = true;
         setAmbient(this.theme.sound);
+      }
+      // fuera del vivo, un toque durante la intro la termina; se evalúa antes del golpe y lo consume
+      if (!this.paused && this.course && introSkipAction({ live: this.live, intro: this.intro, skipEnabled: INTRO_SKIP }) === 'skip') {
+        this.intro = 1;
+        this.#placeCamera(1, true);
+        this.#skipClick = e.pointerType === 'mouse';
+        return;
       }
       if (this.paused || !this.course || this.sunk || this.timedOut || this.locked || this.intro < 1) return;
       if (this.course.noCup && this.strokes >= 1) return;
@@ -1361,6 +1998,11 @@ export class GolfGame {
   // ---------- bucle ----------
 
   #frame() {
+    const perfFirst = PERF && this.perfFirst;
+    if (perfFirst) {
+      this.perfFirst = false;
+      perf.mark('frame1:start', { gl: perf.gl(this.renderer, 'frame1:start') });
+    }
     const now = performance.now();
     this.perf?.tick(now);
     this.resGov.tick(now);
@@ -1645,6 +2287,15 @@ export class GolfGame {
       this.renderPass.scene = this.scene;
       this.composer.render(realDt);
     } else this.renderer.render(this.scene, this.camera);
+    if (perfFirst) {
+      perf.mark('frame1:end', { gl: perf.gl(this.renderer, 'frame1:end') });
+      this.perfHole = perf.hole();
+      perf.startFrames(`hole${this.perfHole}`);
+    }
+    if (PERF && this.perfPlayable && this.intro >= 1) {
+      this.perfPlayable = false;
+      perf.mark('playable');
+    }
   }
 
   // ---------- suavidad ----------

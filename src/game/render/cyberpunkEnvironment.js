@@ -30,18 +30,26 @@ function haloSprite(color, size) {
 
 const textureCache = new Map();
 
-/**
- * Textura procedural de fachada con ventanas discretas y sutiles.
- */
-export function getSkyscraperTexture(themeColors) {
-  const [c1, c2] = themeColors.map((c) => '#' + new THREE.Color(c).getHexString());
-  const cacheKey = `sky_${c1}_${c2}`;
-  if (textureCache.has(cacheKey)) return textureCache.get(cacheKey);
+/** Semilla estable a partir de la clave de la textura (FNV-1a). */
+function hashSeed(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
 
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 256;
-  const ctx = canvas.getContext('2d');
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Dibuja la fachada en un contexto 2D de 256x256. Determinista: la semilla sale de los dos colores (misma textura en cada carga). */
+export function drawSkyscraperFacade(ctx, c1, c2) {
+  const rnd = mulberry32(hashSeed(`sky_${c1}_${c2}`));
 
   // Fondo obsidiana arquitectónico
   ctx.fillStyle = '#090b16';
@@ -64,9 +72,9 @@ export function getSkyscraperTexture(themeColors) {
   for (let r = 0; r < rows; r++) {
     const floorLit = (r % 3 === 0);
     for (let c = 0; c < cols; c++) {
-      const isLit = floorLit ? Math.random() < 0.6 : Math.random() < 0.2;
+      const isLit = floorLit ? rnd() < 0.6 : rnd() < 0.2;
       if (isLit) {
-        ctx.fillStyle = Math.random() < 0.6 ? c1 : c2;
+        ctx.fillStyle = rnd() < 0.6 ? c1 : c2;
         ctx.fillRect(c * w + 6, r * h + 4, w - 12, h - 8);
       } else {
         ctx.fillStyle = '#101322';
@@ -74,6 +82,21 @@ export function getSkyscraperTexture(themeColors) {
       }
     }
   }
+}
+
+/**
+ * Textura procedural de fachada con ventanas discretas y sutiles.
+ */
+export function getSkyscraperTexture(themeColors) {
+  const [c1, c2] = themeColors.map((c) => '#' + new THREE.Color(c).getHexString());
+  const cacheKey = `sky_${c1}_${c2}`;
+  if (textureCache.has(cacheKey)) return textureCache.get(cacheKey);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  drawSkyscraperFacade(ctx, c1, c2);
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
