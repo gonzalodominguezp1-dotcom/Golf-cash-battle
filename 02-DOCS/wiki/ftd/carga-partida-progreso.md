@@ -65,3 +65,12 @@ Verificación local: `pnpm test` 1290 pass / 0 fail; build OK. Sin commit ni pus
 - Interruptores: `PERSISTENT_RENDERER` (o `?persist=0`) vuelve a F2; `NEXT_HOLE_PREBUILD` (o `?next=0`) no prepara el siguiente; `PERSISTENT_LIVE = false`: vivo como hoy.
 - Revisar: (1) la bola y sus efectos se pasan un instante a la escena preparada durante `compileAsync`, en la misma tarea; (2) el material de la bola puede regenerarse si cambia el tema; (3) viento compartido devuelto al hoyo actual; (4) sin manejo de pérdida de contexto (three la recupera; se cancela `#next`); (5) si el siguiente no está listo a 1 s, se construye por el camino normal.
 - Checklist: el informe del subagente F3 (práctica de 3 hoyos con `?perf=1&perfcourses=3,6,12`; `contextos_partida.creados = 1`; `next:hit`; texturas y geometrías sin crecer entre partidas; desempate `#hoyo3-empate`; Modo Libre; calidad a mitad de hoyo y paso a/desde Bajo; salir a mitad de hoyo 2; girar el móvil; `?perf=1&persist=0` para comparar; vivo igual que antes).
+
+## F4 — Caché de texturas procedurales (implementada, sin verificar en navegador)
+Verificación local: `pnpm test` 1299 pass / 0 fail; build OK. Sin commit ni push.
+- Archivos: `src/game/render/textureCache.js` (nuevo), `src/game/render/textures.js` (12 generadores envueltos con `cached()`), `tests/texture-cache.test.js` (9 tests).
+- No tocados (candidatos a otra pasada): `lushEnvironment.js`, `flora.js`, `attractions.js`, `cyberpunkEnvironment.js`.
+- Interruptor: `TEXTURE_CACHE = false` (en `textureCache.js`) vuelve a generar cada vez; `maxBytes = 0` también.
+- Límites: Bajo 8 MB, Medio 24 MB, Alto 64 MB (propuesta; no confirmados por el usuario).
+- Riesgos a medir: `Texture.copy` marca `needsUpdate`, así que cada clon puede forzar una resubida a GPU de la imagen compartida; reenlace de `repeat` (arena, normales); comportamiento de `dispose` de clon con F3 en escena real.
+- Checklist: capturas lado a lado de hierba, arena, tierra, madera, hielo y neón (idénticas); sin desalineación en arena; `stats().hits > 0` desde el hoyo 2; `load_desglose` baja; cambio de calidad sin cruzar texturas. `textureCache` no está expuesto en `window`: hace falta para leer `stats()` en consola.
