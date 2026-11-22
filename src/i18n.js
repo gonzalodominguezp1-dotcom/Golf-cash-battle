@@ -180,10 +180,93 @@ const EN = {
   '¡Bien! Mete la bola en el hoyo con los menos golpes posibles': 'Nice! Sink the ball in as few strokes as you can',
   'Usa «Ver mapa» para ver el hoyo entero': 'Use “View map” to see the whole hole',
   'Entendido': 'Got it', 'Cómo se juega': 'How to play',
+  // --- menú nuevo (hub y pantallas del router) ---
+  'JUGAR': 'PLAY', 'Logros': 'Achievements', 'Cofre': 'Chest', 'Inicio': 'Home', 'Ajustes': 'Settings',
+  'Pendientes': 'Pending', 'Completados': 'Completed', 'Completado': 'Completed',
+  'Todavía no hay logros disponibles.': 'No achievements yet.', 'No se pudieron cargar los logros. Inténtalo de nuevo.': 'Could not load achievements. Try again.',
+  'Practicar hoyo': 'Practice hole', 'Secretas': 'Secret', 'Obtenida': 'Owned', 'Estado': 'Status', 'Cómo conseguirla': 'How to get it',
+  'Cargando visor 3D…': 'Loading 3D viewer…', 'Skin anterior': 'Previous ball', 'Skin siguiente': 'Next ball', 'Ver logros': 'View achievements',
+  'Esa skin no existe o no está disponible. Volvemos a Skins.': 'That ball does not exist. Back to Skins.',
+  'No se han podido cargar las skins. Prueba otra vez.': 'Could not load the balls. Try again.',
+  'No se pudieron cargar los mapas. Inténtalo de nuevo.': 'Could not load the maps. Try again.',
+  'No se pudieron cargar los ajustes. Inténtalo de nuevo.': 'Could not load settings. Try again.',
+  'No se pudo abrir la pantalla. Volvemos al inicio.': 'Could not open that screen. Back to home.',
+  'No se pudo abrir el juego. Inténtalo de nuevo.': 'Could not start the game. Try again.',
+  'No se pudo cargar. Inténtalo de nuevo.': 'Could not load. Try again.', 'Todavía no hay nada aquí.': 'Nothing here yet.',
+  'Premio raro al azar': 'Rare random drop', 'Código secreto': 'Secret code',
+  // cofre
+  'Próximo cofre': 'Next chest', 'Desactiva el bloqueador de anuncios para abrirlo': 'Turn off your ad blocker to open it',
+  // sala de emparejamiento y recompensas
+  'Buscando rivales': 'Finding rivals', 'Práctica contra rivales simulados': 'Quick match vs 7 rivals', 'Rivales simulados · juega sin riesgo': '8 players · 3 holes',
+  'Mesa': 'Table', 'Cancelar emparejamiento': 'Cancel', 'Jugadores en la mesa': 'Players at the table', 'Cómo funciona la sala': 'How it works',
+  'Ya estás buscando partida': 'Already finding a match', 'Te llevamos a tu sala de emparejamiento.': 'Taking you back to your lobby.',
+  'Buscando partida': 'Finding a match', '¡Partida encontrada!': 'Match found!', 'Error al iniciar partida': 'Could not start the match',
+  'Toca para reintentar o cancelar': 'Tap to retry or cancel', 'Volver a la sala de emparejamiento': 'Back to the match lobby',
+  'Cancelar emparejamiento y recuperar la entrada': 'Cancel matchmaking', 'Emparejamiento en curso': 'Matchmaking in progress',
+  'Buscando…': 'Searching…', '¡YA!': 'GO!', 'TÚ': 'YOU', 'Se acabó el tiempo': 'Time is up', 'Partida de práctica': 'Quick match',
+  '¡Recompensa!': 'Reward!', '¡Mantén pulsado para abrir!': 'Hold to open!', 'Mantén pulsado para abrir': 'Hold to open', '¡Pulsa para abrir!': 'Tap to open!',
+  '¡Skin desbloqueada!': 'Ball unlocked!', '¡Skin rara!': 'Rare ball!', 'Patrón raro': 'Rare pattern', 'Reiniciar hoyo': 'Restart hole',
+  'Fotogramas por segundo · latencia con el servidor': 'Frames per second · latency',
+  // ajustes
+  'Controles': 'Controls', 'Calidad': 'Quality', '🎮 Controles': '🎮 Controls', '✨ Calidad': '✨ Quality', '🔊 Sonido': '🔊 Sound',
+  'Secciones de ajustes': 'Settings sections', 'Cerrar ajustes': 'Close settings',
+  '📱 Se guarda en este dispositivo. Entra con tu cuenta para llevarlo a otros.': '📱 Saved on this device.',
+  '☁️ Se guarda en tu cuenta: vale en el móvil y en el ordenador.': '☁️ Saved to your account.',
+  'Cámara, apuntado y fuerza del tiro.': 'Camera, aiming and shot power.', 'Cámara': 'Camera', 'Tiro': 'Shot',
+  'Invertir cámara (horizontal)': 'Invert camera (horizontal)', 'Invertir cámara (vertical)': 'Invert camera (vertical)',
+  'Al arrastrar a un lado, la cámara gira hacia el otro.': 'Dragging one way turns the camera the other way.',
+  'Arriba y abajo inclinan la vista del mapa al revés.': 'Up and down tilt the map view the other way.',
+  'Arriba y abajo acercan o alejan al revés, y la vista del mapa se inclina al revés.': 'Up and down zoom the other way, and the map view tilts the other way.',
+  'Sensibilidad de la cámara': 'Camera sensitivity', 'Cuánto gira la cámara por cada movimiento.': 'How much the camera turns per movement.',
+  'Invertir ángulo de tiro': 'Invert shot angle', 'Mover a la derecha apunta a la izquierda.': 'Moving right aims left.',
+  'Cargar empujando': 'Push to charge', 'La fuerza sube al mover el ratón hacia delante en vez de hacia atrás.': 'Power goes up when you move the mouse forward instead of back.',
+  'La fuerza sube al empujar el dedo hacia delante en vez de tirar hacia atrás.': 'Power goes up when you push your finger forward instead of pulling back.',
+  'Sensibilidad del apuntado': 'Aim sensitivity', 'Más bajo = apuntado más fino.': 'Lower = finer aiming.',
+  'Rueda del ratón': 'Mouse wheel', 'Con la bola parada: ajustar la fuerza o hacer zoom.': 'With the ball still: adjust power or zoom.',
+  'Fuerza': 'Power', 'Zoom': 'Zoom', 'Teclas': 'Keys', 'Ratón': 'Mouse', 'Rueda': 'Wheel', 'Espacio': 'Space', 'Clic der.': 'Right click',
+  'Apuntar · clic izquierdo y soltar para tirar': 'Aim · left click and release to shoot', 'Girar la cámara': 'Turn the camera',
+  'Fuerza (Ctrl + rueda: zoom)': 'Power (Ctrl + wheel: zoom)', 'Vista del mapa': 'Map view', 'Pausa y ajustes': 'Pause and settings',
+  'Silenciar': 'Mute', 'Restablecer controles': 'Reset controls', '✓ Guardado': '✓ Saved',
+  'Vibración': 'Vibration', 'Pequeños toques al tocar la bola, cargar y embocar.': 'Small taps when touching the ball, charging and holing out.',
+  'Cómo se dibuja el juego. Nunca cambia la física.': 'How the game is drawn. Never changes the physics.',
+  'Auto': 'Auto', 'La que mejor va en este dispositivo.': 'The best one for this device.',
+  'Sin sombras ni brillos. Para móviles que se calientan o van lentos.': 'No shadows or glow. For phones that get hot or slow.',
+  'Sombras y brillo con un coste moderado.': 'Shadows and glow at a moderate cost.',
+  'Todo el detalle: sombras suaves, hierba densa y efectos completos.': 'Full detail: soft shadows, dense grass and all effects.',
+  'Bajo': 'Low', 'Medio': 'Medium', 'Alto': 'High',
+  'Volumen del juego y del ambiente.': 'Game and ambient volume.', 'Volumen general': 'Master volume', 'Ambiente': 'Ambient',
+  'Golpes, rebotes, música de victoria.': 'Hits, bounces, victory music.', 'Pájaros, olas, lluvia, grillos…': 'Birds, waves, rain, crickets…',
+  'Quita todo el sonido. Atajo en el ordenador: M.': 'Turns off all sound. Keyboard shortcut: M.',
+  'Probar sonido': 'Test sound', 'Probar': 'Test', 'Suena un golpe con el volumen elegido.': 'Plays a hit at the chosen volume.',
+  'Sin apuesta': 'Free', 'Entrenamiento': 'Quick match', 'Buscando rivales a tu altura…': 'Finding rivals at your level…', 'seg': 's',
+  // portada (splash)
+  'Arrancando el juego…': 'Starting the game…', 'Cargando el juego…': 'Loading the game…', 'Comprobando tu sesión…': 'Checking your save…',
+  'Cargando tu saldo…': 'Loading your progress…', 'Preparando el campo 3D…': 'Preparing the 3D course…', 'Colocando las banderas…': 'Placing the flags…',
+  '¡Listo, a jugar!': 'Ready, let’s play!', 'Preparando el campo…': 'Preparing the course…', 'Error de carga': 'Loading error',
+  'Un golpe suave en el green vale más que uno fuerte.': 'A soft putt on the green beats a hard one.',
+  'Mira la pendiente antes de golpear: la bola siempre sigue la bajada.': 'Check the slope before you shoot: the ball always rolls downhill.',
+  'Arrastra hacia atrás para apuntar; cuanto más largo, más fuerte.': 'Drag back to aim; the longer the drag, the harder the shot.',
+  'Practica el hoyo gratis antes de jugarte las monedas.': 'Practice any hole in Maps before a match.',
+  'No hemos podido conectar': 'Could not load', 'La carga está tardando demasiado. Revisa tu conexión e inténtalo de nuevo.': 'Loading is taking too long. Check your connection and try again.',
 };
 
 // textos con números u otras partes variables
 const EN_PATTERNS = [
+  [/^Pendientes \((\d+)\)$/, 'Pending ($1)'], [/^Completados \((\d+)\)$/, 'Completed ($1)'],
+  [/^(\d+) de (\d+)$/, '$1 of $2'],
+  [/^Recompensa: (.+)$/, (_, n) => `Reward: ${EN[n] ?? n}`],
+  [/^Requisito: (.+)$/, (_, n) => `Requirement: ${EN[n] ?? n}`],
+  [/^Se consigue con un logro: (.+)$/, (_, n) => `Unlocked by an achievement: ${EN[n] ?? n}`],
+  [/^Skin equipada: (.+)$/, (_, n) => `Ball equipped: ${EN[n] ?? n}`],
+  [/^(\d+) min$/, '$1 min'],
+  [/^Cofre gratis: ver anuncio · (\d+)% de bola exclusiva$/, 'Free chest: watch an ad · $1% exclusive ball chance'],
+  [/^Mi cuenta \(invitado\)\. Nivel (\d+), (\d+) % al siguiente$/, 'Level $1, $2% to the next'],
+  [/^Mi cuenta\. Nivel (\d+), (\d+) % al siguiente$/, 'Level $1, $2% to the next'],
+  [/^Nivel (\d+), (\d+) % al siguiente$/, 'Level $1, $2% to the next'],
+  [/^\/(\d+) jugadores$/, '/$1 players'],
+  [/^Empieza en (\d+) s$/, 'Starts in $1 s'], [/^(\d+)\/(\d+) jugadores$/, '$1/$2 players'],
+  [/^(.+): (\d+) de (\d+)$/, (_, n, a, b) => `${EN[n] ?? n}: ${a} of ${b}`],
+  [/^Se guarda aparte para el móvil y el ordenador\. Este dispositivo: (.*)$/, (_, d) => `Saved separately for phone and computer. This device: ${EN[d] ?? d}`],
   [/^Nivel (\d+)$/, 'Level $1'], [/^Nivel (\d+) · (\d+)%$/, 'Level $1 · $2%'], [/^¡Nivel (\d+)!$/, 'Level $1!'],
   [/^(\d+) Jugadores$/, '$1 Players'], [/^(\d+) Hoyos$/, '$1 Holes'],
   [/^Hoyo (\d+)$/, 'Hole $1'], [/^Hoyo (\d+)\/(\d+)$/, 'Hole $1/$2'], [/^Par (\d+)$/, 'Par $1'],
@@ -215,8 +298,19 @@ const EN_PATTERNS = [
   [/^Jugando · (\d+) hoyos?$/, (_, n) => `Playing · ${n} hole${n === '1' ? '' : 's'}`],
 ];
 
+// en español, solo se cambia lo que habla de dinero o entradas (el portal no tiene ni monedero ni mesas de pago)
+const ES = {
+  'Golf Cash Battle': BRAND,
+  'Practica el hoyo gratis antes de jugarte las monedas.': 'Practica cualquier hoyo en Mapas antes de una partida.',
+  'Cargando tu saldo…': 'Cargando tu progreso…',
+  'Cancelar emparejamiento y recuperar la entrada': 'Cancelar emparejamiento',
+  'Práctica contra rivales simulados': 'Partida rápida contra 7 rivales', 'Rivales simulados · juega sin riesgo': '8 jugadores · 3 hoyos',
+  'Partida de práctica': 'Partida rápida', 'Sin apuesta': 'Gratis', 'Entrenamiento': 'Partida rápida',
+  '📱 Se guarda en este dispositivo. Entra con tu cuenta para llevarlo a otros.': '📱 Se guarda en este dispositivo.',
+};
+
 function translate(text) {
-  if (LANG !== 'en') return text === 'Golf Cash Battle' ? BRAND : null;
+  if (LANG !== 'en') return Object.hasOwn(ES, text) ? ES[text] : null;
   if (Object.hasOwn(EN, text)) return EN[text];
   for (const [re, to] of EN_PATTERNS) {
     if (!re.test(text)) continue;

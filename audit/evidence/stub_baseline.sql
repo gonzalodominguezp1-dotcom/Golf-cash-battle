@@ -1,0 +1,20 @@
+-- STUB of the Supabase baseline NOT present in the repo (assumptions documented in audit). Audit-only.
+create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;
+create schema auth;
+create table auth.users (id uuid primary key default gen_random_uuid(), email text, is_anonymous boolean default false, email_confirmed_at timestamptz, email_change text);
+create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+grant usage on schema auth to anon, authenticated, service_role;
+grant execute on function auth.uid() to anon, authenticated, service_role;
+create extension if not exists pgcrypto;
+create type public.tx_type as enum ('bonus','deposit','entry','prize','refund','withdrawal');
+create table public.tiers (id text primary key, name text not null, entry_fee numeric not null);
+create table public.app_config (key text primary key, value jsonb not null);
+create table public.profiles (id uuid primary key references auth.users(id), username text);
+create table public.wallets (user_id uuid primary key references auth.users(id), balance numeric not null default 0, updated_at timestamptz default now());
+create table public.transactions (id uuid primary key default gen_random_uuid(), user_id uuid, type public.tx_type, amount numeric, balance_after numeric, note text, match_id uuid, created_at timestamptz default now());
+create table public.matches (id uuid primary key default gen_random_uuid(), entry_fee numeric not null default 0);
+create table public.deposits (id uuid primary key default gen_random_uuid(), user_id uuid, amount numeric, credited_at timestamptz);
+create function public._cfg(p_key text) returns jsonb language sql stable security definer set search_path = '' as $$ select value from public.app_config where key = p_key $$;
+insert into public.tiers values ('practice','Práctica',0),('bronze','Bronce',1),('silver','Plata',5),('gold','Oro',10);
+insert into public.app_config values ('players_per_match','8'),('max_strokes','8'),('holes_per_match','3'),('course_count','5'),('commission','0.1');
+grant usage on schema public to anon, authenticated, service_role;

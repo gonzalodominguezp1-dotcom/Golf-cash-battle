@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="es" data-state="loading">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Boceto del splash</title>
+<!--
+  Boceto estático del splash de Golf Cash Battle (T017). Se abre con doble clic, sin servidor.
+  Estados: ?state=loading (por defecto) | ?state=error | ?state=reduced (fuerza reduced-motion).
+  Capas: ../../../public/splash/{sky,forest,green}.webp. Logo: ../../../public/logo-header.png.
+  El script inline solo lee ?state; en la app real el CSS va en index.html y el JS en public/splash.js.
+
+  Encaje de las capas (WebP de 1280x800):
+  - Horizontal (aspect >= 1): las tres capas con `cover`, centradas.
+  - Vertical (aspect < 1): `cover` dejaría ver solo el ~30 % central (se pierde el green y el bosque).
+    Cada capa se escala a una altura de 60 vh (auto de ancho), anclada abajo y centrada: se ve el green entero
+    y parte del bosque. El cielo prolonga hacia arriba con un degradado del mismo azul que el borde superior
+    de sky.webp, así el logo cae sobre cielo continuo.
+  - Parallax simulado: cada capa se desplaza un poco distinto en X (cielo -6, bosque +10, green +22 px) y la
+    capa de bosque lleva un 4 % más de escala. La versión real mueve estos offsets con dedo/ratón.
+-->
+<style>
+  :root {
+    --bg: #0b0f15;
+    --panel: rgba(11, 15, 21, 0.78);
+    --line: rgba(255, 255, 255, 0.14);
+    --text: #f1f5f9;
+    --text-dim: #cbd5e1;
+    --emerald: #10b981;
+    --emerald-glow: rgba(16, 185, 129, 0.3);
+    --gold: #d4af37;
+    --yellow: #f59e0b;
+    --neg: #ef4444;
+    --sky-top: #5594c5;
+    --lh: 60vh;
+    --display: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --body: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: var(--body); }
+  body { overflow: hidden; }
+
+  #splash {
+    position: fixed; inset: 0; overflow: hidden;
+    background: var(--sky-top); /* mismo azul que el borde superior de sky.webp: sin costura en vertical */
+  }
+
+  /* --- Capas --- */
+  .layer {
+    position: absolute; inset: 0 -48px; /* holgura lateral para el desplazamiento del parallax */
+    background-repeat: no-repeat; background-position: center bottom;
+    background-size: auto var(--lh);
+    pointer-events: none;
+  }
+  .sky    { background-image: url('../../../public/splash/sky.webp');    transform: translateX(-6px); }
+  .forest { background-image: url('../../../public/splash/forest.webp'); transform: translateX(10px) scale(1.04); transform-origin: 50% 100%; }
+  .green  { background-image: url('../../../public/splash/green.webp');  transform: translateX(22px) scale(1.08); transform-origin: 50% 100%; }
+  @media (min-aspect-ratio: 1/1) {
+    :root { --lh: 100vh; }
+    .layer { background-size: cover; background-position: center; }
+  }
+  /* Velo oscuro suave arriba y abajo para dar contraste al logo y al panel de carga */
+  .shade {
+    position: absolute; inset: 0; pointer-events: none;
+    background:
+      linear-gradient(180deg, rgba(8, 14, 24, 0.38) 0%, rgba(8, 14, 24, 0) 34%),
+      linear-gradient(0deg, rgba(8, 14, 24, 0.82) 0%, rgba(8, 14, 24, 0.5) 22%, rgba(8, 14, 24, 0) 46%);
+  }
+
+  /* --- Logo --- */
+  .brand {
+    position: absolute; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 7vh);
+    transform: translateX(-50%); display: grid; justify-items: center; gap: 10px;
+  }
+  .brand img {
+    width: min(46vw, 190px); height: auto; display: block;
+    filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.45)) drop-shadow(0 0 22px rgba(212, 175, 55, 0.35));
+    animation: glint 2.4s ease-in-out infinite; /* 1 pulso cada ~2,4 s (< 2 Hz) */
+  }
+  @keyframes glint {
+    0%, 70%, 100% { filter: drop-shadow(0 6px 18px rgba(0,0,0,.45)) drop-shadow(0 0 18px rgba(212,175,55,.3)); }
+    80% { filter: drop-shadow(0 6px 18px rgba(0,0,0,.45)) drop-shadow(0 0 34px rgba(255,214,102,.8)); }
+  }
+
+  /* --- Pelota con estela de fuego (CSS puro) --- */
+  .ball-wrap {
+    position: absolute; left: 50%; bottom: 24vh; width: 0; height: 0;
+    transform: translateX(-4vw);
+  }
+  .trail {
+    position: absolute; right: 6px; top: -9px; width: 150px; height: 18px;
+    transform-origin: 100% 50%; transform: rotate(-24deg) translateX(-2px);
+    background: linear-gradient(90deg, rgba(245,158,11,0) 0%, rgba(245,158,11,0.55) 40%, rgba(255,120,30,0.9) 78%, rgba(255,230,160,1) 100%);
+    clip-path: polygon(0 50%, 22% 14%, 55% 6%, 100% 0, 100% 100%, 55% 94%, 22% 86%);
+    filter: blur(1.2px) drop-shadow(0 0 8px rgba(255, 140, 40, 0.8));
+    animation: flicker 0.7s ease-in-out infinite alternate;
+  }
+  .trail.t2 { width: 96px; height: 11px; top: -5px; transform: rotate(-32deg) translateX(-2px); opacity: 0.8; animation-duration: 0.5s; }
+  .ball {
+    position: absolute; left: -11px; top: -11px; width: 22px; height: 22px; border-radius: 50%;
+    background: radial-gradient(circle at 34% 30%, #fff 0%, #f4f6f8 45%, #c4ccd6 100%);
+    box-shadow: 0 0 14px rgba(255, 180, 80, 0.85), 0 3px 6px rgba(0, 0, 0, 0.4);
+  }
+  .shadow {
+    position: absolute; left: -12px; top: 14px; width: 26px; height: 7px; border-radius: 50%;
+    background: rgba(0, 0, 0, 0.32); filter: blur(2px);
+  }
+  @keyframes flicker { from { opacity: 0.8; } to { opacity: 1; } }
+
+  /* --- Panel de carga --- */
+  .loader {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 5vh);
+    width: min(100% - 32px, 440px); display: grid; gap: 10px;
+    text-align: center;
+  }
+  .row { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; color: var(--text-dim); }
+  .row .pct { font-family: var(--display); font-weight: 700; font-size: 20px; color: var(--text); font-variant-numeric: tabular-nums; }
+  .bar { height: 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.16); border: 1px solid var(--line); overflow: hidden; }
+  .bar > i {
+    display: block; height: 100%; width: 62%; border-radius: inherit;
+    background: linear-gradient(90deg, var(--emerald), #34d399 60%, #a7f3d0);
+    box-shadow: 0 0 12px var(--emerald-glow);
+    background-size: 200% 100%; animation: sheen 1.6s linear infinite;
+  }
+  @keyframes sheen { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+  .tip {
+    margin: 4px 0 0; min-height: 2.8em; font-size: 14px; line-height: 1.4; color: var(--text-dim);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  }
+  .tip b { color: var(--gold); letter-spacing: 0.08em; margin-right: 4px; }
+
+  /* --- Estado de error --- */
+  .err { display: none; gap: 12px; justify-items: center; }
+  .err h1 { margin: 0; font: 700 18px/1.25 var(--display); }
+  .err p { margin: 0; font-size: 14px; line-height: 1.4; color: var(--text-dim); }
+  .err button {
+    min-height: 48px; min-width: 180px; padding: 0 28px; border: 0; border-radius: 12px; cursor: pointer;
+    font: 700 16px var(--display); color: #04251a; background: linear-gradient(180deg, #34d399, var(--emerald));
+    box-shadow: 0 6px 18px var(--emerald-glow);
+  }
+  .err button:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+  html[data-state="error"] .err { display: grid; }
+  html[data-state="error"] .prog, html[data-state="error"] .tip { display: none; }
+  html[data-state="error"] .trail { opacity: 0.12; animation: none; }
+  html[data-state="error"] .ball { box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4); }
+  html[data-state="error"] .brand img { animation: none; }
+  html[data-state="error"] .bar > i { animation: none; }
+
+  /* --- Reduced motion: todo quieto --- */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+  html[data-state="reduced"] *, html[data-state="reduced"] *::before, html[data-state="reduced"] *::after {
+    animation: none !important; transition: none !important;
+  }
+
+  @media (min-aspect-ratio: 1/1) {
+    .brand { top: 6vh; }
+    .brand img { width: min(18vw, 230px); }
+    .ball-wrap { bottom: 36vh; transform: translateX(-2vw); }
+    .loader { width: 460px; }
+  }
+</style>
+</head>
+<body>
+<main id="splash" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="62" aria-label="Cargando">
+  <div class="layer sky"></div>
+  <div class="layer green"></div>
+  <div class="layer forest"></div> <!-- el bosque va sobre el green: sus árboles se plantan en el suelo -->
+  <div class="shade"></div>
+
+  <div class="brand"><img src="../../../public/logo-header.png" alt="Golf Cash Battle"></div>
+
+  <div class="ball-wrap" aria-hidden="true">
+    <span class="trail"></span><span class="trail t2"></span>
+    <span class="shadow"></span><span class="ball"></span>
+  </div>
+
+  <section class="loader">
+    <div class="prog">
+      <div class="row"><span>Preparando el campo…</span><span class="pct">62 %</span></div>
+      <div class="bar"><i></i></div>
+    </div>
+    <p class="tip"><b>TIP</b>Un golpe suave en el green vale más que uno fuerte.</p>
+    <div class="err" role="alert">
+      <h1>No hemos podido conectar</h1>
+      <p>La carga está tardando demasiado. Revisa tu conexión e inténtalo de nuevo.</p>
+      <button type="button">Reintentar</button>
+    </div>
+  </section>
+</main>
+<script>
+  (function () {
+    var s = new URLSearchParams(location.search).get('state');
+    if (s === 'loading' || s === 'error' || s === 'reduced') document.documentElement.setAttribute('data-state', s);
+    if (s === 'error') {
+      var el = document.getElementById('splash');
+      el.setAttribute('aria-valuenow', '35'); el.setAttribute('aria-label', 'Error de carga');
+    }
+  })();
+</script>
+</body>
+</html>

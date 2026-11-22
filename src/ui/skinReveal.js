@@ -1,5 +1,6 @@
 import './skinReveal.css';
 import { sfx } from '../game/audio.js';
+import { icon, tierIcon } from './icons.js';
 import { ballPreview } from '../game/render/ballPaint.js';
 import { TIERS } from '../progress/skins.js';
 import { rarePatternOf } from '../progress/inventory.js';
@@ -13,15 +14,15 @@ const loadInspector = () => import('./skinInspector.js');
 // de la skin actual; después, «Siguiente»/«Continuar» avanza. La promesa se resuelve al cerrar la cola.
 // La bola es una imagen estática (skinThumbs).
 //
-// Fases (ms): 1 oscurece · 2 haz de luz · 3 la bola se materializa · 4 estallido + sello · 5 datos y botones.
-// Los totales salen de (d): Común 1,5 s · Legendaria 3,2 s · Mítica 4,2 s; el resto, interpolados.
+// Fases (ms): 1 oscurece · 2 el pack se rasga y sus dos mitades salen despedidas · 3 la bola aparece al 20 % y crece al 100 % en 2 s, girando · 4 estallido + sello · 5 datos y botones.
+// La bola empieza justo al acabar la apertura; el resto de fases es igual para todas las rarezas.
 const TIMELINE = {
-  common: [250, 350, 400, 300, 200],
-  uncommon: [300, 450, 500, 400, 250],
-  rare: [400, 550, 650, 450, 250],
-  epic: [450, 700, 800, 500, 300],
-  legendary: [500, 800, 900, 600, 400],
-  mythic: [500, 1100, 1200, 800, 600],
+  common: [150, 380, 2000, 300, 200],
+  uncommon: [150, 380, 2000, 350, 250],
+  rare: [150, 380, 2000, 400, 250],
+  epic: [150, 380, 2000, 500, 300],
+  legendary: [150, 380, 2000, 600, 400],
+  mythic: [150, 380, 2000, 800, 600],
 };
 const REDUCED_MS = 600;
 const PARTICLES = { common: 14, uncommon: 22, rare: 36, epic: 56, legendary: 84, mythic: 120 };
@@ -99,6 +100,38 @@ function burst(canvas, color, count, lifeMul = 1) {
   };
 }
 
+// Explosión de la caja: trozos de madera que salen disparados desde su centro (fuera de pantalla).
+const SHARDS = 28;
+const REVEAL_AT_MS = 320; // la bola empieza mientras los trozos aún vuelan: sin pausa
+function shatter(pack) {
+  const r = pack.getBoundingClientRect();
+  const cx = r.left + r.width / 2;
+  const cy = r.top + r.height / 2;
+  // se quita la puerta entera (no solo se oculta) para que no quede ningún marco
+  pack.closest('.sr-stage')?.remove();
+  // capa en el body: sobrevive al cambio de la puerta a la animación de la bola
+  const layer = document.createElement('div');
+  layer.className = 'sr-shards';
+  layer.setAttribute('aria-hidden', 'true');
+  layer.innerHTML = '<span class="sr-burst"></span>';
+  const reach = Math.max(innerWidth, innerHeight);
+  const pt = () => `${Math.round(Math.random() * 100)}% ${Math.round(Math.random() * 100)}%`;
+  for (let n = 0; n < SHARDS; n++) {
+    const s = document.createElement('span');
+    s.className = 'sr-shard';
+    const w = r.width * (0.16 + Math.random() * 0.22);
+    const h = r.height * (0.16 + Math.random() * 0.22);
+    const a = Math.random() * Math.PI * 2;
+    const far = reach * (0.6 + Math.random() * 0.7);
+    const x = cx + (Math.random() - 0.5) * r.width * 0.8 - w / 2;
+    const y = cy + (Math.random() - 0.5) * r.height * 0.8 - h / 2;
+    s.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px;--tx:${Math.cos(a) * far}px;--ty:${Math.sin(a) * far}px;--rot:${(Math.random() * 2 - 1) * 540}deg;--dl:${Math.round(Math.random() * 60)}ms;clip-path:polygon(${pt()}, ${pt()}, ${pt()}, ${pt()})`;
+    layer.append(s);
+  }
+  document.body.append(layer);
+  return layer;
+}
+
 export function showSkinReveal(skins, { progress = null } = {}) {
   const list = [...(skins ?? [])].sort((a, b) => TIERS[tierKey(a)].order - TIERS[tierKey(b)].order);
   if (!list.length) return Promise.resolve();
@@ -165,12 +198,17 @@ export function showSkinReveal(skins, { progress = null } = {}) {
         <canvas class="sr-fx" aria-hidden="true"></canvas>
         <div class="sr-stage sr-gate">
           ${list.length > 1 ? `<span class="sr-count">${i + 1} / ${list.length}</span>` : ''}
-          <p class="sr-kicker sr-kicker-gate">Recompensa</p>
+          <p class="sr-kicker sr-kicker-gate">¡Recompensa!</p>
           <button type="button" class="sr-orb" aria-label="${calm ? 'Pulsa para abrir' : 'Mantén pulsado para abrir'}">
-            <svg class="sr-orb-ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46" pathLength="100"></circle></svg>
-            <span class="sr-orb-core"></span>
+            <span class="sr-pack" aria-hidden="true">
+              <span class="sr-pack-window">
+                <span class="sr-pack-fill"></span>
+                <span class="sr-pack-q">?</span>
+              </span>
+              <span class="sr-pack-bar"><i></i></span>
+            </span>
           </button>
-          <p class="sr-hint">${calm ? 'Pulsa para abrir' : 'Mantén pulsado para abrir'}</p>
+          <p class="sr-hint">${calm ? '¡Pulsa para abrir!' : '¡Mantén pulsado para abrir!'}</p>
         </div>`;
       const orb = root.querySelector('.sr-orb');
       let p = 0;
@@ -189,7 +227,11 @@ export function showSkinReveal(skins, { progress = null } = {}) {
         opened = true;
         stopGate();
         buzz([30, 40, 80]);
-        reveal(i);
+        if (calm) return reveal(i);
+        // la caja explota en trozos y, cuando acaban de salir, empieza la bola
+        const layer = shatter(root.querySelector('.sr-pack'));
+        setTimeout(() => reveal(i), REVEAL_AT_MS);
+        setTimeout(() => layer.remove(), 1000);
       };
       const frame = (now) => {
         const dt = Math.min(0.05, (now - last) / 1000);
@@ -235,7 +277,6 @@ export function showSkinReveal(skins, { progress = null } = {}) {
       const tier = TIERS[k];
       const inst = progress?.instance(skin.id) ?? null;
       const rare = inst ? rarePatternOf(skin, inst.seed) : null;
-      const mythic = k === 'mythic';
       const calm = reduced();
       const dur = calm ? [0, 0, 0, REDUCED_MS, 0] : TIMELINE[k];
       const start = dur.map((_, n) => dur.slice(0, n).reduce((a, b) => a + b, 0));
@@ -247,21 +288,18 @@ export function showSkinReveal(skins, { progress = null } = {}) {
       root.style.cssText = `${css};--c:${tier.color};--sk-a:${skin.palette?.base ?? tier.color};--sk-b:${skin.palette?.accent ?? tier.color};--k:${tier.order}`;
       root.innerHTML = `
         <div class="sr-vignette"></div>
-        ${mythic ? '<div class="sr-beam sr-beam-gold"></div><div class="sr-beam sr-beam-crimson"></div>' : '<div class="sr-beam"></div>'}
         <div class="sr-rays" aria-hidden="true"></div>
-        <div class="sr-ring" aria-hidden="true"></div><div class="sr-ring sr-ring-2" aria-hidden="true"></div><div class="sr-ring sr-ring-3" aria-hidden="true"></div>
         <canvas class="sr-fx" aria-hidden="true"></canvas>
         <div class="sr-stage">
           ${list.length > 1 ? `<span class="sr-count">${i + 1} / ${list.length}</span>` : ''}
           <p class="sr-kicker">${tier.order >= 3 ? `¡${esc(tier.name)}!` : tier.order >= 2 ? '¡Skin rara!' : '¡Skin desbloqueada!'}</p>
-          <div class="sr-seal"><span class="sr-seal-ico">${tier.icon}</span>${esc(tier.name)}</div>
+          <div class="sr-seal"><span class="sr-seal-ico">${tierIcon(k)}</span>${esc(tier.name)}</div>
           <div class="sr-ball">
             <img src="${ballPreview(skin, 288)}" width="384" height="384" alt="" draggable="false">
-            <span class="sr-scan"></span>
           </div>
           <div class="sr-info">
             <h2 class="sr-name">${esc(skin.name)}</h2>
-            ${inst ? `<p class="sr-meta"><span>Patrón #${String(inst.seed).padStart(3, '0')}</span>${rare ? '<span class="sr-rare">✦ Patrón raro</span>' : ''}${inst.counter?.enabled ? '<span class="sr-rare">Marcador</span>' : ''}</p>` : ''}
+            ${inst ? `<p class="sr-meta"><span>Patrón #${String(inst.seed).padStart(3, '0')}</span>${rare ? `<span class="sr-rare">${icon('sparkle')} Patrón raro</span>` : ''}${inst.counter?.enabled ? '<span class="sr-rare">Marcador</span>' : ''}</p>` : ''}
             <div class="sr-actions">
               ${progress ? '<button type="button" class="primary sr-equip">Equipar</button>' : ''}
               <button type="button" class="ghost sr-next">${last ? 'Continuar' : 'Siguiente'}</button>
@@ -281,7 +319,7 @@ export function showSkinReveal(skins, { progress = null } = {}) {
         if (!equipBtn) return;
         const isEq = progress.skin.id === skin.id;
         equipBtn.disabled = isEq;
-        equipBtn.textContent = isEq ? '✓ Equipada' : 'Equipar';
+        equipBtn.innerHTML = isEq ? `${icon('check')}Equipada` : 'Equipar';
       };
       syncEquip();
       equipBtn?.addEventListener('click', () => {
@@ -292,16 +330,20 @@ export function showSkinReveal(skins, { progress = null } = {}) {
       });
       nextBtn.addEventListener('click', () => (last ? finish() : play(i + 1)));
 
-      // Al terminar la secuencia, la imagen estática se sustituye por la bola en vivo (calidad máxima, girando 360°).
+      // Bola 3D en vivo, sin suelo ni reflejo: arranca con la escala de .sr-ball (20 % → 100 %) y gira sobre sí misma.
+      let mounting = false;
+      let boost = false; // giro al doble mientras la bola crece
       const mountLive = () => {
-        if (inspector || calm) return;
+        if (inspector || mounting || calm) return;
+        mounting = true;
         const holder = document.createElement('div');
         holder.className = 'sr-live';
         root.querySelector('.sr-ball').append(holder);
         loadInspector().then(({ createSkinInspector }) => {
           if (!holder.isConnected) return;
-          const api = createSkinInspector(holder, { skin, instance: inst ?? undefined, mode: 'panel', bare: true, autoSpin: true, quality: 'high' });
+          const api = createSkinInspector(holder, { skin, instance: inst ?? undefined, mode: 'panel', bare: true, autoSpin: true, noFloor: true, noEnv: true, quality: 'high' });
           inspector = { api, el: holder };
+          api.setSpin(boost ? 2 : 1);
           root.classList.add('sr-live-on');
         }).catch(() => holder.remove());
       };
@@ -328,6 +370,10 @@ export function showSkinReveal(skins, { progress = null } = {}) {
 
       if (!calm) {
         timers.push(...sound(skin, 'charge'));
+        mountLive(); // arranca ya: la bola gira desde que aparece (CSS la muestra en start[2])
+        // al crecer, el giro va al doble; al llegar al 100 % vuelve a la velocidad normal (misma dirección)
+        timers.push(setTimeout(() => { boost = true; inspector?.api?.setSpin(2); }, start[2]));
+        timers.push(setTimeout(() => { boost = false; inspector?.api?.setSpin(1); }, start[2] + dur[2]));
         timers.push(setTimeout(() => {
           const b = img.getBoundingClientRect();
           const c = canvas.getBoundingClientRect();

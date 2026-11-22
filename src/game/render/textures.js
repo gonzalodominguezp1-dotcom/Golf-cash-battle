@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { quality } from './quality.js';
+import { cached } from './textureCache.js';
 
 // Texturas procedurales en canvas: no hay que descargar imágenes.
 function canvasTexture(size, draw, repeat = true) {
@@ -48,6 +49,10 @@ function withNormals(map, strength) {
 }
 
 export function grassMaps([a, b]) {
+  return cached('grassMaps', [[a, b]], 4, () => _grassMaps([a, b]));
+}
+
+function _grassMaps([a, b]) {
   return withNormals(grassTexture([a, b]), 1.6);
 }
 
@@ -95,6 +100,10 @@ export function grassTexture([a, b]) {
 
 /** Suelo de la cámara de magma: basalto con losas, grietas y alguna veta encendida. */
 export function rockFloorMaps([a, b]) {
+  return cached('rockFloorMaps', [[a, b]], 4, () => _rockFloorMaps([a, b]));
+}
+
+function _rockFloorMaps([a, b]) {
   return withNormals(rockFloorTexture([a, b]), 2.6);
 }
 
@@ -138,6 +147,10 @@ export function rockFloorTexture([a, b]) {
 }
 
 export function woodMaps() {
+  return cached('woodMaps', [], 4, () => _woodMaps());
+}
+
+function _woodMaps() {
   return withNormals(woodTexture(), 2.4);
 }
 
@@ -242,6 +255,10 @@ function normalMapFromHeight(h, n, strength) {
  * que la luz rasante marca los surcos y los granos de verdad.
  */
 export function sandMaps(snow = false) {
+  return cached('sandMaps', [snow], 8, () => _sandMaps(snow));
+}
+
+function _sandMaps(snow = false) {
   const n = detailSize(256);
   const k = n / 256;
   const r = rand(11);
@@ -362,6 +379,10 @@ export function sandMaps(snow = false) {
 }
 
 export function dirtMaps(neon = false, rock = false) {
+  return cached('dirtMaps', [neon, rock], 4, () => _dirtMaps(neon, rock));
+}
+
+function _dirtMaps(neon = false, rock = false) {
   return withNormals(dirtTexture(neon, rock), 3);
 }
 
@@ -421,23 +442,12 @@ export function dirtTexture(neon = false, rock = false) {
   });
 }
 
-export function ballTexture(color = '#ff4d4d') {
-  return canvasTexture(
-    256,
-    (g, n) => {
-      g.fillStyle = '#ffffff';
-      g.fillRect(0, 0, n, n);
-      g.fillStyle = color;
-      g.fillRect(0, n * 0.44, n, n * 0.12);
-      g.fillStyle = 'rgba(0,0,0,0.06)';
-      for (let y = 8; y < n; y += 14) for (let x = (y / 14) % 2 ? 7 : 0; x < n; x += 14) g.fillRect(x, y, 3, 3);
-    },
-    false,
-  );
-}
-
 /** Oscuridad del fondo de un agujero: casi transparente arriba y negra abajo. */
 export function abyssTexture() {
+  return cached('abyssTexture', [], 4, () => _abyssTexture());
+}
+
+function _abyssTexture() {
   return canvasTexture(64, (g, n) => {
     const grd = g.createLinearGradient(0, 0, 0, n);
     grd.addColorStop(0, 'rgba(0,0,0,0.35)');
@@ -449,6 +459,10 @@ export function abyssTexture() {
 }
 
 export function stripeTexture(a, b) {
+  return cached('stripeTexture', [a, b], 4, () => _stripeTexture(a, b));
+}
+
+function _stripeTexture(a, b) {
   return canvasTexture(64, (g, n) => {
     g.fillStyle = a;
     g.fillRect(0, 0, n, n);
@@ -469,6 +483,10 @@ export function stripeTexture(a, b) {
  * El brillo lo pone el material (poca rugosidad); aquí solo el dibujo.
  */
 export function iceTexture() {
+  return cached('iceTexture', [], 4, () => _iceTexture());
+}
+
+function _iceTexture() {
   return canvasTexture(detailSize(256), (g, n) => {
     const r = rand(29);
     g.fillStyle = '#9fd6ee';
@@ -525,6 +543,10 @@ export function iceTexture() {
 }
 
 export function softDotTexture() {
+  return cached('softDotTexture', [], 4, () => _softDotTexture());
+}
+
+function _softDotTexture() {
   return canvasTexture(
     64,
     (g, n) => {
@@ -539,6 +561,10 @@ export function softDotTexture() {
 }
 
 export function chevronTexture(bg = '#1d3b8f', fg = '#5fd0ff') {
+  return cached('chevronTexture', [bg, fg], 4, () => _chevronTexture(bg, fg));
+}
+
+function _chevronTexture(bg = '#1d3b8f', fg = '#5fd0ff') {
   return canvasTexture(128, (g, n) => {
     g.fillStyle = bg;
     g.fillRect(0, 0, n, n);
@@ -560,6 +586,10 @@ export function chevronTexture(bg = '#1d3b8f', fg = '#5fd0ff') {
 
 /** Degradado de luz a sombra para que la pendiente parezca una cuesta. */
 export function slopeShadeTexture() {
+  return cached('slopeShadeTexture', [], 4, () => _slopeShadeTexture());
+}
+
+function _slopeShadeTexture() {
   const tex = canvasTexture(64, (g, n) => {
     const grad = g.createLinearGradient(0, 0, 0, n);
     grad.addColorStop(0, 'rgba(0,0,0,0.4)');
@@ -571,6 +601,10 @@ export function slopeShadeTexture() {
 }
 
 export function crateTexture() {
+  return cached('crateTexture', [], 4, () => _crateTexture());
+}
+
+function _crateTexture() {
   return canvasTexture(128, (g, n) => {
     g.fillStyle = '#ffcc33';
     g.fillRect(0, 0, n, n);

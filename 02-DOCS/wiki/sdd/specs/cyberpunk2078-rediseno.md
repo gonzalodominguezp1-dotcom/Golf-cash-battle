@@ -1,6 +1,6 @@
 ---
 name: cyberpunk2078-rediseno
-status: draft
+status: done
 supersedes: 02-DOCS/wiki/sdd/specs/cyberpunk2078.md
 ---
 
@@ -20,6 +20,7 @@ Se pide un mapa más complejo **sin aumentar el número de golpes** para meter l
 ## Decisiones cerradas
 
 1. **Alcance.** Solo el hoyo 15. Los demás hoyos neón no cambian (ni su aspecto ni su entorno).
+   > **Derogado (2026-11-19, decisión del usuario):** la cláusula «Los demás hoyos neón no cambian» ya no rige. Se rediseña el entorno (solo entorno, sin agua, pista y atracciones fuera) de `neon`, `neonPink` y `cyber2078`. Ver `02-DOCS/wiki/ftd/assets-entorno-1a1.md`, apartado «Neón / Cyberpunk (N0–NF)».
 2. **Interactividad.** Visual reactiva y obstáculos con primitivas existentes. Los efectos reaccionan a la bola, pero **no alimentan la simulación**: la física y la sincronía de servidor no cambian.
 3. **Portal obligatorio.** El portal es el único acceso al looping. No se puede saltar.
 

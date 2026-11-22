@@ -47,13 +47,14 @@ export async function connectSupabase() {
     matches: new SupabaseMatchService(db, wallet),
     tournaments: new TournamentService(db, wallet),
     parties: new PartyService(db),
+    // latencia para el HUD: ida y vuelta de la petición más pequeña del servidor
+    async ping() {
+      const t0 = performance.now();
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/health`, { headers: { apikey: SUPABASE_KEY }, cache: 'no-store' });
+      if (res.status >= 500) throw new Error('ping');
+      return performance.now() - t0;
+    },
   };
 }
 
-/** Pasa los errores de las funciones SQL (raise exception 'x') a algo legible. */
-export function rpcError(error) {
-  const code = /^[a-z_]+$/.test(error?.message ?? '') ? error.message : 'unknown';
-  const e = new Error(code);
-  e.code = code;
-  return e;
-}
+export { rpcError } from './rpcError.js';

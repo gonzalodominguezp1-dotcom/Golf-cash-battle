@@ -4,7 +4,7 @@ import { buildCourse, collarGeometry } from './course.js';
 import { roughTone } from './textures.js';
 import { BALL_R, CUP_R } from '../physics.js';
 import { THEMES } from '../themes.js';
-import { groundHeight, hasRelief } from './terrain.js';
+import { groundHeight } from './terrain.js';
 import { STATIC_COURSE_PREVIEWS, getCourseDistance } from './coursePreviewStatic.js';
 
 // La parte sin three.js (catálogo de WebP y distancia) vive en coursePreviewStatic.js.

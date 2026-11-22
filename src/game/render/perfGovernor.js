@@ -35,13 +35,15 @@ export const GOVERNOR = Object.freeze({
   GAP_MS: 1000, // huecos mayores (pestaña oculta, pausa) no cuentan ni miden
 });
 
-export function skinlabRequested() {
+export function isSkinLabRequested() {
   try {
     return typeof location !== 'undefined' && new URLSearchParams(location.search).get('skinlab') === '1';
   } catch {
     return false;
   }
 }
+
+export const skinlabRequested = isSkinLabRequested;
 
 function ceilingIndex() {
   const i = SKIN_FX_LEVELS.indexOf(quality().skinFx);

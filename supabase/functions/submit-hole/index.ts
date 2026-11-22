@@ -10,6 +10,8 @@
 // Además guarda las señales del antibots (cuánto tarda en tirar, si arrastra
 // el dedo) y recalcula la nota de riesgo del jugador antes de apuntar el hoyo.
 //
+// Hasta 20 golpes: los hoyos largos tienen su propio máximo (replayHole lo comprueba).
+//
 // Las carpetas game/ y antibot/ son copias de src (pnpm run sync:functions).
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { COURSES, TIEBREAK_COURSE } from './game/courses.js';
@@ -29,7 +31,7 @@ Deno.serve(async (req) => {
 
   const body = await req.json().catch(() => null);
   const { tournament, hole, shots, aim, end } = body ?? {};
-  if (typeof tournament !== 'string' || !Number.isInteger(hole) || hole < 0 || !Array.isArray(shots) || shots.length > 8 ||
+  if (typeof tournament !== 'string' || !Number.isInteger(hole) || hole < 0 || !Array.isArray(shots) || shots.length > 20 ||
       (end != null && !Number.isInteger(end))) {
     return json({ error: 'bad_request' }, 400);
   }
@@ -54,7 +56,7 @@ Deno.serve(async (req) => {
 
   // el antibots no debe impedir apuntar el hoyo si falla
   try {
-    await checkRisk(admin, auth.user.id, tournament, hole, courseIndex, r, Array.isArray(aim) ? aim.slice(0, 8) : []);
+    await checkRisk(admin, auth.user.id, tournament, hole, courseIndex, r, Array.isArray(aim) ? aim.slice(0, 20) : []);
   } catch (e) {
     console.error('antibot', e);
   }

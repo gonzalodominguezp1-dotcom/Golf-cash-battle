@@ -1,0 +1,65 @@
+[
+ {
+  "severity": "moderate",
+  "module": "esbuild",
+  "range": "<=0.24.2",
+  "ghsa": "GHSA-67mh-4wv8-2f99",
+  "title": "esbuild enables any website to send any requests to the development server and read the response"
+ },
+ {
+  "severity": "moderate",
+  "module": "vite",
+  "range": "<=6.4.1",
+  "ghsa": "GHSA-4w7w-66w2-5vf9",
+  "title": "Vite Vulnerable to Path Traversal in Optimized Deps `.map` Handling"
+ },
+ {
+  "severity": "moderate",
+  "module": "vite",
+  "range": "<=6.4.2",
+  "ghsa": "GHSA-v6wh-96g9-6wx3",
+  "title": "launch-editor: NTLMv2 hash disclosure via UNC path handling on Windows"
+ },
+ {
+  "severity": "moderate",
+  "module": "vite",
+  "range": "<=6.4.3",
+  "ghsa": "GHSA-698v-4r3x-3vcv",
+  "title": "launch-editor: escapeCmdArgs() omits % escaping on Windows"
+ },
+ {
+  "severity": "moderate",
+  "module": "vite",
+  "range": "<=6.4.3",
+  "ghsa": "GHSA-r825-w8mm-5pxw",
+  "title": "launch-editor: Editor CLI flag misinterpretation causing arbitrary command execution for some editors"
+ },
+ {
+  "severity": "high",
+  "module": "vite",
+  "range": "<=6.4.3",
+  "ghsa": "GHSA-587h-7wmj-h5pm",
+  "title": "launch-editor: `fs.existsSync()` existence check can be bypassed on Windows"
+ },
+ {
+  "severity": "low",
+  "module": "vite",
+  "range": "<=6.4.3",
+  "ghsa": "GHSA-9jrq-w75r-8gcw",
+  "title": "Vite: Cross origin script execution through Vite custom middleware"
+ },
+ {
+  "severity": "moderate",
+  "module": "vite",
+  "range": "<=6.4.3",
+  "ghsa": "GHSA-rq7h-c2jc-7f22",
+  "title": "Vite: Files outside `server.fs.allow` could be served when project paths match system paths on non-Windows machine"
+ },
+ {
+  "severity": "moderate",
+  "module": "vite",
+  "range": "<=6.4.2",
+  "ghsa": "GHSA-fx2h-pf6j-xcff",
+  "title": "vite: `server.fs.deny` bypass on Windows alternate paths"
+ }
+]

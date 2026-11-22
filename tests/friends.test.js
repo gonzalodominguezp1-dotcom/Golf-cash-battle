@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { addedMessage, cleanFriendName, friendMessage } from '../src/account/friendRules.js';
+import { addedMessage, cleanFriendName, friendMessage, sortOnlineFirst } from '../src/account/friendRules.js';
 
 test('el nombre de amigo se limpia y solo vale 3-16 letras, números o _', () => {
   assert.equal(cleanFriendName('  Gonzalo_7 '), 'Gonzalo_7');
@@ -22,4 +22,15 @@ test('cada error del servidor tiene un texto y lo desconocido no se filtra', () 
 test('el aviso distingue petición enviada de amistad directa', () => {
   assert.equal(addedMessage('pending', 'Ana'), 'Petición enviada a Ana.');
   assert.equal(addedMessage('accepted', 'Ana'), 'Ya eres amigo de Ana.');
+});
+
+test('los amigos conectados salen primero y el resto conserva su orden', () => {
+  const list = [
+    { name: 'Ana', online: false },
+    { name: 'Luis', online: true },
+    { name: 'Eva' },
+    { name: 'Marta', online: true },
+  ];
+  assert.deepEqual(sortOnlineFirst(list).map((f) => f.name), ['Luis', 'Marta', 'Ana', 'Eva']);
+  assert.deepEqual(sortOnlineFirst(), []);
 });

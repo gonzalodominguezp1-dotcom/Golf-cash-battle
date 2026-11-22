@@ -1,7 +1,7 @@
 import { ballPreview } from '../game/render/ballPaint.js';
 import { skinById } from '../progress/skins.js';
 
-// Miniaturas estáticas de skins (tarjetas, lobby, desafíos, resultados y reveal), como las vistas
+// Miniaturas estáticas de skins (tarjetas, lobby, logros, resultados y reveal), como las vistas
 // previas WebP del selector de mapas: la interfaz solo pinta <img>. Este módulo NO importa three.js.
 //   warmThumbs()                        -> carga la caché persistente (IndexedDB) en memoria, una vez
 //   thumbCached(skin, instance, o)      -> URL ya disponible (síncrono) o null
@@ -174,7 +174,7 @@ export function upgradeImg(img, skin, instance, { size = 76, priority = false, h
 }
 
 /**
- * Mejora cualquier `<img data-skin-id>` que se añada bajo `root` (lobby, desafíos, resultados...).
+ * Mejora cualquier `<img data-skin-id>` que se añada bajo `root` (lobby, logros, resultados...).
  * Solo las skins con instancia (desbloqueadas): las bloqueadas se quedan con el marcador 2D.
  */
 export function installThumbObserver(root, instOf = () => null) {

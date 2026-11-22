@@ -30,6 +30,7 @@ export const PATTERN_IDS = [
   'anima_errante',
   'cronometro_laton',
   'abyssal_tide',
+  'huevo_mio',
 ];
 
 function stub(id) {
@@ -55,6 +56,3 @@ export function getPattern(id) {
   return (id && REGISTRY.get(id)) || null;
 }
 
-export function registerPattern(id, pattern) {
-  REGISTRY.set(id, { id, ...stub(id), ...pattern });
-}

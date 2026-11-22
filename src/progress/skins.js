@@ -1,5 +1,5 @@
 // Skins de bola: solo cambian la apariencia, nunca la física ni el resultado.
-// unlock: { level } por nivel, { wins } por victorias o { challenge } por desafío.
+// unlock: { level } por nivel, { wins } por victorias o { challenge } por logro.
 
 // Tiers de rareza. `color` es el marco del tier.
 export const TIERS = {
@@ -13,8 +13,6 @@ export const TIERS = {
 
 /** Alias retrocompatible: antes eran Bronce…Esmeralda, ahora son los tiers. */
 export const RARITIES = TIERS;
-
-export const TIER_IDS = Object.keys(TIERS);
 
 // Acabado, efectos y sonido por defecto de cada tier (el «upgrade base»).
 const TIER_FINISH = {
@@ -85,7 +83,9 @@ const RAW_SKINS = [
   { id: 'anima_errante', name: 'Ánima Errante', tier: 'mythic', sfx: 'holo', collection: 'cosmos', lore: 'Ha recorrido tantos campos que ya no recuerda el suyo.', pattern: 'spirit', shader: 'anima_errante', base: '#e9e6ff', accent: '#8a7dff', secondary: '#0de0f8', shimmer: '#cbbcff', trail: '#8a7dff', finish: { roughness: 0.4, metalness: 0, clearcoat: 0.5, clearcoatRoughness: 0.2, iridescence: 0.15, envMapIntensity: 0.7, dimples: 0.35 }, fx: { roll: null, maxParticles: 20, trailRate: 5 }, unlock: { challenge: 'matches150' } },
   { id: 'cronometro_laton', name: 'Cronómetro de Latón', tier: 'epic', sfx: 'steel', collection: 'oro', lore: 'Nunca llega tarde al hoyo.', pattern: 'clockwork', shader: 'cronometro_laton', base: '#d4af37', accent: '#c46a2b', secondary: '#3d1f0f', shimmer: '#fff3b0', trail: '#d4af37', finish: { roughness: 0.28, metalness: 0.9, clearcoat: 0.2, clearcoatRoughness: 0.2, iridescence: 0, envMapIntensity: 1.2, dimples: 0.7 }, fx: { maxParticles: 16, trailRate: 5 }, unlock: { challenge: 'matches50' } },
   { id: 'abyssal_tide', name: 'Marea Abisal', tier: 'mythic', sfx: 'ice', collection: 'elementos', lore: 'Trae consigo la luz del fondo del mar.', pattern: 'abyss_veins', shader: 'abyssal_tide', base: '#0b1e36', accent: '#19e3d0', secondary: '#4b6bff', shimmer: '#7dffd8', trail: '#19e3d0', finish: { roughness: 0.06, metalness: 0.15, clearcoat: 1, clearcoatRoughness: 0.03, iridescence: 0.35, envMapIntensity: 1.3, dimples: 0.8 }, fx: { roll: null, maxParticles: 20, trailRate: 6 }, unlock: { challenge: 'birdies50' } },
-  // Prestigio (por nivel) y ranking de victorias: se consiguen con los desafíos 'prestige*' y 'rank*'.
+  // Solo por código (unlock: { code: true }): el código está en codes.js. Se guarda como instancia en el inventario.
+  { id: 'huevo_mio', name: 'El Huevo Mío', tier: 'legendary', sfx: 'generic', collection: 'secretas', lore: 'No se compra, no se gana: se canjea. Y tiene vida propia.', pattern: 'flesh', shader: 'huevo_mio', base: '#c68a78', accent: '#9a4542', secondary: '#4b2721', shimmer: '#f3c7b6', trail: '#c98a7c', finish: { preset: 'pearl', roughness: 0.42, metalness: 0, clearcoat: 0.12, clearcoatRoughness: 0.45, iridescence: 0, envMapIntensity: 0.55, dimples: 0.04 }, fx: { roll: null }, decor: { hair: { medium: 200, high: 340, color: '#0c0807' } }, unlock: { code: true } },
+  // Prestigio (por nivel) y ranking de victorias: se consiguen con los logros 'prestige*' y 'rank*'.
   { id: 'prestigio_bronce', name: 'Aro de Bronce', tier: 'rare', sfx: 'steel', collection: 'prestigio', lore: 'Veinticinco niveles de oficio.', pattern: 'gem', base: '#f1d3b0', accent: '#cd7f32', trail: '#ffb067', unlock: { challenge: 'prestige25' } },
   { id: 'prestigio_plata', name: 'Aro de Plata', tier: 'epic', sfx: 'steel', collection: 'prestigio', lore: 'Cincuenta niveles y aún afina el golpe.', pattern: 'gem', base: '#eef2f7', accent: '#9aa8b8', trail: '#ffffff', unlock: { challenge: 'prestige50' } },
   { id: 'prestigio_oro', name: 'Aro de Oro', tier: 'legendary', sfx: 'gold', collection: 'prestigio', lore: 'Setenta y cinco niveles de campo.', pattern: 'stars', base: '#ffe28a', accent: '#d99a00', secondary: '#fff7d1', trail: '#ffc83d', unlock: { challenge: 'prestige75' } },
@@ -126,7 +126,8 @@ for (const id of PORTAL_DROPS) PORTAL_SKINS[id] = { ...PORTAL_SKINS[id], collect
 // Bola de maestría: se gana al tener todas las que se consiguen jugando (no cuenta las exclusivas).
 const MASTERY_SKIN = { id: 'maestria_oro_diamante', name: 'Maestría Oro y Diamante', tier: 'mythic', sfx: 'gold', collection: 'maestría', lore: 'Solo para quien lo ha conseguido todo.', pattern: 'gem', base: '#ffd86b', accent: '#e0fbff', secondary: '#ffffff', shimmer: '#ffffff', trail: '#ffe9a8', finish: { roughness: 0.08, metalness: 1, clearcoat: 0.7, clearcoatRoughness: 0.04, iridescence: 0.35, envMapIntensity: 1.4, dimples: 0.2 }, unlock: { challenge: 'mastery' } };
 
-export const SKINS = [...RAW_SKINS, ...(PORTAL ? [MASTERY_SKIN] : [])].map((d) => defineSkin(PORTAL && PORTAL_SKINS[d.id] ? { ...d, ...PORTAL_SKINS[d.id] } : d));
+// en portales no entran las skins secretas de código (bromas internas, no aptas para un portal familiar)
+export const SKINS = [...RAW_SKINS.filter((d) => !(PORTAL && d.unlock?.code)), ...(PORTAL ? [MASTERY_SKIN] : [])].map((d) => defineSkin(PORTAL && PORTAL_SKINS[d.id] ? { ...d, ...PORTAL_SKINS[d.id] } : d));
 export const DROP_SKINS = SKINS.filter((s) => s.unlock?.drop);
 export const isMasterySkin = (s) => s.unlock?.challenge === 'mastery';
 /** Skins que cuentan para la maestría: las que se ganan jugando. */
