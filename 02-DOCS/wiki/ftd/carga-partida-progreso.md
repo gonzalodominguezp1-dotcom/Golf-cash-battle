@@ -50,3 +50,11 @@ Checklist de producción (tras fusionar y desplegar, con `?perf=1&perfcourses=3,
 5. Sin pantalla negra al entrar; la intro se ve entera; Bajo y Alto iguales; calidad a mitad de hoyo; Modo Libre, desempate `#hoyo3-empate` y volcán bien; hoyos 2 y siguientes arrancan bien.
 
 Hallazgo no tratado: `vercel.json` usa `npx -y pnpm@…` en `installCommand` y `buildCommand`. CLAUDE.md prohíbe `npx`. Pendiente de decisión del usuario.
+
+## F2 — Hoyo 1 preparado durante la sala (implementada, sin verificar en navegador)
+Verificación local: `pnpm test` 1275 pass / 0 fail; `pnpm run build` OK. Sin commit ni push.
+- Archivos: `src/game/gamePreloader.js`, `src/game/loadingFlags.js`, `src/game/GolfGame.js` (`prepare`, `attach`, `setHandlers`, `#ensureInput`, camino rápido en `load`), `src/game/warmupRules.js` (`keyOf`), `src/main.js`, `tests/game-preloader.test.js` (22 tests).
+- Interruptores: `WARM_IN_ROOM` (o `?warm=0`) apaga la preparación en sala; `WARM_LIVE = false` deja vivo sin preparar; `WARM_GPU` (F1c) apaga el calentamiento de GPU.
+- Decisiones del usuario aplicadas: hold práctica 2000 ms, vivo 1000 ms; hub vuelve con su 3D y se descarta la preparación; vivo apagado; sala e intro sin cambios; «Reiniciar» en práctica intacto.
+- Cambio de comportamiento a revisar: la preparación libera la escena 3D del hub al empezar la sala, así que al volver al hub con la búsqueda activa la escena se recrea (se ve primero la imagen fija). Es la consecuencia de liberar el hub; el usuario lo aceptó como «igual que ahora» pero conviene confirmarlo.
+- Pendiente de medición en producción (checklist del informe de F2: práctica con `?perf=1&perfcourses=3,6,12`, `warm:take:hit`, `post_sala_ms`, tirones en la sala, Esc/Espacio durante la sala, revancha, calidad a mitad de búsqueda, giro de móvil, `?warm=0` para comparar).
