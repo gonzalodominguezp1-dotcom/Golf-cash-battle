@@ -54,7 +54,6 @@ function baseCtx(env, router) {
     icon: (n) => `<svg data-icon="${n}"></svg>`,
     notify: () => {},
     sfx: {},
-    legacy: {},
   };
 }
 

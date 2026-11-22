@@ -29,7 +29,7 @@ import { showSkinReveal } from './ui/skinReveal.js';
 import { installThumbObserver, thumbCached, upgradeImg, warmThumbs } from './ui/skinThumbs.js';
 import { mountAuth } from './ui/authScreen.js';
 import { LiveRoom } from './match/LiveRoom.js';
-import { buildRoster, humanLeaders, liveStandings, seededRng } from './match/liveRules.js';
+import { buildRoster, humanLeaders, liveStandings, roundComplete, roundReady, seededRng } from './match/liveRules.js';
 import { notify } from './ui/notifyPopup.js';
 import { createNotifier } from './ui/notifier.js';
 import { createPartyWatch } from './match/partyWatch.js';
@@ -52,8 +52,15 @@ import { createNavigator } from './screens/navigate.js';
 import { createGoHome } from './screens/playLifecycle.js';
 import { createThumbs } from './screens/skinThumbsHook.js';
 import { getQuality } from './game/render/quality.js';
+import { PERF, fitCourses, forcedCourses, perf } from './game/perfProbe.js';
+import { PREFETCH_DECISION, shouldIdlePrefetch } from './game/prefetchRules.js';
 import { isSkinLabRequested } from './game/render/perfGovernor.js';
 import { createBoot, createHubPreloader, trackProgress, waitPainted } from './ui/splashBridge.js';
+import { createGamePreloader, makeHiddenHolder } from './game/gamePreloader.js';
+import { roomDelays } from './game/roomTiming.js';
+import { HOLD_LIVE_MS, HOLD_PRACTICE_MS, NEXT_HOLE_PREBUILD, PERSISTENT_LIVE, PERSISTENT_RENDERER, ROOM_MIN_MS, WARM_IN_ROOM, WARM_LIVE, urlOff } from './game/loadingFlags.js';
+import { keyOf, withCap } from './game/warmupRules.js';
+import { NEXT_WAIT_MS, canReuseGame, nextToPrepare } from './game/holeWindowRules.js';
 import { mountNetStats } from './ui/netStats.js';
 import { startVersionCheck } from './ui/versionCheck.js';
 import { lobbyButton } from './screens/components.js';
@@ -70,16 +77,46 @@ const progress = new Progress();
 warmThumbs();
 // three.js (partida, inspector 3D) se carga solo cuando hace falta: lobby y pantalla de skins no lo pagan
 // la partida usa su propio renderer: se libera la escena del hub precargada (T026 la recreará si la necesita)
-// el motor de partida (GolfGame y sus módulos, three incluido) se pide una sola vez: la portada lo precarga
-// y, si ya llegó, JUGAR lo usa al instante. Un fallo de red libera la promesa para reintentar.
-let gameMod = null;
-const importGame = () => (gameMod ??= import('./game/GolfGame.js').catch((err) => { gameMod = null; throw err; }));
 // ahorro de datos o red lenta: la portada no descarga el motor por adelantado
 const lowData = () => {
   const c = navigator.connection;
   return !!c && (c.saveData === true || /^(slow-2g|2g|3g)$/.test(c.effectiveType || ''));
 };
-const loadGolfGame = () => { hubPreloader.release(); return importGame().then((m) => m.GolfGame); };
+let golfGameP = null;
+const importGolfGame = () => (golfGameP ??= (() => {
+  perf.mark('import:start');
+  return import('./game/GolfGame.js').then((m) => { perf.mark('import:end'); return m.GolfGame; });
+})().catch((e) => { golfGameP = null; throw e; }));
+const loadGolfGame = () => {
+  perf.mark('hub:release');
+  hubPreloader.release();
+  return importGolfGame();
+};
+// F2: el hoyo 1 se prepara oculto durante la sala (src/game/gamePreloader.js). WARM_IN_ROOM = false o ?warm=0 lo apagan.
+// Antes de crear su renderer libera la partida y la escena del hub: como mucho un contexto WebGL de partida.
+const gamePreloader = createGamePreloader({
+  importGame: importGolfGame,
+  releaseHub: () => { perf.mark('hub:release'); hubPreloader.release(); },
+  releaseCurrentGame: () => { if (game) releasePlay(); },
+  makeHolder: () => makeHiddenHolder(document),
+  enabled: () => WARM_IN_ROOM && !urlOff('warm'),
+  probe: perf,
+});
+/** Lo que se prepara: el primer hoyo de la partida con la skin equipada y la calidad de ahora. */
+const warmRequest = (courseIndex, ghosts) => ({
+  course: COURSES[courseIndex],
+  courseIndex,
+  skin: progress.skin,
+  instance: progress.instance(progress.skin.id),
+  ghosts,
+  quality: getQuality(),
+});
+const warmKey = (course) => keyOf(course, progress.skin, progress.instance(progress.skin.id), getQuality());
+// ?perf=1: sonda de medición y su panel (con otro valor, nada de esto existe: ver src/game/perfProbe.js)
+if (PERF) {
+  perf.setQuality(getQuality);
+  import('./ui/perfPanel.js').then((m) => m.mountPerfPanel(perf.probe));
+}
 const loadSkinInspector = () => import('./ui/skinInspector.js');
 
 // "móvil" en pantallas táctiles, "equipo" en PC
@@ -154,9 +191,44 @@ function releasePlay() {
   partyWatch?.stop();
 }
 
-// pinta una pantalla de partida (juego, sala en vivo, resultados) a pantalla completa: sin cabecera ni barras del HUD anterior
-function paintApp(content) {
-  releasePlay();
+// F3: entre hoyos de la misma partida la canvas se suelta de la pantalla pero el juego (y su contexto WebGL) sigue
+function keepPlay() {
+  game?.detach();
+  playScope?.dispose();
+  playScope = null;
+  gameGuard = null;
+  partyWatch?.stop();
+}
+
+// F3: renderer persistente (PERSISTENT_RENDERER; `?persist=0` vuelve al camino de F2) y hoyo siguiente preparado
+// (NEXT_HOLE_PREBUILD; `?next=0` lo apaga). El vivo queda fuera con PERSISTENT_LIVE = false.
+const persistOn = () => PERSISTENT_RENDERER && !urlOff('persist');
+// con la calidad cambiada a/desde Bajo el antialias ya no es el del contexto: juego nuevo, como antes
+const reusableGame = ({ reuse = false, live = false, prepared = null } = {}) =>
+  canReuseGame({ reuse, enabled: persistOn(), live, persistentLive: PERSISTENT_LIVE, prepared: !!prepared, game })
+  && game.antialias === (getQuality() !== 'low');
+
+/** Empieza a construir el hoyo siguiente (o el desempate) en el juego en curso mientras se ve el resultado. */
+function prepareNextHole(course, ghosts) {
+  if (!persistOn() || !NEXT_HOLE_PREBUILD || urlOff('next') || !course) return;
+  if (!game || game.disposed || !game.prepareNext) return;
+  game.prepareNext(course, { ghosts }).catch(() => {});
+}
+
+/** Al pulsar «Siguiente hoyo»: espera al hoyo preparado con tope (NEXT_WAIT_MS); si no llega, load() hace el camino de siempre. */
+async function waitNextHole() {
+  const p = reusableGame({ reuse: true }) ? game.whenNextReady?.() : null;
+  if (!p) return;
+  if (PERF) perf.mark('next:wait:start');
+  const r = await withCap(p, NEXT_WAIT_MS).catch(() => ({ ok: false }));
+  if (PERF) perf.mark('next:wait:end', { ready: r.ok && r.value === true });
+}
+
+// pinta una pantalla de partida (juego, sala en vivo, resultados) a pantalla completa: sin cabecera ni barras del HUD anterior.
+// keepGame (F3, hoyo siguiente de la misma partida): el juego no se libera, solo se suelta su canvas.
+function paintApp(content, { keepGame = false } = {}) {
+  if (keepGame && persistOn() && game && !game.disposed) keepPlay();
+  else releasePlay();
   app.innerHTML = '';
   window.scrollTo(0, 0);
   app.append(content);
@@ -230,7 +302,13 @@ function reviveHubScene() {
     if (scene && hubPreloader.current() === scene && startCtx) startCtx.setHubScene(scene);
   });
 }
-const goHome = createGoHome({ leaveFinale: () => leaveFinale(), stopLive: () => stopLive(), releasePlay, go: (to) => go(to) });
+const goHomeBase = createGoHome({ leaveFinale: () => leaveFinale(), stopLive: () => stopLive(), releasePlay, go: (to) => go(to) });
+// volver al hub descarta el hoyo preparado (el hub recrea su escena 3D como siempre; la búsqueda sigue)
+const goHome = (...args) => {
+  gamePreloader.release();
+  if (PERF) { perf.mark('home'); perf.persist(); }
+  return goHomeBase(...args);
+};
 
 // cartas holográficas: se inclinan y el brillo sigue al dedo
 function bindHolo(root) {
@@ -313,6 +391,7 @@ function showSearch() {
 }
 
 async function startMatch(tier, rematchOf = null) {
+  importGolfGame().catch(() => {});
   if (resumeSearch()) return;
   leaveFinale();
   // #hoyo3 en la URL: la práctica empieza por ese hoyo (útil para probar);
@@ -321,6 +400,9 @@ async function startMatch(tier, rematchOf = null) {
   // con servidor, las mesas de pago son torneos contra jugadores reales y la
   // práctica se juega en el móvil contra rivales simulados
   if (!forced && tier.entryFee > 0 && backend.tournaments) return startTournament(tier, rematchOf);
+  perf.setContext({});
+  perf.mark('click');
+  const clickAt = performance.now();
   const service = forced || backend.tournaments ? practice : matches;
   let match;
   try {
@@ -332,7 +414,14 @@ async function startMatch(tier, rematchOf = null) {
   if (resumeSearch()) return service.cancel(match).catch(() => { }); // doble toque mientras se unía
   match.service = service;
   match.myHoles = [];
+  perf.mark('join:end');
+  if (PERF && !forced) {
+    // ?perfcourses=3,7,11: mapas forzados solo en práctica (nunca en mesas de pago ni en vivo)
+    const fc = forcedCourses(location.search, tier, COURSES.length);
+    if (fc) match.courses = fitCourses(fc, match.courses.length);
+  }
   if (forced) Object.assign(match, { courses: [forced.hole - 1], holes: 1, forceTie: forced.tie });
+  let warm = null;
   // la búsqueda vive fuera de la pantalla: la sala (src/screens/matchmaking.js) y el aviso flotante la pintan,
   // y sigue aunque se vuelva al lobby; aquí solo se van rellenando los asientos
   const search = createSearch({
@@ -341,27 +430,41 @@ async function startMatch(tier, rematchOf = null) {
     seats: Math.max(PLAYERS_PER_MATCH, match.players.length),
     info: defaultInfo(tier),
     show: showSearch,
-    onCancel: () => match.service.cancel(match),
+    onCancel: () => { warm?.cancel(); return match.service.cancel(match); },
   });
   go('matchmaking');
+  perf.mark('room:shown');
+  // F2: el hoyo 1 se prepara oculto mientras se llenan los asientos (con la sala ya tapando el hub)
+  warm = gamePreloader.warm(warmRequest(match.courses[0], match.players.filter((p) => p.isBot).length));
+  const quit = () => { warm.cancel(); };
+  // F5: la sala dura al menos ROOM_MIN_MS desde el clic (`?room=old` o ROOM_MIN_MS = 0: tiempos de antes)
+  const roomMin = new URLSearchParams(location.search).get('room') === 'old' ? 0 : ROOM_MIN_MS;
+  const { seatWaits, launchWaitMs } = roomDelays({ players: match.players.length, rnd: Math.random, elapsedMs: performance.now() - clickAt, minMs: roomMin });
   for (let i = 0; i < match.players.length; i++) {
-    await wait(i === 0 ? 200 : 250 + Math.random() * 350);
-    if (search.ended) return;
+    await wait(seatWaits[i]);
+    if (search.ended) return quit();
     const p = match.players[i];
     search.setSeat(i, { name: p.name, color: p.color, me: p.id === 'me' }); // el tic suena al pintar el asiento
   }
-  await wait(250);
-  if (search.ended) return;
+  await wait(launchWaitMs);
+  if (search.ended) return quit();
+  perf.mark('room:launching');
   search.setPhase('launching');
   await search.present(); // desde otra pantalla: vuelve a la sala para la salida
-  if (search.ended) return;
+  if (search.ended) return quit();
+  // si el hoyo aún no está listo, «Preparando el campo…» con tope (HOLD_PRACTICE_MS)
+  await gamePreloader.hold(warm, search, HOLD_PRACTICE_MS);
+  if (search.ended) return quit();
+  perf.mark('room:go');
   search.go(); // «¡YA!» y salida animada (la pinta la sala)
   await wait(650);
-  if (search.ended) return;
+  if (search.ended) return quit();
   await search.leave();
-  if (search.ended) return;
+  perf.mark('room:end');
+  if (search.ended) return quit();
   search.finish();
-  playHole(match, 0);
+  const first = COURSES[match.courses[0]];
+  playHole(match, 0, { prepared: gamePreloader.take(warm, warmKey(first)) });
 }
 
 // ---------- juego ----------
@@ -370,8 +473,12 @@ async function startMatch(tier, rematchOf = null) {
  * Pantalla de juego. mode 'hole' es un hoyo normal; 'tiebreak' es el hoyo
  * sin agujero del desempate (un tiro, gana el más cercano).
  */
-function playScreen(match, { course, title, subtitle, players, onDone, firstSunkTick = null, timeLimit = HOLE_TIME_LIMIT, freePlay = false, onRestartHole = null, onSelectMap = null, rivals = null, live = false, onGame = null, onShots = null }) {
+function playScreen(match, { course, title, subtitle, players, onDone, firstSunkTick = null, timeLimit = HOLE_TIME_LIMIT, freePlay = false, onRestartHole = null, onSelectMap = null, rivals = null, live = false, onGame = null, onShots = null, prepared = null, reuse = false }) {
   const tiebreak = !!course.noCup;
+  // F3: hoyo siguiente de la misma partida (o Modo Libre siguiente/repetir): mismo juego, mismo renderer
+  const keep = reusableGame({ reuse, live, prepared });
+  // sin hoyo preparado (otro hoyo, Modo Libre, desempate…) no queda ninguno a medias: un solo contexto de partida
+  if (!prepared) gamePreloader.release();
   // en partida el HUD solo lleva FPS · latencia, Ajustes y Pantalla completa:
   // ni golpes de cada rival en directo ni avisos menores (sí el «¡Birdie!» al embocar)
   const lean = !freePlay;
@@ -421,9 +528,9 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       <button class="map-btn" aria-label="Ver el hoyo completo">${icon('eye')}Ver mapa <kbd class="kbd-hint">Espacio</kbd></button>
     </main>`);
   const gameClass = loadGolfGame();
-  paintApp(view);
+  paintApp(view, { keepGame: keep });
   gameClass.then((GolfGame) => {
-    if (!view.isConnected) return; // se salió de la pantalla mientras cargaba el motor
+    if (!view.isConnected) { prepared?.dispose(); return; } // se salió de la pantalla mientras cargaba el motor
     playScope?.dispose();
     playScope = createScope();
     const strokesEl = view.querySelector('.strokes b');
@@ -449,6 +556,8 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       finished = true;
       game.locked = true;
       game?.exitPointerLock?.();
+      perf.stopFrames(`hole${perf.hole()}`);
+      perf.mark('hole:done', { gl: perf.gl(game?.renderer, 'hole:done') });
       onDone(game, strokes, banner);
     };
     stageEl?.addEventListener('click', () => {
@@ -578,7 +687,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       view.append(overlay);
     }
 
-    game = new GolfGame(view.querySelector('.stage'), {
+    const handlers = {
       onOpenSettings: openSettingsMenu,
       onOverviewChange: (isOverview) => {
         view.querySelector('.overview-banner')?.classList.toggle('show', isOverview);
@@ -647,7 +756,15 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
           setTimeout(() => finish(n), 900);
         } else if (!freePlay && n >= maxStrokesOf(course)) finish(n);
       },
-    });
+    };
+    // hoyo preparado en la sala: se le dan los avisos y su canvas pasa a la pantalla (load toma el camino rápido).
+    // F3: con el juego de la partida en curso, igual: sus avisos y su canvas a esta pantalla; load intercambia la escena
+    const kept = keep && game && !game.disposed ? game : null;
+    game = prepared ?? kept ?? new GolfGame(stageEl, handlers);
+    if (prepared || kept) {
+      game.setHandlers(handlers);
+      game.attach(stageEl);
+    }
     game.load(course, { bots: freePlay ? [] : rivals ?? players.filter((p) => p.isBot), skin: progress.skin, instance: progress.instance(progress.skin.id), firstSunkTick, timeLimit: freePlay ? null : timeLimit, live });
     onGame?.(game, { toast, view });
     showDistance();
@@ -722,16 +839,22 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
   });
 }
 
-function playHole(match, index) {
+function playHole(match, index, { prepared = null, reuse = false } = {}) {
   const course = COURSES[match.courses[index]];
+  perf.setContext({ hole: index, course: course.name, courseIndex: match.courses[index] });
   playScreen(match, {
     course,
+    prepared,
+    reuse,
     title: `Hoyo ${index + 1}/${match.holes}`,
     subtitle: `Hoyo ${index + 1}`,
     players: match.players,
     onDone: (g, strokes) => {
       const bots = g.finishBots();
       const dq = g.timedOut;
+      // F3: el hoyo siguiente se construye mientras se ve el resultado de este (nunca durante el hoyo)
+      const nxt = nextToPrepare({ mode: match.service === practice ? 'practice' : 'local', index, holes: match.holes });
+      if (nxt?.kind === 'hole') prepareNextHole(COURSES[match.courses[nxt.index]], match.players.filter((p) => p.isBot).length);
       match.myHoles[index] = { strokes, par: course.par };
       Promise.resolve()
         .then(() => match.service.recordHole(match, index, course.par, strokes, bots, maxStrokesOf(course)))
@@ -777,7 +900,16 @@ function showHoleResult(match, index, course, strokes, standings, dq = false) {
         <button class="primary next">${last ? 'Ver resultado' : 'Siguiente hoyo'}${icon('next')}</button>
       </div>
     </div>`);
-  overlay.querySelector('.next').addEventListener('click', () => (last ? afterLastHole(match) : playHole(match, index + 1)));
+  let going = false;
+  overlay.querySelector('.next').addEventListener('click', async () => {
+    if (going) return;
+    going = true;
+    if (last) return afterLastHole(match);
+    perf.mark('hole:next:click');
+    await waitNextHole(); // hoyo siguiente preparado (F3): como mucho NEXT_WAIT_MS
+    if (!overlay.isConnected) return; // se salió mientras tanto
+    playHole(match, index + 1, { reuse: true });
+  });
   app.append(overlay);
 }
 
@@ -803,13 +935,26 @@ function afterLastHole(match) {
         <button class="primary next">${meTied ? 'Jugar desempate' : 'Ver desempate'}${icon('next')}</button>
       </div>
     </div>`);
-  overlay.querySelector('.next').addEventListener('click', () => (meTied ? playTiebreak(match, tied) : simulateTiebreak(match, tied)));
+  // F3: el desempate se construye mientras se ve este aviso (solo si lo juegas tú)
+  const nxt = nextToPrepare({ mode: match.service === practice ? 'practice' : 'local', index: match.holes - 1, holes: match.holes, tied: meTied });
+  if (nxt?.kind === 'tiebreak') prepareNextHole(TIEBREAK_COURSE, tied.filter((p) => p.isBot).length);
+  let going = false;
+  overlay.querySelector('.next').addEventListener('click', async () => {
+    if (going) return;
+    going = true;
+    if (!meTied) return simulateTiebreak(match, tied);
+    await waitNextHole();
+    if (!overlay.isConnected) return;
+    playTiebreak(match, tied);
+  });
   app.append(overlay);
 }
 
 function playTiebreak(match, tied) {
+  perf.setContext({ tiebreak: true });
   playScreen(match, {
     course: TIEBREAK_COURSE,
+    reuse: true,
     title: 'Desempate',
     subtitle: 'Muerte súbita',
     players: tied,
@@ -972,6 +1117,8 @@ function stopLive({ force = false } = {}) {
   app.querySelector('.overlay')?.remove();
   currentLive = null;
   live.stopped = true;
+  live.warm?.cancel();
+  live.warm = null;
   clearTimeout(live.beat);
   clearInterval(live.timer);
   live.room?.close();
@@ -986,7 +1133,10 @@ function stopLive({ force = false } = {}) {
 const liveNow = (match) => Date.now() + (match.clockOffset ?? 0);
 
 async function startTournament(tier, rematchOf = null) {
+  importGolfGame().catch(() => {});
   stopLive();
+  perf.setContext({});
+  perf.mark('click');
   let match;
   try {
     // revancha: el servidor junta en la misma sala a quienes la piden; si ya no vale, mesa normal
@@ -1003,11 +1153,13 @@ async function startTournament(tier, rematchOf = null) {
     console.error('join_tournament', e);
     return alertMsg(`No se ha podido entrar en la partida. Prueba otra vez.${esc(errorRef(e))}`);
   }
+  perf.mark('join:end');
   enterLive(match);
 }
 
 /** Entra en una partida: a la sala si aún no ha empezado, o al hoyo por el que vas. */
 function enterLive(match) {
+  importGolfGame().catch(() => {});
   // la misma mesa en la que ya esperas (doble toque, o el aviso del grupo de una partida que ya tienes): a su sala
   if (currentLive?.searching && currentLive.match.id === match.id) return showSearch();
   // otra búsqueda en marcha (p. ej. el grupo entra en un torneo mientras buscabas solo): se cancela
@@ -1071,6 +1223,7 @@ function showLiveRoom(live) {
   };
   sync();
   go('matchmaking');
+  perf.mark('room:shown');
 }
 
 /** Cuenta atrás a 0: bots en los huecos, arranque en el servidor, salida animada y primer hoyo. */
@@ -1078,6 +1231,7 @@ async function launchLive(live) {
   const { match } = live;
   const { search } = live;
   if (live.stopped || search.ended) return;
+  perf.mark('room:launching');
   search.setPhase('launching');
   const shown = search.present(); // desde otra pantalla: vuelve a la sala para ver el arranque
   search.setStatus(t('matchmaking.fillingBots'));
@@ -1087,6 +1241,8 @@ async function launchLive(live) {
   await shown;
   if (live.stopped) return;
   live.roster = buildRoster(match);
+  // F2 en vivo: apagado (WARM_LIVE = false) hasta tener un entorno de pruebas; con false no se prepara nada
+  if (WARM_LIVE) live.warm = gamePreloader.warm(warmRequest(match.courses[0], live.roster.length - 1));
   for (const r of live.roster) {
     if (r.isBot) continue;
     search.setSeat(r.seat, { name: r.name, color: r.color, me: r.id === 'me' });
@@ -1115,10 +1271,16 @@ async function launchLive(live) {
     });
   }
   if (live.stopped) return;
+  if (live.warm) {
+    await gamePreloader.hold(live.warm, search, HOLD_LIVE_MS);
+    if (live.stopped) return;
+  }
+  perf.mark('room:go');
   search.go();
   await wait(380);
   if (live.stopped) return;
   await search.leave();
+  perf.mark('room:end');
   if (!live.stopped) beginLive(live);
 }
 
@@ -1147,6 +1309,7 @@ function playLiveHole(live, index) {
   const { match } = live;
   app.querySelector('.overlay')?.remove();
   const course = COURSES[match.courses[index]];
+  perf.setContext({ hole: index, course: course.name, courseIndex: match.courses[index] });
   live.hole = index;
   live.game = null;
   live.check = null;
@@ -1154,8 +1317,12 @@ function playLiveHole(live, index) {
   const rivals = live.roster
     .filter((r) => r.id !== 'me')
     .map((r) => (r.isBot ? { ...r, rng: seededRng(`${match.id}:${index}:${r.seat}`) } : { ...r, remote: live.room.feed(r.seat, index) }));
+  // hoyo 1 preparado en la sala (solo con WARM_LIVE; si no, live.warm no existe)
+  const prepared = index === 0 && live.warm ? gamePreloader.take(live.warm, warmKey(course)) : null;
+  live.warm = null;
   playScreen(match, {
     course,
+    prepared,
     title: `Hoyo ${index + 1}/${match.holes}`,
     subtitle: `${match.tier.name} · en vivo`,
     players: [me, ...rivals],
@@ -1246,16 +1413,43 @@ async function finishLiveHole(live, index, course, result) {
   live.timer = setTimeout(() => {
     if (live.stopped || live.hole !== index) return;
     if (last) liveAfterRound(live);
-    else playLiveHole(live, index + 1);
+    else {
+      perf.mark('hole:next:click', { auto: true }); // en vivo el paso al siguiente hoyo es automático
+      playLiveHole(live, index + 1);
+    }
   }, LIVE_NEXT_MS);
 }
 
-/** Tras el último hoyo: desempate si empatas en cabeza con otro jugador real; si no, has terminado. */
-async function liveAfterRound(live) {
-  const { match } = live;
+/**
+ * Tras el último hoyo: no decides hasta que todos los jugadores reales hayan cerrado
+ * su ronda (o se hayan desconectado). Así el que acaba primero también ve si empata.
+ */
+function liveAfterRound(live) {
   app.querySelector('.overlay')?.remove();
+  live.roundWait = null;
+  live.decided = false;
+  live.fast = true;
+  live.onStatus = () => decideAfterRound(live);
+  decideAfterRound(live);
+}
+
+async function decideAfterRound(live) {
+  if (live.stopped || live.decided) return;
+  const { match } = live;
+  if (match.status !== 'open') {
+    live.decided = true;
+    return showLiveResults(live);
+  }
+  if (!roundReady(match.players, match.holes)) return showRoundWait(live);
+  live.decided = true;
+  live.roundWait?.remove();
+  live.roundWait = null;
   const tied = humanLeaders(match.players, match.holes);
-  if (tied.length >= 2 && tied.some((p) => p.id === 'me')) return liveTiebreak(live, tied);
+  // si empatas y aún no has jugado el desempate, lo juegas (el servidor solo lo admite con la partida abierta)
+  if (tied.length >= 2 && tied.some((p) => p.id === 'me') && match.me.tiebreak === undefined) {
+    live.onStatus = null;
+    return liveTiebreak(live, tied);
+  }
   live.finished = true;
   try {
     await backend.tournaments.finish(match);
@@ -1263,15 +1457,34 @@ async function liveAfterRound(live) {
   showLiveResults(live);
 }
 
+/** Mientras esperamos al resto: quién falta por cerrar su ronda. */
+function showRoundWait(live) {
+  const { match } = live;
+  live.fast = true;
+  const left = match.players.filter((p) => p.id !== 'me' && p.online && !roundComplete(p, match.holes)).map((p) => p.name);
+  if (!live.roundWait) {
+    live.roundWait = h(`
+      <div class="overlay">
+        <div class="card">
+          <h2>Esperando a los demás</h2>
+          <p class="sub"></p>
+          <p class="legal">Si hay empate, jugáis el desempate.</p>
+        </div>
+      </div>`);
+    app.append(live.roundWait);
+  }
+  live.roundWait.querySelector('.sub').textContent = left.length ? `Están terminando: ${left.join(', ')}` : 'Cerrando la partida…';
+}
+
 function liveTiebreak(live, tied) {
   const { match } = live;
-  const names = tied.map((p) => (p.id === 'me' ? 'Tú' : esc(p.name)));
+  const label = (p) => (p.id === 'me' ? 'Tú' : p.name);
   const overlay = h(`
     <div class="overlay">
       <div class="card tiebreak-card">
-        <div class="vs">${tied.map((p) => `<span class="avatar" style="--c:${p.color}">${esc((p.id === 'me' ? 'Tú' : p.name)[0])}</span>`).join('<em>VS</em>')}</div>
+        <div class="vs">${tied.map((p) => `<span class="avatar" style="--c:${p.color}">${esc(label(p)[0])}</span>`).join('<em>VS</em>')}</div>
         <h2 class="score-title">¡Empate a ${tied[0].total}!</h2>
-        <p class="sub">${names.join(', ')} vais al desempate. Hoyo sin agujero: un solo tiro y gana quien deje la bola más cerca de la diana.</p>
+        <p class="sub">${tied.map((p) => esc(label(p))).join(', ')} vais al desempate. Hoyo sin agujero: un solo tiro y gana quien deje la bola más cerca de la diana.</p>
         <button class="primary next">Jugar desempate${icon('next')}</button>
       </div>
     </div>`);
@@ -1281,11 +1494,13 @@ function liveTiebreak(live, tied) {
     const hole = match.holes;
     live.hole = hole;
     const me = live.roster.find((r) => r.id === 'me');
+    // los rivales salen de los empatados: si falta alguno en el roster, se monta con sus datos del servidor
     const rivals = tied
       .filter((p) => p.id !== 'me')
-      .map((p) => live.roster.find((r) => r.id === p.id))
-      .filter(Boolean)
-      .map((r) => ({ ...r, remote: live.room.feed(r.seat, hole) }));
+      .map((p) => ({
+        ...(live.roster.find((r) => r.id === p.id) ?? { id: p.id, seat: p.seat, name: p.name, color: p.color, human: true }),
+        remote: live.room.feed(p.seat, hole),
+      }));
     playScreen(match, {
       course: TIEBREAK_COURSE,
       title: 'Desempate',
@@ -1474,7 +1689,10 @@ function alertMsg(text) {
 
 // ---------- juego libre en solitario ----------
 
-export function playFreePlay(courseIndex) {
+// reuse (F3): siguiente o repetir desde el resultado reutilizan el juego (sin preparar nada: no hay sala).
+// «Reiniciar» (botón, R y Ajustes) sigue igual que antes: juego nuevo.
+export function playFreePlay(courseIndex, { reuse = false } = {}) {
+  importGolfGame().catch(() => {});
   const isTiebreak = courseIndex === 'tiebreak';
   const course = isTiebreak ? TIEBREAK_COURSE : COURSES[courseIndex];
   const holeNum = isTiebreak ? 'Extra' : courseIndex + 1;
@@ -1482,6 +1700,7 @@ export function playFreePlay(courseIndex) {
 
   playScreen(null, {
     course,
+    reuse,
     freePlay: true,
     title: isTiebreak ? 'Desempate' : `Hoyo ${holeNum}/${totalHoles}`,
     subtitle: isTiebreak ? 'Práctica de Precisión' : `Modo Libre · Hoyo ${holeNum}`,
@@ -1536,12 +1755,12 @@ export function showFreePlayHoleResult(courseIndex, course, strokes) {
 
   overlay.querySelector('.retry-btn').addEventListener('click', () => {
     overlay.remove();
-    playFreePlay(courseIndex);
+    playFreePlay(courseIndex, { reuse: true });
   });
   if (nextIndex != null) {
     overlay.querySelector('.next-btn').addEventListener('click', () => {
       overlay.remove();
-      playFreePlay(nextIndex);
+      playFreePlay(nextIndex, { reuse: true });
     });
   }
   overlay.querySelector('.select-map-btn').addEventListener('click', () => {
@@ -1611,7 +1830,7 @@ if (skinLab) {
     // el hub usa vídeo de fondo: no se carga three; el rechazo marca los hitos three/escena y sigue el splash
     // el hub usa vídeo de fondo: la portada precarga el motor de partida (three incluido) en vez de la escena 3D del hub
     const hubScene = boot.preloadScene({
-      importScene: () => (lowData() ? Promise.reject(new Error('ahorro de datos')) : importGame()),
+      importScene: () => (lowData() ? Promise.reject(new Error('ahorro de datos')) : importGolfGame()),
       createScene: () => null,
       onScene() {},
       onDiscard() {},
@@ -1626,6 +1845,19 @@ if (skinLab) {
       // textura de hoyuelos de la bola (451 KB) en reposo, con el hub ya visible; no en calidad baja ni con ahorro de datos
       const warmDimples = () => { if (!lowData() && getQuality() !== 'low') fetch('/skins/dimples-normal.png', { priority: 'low' }).catch(() => {}); };
       if ('requestIdleCallback' in window) window.requestIdleCallback(warmDimples, { timeout: 4000 }); else setTimeout(warmDimples, 1500);
+      // el motor del juego se baja en reposo para que no esté en el camino crítico tras la sala (no libera el hub)
+      if (painted && shouldIdlePrefetch({
+        saveData: navigator.connection?.saveData,
+        effectiveType: navigator.connection?.effectiveType,
+        decision: PREFETCH_DECISION,
+      })) {
+        const run = () => {
+          perf.mark('prefetch:start');
+          importGolfGame().catch(() => {}).finally(() => perf.mark('prefetch:end'));
+        };
+        if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 8000 });
+        else setTimeout(run, 4000);
+      }
     });
   }).catch((err) => {
     // solo backend/sesión (y el lobby sin pintar) pueden bloquear el splash con «Reintentar»
@@ -1663,15 +1895,12 @@ function startRouting(b) {
       claimRewards: () => claimRewards(),
       toggleFullscreen: () => toggleFullscreen(),
       toggleMute: () => toggleMute(),
-      reviveHubScene: () => reviveHubScene(),
+      // llegar al hub (también con la búsqueda activa) descarta el hoyo preparado antes de que el hub recree su escena 3D
+      reviveHubScene: () => { gamePreloader.release(); reviveHubScene(); },
       playFreePlay: (i) => playFreePlay(i),
     },
-    legacy: {
-      // Mesas (T028): lo que la pantalla necesita de main.js
-      enterTables: () => { leaveFinale(); stopLive(); releasePlay(); },
-      enterSettings: () => { leaveFinale(); stopLive(); releasePlay(); },
-      enterMaps: () => { leaveFinale(); stopLive(); releasePlay(); },
-    },
+    // al entrar en Mesas, Ajustes o Mapas: cerrar el final y la sala en vivo, y liberar la partida
+    leavePlay: () => { leaveFinale(); stopLive(); releasePlay(); },
   });
   screenHost = createHost({ router, routes, root: app, ctx, notify, win: window, doc: document });
   const navigate = createNavigator({ router, host: screenHost, rootId: ROOT_SCREEN });

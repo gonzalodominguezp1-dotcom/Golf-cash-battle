@@ -1,5 +1,5 @@
 // Tabla de rutas de las pantallas. Cada ruta carga su archivo por convención (`./<archivo>.js`);
-// si el archivo aún no existe, cae al adaptador de legado de main.js (ctx.legacy[id]) o a un marcador.
+// si el archivo aún no existe, cae a un marcador «en construcción».
 import { header, bindHeader } from './components.js';
 import { t } from './texts/index.js';
 import './texts/common.js';
@@ -18,16 +18,11 @@ export const screenModules = () => import.meta.glob([
   './matchmaking.js', './novedades.js',
 ]);
 
-// Adaptador de legado o marcador «en construcción». `manages`: la pantalla pinta #app por su cuenta.
-function fallbackModule(id) {
+// Marcador «en construcción» para una ruta sin archivo. `manages`: la pantalla pinta #app por su cuenta.
+function fallbackModule() {
   return {
     manages: true,
-    async mount(root, ctx, params) {
-      const fn = ctx.legacy && ctx.legacy[id];
-      if (typeof fn === 'function') {
-        await fn(params);
-        return { destroy() {} };
-      }
+    async mount(root, ctx) {
       root.innerHTML = `<main class="screen">${header({ title: t('common.underConstruction') })}<p class="scr-state">${t('common.underConstructionText')}</p></main>`;
       bindHeader(root, ctx);
       return { destroy() {} };
@@ -43,7 +38,7 @@ export function createRoutes({ root = 'hub', modules = screenModules() } = {}) {
   const loader = (id) => async () => {
     const file = FILES[id];
     const fromFile = file && modules[`./${file}.js`];
-    return fromFile ? fromFile() : fallbackModule(id);
+    return fromFile ? fromFile() : fallbackModule();
   };
   const r = (id, hash, extra = {}) => ({ id, hash, parent: id === root ? undefined : root, restorable: true, load: loader(id), ...extra });
   return [

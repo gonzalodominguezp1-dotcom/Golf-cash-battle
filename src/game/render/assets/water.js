@@ -53,7 +53,6 @@ import { applyWind, windUniforms } from './wind.js';
 
 // ---------- constantes ----------
 
-export const WATER_LEVELS = LEVELS;
 /**
  * Presupuesto por calidad. lakeSeg: celdas por lado de la rejilla del lago (220 m, con el
  * mismo enfoque hacia el hoyo que el terreno si se pasa `warp`); riverStep: m entre cortes

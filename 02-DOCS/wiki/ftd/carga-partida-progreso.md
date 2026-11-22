@@ -58,3 +58,27 @@ Verificación local: `pnpm test` 1275 pass / 0 fail; `pnpm run build` OK. Sin co
 - Decisiones del usuario aplicadas: hold práctica 2000 ms, vivo 1000 ms; hub vuelve con su 3D y se descarta la preparación; vivo apagado; sala e intro sin cambios; «Reiniciar» en práctica intacto.
 - Cambio de comportamiento a revisar: la preparación libera la escena 3D del hub al empezar la sala, así que al volver al hub con la búsqueda activa la escena se recrea (se ve primero la imagen fija). Es la consecuencia de liberar el hub; el usuario lo aceptó como «igual que ahora» pero conviene confirmarlo.
 - Pendiente de medición en producción (checklist del informe de F2: práctica con `?perf=1&perfcourses=3,6,12`, `warm:take:hit`, `post_sala_ms`, tirones en la sala, Esc/Espacio durante la sala, revancha, calidad a mitad de búsqueda, giro de móvil, `?warm=0` para comparar).
+
+## F3 — Renderer persistente y hoyo siguiente (implementada, sin verificar en navegador)
+Verificación local: `pnpm test` 1290 pass / 0 fail; build OK. Sin commit ni push. F4 (caché de texturas) sigue sin hacer: F3 usa el contrato mínimo.
+- Archivos: `src/game/render/sceneDisposal.js`, `src/game/holeWindowRules.js`, `src/game/GolfGame.js` (`prepareNext`, `whenNextReady`, `cancelNext`, `detach`, intercambio en `load`), `src/game/loadingFlags.js`, `src/main.js`, tests `scene-disposal` y `hole-window-rules`.
+- Interruptores: `PERSISTENT_RENDERER` (o `?persist=0`) vuelve a F2; `NEXT_HOLE_PREBUILD` (o `?next=0`) no prepara el siguiente; `PERSISTENT_LIVE = false`: vivo como hoy.
+- Revisar: (1) la bola y sus efectos se pasan un instante a la escena preparada durante `compileAsync`, en la misma tarea; (2) el material de la bola puede regenerarse si cambia el tema; (3) viento compartido devuelto al hoyo actual; (4) sin manejo de pérdida de contexto (three la recupera; se cancela `#next`); (5) si el siguiente no está listo a 1 s, se construye por el camino normal.
+- Checklist: el informe del subagente F3 (práctica de 3 hoyos con `?perf=1&perfcourses=3,6,12`; `contextos_partida.creados = 1`; `next:hit`; texturas y geometrías sin crecer entre partidas; desempate `#hoyo3-empate`; Modo Libre; calidad a mitad de hoyo y paso a/desde Bajo; salir a mitad de hoyo 2; girar el móvil; `?perf=1&persist=0` para comparar; vivo igual que antes).
+
+## F4 — Caché de texturas procedurales (implementada, sin verificar en navegador)
+Verificación local: `pnpm test` 1299 pass / 0 fail; build OK. Sin commit ni push.
+- Archivos: `src/game/render/textureCache.js` (nuevo), `src/game/render/textures.js` (12 generadores envueltos con `cached()`), `tests/texture-cache.test.js` (9 tests).
+- No tocados (candidatos a otra pasada): `lushEnvironment.js`, `flora.js`, `attractions.js`, `cyberpunkEnvironment.js`.
+- Interruptor: `TEXTURE_CACHE = false` (en `textureCache.js`) vuelve a generar cada vez; `maxBytes = 0` también.
+- Límites: Bajo 8 MB, Medio 24 MB, Alto 64 MB (propuesta; no confirmados por el usuario).
+- Riesgos a medir: `Texture.copy` marca `needsUpdate`, así que cada clon puede forzar una resubida a GPU de la imagen compartida; reenlace de `repeat` (arena, normales); comportamiento de `dispose` de clon con F3 en escena real.
+- Checklist: capturas lado a lado de hierba, arena, tierra, madera, hielo y neón (idénticas); sin desalineación en arena; `stats().hits > 0` desde el hoyo 2; `load_desglose` baja; cambio de calidad sin cruzar texturas. `textureCache` no está expuesto en `window`: hace falta para leer `stats()` en consola.
+
+## F5 — Decisiones de producto (implementada, sin verificar en navegador)
+Verificación local: `pnpm test` 1308 pass / 0 fail; build OK. Sin commit ni push.
+- Sala de práctica: mínimo 2500 ms desde el clic (`src/game/roomTiming.js`, `ROOM_MIN_MS = 2500`). Con `ROOM_MIN_MS = 0` o `?room=old`, tiempos de antes. Solo práctica y mesas locales.
+- Intro: un toque la salta fuera del vivo (`src/game/introSkip.js`, `INTRO_SKIP = true`). El toque que salta no dispara golpe. Con `INTRO_SKIP = false`, no hay salto. En vivo sin cambios.
+- No hechas (no aprobadas o dependen de datos de F0): dieta de shaders (prohibido tocar shaders), worker de texturas, caché de shaders de Chrome.
+- Riesgo: el salto con ratón podría pedir pointer lock en el primer clic (el agente lo ha tratado ignorando el click siguiente); verificar en navegador.
+- Checklist: sala ≥ 2,5 s y animación sin cortes; `?room=old` como comparación; intro saltable con toque (ratón y táctil) sin golpe en el toque que salta; intro en vivo igual; mesas de pago en local igual.

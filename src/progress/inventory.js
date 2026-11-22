@@ -4,7 +4,6 @@
 // quitó: las claves `float` de guardados antiguos se ignoran al leer.)
 
 export const MAX_INVENTORY = 64;
-export const COUNTER_KEYS = ['aces', 'sinks', 'birdies'];
 
 /** Hash FNV-1a de 32 bits con mezcla final; estable entre plataformas. */
 function hash32(str) {

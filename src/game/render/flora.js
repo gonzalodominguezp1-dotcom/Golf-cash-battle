@@ -167,16 +167,6 @@ export function makeRiver(bounds, theme, rng, { grounded, enabled }) {
   return { dist, carve, y, w, along, grounded };
 }
 
-/** Agua de río a ras de suelo: un plano con olas suaves que solo asoma por el cauce. */
-export function riverWaterPlane(size, river, theme) {
-  const geo = new THREE.PlaneGeometry(size, size, 1, 1);
-  geo.rotateX(-Math.PI / 2);
-  const mat = new THREE.MeshPhongMaterial({ color: theme.water ?? 0x2bb3e6, shininess: 110, specular: 0xffffff, transparent: true, opacity: 0.88 });
-  const m = new THREE.Mesh(geo, mat);
-  m.position.y = river.y;
-  m.receiveShadow = true;
-  return m;
-}
 
 // ---------- hierba instanciada ----------
 
