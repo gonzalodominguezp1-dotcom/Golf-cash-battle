@@ -1,6 +1,6 @@
 // NOTA: el logo ya no está en la barra; vuelve como banderín en la escena (tarea aparte). Queda un h1 sr-only con el nombre del juego.
 // Hub: pantalla raíz con la composición C10 (usuario · saldo · Ajustes y pantalla completa arriba; Ranking/Logros a la
-// izquierda, Skins/Amigos a la derecha; Mapas · JUGAR · Práctica abajo). Fondo: escena 3D precargada (ctx.hubScene) o, sin ella, la imagen fija del CSS.
+// izquierda, Skins/Amigos a la derecha; Mapas · JUGAR · Práctica abajo). Fondo: vídeo en bucle (16:9 o 9:16 según la orientación) con el póster como imagen fija en el CSS.
 // El CSS (hub.css) lo importa el arranque, no este módulo, para poder probarlo en Node.
 import { CHALLENGES } from '../progress/skins.js';
 import { esc, avatarHtml } from './shared.js';
@@ -76,8 +76,22 @@ export async function mount(root, ctx) {
     return `<button type="button" class="hub-big ${cls}" data-hub="${key}" data-focus-key="${key}">${icon(n.icon, { size: 34 })}<span class="hub-big-t">${esc(t(`hub.${n.text}`))}</span></button>`;
   };
 
+  // Fondo en vídeo: variante vertical (9x16) u horizontal (16x9) según la orientación; con movimiento reducido solo el póster.
+  const win = scope.win;
+  const doc = scope.doc;
+  const portraitNow = () => { try { return !!win?.matchMedia?.('(orientation: portrait)')?.matches; } catch { return false; } };
+  const reduced = (() => { try { return !!ctx.reducedMotion?.(); } catch { return false; } })();
+  const variantOf = (p) => (p ? '9x16' : '16x9');
+  let variant = variantOf(portraitNow());
+  const poster = (v) => `/hub/lobby-poster-${v}.webp`;
+  const sourcesHtml = (v) => `<source src="/hub/lobby-loop-${v}.webm" type="video/webm"><source src="/hub/lobby-loop-${v}.mp4" type="video/mp4">`;
+  function videoHtml() {
+    const attrs = ['muted', 'loop', 'playsinline', reduced ? '' : 'autoplay', 'preload="auto"', 'disablepictureinpicture', 'aria-hidden="true"', `poster="${poster(variant)}"`];
+    return `<video class="hub-video" data-hub-video="1" ${attrs.filter(Boolean).join(' ')}>${sourcesHtml(variant)}</video>`;
+  }
+
   root.innerHTML = `<main class="hub" aria-label="${esc(t('hub.title'))}">
-    <div class="hub-scene" data-hub-scene="1" aria-hidden="true"></div>
+    <div class="hub-scene" data-hub-scene="1" aria-hidden="true">${videoHtml()}</div>
     <h1 class="sr-only">${esc(t('hub.logoAlt'))}</h1>
     <header class="hub-top">
       <div class="hub-left">
@@ -208,52 +222,36 @@ export async function mount(root, ctx) {
   if (notifier) {
     scope.sub(notifier.subscribe((c) => { badges.friends = friendsNow(c); paintBadge('friends'); }));
   }
-  // Escena 3D de fondo. Es del contexto (la libera la partida), no del hub: aquí solo se coloca, se pausa y se suelta.
-  // Si no hay (sin WebGL, omitida por el margen, three bloqueado, liberada por una partida) se ve la imagen fija.
-  const box = root.querySelector('[data-hub-scene="1"]');
-  const doc = scope.doc;
-  let scene = null, attached = false, covered = false;
-  // dueño de la escena: el host monta el hub nuevo antes de destruir el viejo y ambos comparten la misma escena.
-  // Solo el dueño actual la pausa o reanuda; si no, el viejo la pausaría justo después de que el nuevo la reanudara.
-  const owner = {};
+  // Vídeo de fondo: se reproduce solo con el hub visible (ni tapado ni pestaña oculta) y sin movimiento reducido.
+  const video = root.querySelector('[data-hub-video="1"]');
+  let covered = false;
+  if (video) video.muted = true; // el atributo por innerHTML no siempre fija la propiedad, y sin ella no hay autoplay
   const sync = () => {
-    if (!scene || scene.hubOwner !== owner) return;
-    try { (!covered && !doc?.hidden) ? scene.resume() : scene.pause(); } catch { /* una escena rota no tumba el hub */ }
-  };
-  const place = () => {
-    if (!scene || !box || covered) return; // tapado el contenedor mide 0: se coloca al destapar
+    if (!video) return;
     try {
-      if (!attached) { scene.attach(box); attached = true; }
-      scene.setQuality?.(ctx.quality?.());
-      scene.resize?.();
+      if (!reduced && !covered && !doc?.hidden) Promise.resolve(video.play?.()).catch(() => {});
+      else video.pause?.();
+    } catch { /* un vídeo roto no tumba el hub */ }
+  };
+  // al girar el dispositivo solo se recarga si cambia la variante
+  const applyVariant = () => {
+    const v = variantOf(portraitNow());
+    if (v === variant || !video) return;
+    variant = v;
+    try {
+      video.poster = poster(v);
+      video.innerHTML = sourcesHtml(v);
+      video.autoplay = !reduced && !covered && !doc?.hidden;
+      video.load?.();
     } catch { /* idem */ }
     sync();
   };
-  const drop = () => {
-    if (scene && scene.hubOwner === owner) {
-      try { scene.pause(); } catch { /* ya liberada */ }
-      scene.hubOwner = null;
-    }
-    scene = null; attached = false;
-    if (box) box.innerHTML = '';
-  };
-  const adopt = (sc) => {
-    if (sc === scene) return;
-    if (scene) drop();
-    scene = sc || null;
-    if (scene) scene.hubOwner = owner;
-    place();
-  };
-  const reviveScene = () => { try { ctx.actions.reviveHubScene?.(); } catch (err) { console.warn('hubScene.revive', err?.message ?? err); } };
-  adopt(ctx.getHubScene ? ctx.getHubScene() : ctx.hubScene);
-  if (ctx.watchHubScene) scope.sub(ctx.watchHubScene(adopt));
-  scope.on(doc, 'visibilitychange', () => { sync(); if (!doc?.hidden && !scene && !covered) reviveScene(); });
-  scope.on(scope.win, 'resize', () => { if (!covered) scene?.resize?.(); });
-  if (import.meta.env?.DEV && scope.win) scope.win.__gcbHub = { get stats() { return scene?.stats; } };
+  scope.on(doc, 'visibilitychange', sync);
+  scope.on(win, 'resize', applyVariant);
+  scope.on(win, 'orientationchange', applyVariant);
+  sync();
 
   ctx.actions.claimRewards();
-  // llegada al hub sin escena (tras una partida): se recrea en segundo plano; el hub ya está pintado con la imagen fija
-  if (!scene) reviveScene();
 
   return {
     title: t('hub.title'),
@@ -261,17 +259,15 @@ export async function mount(root, ctx) {
     onUncover(from) {
       covered = false;
       repaintAll();
-      const cur = ctx.getHubScene ? ctx.getHubScene() : ctx.hubScene;
-      if (cur !== scene) adopt(cur); else place();
-      if (!cur) reviveScene();
+      applyVariant();
+      sync();
       if (from) root.querySelector?.(`[data-focus-key="${from}"]`)?.focus?.();
       ctx.actions.claimRewards();
     },
     destroy() { // los listeners y la suscripción los libera el scope del host
       gone = true;
       dlg?.close({ restoreFocus: false });
-      drop();
-      if (scope.win?.__gcbHub) delete scope.win.__gcbHub;
+      try { video?.pause?.(); } catch { /* idem */ }
     },
   };
 }

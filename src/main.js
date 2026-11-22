@@ -59,7 +59,8 @@ import { startVersionCheck } from './ui/versionCheck.js';
 import { lobbyButton } from './screens/components.js';
 
 // hitos del arranque hacia el splash (no-op si no hay #splash: ?skinlab=1)
-const boot = createBoot();
+// margen de 3 s: la portada no espera más que eso al motor de partida (la descarga sigue en segundo plano)
+const boot = createBoot({ marginMs: 3000 });
 boot.bundle();
 let backend, wallet, matches;
 // práctica forzada con #hoyoN: siempre local, no toca el servidor
@@ -69,7 +70,16 @@ const progress = new Progress();
 warmThumbs();
 // three.js (partida, inspector 3D) se carga solo cuando hace falta: lobby y pantalla de skins no lo pagan
 // la partida usa su propio renderer: se libera la escena del hub precargada (T026 la recreará si la necesita)
-const loadGolfGame = () => { hubPreloader.release(); return import('./game/GolfGame.js').then((m) => m.GolfGame); };
+// el motor de partida (GolfGame y sus módulos, three incluido) se pide una sola vez: la portada lo precarga
+// y, si ya llegó, JUGAR lo usa al instante. Un fallo de red libera la promesa para reintentar.
+let gameMod = null;
+const importGame = () => (gameMod ??= import('./game/GolfGame.js').catch((err) => { gameMod = null; throw err; }));
+// ahorro de datos o red lenta: la portada no descarga el motor por adelantado
+const lowData = () => {
+  const c = navigator.connection;
+  return !!c && (c.saveData === true || /^(slow-2g|2g|3g)$/.test(c.effectiveType || ''));
+};
+const loadGolfGame = () => { hubPreloader.release(); return importGame().then((m) => m.GolfGame); };
 const loadSkinInspector = () => import('./ui/skinInspector.js');
 
 // "móvil" en pantallas táctiles, "equipo" en PC
@@ -1598,7 +1608,14 @@ if (skinLab) {
     startVersionCheck();
     // el saldo no frena el arranque: `progress` se marca al llegar o a los 3 s
     trackProgress(boot, () => wallet.getBalance());
-    const hubScene = hubPreloader.preload();
+    // el hub usa vídeo de fondo: no se carga three; el rechazo marca los hitos three/escena y sigue el splash
+    // el hub usa vídeo de fondo: la portada precarga el motor de partida (three incluido) en vez de la escena 3D del hub
+    const hubScene = boot.preloadScene({
+      importScene: () => (lowData() ? Promise.reject(new Error('ahorro de datos')) : importGame()),
+      createScene: () => null,
+      onScene() {},
+      onDiscard() {},
+    });
     startRouting(b);
     hubScene.then((scene) => { if (scene && hubPreloader.current() === scene) startCtx.setHubScene(scene); });
     // `hub` espera al lobby pintado y a que la escena llegue o se omita (margen de 8 s)
@@ -1606,6 +1623,9 @@ if (skinLab) {
     Promise.all([hubScene, waitPainted(app, { maxMs })]).then(([, painted]) => {
       // un lobby que no se pinta es un fallo de arranque: «Reintentar» (splash.js no lo da solo con `session` marcada)
       if (painted) boot.hub(); else boot.fail('lobby sin pintar');
+      // textura de hoyuelos de la bola (451 KB) en reposo, con el hub ya visible; no en calidad baja ni con ahorro de datos
+      const warmDimples = () => { if (!lowData() && getQuality() !== 'low') fetch('/skins/dimples-normal.png', { priority: 'low' }).catch(() => {}); };
+      if ('requestIdleCallback' in window) window.requestIdleCallback(warmDimples, { timeout: 4000 }); else setTimeout(warmDimples, 1500);
     });
   }).catch((err) => {
     // solo backend/sesión (y el lobby sin pintar) pueden bloquear el splash con «Reintentar»

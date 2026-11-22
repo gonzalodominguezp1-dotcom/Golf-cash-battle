@@ -137,54 +137,318 @@
   };
   core.mark('html');
 
-  // ---- Capa visual (T020b). Solo actúa si hay document y #splash; en vm de tests sin DOM no hace nada. ----
-  var BASES = { sky: -6, forest: 10, green: 22 };     // px a máxima amplitud, como el boceto
-  var SCALES = { sky: 1, forest: 1.04, green: 1.08 };
-  var SAFETY_MS = 700;     // fundido = 500 ms en index.html; si no llega transitionend
-  var POLL_MS = 500;       // sondeo de state() (el núcleo no usa timers) y del TIP
-  var IDLE_MS = 3000;      // sin input durante este tiempo: deriva sola
-  var FRAME_MS = 30;       // ~30 fps: se saltan frames intermedios
-  var EPS = 0.001;         // convergencia del parallax
+  // ---- Capa visual: la moneda cae al hoyo. Solo actúa si hay document y #splash; en vm de tests sin DOM no hace nada. ----
+  // .hole = foto del hoyo a pantalla completa (cover, en index.html); .coins = canvas con monedas, chispas y símbolos.
+  // Sin sonido ni vibración: la escena solo pinta en el canvas (lo comprueba tests/splash-scene.test.js).
+  var HOLE_W = 1376, HOLE_H = 768;          // public/splash/hole.jpg
+  var HOLE_FX = 0.499, HOLE_FY = 0.502;     // centro del hoyo dentro de la foto (fracción)
+  var HOLE_R = 0.1275;                      // radio del hoyo respecto al ancho pintado
+  var ZOOM_LAND = 1.06, PORT_FILL = 1.5;    // paisaje: cover x 1,06; vertical: la foto mide 150 % del ancho y se funde a negro (CSS)
+  var PAR_X = 14, PAR_Y = 10;               // desplazamiento del hoyo con el parallax (px)
+  var HOLE_PORT_W = 1080, HOLE_PORT_H = 1920;   // public/splash/hole-portrait.jpg (vertical)
+  var HOLE_PORT_FX = 0.5, HOLE_PORT_FY = 0.5;   // centro del hoyo en la foto vertical
+  var HOLE_PORT_R = 0.125;                      // radio del hoyo respecto al ancho de la foto vertical
+  var COIN_SRC = '/splash/coin.png';
+  var MAX_COINS = 60;                       // monedas a la vez
+  var SPAWN_MIN = 0.1, SPAWN_VAR = 0.12;    // una moneda cada 0,1–0,22 s
+  var SAFETY_MS = 700;                      // fundido = 500 ms en index.html; si no llega transitionend
+  var POLL_MS = 500;                        // sondeo de state() (el núcleo no usa timers) y del TIP
 
-  // minimal = true: sin parallax ni listeners globales (modo de rescate si el completo falla).
+  function clamp1(v) { return v < -1 ? -1 : (v > 1 ? 1 : v); }
+
+  function clampN(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+  // Geometría del hoyo en pantalla (px, py en [-1, 1]). Sin DOM.
+  // Horizontal: cover centrado con margen de 1,06 para el parallax.
+  // Vertical: la foto va desde la mitad del logo (donde empieza la viñeta) hasta el 88 % de la altura
+  // (mitad de la barra de progreso); el ancho sigue la proporción de la foto y se corta a los lados.
+  function holeGeom(W, H, px, py) {
+    var tx = -(px || 0) * PAR_X, ty = -(py || 0) * PAR_Y;
+    var s, dw, dh, ox, oy;
+    if (H > W) {
+      // vertical: la foto ocupa toda la pantalla (cover centrado), con margen de parallax en los cuatro lados.
+      dh = H + 2 * PAR_Y;
+      dw = W + 2 * PAR_X;
+      ox = -PAR_X + tx;
+      oy = -PAR_Y + ty;
+      var cover = Math.max(dw / HOLE_PORT_W, dh / HOLE_PORT_H);   // escala real de la foto dentro de la caja
+      return { ox: ox, oy: oy, dw: dw, dh: dh, k: cover, tx: tx, ty: ty,
+        hx: ox + dw * HOLE_PORT_FX, hy: oy + dh * HOLE_PORT_FY, holeR: HOLE_PORT_W * cover * HOLE_PORT_R };
+    } else {
+      s = Math.max(W / HOLE_W, H / HOLE_H) * ZOOM_LAND;
+      dw = HOLE_W * s; dh = HOLE_H * s;
+      ox = (W - dw) / 2 + tx;
+      oy = (H - dh) / 2 + ty;
+    }
+    return { ox: ox, oy: oy, dw: dw, dh: dh, k: s, tx: tx, ty: ty,
+      hx: ox + dw * HOLE_FX, hy: oy + dh * HOLE_FY, holeR: dw * HOLE_R };
+  }
+
+  // Simulación de la escena (sin DOM): monedas que entran por un borde y caen al hoyo; al entrar, chispas y «$»/«↑».
+  function createCoinScene(rnd) {
+    rnd = rnd || Math.random;
+    var sc = { coins: [], sparks: [], pops: [], spawnT: 0, landed: 0 };
+    function spawn(t0) {
+      var edge = Math.floor(rnd() * 4), u = rnd(), m = 0.12;   // 0 arriba, 1 derecha, 2 abajo, 3 izquierda
+      var fx = edge === 0 ? u : (edge === 1 ? 1 + m : (edge === 2 ? u : -m));
+      var fy = edge === 0 ? -m : (edge === 1 ? u : (edge === 2 ? 1 + m : u));
+      sc.coins.push({
+        t: t0 || 0, dur: 2.6 + rnd() * 1.0, fx: fx, fy: fy,
+        depth: 0.4 + rnd() * 0.6,                 // 0,4 lejos … 1 cerca
+        spins: 3 + rnd() * 3, ph: rnd() * Math.PI * 2, fade: 1, landed: false,
+        x: 0, y: 0, size: 0, flip: 1
+      });
+    }
+    function land(g) {
+      sc.landed++;
+      for (var i = 0; i < 14; i++) {
+        var a = rnd() * Math.PI * 2, v = 80 + rnd() * 180;
+        sc.sparks.push({ x: g.hx, y: g.hy, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 120, life: 1 });
+      }
+      for (var j = 0; j < 3; j++) {
+        sc.pops.push({ x: g.hx + (rnd() - 0.5) * g.holeR * 1.6, y: g.hy, vy: -(110 + rnd() * 90),
+          life: 1, ch: rnd() < 0.6 ? '$' : '↑', sc: 0.8 + rnd() * 0.6 });
+      }
+    }
+    function alive(o) { return o.life > 0; }
+    function notLanded(c) { return !c.landed; }
+    function byDepth(a, b) { return a.depth - b.depth; }   // de lejos a cerca
+    // monedas ya en vuelo desde el primer fotograma: así se ven caer aunque la carga sea corta
+    sc.prewarm = function (n) { for (var i = 0; i < n; i++) spawn(rnd() * 0.8); };
+    // dt en segundos; spawnOn = false deja terminar lo que hay sin crear monedas nuevas.
+    sc.update = function (dt, W, H, g, px, py, spawnOn) {
+      if (spawnOn) {
+        sc.spawnT -= dt;
+        if (sc.spawnT <= 0 && sc.coins.length < MAX_COINS) { spawn(); sc.spawnT = SPAWN_MIN + rnd() * SPAWN_VAR; }
+      }
+      var size = Math.min(W, H) * 0.2;
+      sc.coins.sort(byDepth);
+      for (var i = 0; i < sc.coins.length; i++) {
+        var c = sc.coins[i];
+        c.t += dt / c.dur;
+        var t = c.t < 1 ? c.t : 1;
+        var p = t * t;                              // acelera hacia el hoyo
+        var x0 = c.fx * W, y0 = c.fy * H;
+        c.x = x0 + (g.hx - x0) * p + px * c.depth * 22;
+        c.y = y0 + (g.hy - y0) * p + py * c.depth * 14;
+        c.size = size * (1 - 0.72 * t) * (0.55 + 0.45 * c.depth);
+        if (t > 0.85) { c.fade = Math.max(0, 1 - (t - 0.85) / 0.15); c.y += (t - 0.85) * H * 0.05; }   // se hunde
+        c.flip = Math.max(0.12, Math.abs(Math.cos(c.ph + t * c.spins * Math.PI * 2)));                  // giro en Y
+        if (c.t >= 1 && !c.landed) { c.landed = true; land(g); }
+      }
+      sc.coins = sc.coins.filter(notLanded);
+      for (var s = 0; s < sc.sparks.length; s++) {
+        var k = sc.sparks[s];
+        k.life -= dt * 1.6; k.vy += 520 * dt; k.x += k.vx * dt; k.y += k.vy * dt;
+      }
+      sc.sparks = sc.sparks.filter(alive);
+      for (var q = 0; q < sc.pops.length; q++) {
+        var o = sc.pops[q];
+        o.life -= dt * 0.9; o.y += o.vy * dt;
+      }
+      sc.pops = sc.pops.filter(alive);
+    };
+    sc.draw = function (ctx, W, H, coinImg) {
+      ctx.clearRect(0, 0, W, H);
+      var i;
+      if (coinImg) {
+        for (i = 0; i < sc.coins.length; i++) {
+          var c = sc.coins[i];
+          ctx.save();
+          ctx.globalAlpha = c.fade;
+          ctx.translate(c.x, c.y);
+          ctx.scale(c.flip, 1);
+          ctx.drawImage(coinImg, -c.size / 2, -c.size / 2, c.size, c.size);
+          ctx.restore();
+        }
+      }
+      if (sc.sparks.length) {
+        ctx.globalCompositeOperation = 'lighter';
+        for (i = 0; i < sc.sparks.length; i++) {
+          var k = sc.sparks[i], l = k.life > 0 ? k.life : 0;
+          ctx.fillStyle = 'rgba(255, 214, 120, ' + l.toFixed(3) + ')';
+          ctx.beginPath();
+          ctx.arc(k.x, k.y, 2.2 * Math.max(0.3, l) + 0.6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalCompositeOperation = 'source-over';
+      }
+      if (sc.pops.length) {
+        var fs = Math.max(20, Math.min(W, H) * 0.07);
+        ctx.font = '800 ' + Math.round(fs) + "px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        for (i = 0; i < sc.pops.length; i++) {
+          var o = sc.pops[i];
+          ctx.save();
+          ctx.globalAlpha = o.life > 0 ? o.life : 0;
+          ctx.translate(o.x, o.y);
+          ctx.scale(o.sc, o.sc);
+          ctx.fillStyle = '#3dff7a';
+          ctx.shadowColor = 'rgba(0, 255, 90, 0.9)';
+          ctx.shadowBlur = 14;
+          ctx.fillText(o.ch, 0, 0);
+          ctx.restore();
+        }
+      }
+    };
+    sc.clear = function () { sc.coins = []; sc.sparks = []; sc.pops = []; };
+    return sc;
+  }
+
+  // minimal = true: sin escena ni listeners globales (modo de rescate si el completo falla).
   function build(minimal) {
     var doc = root.document;
     var splash = doc && doc.getElementById ? doc.getElementById('splash') : null;
     if (!splash || splash.hidden) return null;
-    var ctl = { destroyed: false, minimal: minimal, quality: null, reduced: false };
+    var ctl = { destroyed: false, minimal: minimal, quality: null, reduced: false, animated: false, scene: null };
 
     var reduced = !!minimal;                 // en modo mínimo se oculta sin fundido
-    var paused = false, hiding = false, retried = false;
-    var rafId = 0, pollId = 0, safetyId = 0, idleId = 0, unsub = null, lastTip = -1;
-    var ptrOn = false, visOn = false, mqRemove = null, endOn = false, retryOn = false;
-    var elPct = null, elBar = null, elFill = null, elTip = null, elRetry = null, elBall = null, elShadow = null;
-    var layers = {};
-    var written = {};                         // última transform escrita por elemento
+    var paused = false, hiding = false, retried = false, full = false;
+    var rafId = 0, pollId = 0, safetyId = 0, unsub = null, lastTip = -1;
+    var ptrOn = false, oriOn = false, resizeOn = false, visOn = false, mqRemove = null, endOn = false, retryOn = false;
+    var elPct = null, elBar = null, elFill = null, elTip = null, elRetry = null, elTicks = null, elHole = null, elCanvas = null;
+    var ctx = null, coinImg = null, coinReady = false, scene = null, animOn = false, saveData = false;
+    var W = 0, H = 0, dpr = 1, px = 0, py = 0, tx = 0, ty = 0, lastTs = 0, holeT = '';
+    var ticks = [];                           // hitos de la barra: { el, at, on }
+
+    // Marcas de hito sobre la barra, en el % acumulado de cada peso (sin el primero ni el último).
+    function buildTicks() {
+      if (!elTicks || !doc.createElement) return;
+      elTicks.textContent = '';                 // un reintento en modo mínimo no duplica marcas
+      var keys = [], acc = 0;
+      for (var k in WEIGHTS) keys.push(k);
+      for (var i = 0; i < keys.length - 1; i++) {
+        acc += WEIGHTS[keys[i]];
+        if (i === 0) continue;
+        var b = doc.createElement('b');
+        b.className = 'tick';
+        b.style.left = acc + '%';
+        elTicks.appendChild(b);
+        ticks.push({ el: b, at: acc, on: false });
+      }
+    }
 
     function cancelRaf() {
       if (rafId && root.cancelAnimationFrame) root.cancelAnimationFrame(rafId);
       rafId = 0;
     }
-    function clearIdle() { if (idleId) root.clearTimeout(idleId); idleId = 0; }
     function stopPoll() { if (pollId) root.clearInterval(pollId); pollId = 0; }
-    function setT(key, el, value) {
-      if (!el || written[key] === value) return;
-      written[key] = value;
-      el.style.transform = value;
+
+    function onPointer(e) {
+      if (!animOn || paused) return;
+      var w = W || root.innerWidth || 1, h = H || root.innerHeight || 1;
+      var x = e && typeof e.clientX === 'number' ? e.clientX : w / 2;
+      var y = e && typeof e.clientY === 'number' ? e.clientY : h / 2;
+      tx = clamp1((x / w) * 2 - 1);
+      ty = clamp1((y / h) * 2 - 1);
+    }
+    // Android: llega sin pedir permiso. iOS: sin permiso no llega y manda el puntero (o el dedo).
+    function onOrient(e) {
+      if (!animOn || paused || !e || e.gamma == null) return;
+      tx = clamp1(e.gamma / 30);
+      ty = clamp1(((e.beta == null ? 45 : e.beta) - 45) / 30);
+    }
+    function resize() {
+      W = root.innerWidth || 1;
+      H = root.innerHeight || 1;
+      if (!elCanvas) return;
+      var max = ctl.quality === 'high' ? 2 : 1.5;
+      dpr = Math.min(root.devicePixelRatio || 1, max);
+      elCanvas.width = Math.round(W * dpr);
+      elCanvas.height = Math.round(H * dpr);
+      if (ctx && ctx.setTransform) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    // Fija la foto con su tamaño real (cover en horizontal; 150 % del ancho en vertical) y el parallax.
+    function setHole(g) {
+      var v = [g.ox, g.oy, g.dw, g.dh].map(function (n) { return n.toFixed(1); }).join(',');
+      if (!elHole || v === holeT) return;
+      holeT = v;
+      var st = elHole.style;
+      st.transform = 'none'; st.right = 'auto'; st.bottom = 'auto';
+      st.left = g.ox.toFixed(1) + 'px'; st.top = g.oy.toFixed(1) + 'px';
+      st.width = g.dw.toFixed(1) + 'px'; st.height = g.dh.toFixed(1) + 'px';
+    }
+    function schedule() {
+      if (rafId || ctl.destroyed || paused || !animOn || !root.requestAnimationFrame) return;
+      rafId = root.requestAnimationFrame(frame);
+    }
+    function frame(ts) {
+      rafId = 0;
+      if (ctl.destroyed || paused || !animOn) return;
+      ts = ts || 0;
+      var dt = lastTs ? (ts - lastTs) / 1000 : 0;
+      if (dt < 0) dt = 0;
+      if (dt > 0.05) dt = 0.05;
+      lastTs = ts;
+      px += (tx - px) * 0.08;
+      py += (ty - py) * 0.08;
+      var g = holeGeom(W, H, px, py);
+      setHole(g);
+      scene.update(dt, W, H, g, px, py, coinReady);
+      scene.draw(ctx, W, H, coinReady ? coinImg : null);
+      schedule();
+    }
+    function removeMotionListeners() {
+      if (ptrOn) root.removeEventListener('pointermove', onPointer);
+      ptrOn = false;
+      if (oriOn) root.removeEventListener('deviceorientation', onOrient);
+      oriOn = false;
+      if (resizeOn) root.removeEventListener('resize', resize);
+      resizeOn = false;
+    }
+    function stopScene() {
+      animOn = false;
+      ctl.animated = false;
+      cancelRaf();
+      removeMotionListeners();
+      if (coinImg) { coinImg.onload = null; coinImg.onerror = null; }
+      if (scene) scene.clear();
+      if (ctx && ctx.clearRect) ctx.clearRect(0, 0, W, H);
+      if (elCanvas) elCanvas.hidden = true;
+      if (elHole && holeT) {                                              // vuelve al tamaño fijo del CSS
+        var es = elHole.style;
+        es.transform = ''; es.left = ''; es.top = ''; es.width = ''; es.height = ''; es.right = ''; es.bottom = '';
+        holeT = '';
+      }
+    }
+    function startScene() {
+      ctx = elCanvas.getContext ? elCanvas.getContext('2d') : null;
+      if (!ctx) { elCanvas.hidden = true; return; }
+      scene = createCoinScene();
+      scene.prewarm(16);
+      ctl.scene = scene;
+      animOn = true;
+      ctl.animated = true;
+      elCanvas.hidden = false;
+      resize();
+      if (root.Image) {
+        coinImg = new root.Image();
+        coinImg.decoding = 'async';
+        try { coinImg.fetchPriority = 'high'; } catch (e) { /* navegador sin fetchPriority */ }
+        coinImg.onload = function () { coinReady = true; };
+        coinImg.onerror = function () { coinReady = false; };   // sin moneda: queda el hoyo
+        coinImg.src = COIN_SRC;
+      }
+      if (splash.style) splash.style.touchAction = 'none';    // arrastrar con el dedo mueve el parallax
+      root.addEventListener('pointermove', onPointer, { passive: true });
+      ptrOn = true;
+      root.addEventListener('deviceorientation', onOrient);
+      oriOn = true;
+      root.addEventListener('resize', resize);
+      resizeOn = true;
+      schedule();
     }
 
     function cleanup(hideIt) {
       if (ctl.destroyed) return;
       ctl.destroyed = true;
-      cancelRaf();
+      stopScene();
       stopPoll();
-      clearIdle();
       if (safetyId) root.clearTimeout(safetyId);
       safetyId = 0;
       if (unsub) unsub();
       unsub = null;
-      if (ptrOn) root.removeEventListener('pointermove', onPointer);
-      ptrOn = false;
       if (visOn) doc.removeEventListener('visibilitychange', onVis);
       visOn = false;
       if (mqRemove) mqRemove();
@@ -205,6 +469,11 @@
       if (elPct) elPct.textContent = p + ' %';
       if (elFill) elFill.style.width = p + '%';
       if (elBar) elBar.setAttribute('aria-valuenow', String(p));
+      for (var i = 0; i < ticks.length; i++) {
+        var on = p >= ticks[i].at;
+        if (on !== ticks[i].on) { ticks[i].on = on; ticks[i].el.className = on ? 'tick on' : 'tick'; }
+      }
+      if (!full && p >= 100) { full = true; splash.classList.add('is-full'); }   // destello final de la barra
     }
     function setError(on) {
       if (on === (splash.getAttribute('data-state') === 'error')) return;
@@ -228,69 +497,11 @@
       pollId = root.setInterval(function () { tickTip(); check(); }, POLL_MS);
     }
 
-    // Parallax: x normalizada en [-1, 1]; 1 = posición del boceto (reposo inicial).
-    var cur = 1, target = 1, lastInput = null, lastFrame = -1e9, lastTs = 0;
-    function apply(ts) {
-      var k = 0.5 + 0.5 * cur;
-      for (var n in layers) {
-        if (layers[n] && !layers[n].hidden) {
-          setT(n, layers[n], 'translate3d(' + (BASES[n] * k).toFixed(2) + 'px,0,0) scale(' + SCALES[n] + ')');
-        }
-      }
-      // Pelota: vaivén suave; el periodo nunca baja de FLASH_MIN_MS (AC33). La estela anima por CSS.
-      var bob = ts === null ? 0 : Math.sin((2 * Math.PI * ts) / flashPeriod(1600)) * 3;
-      setT('ball', elBall, 'translate3d(0,' + bob.toFixed(2) + 'px,0)');
-      setT('shadow', elShadow, 'scaleX(' + (1 - bob * 0.02).toFixed(3) + ')');
-    }
-    function schedule() {
-      if (rafId || ctl.destroyed || paused || reduced || minimal || !root.requestAnimationFrame) return;
-      rafId = root.requestAnimationFrame(frame);
-    }
-    function resumeLoop() { idleId = 0; schedule(); }
-    function frame(ts) {
-      rafId = 0;
-      if (ctl.destroyed || paused || reduced) return;
-      ts = ts || 0;
-      if (ts - lastFrame < FRAME_MS) { schedule(); return; }  // ~30 fps
-      lastFrame = ts; lastTs = ts;
-      var nowMs = Date.now();
-      if (lastInput !== null && nowMs - lastInput > IDLE_MS) lastInput = null;
-      var drifting = lastInput === null;
-      if (drifting) target = Math.sin(ts / 7000);              // deriva lenta sin input
-      cur += (target - cur) * 0.08;
-      if (!drifting && Math.abs(target - cur) < EPS) {
-        // Convergido y con el puntero quieto: se para el bucle hasta nuevo input o fin del reposo.
-        cur = target;
-        apply(null);
-        idleId = root.setTimeout(resumeLoop, Math.max(50, IDLE_MS - (nowMs - lastInput) + 20));
-        return;
-      }
-      apply(ts);
-      schedule();
-    }
-    function onPointer(e) {
-      if (ctl.destroyed || paused || reduced) return;
-      var w = root.innerWidth || 1;
-      var x = e && typeof e.clientX === 'number' ? e.clientX : w / 2;
-      target = Math.max(-1, Math.min(1, (x / w) * 2 - 1));
-      lastInput = Date.now();
-      clearIdle();
-      schedule();
-    }
-
     function goReduced() {
       if (reduced) return;
       reduced = true;
       ctl.reduced = true;
-      cancelRaf();
-      clearIdle();
-      if (ptrOn) root.removeEventListener('pointermove', onPointer);
-      ptrOn = false;
-      for (var n in layers) if (layers[n]) { layers[n].style.transform = ''; }
-      if (elBall) elBall.style.transform = '';
-      if (elShadow) elShadow.style.transform = '';
-      written = {};
-      if (layers.forest) layers.forest.hidden = false;       // reduced: 3 capas estáticas
+      stopScene();                                           // hoyo estático, sin monedas
     }
     function onMq(e) {
       if (e && e.matches === true) goReduced();
@@ -300,9 +511,10 @@
       var hidden = !!doc.hidden;
       if (hidden && !paused) {
         paused = true;
-        cancelRaf(); stopPoll(); clearIdle();
+        cancelRaf(); stopPoll();
       } else if (!hidden && paused) {
         paused = false;
+        lastTs = 0;                                          // sin salto de tiempo al volver
         startPoll();
         schedule();
         tickTip();
@@ -324,8 +536,7 @@
     function hide() {
       if (hiding || ctl.destroyed) return;
       hiding = true;
-      cancelRaf(); clearIdle();
-      splash.classList.add('is-hiding');
+      splash.classList.add('is-hiding');                   // las monedas siguen durante el fundido
       if (reduced) { finish(); return; }                   // sin transición: no hay transitionend
       splash.addEventListener('transitionend', onEnd);
       endOn = true;
@@ -335,9 +546,8 @@
     try {
       elPct = splash.querySelector('.pct'); elBar = splash.querySelector('.bar');
       elFill = splash.querySelector('.bar > i'); elTip = splash.querySelector('.tip-text');
-      elRetry = splash.querySelector('.retry'); elBall = splash.querySelector('.ball');
-      elShadow = splash.querySelector('.ball-shadow');
-      layers = { sky: splash.querySelector('.sky'), forest: splash.querySelector('.forest'), green: splash.querySelector('.green') };
+      elRetry = splash.querySelector('.retry'); elTicks = splash.querySelector('.ticks');
+      elHole = splash.querySelector('.hole'); elCanvas = splash.querySelector('.coins');
 
       var mql = null;
       if (!minimal) {
@@ -355,17 +565,24 @@
         stored: stored, width: root.innerWidth, finePointer: !coarse,
         deviceMemory: nav.deviceMemory, cores: nav.hardwareConcurrency, userAgent: nav.userAgent
       });
+      saveData = !!(nav.connection && nav.connection.saveData);
 
       var maxAttr = splash.dataset ? Number(splash.dataset.maxMs) : NaN;
       if (isFinite(maxAttr) && maxAttr > 0) root.gcbSplash.configure({ maxMs: maxAttr });
 
-      // Calidad baja: 2 capas (se omite el bosque). Con reduced-motion, 3 estáticas.
-      if (layers.forest) layers.forest.hidden = core.layersFor(ctl.quality, reduced) < 3;
+      splash.setAttribute('data-quality', minimal ? 'low' : ctl.quality);
+      buildTicks();
 
       if (elTip) elTip.setAttribute('aria-live', 'off');
       if (elRetry) { elRetry.addEventListener('click', onRetry); retryOn = true; }
       unsub = root.gcbSplash.subscribe(check);
       startPoll();
+      // Escena animada solo con movimiento permitido y calidad media/alta (low = 2 capas: hoyo fijo, sin monedas ni chispas).
+      var animate = !minimal && !reduced && !saveData && core.layersFor(ctl.quality, reduced) >= 3;
+      if (elCanvas) {
+        if (animate) startScene();
+        else elCanvas.hidden = true;
+      }
       if (!minimal) {
         if (mql) {
           if (mql.addEventListener) {
@@ -377,12 +594,6 @@
           }
         }
         if (doc.addEventListener) { doc.addEventListener('visibilitychange', onVis); visOn = true; }
-        if (!reduced) {
-          if (splash.style) splash.style.touchAction = 'none';
-          root.addEventListener('pointermove', onPointer);
-          ptrOn = true;
-          schedule();
-        }
         if (doc.hidden) onVis();
       }
       tickTip();
@@ -404,6 +615,6 @@
     return c;
   }
 
-  root.__gcbSplashView = { init: initView, instance: null };
+  root.__gcbSplashView = { init: initView, instance: null, holeGeom: holeGeom, createCoinScene: createCoinScene, MAX_COINS: MAX_COINS };
   if (root.document) initView();
 })(window);

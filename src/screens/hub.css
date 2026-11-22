@@ -6,10 +6,11 @@
   --ico: 84px; --ico-svg: 62px; --tool: 68px; --tool-svg: 48px; --face: 72px; --face-svg: 42px; --pad: 12px;
   --bigh: 88px; --big-svg: 34px; --pill: 48px; --lift: 18px; --display-btn: var(--display);
   position: fixed; inset: 0; overflow: hidden; z-index: 0;
-  background: #6fb07a url('/splash/hub-fallback.webp') center / cover no-repeat;
+  background: #c98a5a url('/hub/lobby-poster-16x9.webp') center / cover no-repeat;
   display: grid; grid-template-rows: auto 1fr auto; color: var(--text);
   padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
 }
+@media (orientation: portrait) { .hub { background-image: url('/hub/lobby-poster-9x16.webp'); } }
 /* velo oscuro arriba y abajo para el contraste AA de los controles sobre la escena */
 .hub::before {
   content: ''; position: absolute; inset: 0; pointer-events: none;
@@ -20,9 +21,9 @@
     radial-gradient(ellipse farthest-corner at center, rgba(4, 8, 14, 0) 55%, rgba(4, 8, 14, 0.5) 100%);
 }
 .hub > * { position: relative; }
-/* escena 3D detrás de todo (bajo el velo ::before); sin escena queda vacío y se ve la imagen fija del fondo */
+/* vídeo de fondo detrás de todo (bajo el velo ::before); sin vídeo o con movimiento reducido se ve el póster */
 .hub > .hub-scene { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
-.hub-scene canvas { display: block; width: 100%; height: 100%; }
+.hub-scene .hub-video { display: block; width: 100%; height: 100%; object-fit: cover; }
 .hub button { font: inherit; color: inherit; cursor: pointer; border: 0; padding: 0; }
 .hub button:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
 
