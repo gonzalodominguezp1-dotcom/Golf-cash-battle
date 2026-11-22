@@ -74,3 +74,11 @@ Verificación local: `pnpm test` 1299 pass / 0 fail; build OK. Sin commit ni pus
 - Límites: Bajo 8 MB, Medio 24 MB, Alto 64 MB (propuesta; no confirmados por el usuario).
 - Riesgos a medir: `Texture.copy` marca `needsUpdate`, así que cada clon puede forzar una resubida a GPU de la imagen compartida; reenlace de `repeat` (arena, normales); comportamiento de `dispose` de clon con F3 en escena real.
 - Checklist: capturas lado a lado de hierba, arena, tierra, madera, hielo y neón (idénticas); sin desalineación en arena; `stats().hits > 0` desde el hoyo 2; `load_desglose` baja; cambio de calidad sin cruzar texturas. `textureCache` no está expuesto en `window`: hace falta para leer `stats()` en consola.
+
+## F5 — Decisiones de producto (implementada, sin verificar en navegador)
+Verificación local: `pnpm test` 1308 pass / 0 fail; build OK. Sin commit ni push.
+- Sala de práctica: mínimo 2500 ms desde el clic (`src/game/roomTiming.js`, `ROOM_MIN_MS = 2500`). Con `ROOM_MIN_MS = 0` o `?room=old`, tiempos de antes. Solo práctica y mesas locales.
+- Intro: un toque la salta fuera del vivo (`src/game/introSkip.js`, `INTRO_SKIP = true`). El toque que salta no dispara golpe. Con `INTRO_SKIP = false`, no hay salto. En vivo sin cambios.
+- No hechas (no aprobadas o dependen de datos de F0): dieta de shaders (prohibido tocar shaders), worker de texturas, caché de shaders de Chrome.
+- Riesgo: el salto con ratón podría pedir pointer lock en el primer clic (el agente lo ha tratado ignorando el click siguiente); verificar en navegador.
+- Checklist: sala ≥ 2,5 s y animación sin cortes; `?room=old` como comparación; intro saltable con toque (ratón y táctil) sin golpe en el toque que salta; intro en vivo igual; mesas de pago en local igual.
