@@ -11,6 +11,17 @@
     'Arrastra hacia atrás para apuntar; cuanto más largo, más fuerte.',
     'Practica el hoyo gratis antes de jugarte las monedas.'
   ];
+  // Texto de estado según el último hito alcanzado (en el orden de arranque).
+  var PHASES = ['html', 'bundle', 'session', 'progress', 'three', 'scene', 'hub'];
+  var LABELS = {
+    html: 'Arrancando el juego…',
+    bundle: 'Cargando el juego…',
+    session: 'Comprobando tu sesión…',
+    progress: 'Cargando tu saldo…',
+    three: 'Preparando el campo 3D…',
+    scene: 'Colocando las banderas…',
+    hub: '¡Listo, a jugar!'
+  };
   var FLASH_MIN_MS = 500; // AC33: como mucho 2 destellos por segundo
 
   function flashPeriod(ms) {
@@ -75,6 +86,12 @@
       if (sum > shown) shown = sum; // nunca baja
       return shown;
     }
+    // Último hito alcanzado según el orden de arranque (para el texto de estado).
+    function phase() {
+      var last = null;
+      for (var i = 0; i < PHASES.length; i++) if (marked[PHASES[i]]) last = PHASES[i];
+      return last;
+    }
     function mark(name) {
       if (Object.prototype.hasOwnProperty.call(weights, name)) marked[name] = true;
       return pct();
@@ -102,7 +119,7 @@
       return quality === 'low' ? 2 : 3;
     }
     return {
-      mark: mark, pct: pct, state: state, canHide: canHide, tipAt: tipAt, layersFor: layersFor,
+      mark: mark, pct: pct, state: state, canHide: canHide, tipAt: tipAt, layersFor: layersFor, phase: phase,
       fail: function () { failed = true; },
       forceHide: function () { forced = true; },
       setMaxMs: function (v) { if (typeof v === 'number' && isFinite(v) && v > 0) maxMs = v; },
@@ -119,7 +136,8 @@
   };
   root.__gcbSplashCore = api;
 
-  var core = createSplashCore({ maxMs: 15000 });
+  // minMs: el splash se queda al menos este tiempo, para que dé tiempo a leer el estado y un consejo.
+  var core = createSplashCore({ maxMs: 15000, minMs: 3000 });
   var listeners = [];
   function emit() {
     var copy = listeners.slice();
@@ -307,7 +325,7 @@
     var paused = false, hiding = false, retried = false, full = false;
     var rafId = 0, pollId = 0, safetyId = 0, unsub = null, lastTip = -1;
     var ptrOn = false, oriOn = false, resizeOn = false, visOn = false, mqRemove = null, endOn = false, retryOn = false;
-    var elPct = null, elBar = null, elFill = null, elTip = null, elRetry = null, elTicks = null, elHole = null, elCanvas = null;
+    var elPct = null, elBar = null, elFill = null, elTip = null, elRetry = null, elTicks = null, elHole = null, elCanvas = null, elLabel = null;
     var ctx = null, coinImg = null, coinReady = false, scene = null, animOn = false, saveData = false;
     var W = 0, H = 0, dpr = 1, px = 0, py = 0, tx = 0, ty = 0, lastTs = 0, holeT = '';
     var ticks = [];                           // hitos de la barra: { el, at, on }
@@ -464,8 +482,11 @@
     }
     ctl.destroy = function () { cleanup(true); };
 
+    var lastPhase = null;
     function render() {
       var p = core.pct();
+      var ph = core.phase();
+      if (elLabel && ph !== lastPhase) { lastPhase = ph; elLabel.textContent = LABELS[ph] || LABELS.html; }
       if (elPct) elPct.textContent = p + ' %';
       if (elFill) elFill.style.width = p + '%';
       if (elBar) elBar.setAttribute('aria-valuenow', String(p));
@@ -546,6 +567,7 @@
     try {
       elPct = splash.querySelector('.pct'); elBar = splash.querySelector('.bar');
       elFill = splash.querySelector('.bar > i'); elTip = splash.querySelector('.tip-text');
+      elLabel = splash.querySelector('.label');
       elRetry = splash.querySelector('.retry'); elTicks = splash.querySelector('.ticks');
       elHole = splash.querySelector('.hole'); elCanvas = splash.querySelector('.coins');
 

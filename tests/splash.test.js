@@ -50,6 +50,18 @@ test('pesos por defecto suman 100', () => {
   assert.equal(Object.values(api.WEIGHTS).reduce((a, b) => a + b, 0), 100);
 });
 
+test('phase: último hito alcanzado según el orden de arranque', () => {
+  const { core } = make();
+  assert.equal(core.phase(), null, 'sin hitos');
+  core.mark('html');
+  assert.equal(core.phase(), 'html');
+  core.mark('session');
+  core.mark('bundle');
+  assert.equal(core.phase(), 'session', 'bundle va antes que session');
+  core.mark('hub');
+  assert.equal(core.phase(), 'hub');
+});
+
 test('canHide: falso antes de 600 ms aunque haya hub; verdadero después', () => {
   const { core, c } = make();
   assert.equal(core.canHide(c.now()), false, 'sin hub');
@@ -490,7 +502,7 @@ test('escena: con ahorro de datos no se anima (hoyo fijo, sin pedir la moneda)',
 test('visual: fundido al ocultar: is-hiding y hidden por transitionend o por seguridad', () => {
   const v = loadView();
   v.win.gcbSplash.done();
-  v.t.now += 700; v.tick();
+  v.t.now += 3001; v.tick(); // minMs del splash en vivo: 3000 ms
   assert.equal(v.splash.classList.contains('is-hiding'), true);
   assert.equal(v.splash.hidden, false);
   v.splash.fire('transitionend', { target: v.splash, propertyName: 'opacity' });
@@ -551,7 +563,7 @@ test('visual2: destroy a mitad de fundido y en error deja #splash oculto', () =>
   assert.equal(v.splash.getAttribute('aria-hidden'), 'true');
   const w = loadView();
   w.win.gcbSplash.done();
-  w.t.now += 700; w.tick();
+  w.t.now += 3001; w.tick(); // minMs del splash en vivo: 3000 ms
   assert.equal(w.splash.classList.contains('is-hiding'), true);
   assert.equal(w.splash.hidden, false);
   inst(w).destroy();
