@@ -34,3 +34,19 @@ Rama de trabajo: `la-chaqueta-bionica-carga-partida` (worktree `.worktrees/la-ch
   5. El juego se ve y se juega igual que antes.
 - Rollback: revertir el commit, o forzar `PERF = false` en `src/game/perfProbe.js`.
 - Riesgo residual: el código de `perfProbe.js` sí viaja en el bundle principal aunque esté desactivado (ver tamaño en el build).
+
+## F1 — Arreglos rápidos (implementadas, pendientes de verificar en producción)
+Verificación local: `pnpm test` 1252 pass / 0 fail; `pnpm run build` OK. Sin commit ni push.
+
+- **F1a, caché `immutable` para `/assets/*`** (`vercel.json`, `tests/vercel-headers.test.js` 4/4). Rollback: quitar la entrada.
+- **F1b, prefetch del motor** (`src/main.js`, `src/game/prefetchRules.js`, `tests/prefetch-rules.test.js` 2/2). `PREFETCH_DECISION = 'idle'`; ponerlo en `'onPlay'` desactiva el prefetch en reposo. Las llamadas anticipadas al iniciar partida siguen activas con ese interruptor.
+- **F1c, compilación correcta y primer frame oculto** (`src/game/GolfGame.js`, `src/game/warmupRules.js`, `tests/warmup-rules.test.js`). `WARM_GPU = true`; ponerlo en `false` devuelve el comportamiento anterior. Desviación del encargo: el `compileAsync` de `#buildScene` queda solo bajo `if (!WARM_GPU)`, para que el rollback funcione. Con `WARM_GPU = true` no hay compilación doble. Decisión del agente: si `load()` se llama con el bucle ya corriendo, lo para mientras calienta y lo reinicia al final.
+
+Checklist de producción (tras fusionar y desplegar, con `?perf=1&perfcourses=3,6,12`):
+1. `curl -sI` a `/assets/<x>.js` muestra `max-age=31536000, immutable`; `/` sigue con `max-age=0`; `version.json` sin `immutable`.
+2. `import:end` antes de `room:end`; `prefetch:start`/`prefetch:end` presentes; sin prefetch con Data Saver.
+3. Modo avión → Práctica da error controlado; con red, reintenta y funciona.
+4. `programas_frame1` ≤ 12 en El Portal y Looping Neón (Medio).
+5. Sin pantalla negra al entrar; la intro se ve entera; Bajo y Alto iguales; calidad a mitad de hoyo; Modo Libre, desempate `#hoyo3-empate` y volcán bien; hoyos 2 y siguientes arrancan bien.
+
+Hallazgo no tratado: `vercel.json` usa `npx -y pnpm@…` en `installCommand` y `buildCommand`. CLAUDE.md prohíbe `npx`. Pendiente de decisión del usuario.
