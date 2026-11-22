@@ -55,9 +55,7 @@ function makeCtx(env, over = {}) {
     icon: (n) => `<svg data-icon="${n}"></svg>`,
     partyWatch: { state: null, pickTier: (t) => calls.pick.push(t.id), stop: () => { calls.release++; } },
     actions: { startMatch: (t) => calls.start.push(t.id), claimRewards: () => { calls.claim++; } },
-    legacy: {
-      enterTables: () => { calls.enter++; },
-    },
+    leavePlay: () => { calls.enter++; },
     ...over,
   };
   return { ctx, calls, store, walletSubs };

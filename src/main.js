@@ -1883,12 +1883,8 @@ function startRouting(b) {
       reviveHubScene: () => { gamePreloader.release(); reviveHubScene(); },
       playFreePlay: (i) => playFreePlay(i),
     },
-    legacy: {
-      // Mesas (T028): lo que la pantalla necesita de main.js
-      enterTables: () => { leaveFinale(); stopLive(); releasePlay(); },
-      enterSettings: () => { leaveFinale(); stopLive(); releasePlay(); },
-      enterMaps: () => { leaveFinale(); stopLive(); releasePlay(); },
-    },
+    // al entrar en Mesas, Ajustes o Mapas: cerrar el final y la sala en vivo, y liberar la partida
+    leavePlay: () => { leaveFinale(); stopLive(); releasePlay(); },
   });
   screenHost = createHost({ router, routes, root: app, ctx, notify, win: window, doc: document });
   const navigate = createNavigator({ router, host: screenHost, rootId: ROOT_SCREEN });

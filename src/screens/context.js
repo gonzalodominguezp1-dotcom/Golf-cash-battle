@@ -14,7 +14,7 @@ export function createContext(deps = {}) {
     quality: () => 'medium',
     testHole: null,
     hubScene: null,
-    legacy: {}, // id de ruta -> función show* de main.js mientras la pantalla no se haya migrado
+    leavePlay: noop, // cierra el final y la sala en vivo y libera la partida (lo pone main.js)
     ...deps,
     t,
     reducedMotion: deps.reducedMotion || prefersReduced,
