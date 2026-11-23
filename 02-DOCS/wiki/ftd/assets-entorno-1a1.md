@@ -180,7 +180,10 @@ Propuesta (2026-11-19) para rediseñar SOLO el entorno de `neon`, `neonPink` y `
   `tests/neon-water.test.js`), sin commit. `pnpm test`: solo fallan los VFX ajenos. `pnpm build` ok.
   Revisión de contexto limpio: sin hallazgos reales. Nit abierto: `scatter` puede dar menos motas que el
   presupuesto en agua muy somera (documentado). Sin verificar: aspecto en pantalla, GLSL en GPU, coste de
-  fill-rate del vapor en móvil. Pendiente de visto bueno del usuario.
+  fill-rate del vapor en móvil. Visto bueno del usuario 2026-11-23 («es la polla»); sin commit.
+- [ ] N7 — elementos con textura ASCII en neón (2026-11-23, pedido del usuario): nubes de caracteres,
+  pilares de energía que suben y naves/coches voladores en ASCII. Solo entorno lejano; sin física.
+  Módulo `assets/asciiNeon.js` (Opus), registrado en el laboratorio. Pendiente de visto bueno.
 - [ ] NF — cierre y previews.
 - N5 (pista/atracciones) descartado por el usuario. (No hay N1: su contenido, quitar el agua, ya está en N0.)
 
