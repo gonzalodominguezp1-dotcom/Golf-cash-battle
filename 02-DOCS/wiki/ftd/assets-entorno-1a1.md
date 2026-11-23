@@ -21,7 +21,9 @@ aprobando cada uno antes de pasar al siguiente, para que el campo se vea vivo y 
   los hoyos. El usuario hace las comprobaciones visuales; el agente no abre el navegador.
 - **Alcance:** cada asset nuevo sustituye al viejo en **todos los entornos naturales**.
   Desde 2026-11-19 neón/cyberpunk SÍ entran: temas `neon`, `neonPink`, `cyber2078`; solo entorno;
-  sin agua; pista/atracciones fuera (decisión del usuario; antes: «Neón y cyberpunk no se tocan»).
+  pista/atracciones fuera (decisión del usuario; antes: «Neón y cyberpunk no se tocan»).
+  2026-11-23: el usuario cambia lo de «sin agua»: el neón lleva agua pútrida y radiactiva con partículas
+  de suciedad y vapor verde ascendente (ver «Neón / Cyberpunk», N6).
   Ver el apartado «Neón / Cyberpunk (N0–NF)».
 - **Orden:** viento → árbol redondo → pino → palmera → arbustos → césped → flores → rocas → agua →
   especiales (pino nevado, cactus, árbol seco, montón de rocas).
@@ -172,6 +174,9 @@ Propuesta (2026-11-19) para rediseñar SOLO el entorno de `neon`, `neonPink` y `
 - [ ] N2 — ciudad lejana rediseñada (Opus).
 - [ ] N3 — pilones y cristales (Sonnet).
 - [ ] N4 — suelo y montañas.
+- [ ] N6 — agua de neón (2026-11-23, pedido del usuario tras la prueba en producción): fondo verdoso pútrido,
+  superficie radiactiva, partículas de suciedad dentro del agua y vapor verde que sube desde la superficie.
+  Solo visual; la física no cambia. Pendiente de visto bueno del usuario.
 - [ ] NF — cierre y previews.
 - N5 (pista/atracciones) descartado por el usuario. (No hay N1: su contenido, quitar el agua, ya está en N0.)
 
