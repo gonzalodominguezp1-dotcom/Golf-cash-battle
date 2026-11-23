@@ -184,6 +184,12 @@ Propuesta (2026-11-19) para rediseñar SOLO el entorno de `neon`, `neonPink` y `
 - [ ] N7 — elementos con textura ASCII en neón (2026-11-23, pedido del usuario): nubes de caracteres,
   pilares de energía que suben y naves/coches voladores en ASCII. Solo entorno lejano; sin física.
   Módulo `assets/asciiNeon.js` (Opus), registrado en el laboratorio. Pendiente de visto bueno.
+  Implementado 2026-11-23 sin commit: `assets/asciiNeon.js` (atlas de glifos pintado en JS, un cuadrilátero por
+  elemento con la rejilla de caracteres en el sombreador), llamado desde `environment.js` en la rama neón y liberado
+  en `env.dispose()`; laboratorio: `ascii-clouds`, `ascii-pillars`, `ascii-flyers` (`src/lab/assets/examples.js`).
+  Presupuesto: nubes 4/7/10, pilares 2/4/6, naves 1/2/2; 3 llamadas; 14/26/36 triángulos (tope 64); 0 tiradas del
+  rng del hoyo. `tests/ascii-neon.test.js` (8). `pnpm test`: solo fallan los VFX ajenos; `pnpm build` ok. Sin
+  verificar: aspecto en pantalla, GLSL en GPU real, relleno en móvil. Decisión en `sdd/decisions.md`.
 - [ ] NF — cierre y previews.
 - N5 (pista/atracciones) descartado por el usuario. (No hay N1: su contenido, quitar el agua, ya está en N0.)
 
