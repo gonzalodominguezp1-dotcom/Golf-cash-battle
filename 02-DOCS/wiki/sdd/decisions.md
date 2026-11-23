@@ -261,3 +261,10 @@ Open     — decisión de diseño del usuario: las zonas `water` jugables del ho
 - **Dispose:** `env.dispose()` llama a `cyber.city.dispose()` (idempotente; quita el grupo y libera geometrías y materiales; la fachada compartida se queda). `setupCyberpunkEnvironment` ahora devuelve `{ city }`.
 - **Tests:** `tests/neon-city.test.js` (11; el de presupuesto también exige color de neón saturado en cada vértice: cazó que `new THREE.Color([r, g, b])` deja el color en blanco). Mutaciones rojas y restauradas con `cmp`: sin las 36 tiradas heredadas; sin `cyber?.city.dispose()`; sin sectores de pilares; `fog: false` en las fachadas; `maxY` 34; una tirada del rng del hoyo dentro de la ciudad.
 - **Abierto:** sin ver en pantalla ni en GPU real (iluminación Lambert de las fachadas con las contraluces, legibilidad con la niebla, relleno de los carteles aditivos en móvil).
+
+## 2026-11-23 — N3 pilones y cristales de neón (feature: assets-entorno-1a1)
+- Módulo nuevo `src/game/render/assets/neonProps.js`; `makeCyberPylon`/`makeHoloCrystal` de `cyberpunkEnvironment.js` son ahora re-exportaciones (mismas firmas, con un último parámetro `opts` con `level` y `animated`). `environment.js` solo añade ese parámetro; las llamadas a `rng()` no cambian (pilón: `rng() > 0.7` de fuera, 0 propias; cristal: 1 tirada para el color, `floor(rng() * n)` igual que antes).
+- Geometrías por (variante, calidad) y materiales por color, compartidos por todos los objetos: `bakeStatic` junta los pilones en 3 mallas (metal, neón, halo) y las bases de cristal en la del metal. Antes: materiales nuevos por objeto (3 llamadas por pilón y 3 por cristal). Nada se crea por objeto, así que no hay nada que liberar por hoyo; `disposeNeonProps()` libera las cachés (se rehacen solas).
+- Variantes del pilón sin rng: `beacon` si `lit`; apagado, `lamp` o `post` según un hash de (x, z).
+- Animación con el reloj compartido: el cristal gira y flota (dt) y un único latido del neón por hoyo (`WeakSet` por lista `animated`); sin objetos por fotograma.
+- Topes de triángulos (código y `tests/neon-pylons.test.js`): pilón 120/200/260, cristal 70/100/130 (Bajo/Medio/Alto).

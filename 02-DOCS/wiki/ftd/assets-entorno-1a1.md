@@ -179,7 +179,12 @@ Propuesta (2026-11-19) para rediseñar SOLO el entorno de `neon`, `neonPink` y `
   500/1000/1600). 0 tiradas propias del rng del hoyo (las 36 de la ciudad vieja se conservan: el decorado no se
   mueve). `tests/neon-city.test.js` (11). Sin verificar: aspecto en pantalla y GPU real. Decisión en
   `sdd/decisions.md`.
-- [ ] N3 — pilones y cristales (Sonnet).
+- [ ] N3 — pilones y cristales (Sonnet). Implementado 2026-11-23 sin commit, pendiente de visto bueno visual:
+  `assets/neonProps.js` (poste de metal, 3 niveles de neón, base ancha, cabeza con halo; variantes lamp/post/beacon;
+  cristal con facetas de neón, anillo de datos y halo; geometrías y materiales compartidos). Presupuesto medido por
+  pilón 96-112/180-200/224-248 y cristal 60/84/112 (tope 120/200/260 y 70/100/130); llamadas por hoyo: 3 fijas + 2 por
+  cristal + 1 por pilón encendido (antes 3 por objeto). rng del hoyo intacto (cristal 1 tirada, pilón 0). Laboratorio:
+  `neon-pylon`, `neon-crystal`. `tests/neon-pylons.test.js` (10). Sin verificar: aspecto en pantalla y GPU real.
 - [ ] N4 — suelo y montañas.
 - [ ] N6 — agua de neón (2026-11-23, pedido del usuario tras la prueba en producción): fondo verdoso pútrido,
   superficie radiactiva, partículas de suciedad dentro del agua y vapor verde que sube desde la superficie.
