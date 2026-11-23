@@ -171,7 +171,14 @@ los entornos tras la aprobación.
 ## Neón / Cyberpunk (N0–NF)
 Propuesta (2026-11-19) para rediseñar SOLO el entorno de `neon`, `neonPink` y `cyber2078` (hoyo 15 incluido): ciudad lejana, cielo, suelo/montañas, pilones y cristales. Sin agua. Pista y atracciones no se tocan; la física tampoco.
 - [x] N0 — preparación y agua fuera: textura de fachada determinista (`drawSkyscraperFacade`, rng con semilla) y sin plano de agua en neón (`environment.js`); tests `*-env` de neón actualizados.
-- [ ] N2 — ciudad lejana rediseñada (Opus).
+- [ ] N2 — ciudad lejana rediseñada (Opus). Implementado 2026-11-23 sin commit, pendiente de visto bueno visual:
+  `assets/neonCity.js` (torres escalonadas con aguja, antena o helipuerto, franjas de neón, ventanas de la fachada
+  de N0 en una DataTexture de 128 px por paleta), llamado desde `buildCyberSkyline`; ASCII creado antes y pasado a
+  la ciudad (deja libres los pilares); tráfico aéreo sube a 33 m; focos desde dos torres; carteles flotantes viejos
+  fuera. Laboratorio: `neon-city`. Presupuesto: torres 9/14/20, llamadas 2/3/4, triángulos 432/856/1363 (tope
+  500/1000/1600). 0 tiradas propias del rng del hoyo (las 36 de la ciudad vieja se conservan: el decorado no se
+  mueve). `tests/neon-city.test.js` (11). Sin verificar: aspecto en pantalla y GPU real. Decisión en
+  `sdd/decisions.md`.
 - [ ] N3 — pilones y cristales (Sonnet).
 - [ ] N4 — suelo y montañas.
 - [ ] N6 — agua de neón (2026-11-23, pedido del usuario tras la prueba en producción): fondo verdoso pútrido,
