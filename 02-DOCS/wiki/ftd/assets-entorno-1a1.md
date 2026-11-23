@@ -176,7 +176,11 @@ Propuesta (2026-11-19) para rediseñar SOLO el entorno de `neon`, `neonPink` y `
 - [ ] N4 — suelo y montañas.
 - [ ] N6 — agua de neón (2026-11-23, pedido del usuario tras la prueba en producción): fondo verdoso pútrido,
   superficie radiactiva, partículas de suciedad dentro del agua y vapor verde que sube desde la superficie.
-  Solo visual; la física no cambia. Pendiente de visto bueno del usuario.
+  Solo visual; la física no cambia. Implementado (`assets/neonWater.js`, `water.js`, `environment.js`,
+  `tests/neon-water.test.js`), sin commit. `pnpm test`: solo fallan los VFX ajenos. `pnpm build` ok.
+  Revisión de contexto limpio: sin hallazgos reales. Nit abierto: `scatter` puede dar menos motas que el
+  presupuesto en agua muy somera (documentado). Sin verificar: aspecto en pantalla, GLSL en GPU, coste de
+  fill-rate del vapor en móvil. Pendiente de visto bueno del usuario.
 - [ ] NF — cierre y previews.
 - N5 (pista/atracciones) descartado por el usuario. (No hay N1: su contenido, quitar el agua, ya está en N0.)
 
