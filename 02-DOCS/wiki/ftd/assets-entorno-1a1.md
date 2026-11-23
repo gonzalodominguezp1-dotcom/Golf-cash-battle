@@ -185,7 +185,13 @@ Propuesta (2026-11-19) para rediseñar SOLO el entorno de `neon`, `neonPink` y `
   pilón 96-112/180-200/224-248 y cristal 60/84/112 (tope 120/200/260 y 70/100/130); llamadas por hoyo: 3 fijas + 2 por
   cristal + 1 por pilón encendido (antes 3 por objeto). rng del hoyo intacto (cristal 1 tirada, pilón 0). Laboratorio:
   `neon-pylon`, `neon-crystal`. `tests/neon-pylons.test.js` (10). Sin verificar: aspecto en pantalla y GPU real.
-- [ ] N4 — suelo y montañas.
+- [ ] N4 — suelo y montañas (Opus). Implementado 2026-11-23 sin commit, pendiente de visto bueno visual:
+  `assets/neonTerrain.js`: misma forma de crestas, pero lo que sobresale se baja bajo la línea de vista del ojo
+  (1,4 m) al pie de la ciudad; llano en el anillo de la ciudad y sierra detrás (pie a 94-100 m según el rumbo). Suelo:
+  la rejilla brilla suave en el neón del tema (`aGlow`: apagada bajo la pista). heightAt igual en la pista y su banda
+  de 5 m; rng del hoyo igual (Looping Neón 1419/1434/1447); mismas llamadas; triángulos 10368/19208/33800 (tope
+  10500/19500/34000). `tests/neon-terrain.test.js` (7). Sin verificar: aspecto en pantalla y GPU real. Decisión en
+  `sdd/decisions.md`.
 - [ ] N6 — agua de neón (2026-11-23, pedido del usuario tras la prueba en producción): fondo verdoso pútrido,
   superficie radiactiva, partículas de suciedad dentro del agua y vapor verde que sube desde la superficie.
   Solo visual; la física no cambia. Implementado (`assets/neonWater.js`, `water.js`, `environment.js`,
