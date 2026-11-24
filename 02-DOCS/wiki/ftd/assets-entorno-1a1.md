@@ -171,7 +171,18 @@ los entornos tras la aprobación.
   `treeKit.js` (`TAU`, `LEVELS`, `lerp`, `range`, `smooth`, `withRim`, `treeLevel`). Previews recapturadas con todos los
   nombres de hoyo. Sigue en uso y NO retirado: `makeTree`, `makeTuft`, `makeGrassClump`, `waterShader` (lava y caldera) y
   la familia `makeLush*` (hub 3D, `hubScene.js`); `makeReeds`/`makeLilyPad` de `flora.js` (solo el «Antes» del agua).
-  Pendiente de decisión: rehacer lava y caldera con assets nuevos (una a una) y retirar el hub 3D precargado.
+  Decidido 2026-11-24: se retiran el hub 3D y el «Antes» del agua (con `makeReeds`/`makeLilyPad` de `flora.js`).
+
+### Siguiente sesión — Lava y caldera (rediseño, Opus 5.5)
+- Estado: `theme.lava` y `theme.caldera` siguen con el decorado viejo: `makeTuft` y `makeGrassClump` (matas),
+  `makeTree` (árbol de respaldo cuando `natureTree` no lo resuelve), `waterShader` (plano de lava de la ciudad/lava)
+  y el lago de lava del volcán (`lavaMaterial`, src/game/render/lava.js). Todo lo viejo sale de environment.js
+  cuando esto esté hecho, y entonces se retiran `makeTree`, `makeTuft`, `makeGrassClump` y `waterShader`.
+- Propuesta: exportar lava y caldera al laboratorio como el resto (un asset por vez), con Opus 5.5 y el mismo
+  método: módulo nuevo en `src/game/render/assets/`, entrada en `src/lab/assets/examples.js`, tests de presupuesto,
+  rng del hoyo y física intactos, y visto bueno del usuario antes de sustituir en `environment.js`.
+- Orden: 1) matas de ceniza con `grass.js` (paleta de ceniza), 2) árboles y rocas volcánicas, 3) lago de lava con el
+  agua nueva, 4) caldera (volcán y lava del cráter). Retirar el viejo solo cuando nada lo use.
 
 ## Neón / Cyberpunk (N0–NF)
 Propuesta (2026-11-19) para rediseñar SOLO el entorno de `neon`, `neonPink` y `cyber2078` (hoyo 15 incluido): ciudad lejana, cielo, suelo/montañas, pilones y cristales. Sin agua. Pista y atracciones no se tocan; la física tampoco.
