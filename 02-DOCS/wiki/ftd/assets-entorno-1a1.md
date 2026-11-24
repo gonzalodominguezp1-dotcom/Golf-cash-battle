@@ -166,7 +166,12 @@ los entornos tras la aprobación.
   - 2026-11-19: roca suelta de arenisca (`material: 'sandstone'` en canto rodado y losa); en laboratorio como `rock-sandstone` y `rock-slab-sandstone`; pendiente de verla en pantalla.
 - [ ] Paso 8 — agua
 - [ ] Paso 9 — especiales
-- [ ] Paso F — cierre, tests y previews
+- [ ] Paso F — cierre, tests y previews. Cierre parcial (2026-11-24, sin commit): retirados `makeRock` y `makeFlower`
+  de `environment.js` y sus «Antes» del laboratorio (solo los usaba el laboratorio). Unificado `roundTree.js` con
+  `treeKit.js` (`TAU`, `LEVELS`, `lerp`, `range`, `smooth`, `withRim`, `treeLevel`). Previews recapturadas con todos los
+  nombres de hoyo. Sigue en uso y NO retirado: `makeTree`, `makeTuft`, `makeGrassClump`, `waterShader` (lava y caldera) y
+  la familia `makeLush*` (hub 3D, `hubScene.js`); `makeReeds`/`makeLilyPad` de `flora.js` (solo el «Antes» del agua).
+  Pendiente de decisión: rehacer lava y caldera con assets nuevos (una a una) y retirar el hub 3D precargado.
 
 ## Neón / Cyberpunk (N0–NF)
 Propuesta (2026-11-19) para rediseñar SOLO el entorno de `neon`, `neonPink` y `cyber2078` (hoyo 15 incluido): ciudad lejana, cielo, suelo/montañas, pilones y cristales. Sin agua. Pista y atracciones no se tocan; la física tampoco.
