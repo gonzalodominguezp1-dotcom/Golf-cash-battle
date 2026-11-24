@@ -24,6 +24,8 @@ import {
 import { floraOf, groundDetailTexture, makeRiver, TERRAIN_FOCUS, warpCoord } from './flora.js';
 import { addWater, makeLilyPad, makeReeds, waterSupported, WATER_RIPPLES, WATER_TIME_WRAP } from './assets/water.js';
 import { addFish, FISH_REACH } from './assets/fish.js';
+import { addAsciiNeon } from './assets/asciiNeon.js';
+import { neonGlowAttribute, neonRelief, neonTerrainMaterial } from './assets/neonTerrain.js';
 import { lushMountains, makeGrassClump, makeLushCloud, makeLushTree, meadowGroundTexture } from './lushEnvironment.js';
 
 // tiempo compartido por los sombreadores animados del agua (el viento va en assets/wind.js)
@@ -175,6 +177,8 @@ export function buildEnvironment(scene, course, theme, rng) {
   // río que cruza el paisaje (solo en los temas donde pega): se excava en el terreno
   const river = makeRiver(bounds, theme, rng, { grounded, enabled: flora.river && !volcano && !theme.lava });
   const waterY = river?.grounded ? river.y : theme.waterLevel;
+  // neón (N4, assets/neonTerrain.js): la misma forma de crestas, con los cerros bajo la línea de vista de la ciudad
+  const relief = isNeon ? neonRelief(bounds, theme) : null;
   const baseHeight = (x, z) => {
     // fuera del volcán: llanura de ceniza con lomas al pie de la montaña
     if (volcano) return FOOT - 0.4 + fbm(x * 0.05, z * 0.05) * 5 * THREE.MathUtils.smoothstep(volcano.q(x, z), 2.8, 4.5);
@@ -190,7 +194,9 @@ export function buildEnvironment(scene, course, theme, rng) {
       const ridge2 = 1.0 - Math.abs(n2 * 2 - 1);
       // Exponencial para culminar en picos angulares y agujas puntiagudas estilo cyberpunk
       const sharpPeak = Math.pow(ridge1, 2.6) * 16.0 + Math.pow(ridge2, 2.2) * 6.0;
-      return theme.terrainOffset - 0.6 + (sharpPeak - 4.5) * ramp;
+      // N4: lo que sobresale se baja para no tapar el pie de la ciudad; la sierra vuelve detrás de ella. Con d < 8
+      // (pista y 5 m alrededor) ramp = 0 y la altura es la de antes, exacta
+      return relief.height(x, z, (sharpPeak - 4.5) * ramp, ramp);
     }
     if (grounded) {
       // meseta plana junto a la pista (la rejilla es de 2 m: con margen para no
@@ -249,23 +255,19 @@ export function buildEnvironment(scene, course, theme, rng) {
     c.toArray(colors, i * 3);
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  // neón: el brillo de la rejilla se apaga bajo la pista y junto a ella (assets/neonTerrain.js)
+  if (isNeon) geo.setAttribute('aGlow', neonGlowAttribute(pos, (x, z) => distToBounds(bounds, x, z)));
   geo.computeVertexNormals();
   const terrainMat = isNeon
-    ? new THREE.MeshStandardMaterial({
-        map: getCyberGridTexture(theme.neon[0], theme.groundLow ?? 0x070814),
-        color: 0x14182a,
-        roughness: 0.45,
-        metalness: 0.65,
-        flatShading: true,
-        vertexColors: true,
-      })
+    ? neonTerrainMaterial(getCyberGridTexture(theme.neon[0], theme.groundLow ?? 0x070814))
     : lush
     ? new THREE.MeshStandardMaterial({ vertexColors: true, map: meadowGroundTexture(), roughness: 0.95 })
     : new THREE.MeshLambertMaterial({ vertexColors: true, map: flora.ground ? groundDetailTexture(flora.ground) : null });
   // la textura de detalle se repite cada ~3 m (con la malla deformada, las UV van en metros)
   if (terrainMat.map && !isNeon) terrainMat.map.repeat.set(size / 3, size / 3);
-  const terrain = new THREE.Mesh(geo, terrainMat);
+  let terrain = new THREE.Mesh(geo, terrainMat);
   terrain.receiveShadow = true;
+  if (isNeon) terrain.name = 'neon-terrain';
   scene.add(terrain);
 
   // --- agua ---
@@ -284,11 +286,15 @@ export function buildEnvironment(scene, course, theme, rng) {
     // agua nueva (assets/water.js): rejilla con la MISMA malla que el terreno (seg y warp) para que la espuma caiga en la
     // orilla, cinta para el río, un material compartido; el tiempo es el del viento. A ras de suelo solo se dibuja con río.
     // rng: 0 tiradas (el agua es determinista por el terreno).
+    // neón (2026-11-23): agua tóxica con motas y vapor (assets/neonWater.js, rng propio: 0 tiradas), repartidos cerca de
+    // la pista (`area`); sin peces (y sin su tirada del rng: el decorado neón no cambia de sitio). La física no cambia.
     if (!grounded || river) {
-      water = addWater(scene, { size, y: waterY, heightAt, river, level: q.lod, theme, warp: focus ? warpCoord : null, seg });
+      const cxF = (bounds.minX + bounds.maxX) / 2, czF = (bounds.minZ + bounds.maxZ) / 2;
+      const reach = Math.max((bounds.maxX - bounds.minX) / 2, (bounds.maxZ - bounds.minZ) / 2);
+      const area = isNeon ? { x: cxF, z: czF, r: reach + 12 } : null;
+      water = addWater(scene, { size, y: waterY, heightAt, river, level: q.lod, theme, warp: focus ? warpCoord : null, seg, area });
       // peces (assets/fish.js): solo con agua dibujada; 1 tirada fija del rng del hoyo (también sin sitios)
-      if (water) {
-        const cxF = (bounds.minX + bounds.maxX) / 2, czF = (bounds.minZ + bounds.maxZ) / 2;
+      if (water && !isNeon) {
         fish = addFish(scene, {
           rng,
           y: waterY,
@@ -296,15 +302,15 @@ export function buildEnvironment(scene, course, theme, rng) {
           river,
           courseDist: (x, z) => distToBounds(bounds, x, z),
           tee: course.tee,
-          area: { x: cxF, z: czF, r: Math.max((bounds.maxX - bounds.minX) / 2, (bounds.maxZ - bounds.minZ) / 2) + FISH_REACH },
+          area: { x: cxF, z: czF, r: reach + FISH_REACH },
           theme,
           level: q.lod,
         });
       }
     }
   } else if (!isNeon) {
-    // neón/cyber2078 (2026-11-19): sin agua en el entorno (la física no cambia; los canales `water` los dibuja course.js).
-    // plano viejo: solo ciudad y lava. Las olas se mueven en la tarjeta gráfica (antes se recalculaban en el procesador)
+    // (neón entra arriba con waterSupported desde 2026-11-23; los canales `water` del hoyo 15 los sigue dibujando course.js.)
+    // plano viejo: solo ciudad sin neón y lava. Las olas se mueven en la tarjeta gráfica (antes se recalculaban en el procesador)
     const waterGeo = new THREE.PlaneGeometry(size, size, 90, 90);
     waterGeo.rotateX(-Math.PI / 2);
     const waterMat = theme.lava
@@ -340,17 +346,22 @@ export function buildEnvironment(scene, course, theme, rng) {
   };
   const detail = (d) => (d > FAR ? Math.max(0, q.lod - 1) : q.lod);
 
+  let ascii = null, cyber = null;
   if (isNeon) {
     // Props perimetrales minimalistas, elegantes y bien separados del campo
     place(3.0, 12, 12, (x, y, z) => {
-      decor.add(makeCyberPylon(x, y, z, theme.neon, rng() > 0.7));
+      decor.add(makeCyberPylon(x, y, z, theme.neon, rng() > 0.7, { level: q.lod, animated }));
     });
     place(3.5, 14, 8, (x, y, z) => {
-      decor.add(makeHoloCrystal(x, y, z, theme.neon, rng, animated));
+      decor.add(makeHoloCrystal(x, y, z, theme.neon, rng, animated, { level: q.lod }));
     });
 
-    // Megaciudad de rascacielos lejanos, searchlights y tráfico aéreo limpio
-    setupCyberpunkEnvironment(scene, decor, bounds, theme, rng, animated, q);
+    // nubes, pilares de energía y naves con textura ASCII, lejos (assets/asciiNeon.js, 2026-11-23): ≤ 3 llamadas,
+    // rng propio (0 tiradas: el decorado neón no se mueve), se mueven en el sombreador. Sin física.
+    ascii = addAsciiNeon(scene, { bounds, theme, level: q.lod, animated });
+    // ciudad lejana (assets/neonCity.js, N2: deja libres los pilares ASCII), searchlights y tráfico aéreo.
+    // rng propio: las tiradas de la ciudad vieja se conservan (se descartan) y el decorado no se mueve
+    cyber = setupCyberpunkEnvironment(scene, decor, bounds, theme, rng, animated, q, { ascii: ascii.group });
     // ciudad propia del hoyo 15 (cables y letreros); los demás neón no la reciben
     if (theme.cyberCity) buildCyberCity(scene, decor, bounds, theme, rng, animated, q);
   } else if (lush) {
@@ -574,6 +585,8 @@ export function buildEnvironment(scene, course, theme, rng) {
     sunDir,
     shadowAnchor,
     river,
+    // altura del terreno dibujado (solo dibujo y decorado; la física no la usa)
+    heightAt,
     update: (t, dt) => animated.forEach((f) => f(t, dt)),
     // trozos de hierba y de flores lejanos: fuera
     lod: (cam) => {
@@ -593,6 +606,16 @@ export function buildEnvironment(scene, course, theme, rng) {
       water?.setRipples([]); // el material es compartido: sin anillos colgados del hoyo anterior
       water?.dispose();
       fish = water = null;
+      ascii?.dispose(); // sus geometrías y materiales; el atlas de glifos es compartido
+      ascii = null;
+      cyber?.city.dispose(); // sus geometrías y materiales; la fachada es compartida
+      cyber = null;
+      // terreno neón: su material es de este hoyo (la rejilla es compartida y se queda)
+      if (isNeon && terrain) {
+        terrain.geometry.dispose();
+        terrain.material.dispose();
+        terrain = null;
+      }
       grassField?.dispose();
       flowerField?.dispose();
     },

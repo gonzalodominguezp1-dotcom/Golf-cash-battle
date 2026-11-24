@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 import { softDotTexture } from './textures.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { addNeonCity, CITY_LEGACY_DRAWS } from './assets/neonCity.js';
+
+// la fachada determinista de N0 vive ahora con la ciudad nueva (assets/neonCity.js)
+export { drawSkyscraperFacade } from './assets/neonCity.js';
 
 function haloSprite(color, size) {
   const halo = new THREE.Sprite(
@@ -19,91 +23,15 @@ function haloSprite(color, size) {
 
 /**
  * Entorno Cyberpunk Futurista estilizado y ligero:
- * - Silueta de megaciudad lejana (12 monolitos elegantes a distancia segura, sin sobrecargar la escena)
- * - 2 carteles holográficos flotantes en el horizonte
- * - 3 speeders lejanos en corredor aéreo de gran altitud
- * - 2 searchlights suaves barriendo lentamente
+ * - Ciudad lejana (assets/neonCity.js, N2): torres escalonadas con agujas, antenas, helipuertos y franjas de neón
+ * - 3 speeders lejanos en corredor aéreo de gran altitud (por encima de la ciudad)
+ * - 2 searchlights suaves barriendo lentamente desde lo alto de dos torres
  * - Sol synthwave con franjas retro
  * - Props perimetrales minimalistas a distancia segura
  * - Máximo de intensidad emisiva estrictamente controlado para mantener el bloom <= 15%
  */
 
 const textureCache = new Map();
-
-/** Semilla estable a partir de la clave de la textura (FNV-1a). */
-function hashSeed(str) {
-  let h = 2166136261;
-  for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619);
-  return h >>> 0;
-}
-
-function mulberry32(seed) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-/** Dibuja la fachada en un contexto 2D de 256x256. Determinista: la semilla sale de los dos colores (misma textura en cada carga). */
-export function drawSkyscraperFacade(ctx, c1, c2) {
-  const rnd = mulberry32(hashSeed(`sky_${c1}_${c2}`));
-
-  // Fondo obsidiana arquitectónico
-  ctx.fillStyle = '#090b16';
-  ctx.fillRect(0, 0, 256, 256);
-
-  // Columnas estructurales
-  ctx.strokeStyle = '#141728';
-  ctx.lineWidth = 1.5;
-  for (let x = 0; x <= 256; x += 32) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0); ctx.lineTo(x, 256); ctx.stroke();
-  }
-
-  // Ventanas de datos tenues (sin sobreiluminar para no disparar el bloom)
-  const cols = 8;
-  const rows = 16;
-  const w = 256 / cols;
-  const h = 256 / rows;
-
-  for (let r = 0; r < rows; r++) {
-    const floorLit = (r % 3 === 0);
-    for (let c = 0; c < cols; c++) {
-      const isLit = floorLit ? rnd() < 0.6 : rnd() < 0.2;
-      if (isLit) {
-        ctx.fillStyle = rnd() < 0.6 ? c1 : c2;
-        ctx.fillRect(c * w + 6, r * h + 4, w - 12, h - 8);
-      } else {
-        ctx.fillStyle = '#101322';
-        ctx.fillRect(c * w + 6, r * h + 4, w - 12, h - 8);
-      }
-    }
-  }
-}
-
-/**
- * Textura procedural de fachada con ventanas discretas y sutiles.
- */
-export function getSkyscraperTexture(themeColors) {
-  const [c1, c2] = themeColors.map((c) => '#' + new THREE.Color(c).getHexString());
-  const cacheKey = `sky_${c1}_${c2}`;
-  if (textureCache.has(cacheKey)) return textureCache.get(cacheKey);
-
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 256;
-  const ctx = canvas.getContext('2d');
-  drawSkyscraperFacade(ctx, c1, c2);
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
-  textureCache.set(cacheKey, texture);
-  return texture;
-}
 
 /**
  * Textura de rejilla digital limpia para el terreno.
@@ -122,8 +50,9 @@ export function getCyberGridTexture(lineColorHex, bgHex = 0x070814) {
   ctx.fillStyle = bgCol;
   ctx.fillRect(0, 0, 256, 256);
 
-  // Cuadrícula fina
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+  // Cuadrícula fina, en el neón del tema y tenue (N4: la rejilla es también el mapa de brillo del suelo)
+  const lc = new THREE.Color(lineColorHex).getHex();
+  ctx.strokeStyle = `rgba(${(lc >> 16) & 255}, ${(lc >> 8) & 255}, ${lc & 255}, 0.16)`;
   ctx.lineWidth = 1;
   for (let i = 0; i <= 256; i += 32) {
     ctx.beginPath();
@@ -141,63 +70,6 @@ export function getCyberGridTexture(lineColorHex, bgHex = 0x070814) {
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
   texture.repeat.set(16, 16);
-  textureCache.set(cacheKey, texture);
-  return texture;
-}
-
-/**
- * Textura para cartel holográfico flotante.
- */
-function getHoloBannerTexture(themeColors, isAlt = false) {
-  const [c1, c2] = themeColors.map((c) => '#' + new THREE.Color(c).getHexString());
-  const cacheKey = `banner_${isAlt}_${c1}_${c2}`;
-  if (textureCache.has(cacheKey)) return textureCache.get(cacheKey);
-
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 256;
-  const ctx = canvas.getContext('2d');
-
-  ctx.fillStyle = '#060714';
-  ctx.fillRect(0, 0, 512, 256);
-
-  // Marco cyber
-  ctx.strokeStyle = c1;
-  ctx.lineWidth = 4;
-  ctx.strokeRect(6, 6, 500, 244);
-
-  // Scanlines
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-  for (let y = 0; y < 256; y += 4) ctx.fillRect(0, y, 512, 2);
-
-  if (!isAlt) {
-    ctx.font = 'bold 42px sans-serif';
-    ctx.fillStyle = '#ffffff';
-    ctx.textAlign = 'center';
-    ctx.fillText('NEON CITY', 256, 100);
-
-    ctx.font = 'bold 32px sans-serif';
-    ctx.fillStyle = c2;
-    ctx.fillText('ネオン · 2088', 256, 155);
-
-    ctx.font = '16px monospace';
-    ctx.fillStyle = c1;
-    ctx.fillText('[ SECTOR 09 // ONLINE ]', 256, 205);
-  } else {
-    ctx.font = 'bold 36px sans-serif';
-    ctx.fillStyle = c2;
-    ctx.textAlign = 'center';
-    ctx.fillText('CYBER GOLF', 256, 85);
-
-    // Barras de ecualizador limpias
-    for (let i = 0; i < 16; i++) {
-      const bh = 25 + Math.abs(Math.sin(i * 0.5) * 65);
-      ctx.fillStyle = i % 2 === 0 ? c1 : c2;
-      ctx.fillRect(80 + i * 22, 200 - bh, 14, bh);
-    }
-  }
-
-  const texture = new THREE.CanvasTexture(canvas);
   textureCache.set(cacheKey, texture);
   return texture;
 }
@@ -247,119 +119,20 @@ function buildSynthwaveSun(scene, theme, animated) {
 }
 
 /**
- * Megaciudad lejana y estilizada: 12 monolitos elegantes a distancia segura (> 55 unidades).
+ * Ciudad lejana (N2, assets/neonCity.js): rng propio, 0 tiradas nuevas. La ciudad vieja tiraba CITY_LEGACY_DRAWS
+ * veces del rng del hoyo; se siguen tirando (y se descartan) para que el resto del decorado neón no se mueva.
+ * ascii = grupo de addAsciiNeon del hoyo (la ciudad deja libres sus pilares). Devuelve el handle de addNeonCity.
  */
-export function buildCyberSkyline(scene, decor, bounds, theme, rng, animated, q) {
-  const neon = theme.neon;
-  const winTex = getSkyscraperTexture(neon);
-
-  const buildingMat = new THREE.MeshLambertMaterial({
-    map: winTex,
-    color: 0x181a2e,
-    emissiveMap: winTex,
-    emissive: 0xffffff,
-    emissiveIntensity: 0.25, // Controlado para bloom <= 15%
-  });
-
-  const darkMetalMat = new THREE.MeshStandardMaterial({
-    color: 0x0a0c16,
-    metalness: 0.85,
-    roughness: 0.3,
-  });
-
-  const neonMat = new THREE.MeshStandardMaterial({
-    color: neon[0],
-    emissive: neon[0],
-    emissiveIntensity: 0.35, // Controlado para bloom <= 15%
-    roughness: 0.3,
-  });
-
-  const cx = (bounds.minX + bounds.maxX) / 2;
-  const cz = (bounds.minZ + bounds.maxZ) / 2;
-
-  // Solo 12 torres majestuosas y bien espaciadas en el horizonte (liviano y elegante)
-  const towerCount = 12;
-  const beacons = [];
-
-  for (let i = 0; i < towerCount; i++) {
-    const angle = (i / towerCount) * Math.PI * 2 + (rng() - 0.5) * 0.15;
-    // Distancia generosa para despejar totalmente la vista del campo
-    const dist = 60 + (i % 3) * 14;
-
-    const x = cx + Math.cos(angle) * dist;
-    const z = cz + Math.sin(angle) * dist;
-
-    const h = 32 + (i % 4) * 8 + rng() * 10;
-    const w = 6 + (i % 2) * 2;
-    const d = 6 + ((i + 1) % 2) * 2;
-
-    const tower = new THREE.Group();
-    tower.position.set(x, h / 2 - 2, z);
-
-    // 1. Monolito geométrico
-    const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), buildingMat);
-    tower.add(body);
-
-    // 2. Línea de neón vertical única y refinada en la arista frontal
-    const edgeStrip = new THREE.Mesh(new THREE.BoxGeometry(0.18, h + 0.1, 0.18), neonMat);
-    edgeStrip.position.set(w / 2, 0, d / 2);
-    tower.add(edgeStrip);
-
-    // 3. Remate de aguja con baliza sutil
-    const antH = 6 + rng() * 4;
-    const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.14, antH, 6), darkMetalMat);
-    antenna.position.set(0, h / 2 + antH / 2, 0);
-    tower.add(antenna);
-
-    const beacon = new THREE.Mesh(
-      new THREE.SphereGeometry(0.25, 8, 6),
-      new THREE.MeshBasicMaterial({ color: i % 2 === 0 ? neon[0] : neon[1] })
-    );
-    beacon.position.set(0, h / 2 + antH, 0);
-    beacon.userData.keep = true;
-    beacon.userData.phase = i * 1.2;
-    tower.add(beacon);
-    beacons.push(beacon);
-
-    tower.lookAt(cx, tower.position.y, cz);
-    decor.add(tower);
-  }
-
-  // Parpadeo suave de balizas
-  animated.push((t) => {
-    for (const b of beacons) {
-      b.visible = Math.sin(t * 3.5 + b.userData.phase) > 0.1;
-    }
-  });
-
-  // Solo 2 carteles holográficos flotantes elegantes en el horizonte
-  for (let k = 0; k < 2; k++) {
-    const angle = k === 0 ? 0.8 : 3.4;
-    const dist = 74;
-    const hx = cx + Math.cos(angle) * dist;
-    const hz = cz + Math.sin(angle) * dist;
-    const hy = 26 + k * 4;
-
-    const bannerTex = getHoloBannerTexture(neon, k === 1);
-    const bannerMat = new THREE.MeshBasicMaterial({
-      map: bannerTex,
-      transparent: true,
-      opacity: 0.82,
-      side: THREE.DoubleSide,
-    });
-
-    const bannerMesh = new THREE.Mesh(new THREE.PlaneGeometry(16, 8), bannerMat);
-    bannerMesh.position.set(hx, hy, hz);
-    bannerMesh.lookAt(cx, hy, cz);
-    bannerMesh.userData.keep = true;
-    scene.add(bannerMesh);
-  }
+export function buildCyberSkyline(scene, decor, bounds, theme, rng, animated, q, ascii) {
+  for (let i = 0; i < CITY_LEGACY_DRAWS; i++) rng();
+  return addNeonCity(scene, { bounds, theme, level: q.lod, animated, ascii });
 }
 
 /**
- * 2 searchlights suaves y elegantes barriendo el cielo nocturno.
+ * 2 searchlights suaves y elegantes barriendo el cielo nocturno. bases = [{ x, y, z }] (mundo): nacen ahí (la cima
+ * de dos torres de la ciudad); sin bases, en los dos sitios fijos de antes.
  */
-export function buildLaserSearchlights(scene, bounds, theme, animated) {
+export function buildLaserSearchlights(scene, bounds, theme, animated, bases = null) {
   const neon = theme.neon;
   const count = 2;
   const beams = [];
@@ -369,9 +142,10 @@ export function buildLaserSearchlights(scene, bounds, theme, animated) {
   for (let i = 0; i < count; i++) {
     const angle = i === 0 ? 1.4 : 4.5;
     const r = 68;
-    const x = cx + Math.cos(angle) * r;
-    const z = cz + Math.sin(angle) * r;
-    const baseY = 36;
+    const base = bases?.[i];
+    const x = base ? base.x : cx + Math.cos(angle) * r;
+    const z = base ? base.z : cz + Math.sin(angle) * r;
+    const baseY = base ? base.y : 36;
 
     const beamGeo = new THREE.ConeGeometry(2.8, 65, 10, 1, true);
     beamGeo.translate(0, 32.5, 0);
@@ -399,6 +173,9 @@ export function buildLaserSearchlights(scene, bounds, theme, animated) {
     }
   });
 }
+
+/** Altura del corredor aéreo más bajo (m): por encima de la ciudad (CITY_LAYOUT.maxY) y bajo las naves ASCII. */
+export const SKYWAY_Y = 33;
 
 /**
  * 3 speeders lejanos en corredor aéreo de gran altitud.
@@ -437,7 +214,7 @@ export function buildSkywayTraffic(scene, bounds, theme, animated) {
 
     group.userData = {
       r: 76,
-      y: 28 + i * 3,
+      y: SKYWAY_Y + i * 2.5,
       speed: 0.16 + i * 0.04,
       angle: (i / 3) * Math.PI * 2,
     };
@@ -457,85 +234,19 @@ export function buildSkywayTraffic(scene, bounds, theme, animated) {
   });
 }
 
-/**
- * Baliza de neón perimetral minimalista a distancia segura.
- */
-export function makeCyberPylon(x, y, z, themeColors, lit = false) {
-  const g = new THREE.Group();
-  const color = themeColors[0];
-
-  const poleMat = new THREE.MeshStandardMaterial({ color: 0x121422, metalness: 0.8, roughness: 0.35 });
-  const glowMat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.35 });
-
-  const pole = new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.8, 0.07), poleMat);
-  pole.position.y = 0.9;
-  g.add(pole);
-
-  const lightBar = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.05, 0.3), glowMat);
-  lightBar.position.set(0, 1.75, 0.12);
-  g.add(lightBar);
-
-  const halo = haloSprite(color, 1.4);
-  halo.position.set(0, 1.75, 0.12);
-  halo.material.opacity = 0.35;
-  g.add(halo);
-
-  g.position.set(x, y, z);
-  return g;
-}
+// pilones y cristales holográficos (N3): assets/neonProps.js (geometrías y materiales compartidos, sin rng propio)
+export { makeCyberPylon, makeHoloCrystal } from './assets/neonProps.js';
 
 /**
- * Cristal holográfico de datos flotante y estilizado.
+ * Monta el entorno Cyberpunk limpio, estilizado y no recargado. opts.ascii = grupo de addAsciiNeon del hoyo.
+ * Devuelve { city } (handle de la ciudad: hay que llamar a city.dispose() al cambiar de hoyo).
  */
-export function makeHoloCrystal(x, y, z, themeColors, rng, animated) {
-  const g = new THREE.Group();
-  const c = themeColors[Math.floor(rng() * themeColors.length)];
-
-  const baseMat = new THREE.MeshStandardMaterial({ color: 0x141624, roughness: 0.45 });
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.28, 0.25, 6), baseMat);
-  base.position.y = 0.12;
-  g.add(base);
-
-  const crystal = new THREE.Mesh(
-    new THREE.OctahedronGeometry(0.25, 0),
-    new THREE.MeshStandardMaterial({
-      color: c,
-      emissive: c,
-      emissiveIntensity: 0.35, // Controlado para bloom <= 15%
-      roughness: 0.2,
-      metalness: 0.5,
-    })
-  );
-  crystal.position.y = 0.9;
-  crystal.userData.keep = true;
-  g.add(crystal);
-
-  const halo = haloSprite(c, 1.2);
-  halo.position.y = 0.9;
-  halo.material.opacity = 0.3;
-  g.add(halo);
-
-  g.position.set(x, y, z);
-
-  if (animated) {
-    animated.push((t) => {
-      crystal.rotation.y += 0.02;
-      crystal.position.y = 0.9 + Math.sin(t * 2 + z) * 0.08;
-      halo.position.y = crystal.position.y;
-    });
-  }
-
-  return g;
-}
-
-/**
- * Monta el entorno Cyberpunk limpio, estilizado y no recargado.
- */
-export function setupCyberpunkEnvironment(scene, decor, bounds, theme, rng, animated, q) {
+export function setupCyberpunkEnvironment(scene, decor, bounds, theme, rng, animated, q, { ascii } = {}) {
   buildSynthwaveSun(scene, theme, animated);
-  buildCyberSkyline(scene, decor, bounds, theme, rng, animated, q);
-  buildLaserSearchlights(scene, bounds, theme, animated);
+  const city = buildCyberSkyline(scene, decor, bounds, theme, rng, animated, q, ascii);
+  buildLaserSearchlights(scene, bounds, theme, animated, city.beamBases);
   buildSkywayTraffic(scene, bounds, theme, animated);
+  return { city };
 }
 
 /**

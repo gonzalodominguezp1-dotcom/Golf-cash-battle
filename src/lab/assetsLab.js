@@ -17,8 +17,8 @@ else console.warn('[assets-lab] wind.js incompleto; sin viento');
 const $ = (id) => document.getElementById(id);
 const stage = $('stage');
 
-// temas naturales (neón y cyberpunk no se tocan)
-const themeIds = Object.keys(THEMES).filter((k) => !THEMES[k].neon && !THEMES[k].cyberCity);
+// temas del laboratorio: naturales y neón (con agua pútrida). La ciudad cyberpunk no entra.
+const themeIds = Object.keys(THEMES).filter((k) => !THEMES[k].cyberCity);
 const state = {
   assetId: getAssets()[0]?.id,
   themeId: themeIds.includes('meadowDay') ? 'meadowDay' : themeIds[0],

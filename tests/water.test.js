@@ -413,9 +413,10 @@ test('agua: bakeStatic no la funde con el decorado (userData.keep) y sale intact
   }
 });
 
-test('agua: temas sin agua de verdad (neón, ciudad, lava, caldera) no cambian: sin agua nueva', () => {
-  const off = Object.entries(THEMES).filter(([, t]) => t.neon || t.cyberCity || t.lava || t.caldera);
+test('agua: temas sin agua de verdad (ciudad sin neón, lava, caldera) no cambian: sin agua nueva; el neón sí la lleva (2026-11-23)', () => {
+  const off = [...Object.entries(THEMES).filter(([, t]) => t.lava || t.caldera), ['city', { ...THEMES.meadow, cyberCity: true }]];
   assert.ok(off.length >= 3);
+  for (const k of ['neon', 'neonPink', 'cyber2078']) assert.equal(waterSupported(THEMES[k]), true, k);
   for (const [k, t] of off) {
     assert.equal(waterSupported(t), false, k);
     assert.equal(waterMaterial('medium', t), null, k);

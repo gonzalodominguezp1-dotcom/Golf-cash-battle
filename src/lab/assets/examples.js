@@ -2,7 +2,9 @@
 // Los pasos siguientes del plan (02-DOCS/wiki/ftd/assets-entorno-1a1.md) sustituyen el null
 // de makeNew por el diseño nuevo.
 import { registerAsset } from '../assetRegistry.js';
-import { makeTree, makeRock } from '../../game/render/environment.js';
+import { makeTree, makeRock, buildEnvironment } from '../../game/render/environment.js';
+import { COURSES } from '../../game/courses.js';
+import { setQuality } from '../../game/render/quality.js';
 import { makeRoundTree } from '../../game/render/assets/roundTree.js';
 import { makePine } from '../../game/render/assets/pine.js';
 import { makePalm } from '../../game/render/assets/palm.js';
@@ -16,6 +18,10 @@ import { fishLakePatch, fishRiverPatch } from './fishPatch.js';
 import { FLOWER_SPECIES, FLOWER_INFO } from '../../game/render/assets/flower.js';
 import { GRASS_SPECIES, GRASS_SPECIES_INFO } from '../../game/render/assets/grass.js';
 import { applyWind } from '../../game/render/assets/wind.js';
+import { makeAsciiClouds, makeAsciiPillars, makeAsciiFlyers } from '../../game/render/assets/asciiNeon.js';
+import { makeNeonCity } from '../../game/render/assets/neonCity.js';
+import { makeCyberPylon, makeHoloCrystal, PYLON_VARIANTS } from '../../game/render/assets/neonProps.js';
+import { THEMES } from '../../game/themes.js';
 import * as THREE from 'three';
 
 // «Antes» del arbusto: las mismas hojas facetadas que usa environment.js (leafMats no se exporta)
@@ -198,6 +204,97 @@ registerAsset({
   label: 'Pez · río (salta cada 2–3 s)',
   makeOld: (rng, preset) => fishRiverPatch(rng, preset, { fish: false }),
   makeNew: (rng, preset) => fishRiverPatch(rng, preset),
+});
+// N7 (neón): nubes, pilares de energía y naves con textura ASCII (assets/asciiNeon.js), una malla por tipo y
+// movimiento en el sombreador con el tiempo del viento. En el juego van a 96-146 m del hoyo; aquí, el anillo entero
+// a escala LAB_ASCII_SCALE para verlo de cerca (la cámara mira desde dentro del anillo). Míralo con neon / neonPink;
+// en los temas sin neón se usan los colores de `neon`. «Antes» = nada (el neón de hoy no tiene ASCII).
+const LAB_ASCII_SCALE = 0.16;
+const asciiPatch = (make, preset, view) => {
+  const theme = preset.sceneTheme?.neon ? preset.sceneTheme : THEMES.neon;
+  const g = new THREE.Group();
+  const m = make({ level: preset.level, theme });
+  m.scale.setScalar(LAB_ASCII_SCALE);
+  g.add(m);
+  // sin sombras (la sombra usaría la posición quieta, no la del sombreador); vista propia
+  g.userData.lab = { keepShadows: true, ...view };
+  return g;
+};
+const ASCII_ENTRIES = [
+  { id: 'ascii-clouds', label: 'Neón · nubes ASCII (anillo x0,16)', make: makeAsciiClouds, view: { dist: 9, target: [0, 7, 0] } },
+  { id: 'ascii-pillars', label: 'Neón · pilares de energía ASCII (anillo x0,16)', make: makeAsciiPillars, view: { dist: 9, target: [0, 3, 0] } },
+  { id: 'ascii-flyers', label: 'Neón · naves ASCII con estela (anillo x0,16)', make: makeAsciiFlyers, view: { dist: 9, target: [0, 6.5, 0] } },
+];
+for (const { id, label, make, view } of ASCII_ENTRIES) {
+  registerAsset({ id, label, makeOld: () => null, makeNew: (rng, preset) => asciiPatch(make, preset, view) });
+}
+// N2 (neón): ciudad lejana (assets/neonCity.js): torres escalonadas con agujas, antenas con baliza y helipuertos,
+// franjas de neón y ventanas de la fachada de N0. En el juego va a 69-87 m del hoyo; aquí el anillo entero a la
+// misma escala que el ASCII. Deja libres los pilares ASCII de la calidad elegida. «Antes» = nada (la ciudad vieja,
+// 12 monolitos, ya no existe en el código).
+registerAsset({
+  id: 'neon-city',
+  label: 'Neón · ciudad lejana (anillo x0,16)',
+  makeOld: () => null,
+  makeNew: (rng, preset) => {
+    const theme = preset.sceneTheme?.neon ? preset.sceneTheme : THEMES.neon;
+    const g = new THREE.Group();
+    const city = makeNeonCity({ level: preset.level, theme });
+    city.scale.setScalar(LAB_ASCII_SCALE);
+    g.add(city);
+    g.userData.lab = { keepShadows: true, dist: 9, target: [0, 2.6, 0] };
+    return g;
+  },
+});
+// N4 (neón): suelo y montañas tal como los monta environment.js en un hoyo neón (la malla «neon-terrain» con la
+// rejilla de neón y las crestas bajo la línea de vista de la ciudad). Tamaño real, no a escala. «Antes» = nada.
+registerAsset({
+  id: 'neon-terrain',
+  label: 'Neón · suelo y montañas (hoyo real, tamaño 1:1)',
+  makeOld: () => null,
+  makeNew: (rng, preset) => {
+    const theme = preset.sceneTheme?.neon ? preset.sceneTheme : THEMES.neon;
+    const course = COURSES.find((c) => THEMES[c.theme] === theme) ?? COURSES.find((c) => THEMES[c.theme]?.neon);
+    setQuality(preset.level);
+    const tmp = new THREE.Scene();
+    buildEnvironment(tmp, course, THEMES[course.theme] ?? theme, rng);
+    const terrain = tmp.children.find((o) => o.name === 'neon-terrain');
+    tmp.remove(terrain);
+    const g = new THREE.Group();
+    g.add(terrain);
+    g.userData.lab = { keepShadows: true, dist: 170, target: [0, 6, 0] };
+    return g;
+  },
+});
+// N3 (neón): pilones (poste de metal, 3 niveles de neón, base ancha, cabeza con halo; variantes lamp/post/beacon) y
+// cristales holográficos (facetas de neón, anillo de datos, halo). «Antes» = nada (los viejos ya no están en el código).
+// El laboratorio no tiene reloj de animación: se ven quietos. Míralos con neon / neonPink.
+const propsTheme = (preset) => (preset.sceneTheme?.neon ? preset.sceneTheme : THEMES.neon);
+registerAsset({
+  id: 'neon-pylon',
+  label: 'Neón · pilón (lamp, post, beacon)',
+  makeOld: () => null,
+  makeNew: (rng, preset) => {
+    const pal = propsTheme(preset).neon;
+    const g = new THREE.Group();
+    PYLON_VARIANTS.forEach((variant, i) => {
+      g.add(makeCyberPylon((i - 1) * 1.2, 0, 0, pal, variant === 'beacon', { level: preset.level, variant }));
+    });
+    g.userData.lab = { keepShadows: true, dist: 6, target: [0, 0.9, 0] };
+    return g;
+  },
+});
+registerAsset({
+  id: 'neon-crystal',
+  label: 'Neón · cristal holográfico',
+  makeOld: () => null,
+  makeNew: (rng, preset) => {
+    const pal = propsTheme(preset).neon;
+    const g = new THREE.Group();
+    for (let i = 0; i < 3; i++) g.add(makeHoloCrystal((i - 1) * 1.1, 0, 0, pal, rng, null, { level: preset.level }));
+    g.userData.lab = { keepShadows: true, dist: 5, target: [0, 0.8, 0] };
+    return g;
+  },
 });
 // cada especie sola, en los mismos sitios (para mirarla de cerca)
 for (const sp of FLOWER_SPECIES) {

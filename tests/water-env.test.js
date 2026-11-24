@@ -51,11 +51,12 @@ function build(course, theme = THEMES[course.theme], seed = 7) {
   });
   return { scene, rng, env, lake, river, plane, meshes: [...river, ...lake] };
 }
-const isNatural = (t) => waterSupported(t);
+// natural = agua nueva sin neón (el agua tóxica del neón, 2026-11-23, se prueba en tests/neon-water.test.js)
+const isNatural = (t) => waterSupported(t) && !t.neon;
 // hoyos con agua nueva: tema natural y (no a ras de suelo, o a ras con río)
 const natural = COURSES.filter((c) => isNatural(THEMES[c.theme]) && !c.grounded);
 const grounded = COURSES.filter((c) => isNatural(THEMES[c.theme]) && c.grounded);
-const old = COURSES.filter((c) => !isNatural(THEMES[c.theme]));
+const old = COURSES.filter((c) => !waterSupported(THEMES[c.theme]));
 const tris = (m) => m.geometry.index.count / 3;
 const geoKey = (meshes) => meshes.map((m) => [m.name, ...Array.from(m.geometry.attributes.position.array, (v) => +v.toFixed(4)), ...m.geometry.attributes.waterShore.array].join()).join('|');
 
@@ -136,15 +137,14 @@ test('entorno: a ras de suelo sin río no se dibuja agua (como antes); con río,
   }
 });
 
-test('entorno: neón sin agua; ciudad, lava y caldera quedan intactos (plano viejo o lava, sin malla de agua nueva)', () => {
-  assert.ok(old.some((c) => THEMES[c.theme].neon) && old.some((c) => THEMES[c.theme].caldera));
+test('entorno: ciudad, lava y caldera quedan intactos (plano viejo o lava, sin malla de agua nueva); el neón lleva agua tóxica', () => {
+  // neón (2026-11-23): agua nueva tóxica (tests/neon-water.test.js), ya no entra aquí
+  assert.ok(old.some((c) => THEMES[c.theme].caldera) && !old.some((c) => THEMES[c.theme].neon));
   for (const c of old) {
     const { scene, meshes, plane } = build(c);
     assert.equal(meshes.length, 0, `${c.name} (${c.theme})`);
     assert.equal(scene.children.some((o) => o.name === 'water' || o.name === 'fish'), false, c.name);
-    // neón/cyber2078 (2026-11-19): sin plano de agua; ciudad y lava conservan el plano viejo
-    if (THEMES[c.theme].neon) assert.equal(plane.length, 0, `${c.name}: neón sin plano de agua`);
-    else if (!THEMES[c.theme].caldera) assert.equal(plane.length, 1, `${c.name}: el plano viejo`);
+    if (!THEMES[c.theme].caldera) assert.equal(plane.length, 1, `${c.name}: el plano viejo`);
   }
   // un tema de lava sintético (ningún hoyo lo usa suelto): plano de lava, sin agua nueva
   const lavaCourse = COURSES.find((c) => !c.grounded && isNatural(THEMES[c.theme]));
