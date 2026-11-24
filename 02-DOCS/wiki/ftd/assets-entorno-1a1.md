@@ -171,12 +171,37 @@ los entornos tras la aprobación.
 ## Neón / Cyberpunk (N0–NF)
 Propuesta (2026-11-19) para rediseñar SOLO el entorno de `neon`, `neonPink` y `cyber2078` (hoyo 15 incluido): ciudad lejana, cielo, suelo/montañas, pilones y cristales. Sin agua. Pista y atracciones no se tocan; la física tampoco.
 - [x] N0 — preparación y agua fuera: textura de fachada determinista (`drawSkyscraperFacade`, rng con semilla) y sin plano de agua en neón (`environment.js`); tests `*-env` de neón actualizados.
-- [ ] N2 — ciudad lejana rediseñada (Opus).
-- [ ] N3 — pilones y cristales (Sonnet).
+- [ ] N2 — ciudad lejana rediseñada (Opus). Implementado 2026-11-23 sin commit, pendiente de visto bueno visual:
+  `assets/neonCity.js` (torres escalonadas con aguja, antena o helipuerto, franjas de neón, ventanas de la fachada
+  de N0 en una DataTexture de 128 px por paleta), llamado desde `buildCyberSkyline`; ASCII creado antes y pasado a
+  la ciudad (deja libres los pilares); tráfico aéreo sube a 33 m; focos desde dos torres; carteles flotantes viejos
+  fuera. Laboratorio: `neon-city`. Presupuesto: torres 9/14/20, llamadas 2/3/4, triángulos 432/856/1363 (tope
+  500/1000/1600). 0 tiradas propias del rng del hoyo (las 36 de la ciudad vieja se conservan: el decorado no se
+  mueve). `tests/neon-city.test.js` (11). Sin verificar: aspecto en pantalla y GPU real. Decisión en
+  `sdd/decisions.md`.
+- [ ] N3 — pilones y cristales (Sonnet). Implementado 2026-11-23 sin commit, pendiente de visto bueno visual:
+  `assets/neonProps.js` (poste de metal, 3 niveles de neón, base ancha, cabeza con halo; variantes lamp/post/beacon;
+  cristal con facetas de neón, anillo de datos y halo; geometrías y materiales compartidos). Presupuesto medido por
+  pilón 96-112/180-200/224-248 y cristal 60/84/112 (tope 120/200/260 y 70/100/130); llamadas por hoyo: 3 fijas + 2 por
+  cristal + 1 por pilón encendido (antes 3 por objeto). rng del hoyo intacto (cristal 1 tirada, pilón 0). Laboratorio:
+  `neon-pylon`, `neon-crystal`. `tests/neon-pylons.test.js` (10). Sin verificar: aspecto en pantalla y GPU real.
 - [ ] N4 — suelo y montañas.
 - [ ] N6 — agua de neón (2026-11-23, pedido del usuario tras la prueba en producción): fondo verdoso pútrido,
   superficie radiactiva, partículas de suciedad dentro del agua y vapor verde que sube desde la superficie.
-  Solo visual; la física no cambia. Pendiente de visto bueno del usuario.
+  Solo visual; la física no cambia. Implementado (`assets/neonWater.js`, `water.js`, `environment.js`,
+  `tests/neon-water.test.js`), sin commit. `pnpm test`: solo fallan los VFX ajenos. `pnpm build` ok.
+  Revisión de contexto limpio: sin hallazgos reales. Nit abierto: `scatter` puede dar menos motas que el
+  presupuesto en agua muy somera (documentado). Sin verificar: aspecto en pantalla, GLSL en GPU, coste de
+  fill-rate del vapor en móvil. Visto bueno del usuario 2026-11-23 («es la polla»); sin commit.
+- [ ] N7 — elementos con textura ASCII en neón (2026-11-23, pedido del usuario): nubes de caracteres,
+  pilares de energía que suben y naves/coches voladores en ASCII. Solo entorno lejano; sin física.
+  Módulo `assets/asciiNeon.js` (Opus), registrado en el laboratorio. Pendiente de visto bueno.
+  Implementado 2026-11-23 sin commit: `assets/asciiNeon.js` (atlas de glifos pintado en JS, un cuadrilátero por
+  elemento con la rejilla de caracteres en el sombreador), llamado desde `environment.js` en la rama neón y liberado
+  en `env.dispose()`; laboratorio: `ascii-clouds`, `ascii-pillars`, `ascii-flyers` (`src/lab/assets/examples.js`).
+  Presupuesto: nubes 4/7/10, pilares 2/4/6, naves 1/2/2; 3 llamadas; 14/26/36 triángulos (tope 64); 0 tiradas del
+  rng del hoyo. `tests/ascii-neon.test.js` (8). `pnpm test`: solo fallan los VFX ajenos; `pnpm build` ok. Sin
+  verificar: aspecto en pantalla, GLSL en GPU real, relleno en móvil. Decisión en `sdd/decisions.md`.
 - [ ] NF — cierre y previews.
 - N5 (pista/atracciones) descartado por el usuario. (No hay N1: su contenido, quitar el agua, ya está en N0.)
 
