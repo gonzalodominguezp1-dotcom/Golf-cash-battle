@@ -41,3 +41,8 @@ test('errores del enlace se mapean a textos en español', () => {
   assert.match(authMessage('confirm_elsewhere'), /Entra con tu email/);
   assert.match(authMessage('link_used'), /ya se usó/);
 });
+
+test('vuelta de Google: el flujo oauth se lee y se construye en la raíz', () => {
+  assert.equal(buildReturnUrl('https://golf.example', 'oauth'), 'https://golf.example/?auth=oauth');
+  assert.deepEqual(parseReturnUrl('https://g.example/?auth=oauth&code=g1'), { flow: 'oauth', code: 'g1', error: null });
+});

@@ -83,7 +83,7 @@ export const authMessage = (code) => AUTH_MESSAGES[code] ?? AUTH_MESSAGES.unknow
 // Siempre la raíz del sitio con un parámetro propio: existe en cualquier host y no depende del pathname.
 // Hay que tenerla en Supabase → Authentication → URL Configuration → Redirect URLs (ver 02-DOCS/wiki/backend/supabase.md).
 export const RETURN_PARAM = 'auth';
-export const RETURN_FLOWS = Object.freeze({ confirm: 'confirm', recovery: 'recovery' });
+export const RETURN_FLOWS = Object.freeze({ confirm: 'confirm', recovery: 'recovery', oauth: 'oauth' });
 
 /** URL de vuelta para un flujo ('confirm' | 'recovery'). Sin hash ni otras query. */
 export function buildReturnUrl(origin, flow) {

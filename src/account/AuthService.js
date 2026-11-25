@@ -21,6 +21,26 @@ export class AuthService {
     return buildReturnUrl(location.origin, RETURN_FLOWS.confirm);
   }
 
+  /**
+   * Entrar o registrarse con Google. Sin paso de verificación: Google ya trae el email confirmado,
+   * y Supabase lo marca así al crear la cuenta.
+   * Un invitado (sesión anónima) vincula Google a su misma cuenta: conserva saldo, nivel y skins.
+   * Redirige a la web de Google; al volver, connectSupabase canjea el código (flow 'oauth').
+   */
+  async signInWithGoogle() {
+    const redirectTo = buildReturnUrl(location.origin, RETURN_FLOWS.oauth);
+    const {
+      data: { session },
+    } = await this.db.auth.getSession();
+    const options = { redirectTo };
+    const result = session?.user?.is_anonymous
+      ? await this.db.auth.linkIdentity({ provider: 'google', options })
+      : await this.db.auth.signInWithOAuth({ provider: 'google', options });
+    if (result.error) throw fail(result.error);
+    // supabase-js ya redirige a Google en el navegador; la URL se devuelve por si el llamador quiere hacerlo a mano
+    return result.data?.url ?? null;
+  }
+
   /** Vuelta del enlace de recuperar contraseña (distinta para que la app sepa qué pantalla mostrar). */
   get recoveryRedirectTo() {
     return buildReturnUrl(location.origin, RETURN_FLOWS.recovery);
