@@ -186,25 +186,25 @@
 
 /* ---------- escritorio ---------- */
 @media (min-width: 900px) {
-  /* logo arriba a la izquierda; debajo, titular a la izquierda y tarjeta (420px) a la derecha.
-     .auth-hero se disuelve (display: contents) para que logo, titular y aviso sean celdas de la rejilla del escenario */
+  /* logo pequeño en la esquina superior izquierda (fuera del flujo); en una sola fila centrada en vertical,
+     titular + aviso a la izquierda y tarjeta (420px) a la derecha: comparten la línea central de la pantalla */
   .auth-screen { padding: 40px 48px 72px; }
-  /* la rejilla ocupa la altura de la pantalla: la fila central es la que crece y ahí se centra el formulario */
+  /* la rejilla ocupa la altura de la pantalla y centra su única fila; si el contenido no cabe, crece */
   .auth-stage {
-    max-width: 1080px; min-height: calc(100dvh - 112px); gap: 0 72px; align-content: start;
+    max-width: 1080px; min-height: calc(100vh - 112px); min-height: calc(100dvh - 112px); gap: 0 72px;
     grid-template-columns: minmax(0, 1fr) 420px;
-    grid-template-areas: "logo logo" "tag card" "note card";
-    grid-template-rows: auto 1fr auto;
+    grid-template-areas: "hero card";
+    align-content: center; align-items: center;
   }
-  .auth-hero { display: contents; }
-  .auth-logo { grid-area: logo; justify-self: start; align-self: start; margin-bottom: 0; }
-  .auth-logo-img { width: 160px; }
+  .auth-hero { grid-area: hero; align-self: center; justify-items: start; gap: 14px; text-align: left; }
+  /* .auth-hero y .auth-stage no tienen position: el bloque contenedor del logo es .auth-screen */
+  .auth-screen .auth-logo { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 28px); left: 32px; z-index: 1; margin: 0; }
+  .auth-logo-img { width: 104px; }
   .auth-logo::before { inset: -14% -18%; }
-  .auth-screen .auth-logo { margin-left: 8px; }
-  .auth-tagline { grid-area: tag; align-self: center; max-width: 14ch; text-align: left; font-size: 56px; line-height: 1.04; text-wrap: balance; }
-  .auth-notice { grid-area: note; align-self: start; justify-self: start; margin: 8px 0 0; max-width: 40ch; text-align: left; }
+  .auth-tagline { max-width: 14ch; text-align: left; font-size: 56px; line-height: 1.04; text-wrap: balance; }
+  .auth-notice { justify-self: start; margin: 0; max-width: 40ch; text-align: left; }
   .auth-card { grid-area: card; align-self: center; padding: 28px 30px 26px; }
-  .auth-screen:not([data-view="signup"]):not([data-view="login"]) .auth-logo-img { width: 160px; }
+  .auth-screen:not([data-view="signup"]):not([data-view="login"]) .auth-logo-img { width: 104px; }
   /* la banda legal queda fija abajo del todo */
   .auth-ticker { position: fixed; }
   .auth-veil {
