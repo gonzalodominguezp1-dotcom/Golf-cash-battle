@@ -26,10 +26,11 @@ aprobando cada uno antes de pasar al siguiente, para que el campo se vea vivo y 
   de suciedad y vapor verde ascendente (ver «Neón / Cyberpunk», N6).
   Ver el apartado «Neón / Cyberpunk (N0–NF)».
 - **Orden:** viento → árbol redondo → pino → palmera → arbustos → césped → flores → rocas → agua →
-  especiales (pino nevado, cactus, árbol seco, montón de rocas) → neón (N) → muros (M) → farolas y luces (F2) →
-  cierre (F). El cierre va el último para que retire también lo que dejen M y F2.
+  especiales (pino nevado, cactus, árbol seco, montón de rocas) → neón (N) → muros (M) → lava y caldera (V) →
+  temas únicos por mapa (T) → cierre (F). Luces (F2), shaders y optimización van después, en fase aparte.
 - 2026-11-24: el usuario pide rehacer los muros de todos los mapas con variaciones según el tipo de mapa (hoy son
-  casi todos de madera) y rediseñar las farolas y luces que se usan. Ver «Muros y farolas (pasos M y F2)».
+  casi todos de madera), incluir la lava en el rediseño y que cada mapa tenga un tema distinto. Las luces se quedan
+  como están por ahora. Ver «Muros, lava, temas y luces (2026-11-24)».
 
 ## Ejecución: con subagentes, como siempre
 - El agente principal coordina, revisa cada entrega y habla con el usuario. No escribe él solo el
@@ -39,11 +40,11 @@ aprobando cada uno antes de pasar al siguiente, para que el campo se vea vivo y 
   el árbol redondo (pasos 1–2, que fijan la técnica de copas), el césped (paso 5) y el agua (paso 8).
 - Lo mecánico va con Sonnet (`model: sonnet`): la página laboratorio, arbustos, flores, rocas,
   especiales, sustituir en `environment.js`, tests de presupuesto y recaptura de previews.
-- Muros y farolas (2026-11-24): con Opus (`model: opus`) el hielo translúcido (M5), la roca volcánica con grietas
-  de lava (M6), el neón metal (M7) y la política de luces reales por hoyo (F2.0). Con Sonnet (`model: sonnet`) la
-  medición (M0), madera, piedra, bambú, pradera de día, cierre de M, farolillo, antorcha, guirnalda, poste de
-  esquina y sustituciones en `course.js`/`environment.js`. Mismas reglas: un subagente por tarea, revisor de
-  contexto limpio, sin commits de subagentes, visto bueno del usuario por familia antes de seguir.
+- Muros, lava y temas (2026-11-24): con Opus (`model: opus`) el hielo translúcido (M5), la roca volcánica con grietas
+  de lava (M6), el neón metal (M7) y la lava y caldera (V, Opus). Con Sonnet (`model: sonnet`) la medición (M0),
+  madera, piedra, bambú, pradera de día, cierre de M, y las sustituciones en `course.js`/`environment.js`. Mismas
+  reglas: un subagente por tarea, revisor de contexto limpio, sin commits de subagentes, visto bueno del usuario por
+  familia antes de seguir.
 - Tras cada tarea, un revisor de contexto limpio lee el diff (`rsc risk` decide cuántos).
 - Un asset no pasa al siguiente sin el visto bueno del usuario en el laboratorio.
 - Tareas sin ficheros en común pueden ir en paralelo (p. ej. rocas y flores), pero nunca dos
@@ -175,7 +176,9 @@ los entornos tras la aprobación.
 - [ ] Paso 8 — agua
 - [ ] Paso 9 — especiales
 - [ ] Paso M — muros por tipo de mapa (2026-11-24, sin empezar). M0 medición, M1–M7 familias, M8 cierre. Ver su apartado.
-- [ ] Paso F2 — farolas y luces (2026-11-24, sin empezar). F2.0 política de luces, F2.1–F2.5, F2.6 cierre. Ver su apartado.
+- [ ] Paso V — lava y caldera (2026-11-24, sin empezar; incluido en el rediseño 1 a 1). Ver «Paso V» abajo.
+- [ ] Paso T — un tema distinto por mapa (2026-11-24, sin empezar). Se resuelve al rediseñar cada familia. Ver su apartado.
+- [ ] Fase posterior — luces (F2), shaders y optimización (2026-11-24, aplazada: las luces quedan como están).
 - [ ] Paso F — cierre, tests y previews. Cierre parcial (2026-11-24, sin commit): retirados `makeRock` y `makeFlower`
   de `environment.js` y sus «Antes» del laboratorio (solo los usaba el laboratorio). Unificado `roundTree.js` con
   `treeKit.js` (`TAU`, `LEVELS`, `lerp`, `range`, `smooth`, `withRim`, `treeLevel`). Previews recapturadas con todos los
@@ -183,7 +186,8 @@ los entornos tras la aprobación.
   la familia `makeLush*` (hub 3D, `hubScene.js`); `makeReeds`/`makeLilyPad` de `flora.js` (solo el «Antes» del agua).
   Decidido 2026-11-24: se retiran el hub 3D y el «Antes» del agua (con `makeReeds`/`makeLilyPad` de `flora.js`).
 
-### Siguiente sesión — Lava y caldera (rediseño, Opus 5.5)
+### Paso V — Lava y caldera (Opus 5.5, dentro del rediseño 1 a 1; 2026-11-24)
+Las luces de la lava (`course.js` ~694, ~773, ~859) no se tocan: van en la fase de luces.
 - Estado: `theme.lava` y `theme.caldera` siguen con el decorado viejo: `makeTuft` y `makeGrassClump` (matas),
   `makeTree` (árbol de respaldo cuando `natureTree` no lo resuelve), `waterShader` (plano de lava de la ciudad/lava)
   y el lago de lava del volcán (`lavaMaterial`, src/game/render/lava.js). Todo lo viejo sale de environment.js
@@ -237,7 +241,10 @@ Propuesta (2026-11-19) para rediseñar SOLO el entorno de `neon`, `neonPink` y `
 - [ ] NF — cierre y previews.
 - N5 (pista/atracciones) descartado por el usuario. (No hay N1: su contenido, quitar el agua, ya está en N0.)
 
-## Muros y farolas (pasos M y F2, 2026-11-24)
+## Muros, lava, temas y luces (2026-11-24)
+Decisiones del usuario (2026-11-24): rediseño visual, la física no cambia. El orden es rediseño 1 a 1 de muros, lava y
+temas, y solo después luces, shaders y optimización. Las luces se quedan como están por ahora. La lava entra en el
+rediseño. Cada mapa tendrá un tema distinto: se resuelve al rediseñar cada asset (Paso T).
 Encargo del usuario (2026-11-24): rehacer los muros de todos los mapas con variaciones según el tipo de mapa («creo
 que ahora es casi el mismo muro siempre») y rediseñar las farolas y luces que se usan. Solo visual: la física no cambia.
 
@@ -273,12 +280,12 @@ usa ningún hoyo (ver decisiones abiertas).
 `courses.js` tiene 18 hoyos (incluido «Desempate»), con 14 temas distintos. `meadow`, `autumn` y `volcano` no los usa ningún hoyo:
 se diseñan con su familia y se prueban en laboratorio, pero van al final de la cola.
 
-### Inventario de farolas y luces
+### Inventario de farolas y luces (fase posterior: no se toca ahora)
 Farolillos y antorchas: `makeLantern`, `makeTorch`, `festoon`, `haloSprite`, `perimeterSpots` en
 `src/game/render/environment.js` (~406-425, ~1055-1130). Salen con `theme.lanterns` (`true` o `'many'`), `theme.torches`
 y `theme.festoon`. Con luz real solo los 6 primeros (`i < 6`); el resto es halo. Parpadean con el reloj `animated`.
 
-| Elemento | Dónde | En qué temas | ¿Luz real? | Propuesta de rediseño | Entra |
+| Elemento | Dónde | En qué temas | ¿Luz real? | Propuesta de rediseño | En la fase de luces |
 |---|---|---|---|---|---|
 | Farolillo (`makeLantern`) | environment.js ~1077 | sunset (`true`, 4), night, gardenNight, beachNight (`many`) | sí, `PointLight` 3,2 / 6,5 m, hasta 6 | forma de linterna de papel con costillas; luz real solo en el tope de F2.0 | Sí (F2.1) |
 | Antorcha (`makeTorch`) | environment.js ~1105 | beachNight (la mitad de los farolillos) | sí, 3 / 6 m, mismo tope | llama con variación de color barata; comparte el tope con el farolillo | Sí (F2.2) |
@@ -316,13 +323,25 @@ compartidos, `rng` con semilla (el mismo hoyo sale igual), compatible con la tra
   `wallBlocksBall` y `baseEmissive` siguen funcionando. Laboratorio `assets-lab.html` (`src/lab/assets/examples.js`)
   con antes/después por tema. Recaptura de previews (`pnpm previews:capture`).
 
-### Paso F2 — Farolas y luces (Sonnet, F2.0 con Opus)
+### Paso T — Un tema distinto por mapa (2026-11-24, sin empezar)
+- Estado medido en `courses.js`: 18 hoyos y 14 temas en uso. Repetidos: sunset (Zigzag, Desempate), canyon (Bloques,
+  El Abismo), night (El Portal, Molinos de Noche), neonPink (Doble Looping, Tubos Neón). Sin usar: meadow, autumn, volcano.
+- Hace falta: 18 temas distintos y `themes.js` tiene 17. Falta al menos un tema nuevo, o que «Desempate» comparta tema
+  con otro (decidirlo al llegar a este paso).
+- Cómo: el tema de cada hoyo se decide al rediseñar su familia (muro, lava, cielo, suelo). Cada cambio de `courses.js`
+  pasa por el laboratorio y el visto bueno del usuario.
+- Hecho cuando: 18 hoyos con tema distinto, un test que lo compruebe, y el usuario aprueba la asignación.
+
+### Fase posterior — Luces (F2), no ahora
+Aplazada por decisión del usuario (2026-11-24): las luces quedan igual hasta terminar el rediseño 1 a 1. Después se
+miran luces, shaders y optimización. Lo de abajo es el borrador para esa fase, no se ejecuta ahora.
+Subpasos: farolillo, antorcha, guirnalda, poste de esquina y la parte de neón que no cubra N3.
 Subpasos: farolillo, antorcha, guirnalda, poste de esquina y la parte de neón que no cubra N3. Máximo de `PointLight`
 reales por hoyo y por calidad; halo o emisivo barato para el resto; parpadeo con el mismo reloj; variaciones por tema.
 
 - **F2.0 — Política de luces (Opus).** Fijar el tope de `PointLight` reales por hoyo y calidad. Propuesta: 6 en Alto,
   4 en Medio, 2 en Bajo, sumando farolillos, antorchas y volcán; el resto, halo. Hoy: 6 farolillos/antorchas + 2 de
-  volcán en Alto. Medir con M0. Decide el usuario (ver abiertas).
+  volcán en Alto. Medir con M0. Aprobado por el usuario 2026-11-24 (6/4/2), se aplica en la fase de luces.
 - **F2.1 — Farolillo (Sonnet).** Forma nueva; luz real hasta el tope; halo para el resto.
 - **F2.2 — Antorcha (Sonnet).** Llama animada barata; comparte tope con el farolillo.
 - **F2.3 — Guirnalda (Sonnet).** Cable y bombillas emisivas con halo; sin luz real; parpadeo con el reloj compartido.
@@ -333,13 +352,12 @@ reales por hoyo y por calidad; halo o emisivo barato para el resto; parpadeo con
 Hecho cuando (F2): ningún hoyo supera el tope de luces reales; el resto del decorado se ve igual sin `PointLight`;
 tests en verde; el usuario aprueba cada tema en laboratorio.
 
-### Decisiones abiertas (para el usuario)
-1. **Muros y postes son pista.** La spec dice «pista y atracciones no se tocan» (N5 descartado). Propuesta: sí, solo
-   visual (la física y los segmentos no cambian). ¿Lo apruebas?
-2. **Luces de atracciones y de lava de pista** (`attractions.js`, `course.js`, luz de volcán): quedan fuera, como
-   pediste preguntar. ¿Quieres incluir alguna?
-3. **Tope de `PointLight` por hoyo** (F2.0): ¿6/4/2 por calidad, o más/menos?
-4. **Temas sin hoyo** (`meadow`, `autumn`, `volcano`): ¿los diseño igualmente o los dejo para el final?
+### Decisiones del usuario (2026-11-24)
+1. **Muros y postes son pista:** sí se rediseñan, solo visual. La física y los segmentos no cambian.
+2. **Luces (atracciones, lava, volcán, farolillos):** quedan igual por ahora. Se miran en la fase posterior, con shaders
+   y optimización. La lava (la forma, no la luz) sí entra en el rediseño (Paso V).
+3. **Tope de `PointLight` por hoyo** (F2.0): 6 en Alto, 4 en Medio, 2 en Bajo. Aprobado, aplicable en la fase de luces.
+4. **Temas sin hoyo** (`meadow`, `autumn`, `volcano`): sí se rediseñan. Cada mapa tendrá un tema distinto (Paso T).
 
 ## Reglas que se respetan
 - Solo la física decide el juego: el decorado nunca cambia colisiones ni la simulación.

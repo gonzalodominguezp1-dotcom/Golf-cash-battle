@@ -288,3 +288,10 @@ Open     — decisión de diseño del usuario: las zonas `water` jugables del ho
 - **Orden:** neón (N) → muros (M) → farolas y luces (F2) → cierre (F), para que el cierre retire también lo que dejen M y F2.
 - **Luces:** el tope de `PointLight` reales por hoyo y calidad lo fija F2.0 (propuesta 6/4/2 en Alto/Medio/Bajo); el resto usa halo o emisivo.
 - **Abierto:** sin medir aún; M0 mide la línea base antes de cambiar nada. Sin código tocado en esta sesión.
+
+## 2026-11-24 — Respuestas del usuario: luces aplazadas, lava y temas únicos (feature: assets-entorno-1a1)
+
+- **Luces:** quedan igual por ahora. F2 pasa a fase posterior, con shaders y optimización. Tope de `PointLight` por hoyo 6/4/2 (Alto/Medio/Bajo) aprobado para esa fase.
+- **Lava:** entra en el rediseño 1 a 1 (Paso V). Sus luces (`course.js` ~694, ~773, ~859) quedan para la fase de luces.
+- **Temas:** cada mapa debe tener un tema distinto (Paso T). Hay 18 hoyos y 17 temas en `themes.js`: falta al menos un tema nuevo. Repetidos hoy: sunset, canyon, night, neonPink. Sin usar: meadow, autumn, volcano.
+- **Muros y postes de pista:** se rediseñan solo en lo visual; la física no cambia.
