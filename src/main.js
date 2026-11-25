@@ -11,6 +11,7 @@ import './screens/account.css';
 import './screens/maps.css';
 import './screens/achievements.css';
 import { HOLE_TIME_LIMIT, PLAYERS_PER_MATCH, TIERS, maxStrokesOf } from './config.js';
+import { strokeMarkerState } from './game/strokeMarker.js';
 import { LocalWallet } from './wallet/LocalWallet.js';
 import { InsufficientFundsError } from './wallet/WalletService.js';
 import { MatchService, leaders } from './match/MatchService.js';
@@ -40,7 +41,7 @@ import { mountMatchmakingBanner } from './ui/matchmakingBanner.js';
 import { installDocHidden } from './ui/matchmakingView.js';
 import { activeSearch, createSearch } from './match/matchmakingController.js';
 import { errorRef } from './backend/rpcError.js';
-import { coin, createBall, esc, fmt, h } from './screens/shared.js';
+import { avatarHtml, coin, createBall, esc, fmt, h } from './screens/shared.js';
 import { createRouter } from './screens/router.js';
 import { createRoutes } from './screens/routes.js';
 import { defaultInfo } from './screens/matchmaking.js';
@@ -491,7 +492,6 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         <div class="pill hl freeplay-pill">Modo Libre</div>
         <div class="pill">${course.name}</div>
         <div class="pill">Par ${course.par}</div>
-        <div class="pill strokes">Golpes <b>0</b></div>
         <div class="pill dist">— m</div>`}
         ${freePlay ? `
         <button class="pill restart-btn hud-freeplay-btn" aria-label="Reiniciar hoyo" title="Reiniciar hoyo al tee (R)">${icon('restart')}Reiniciar <kbd class="kbd-hint">R</kbd></button>
@@ -526,6 +526,11 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       </div>
       <div class="power"><div class="fill"></div></div>
       <button class="map-btn" aria-label="Ver el hoyo completo">${icon('eye')}Ver mapa <kbd class="kbd-hint">Espacio</kbd></button>
+      <div class="stroke-marker neutral" data-stroke-marker aria-live="polite" hidden>
+        <div class="sm-top">${icon('dot', { tone: 'white' })}<b class="sm-num">0</b></div>
+        <span class="sm-word">golpes</span>
+        <span class="sm-par">${course.par ? `Par ${course.par}` : ''}</span>
+      </div>
     </main>`);
   const gameClass = loadGolfGame();
   paintApp(view, { keepGame: keep });
@@ -533,7 +538,30 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
     if (!view.isConnected) { prepared?.dispose(); return; } // se salió de la pantalla mientras cargaba el motor
     playScope?.dispose();
     playScope = createScope();
-    const strokesEl = view.querySelector('.strokes b');
+    // marcador de tus golpes (abajo a la derecha): solo lo mueve el onStroke local, nunca los rivales
+    const strokeMarker = view.querySelector('[data-stroke-marker]');
+    const strokeNumEl = strokeMarker?.querySelector('.sm-num');
+    let shownStrokes = 0;
+    const paintStrokes = (n) => {
+      if (!strokeMarker) return;
+      const s = strokeMarkerState({ strokes: n, par: course.par, max: maxStrokesOf(course), tiebreak });
+      strokeMarker.hidden = s.hidden;
+      strokeMarker.classList.remove('good', 'warn', 'bad', 'neutral');
+      strokeMarker.classList.add(s.tone);
+      strokeMarker.classList.toggle('last', s.last);
+      strokeMarker.querySelector('.sm-word').textContent = s.word;
+      strokeMarker.querySelector('.sm-par').textContent = s.parLine;
+      strokeMarker.setAttribute('aria-label', s.text);
+      strokeNumEl.textContent = s.number;
+      // animación corta solo al subir de golpes (no al reiniciar a 0)
+      if (s.number !== shownStrokes && s.number > 0) {
+        strokeMarker.classList.remove('pop');
+        void strokeMarker.offsetWidth;
+        strokeMarker.classList.add('pop');
+      }
+      shownStrokes = s.number;
+    };
+    paintStrokes(0);
     const distEl = view.querySelector('.dist');
     const power = view.querySelector('.power');
     const hint = view.querySelector('.hint');
@@ -670,7 +698,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
             onRestartHole();
           } else if (game) {
             game.restart();
-            if (strokesEl) strokesEl.textContent = '0';
+            paintStrokes(0);
             showDistance();
             toast('Hoyo reiniciado al tee', '#00f076');
           }
@@ -716,7 +744,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       onStroke: (n) => {
         if (n > 0) onShots?.(game.shots);
         if (!tiebreak) setChip('me', n, false);
-        if (strokesEl) strokesEl.textContent = n;
+        paintStrokes(n);
         hint.classList.add('gone');
         view.querySelector('.desktop-controls-bar')?.classList.add('fade-out');
       },
@@ -766,6 +794,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       game.attach(stageEl);
     }
     game.load(course, { bots: freePlay ? [] : rivals ?? players.filter((p) => p.isBot), skin: progress.skin, instance: progress.instance(progress.skin.id), firstSunkTick, timeLimit: freePlay ? null : timeLimit, live });
+    paintStrokes(0); // hoyo nuevo (también el preparado en la sala): el marcador empieza en 0
     onGame?.(game, { toast, view });
     showDistance();
     if (freePlay) {
@@ -774,7 +803,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         if (onRestartHole) onRestartHole();
         else if (game) {
           game.restart();
-          if (strokesEl) strokesEl.textContent = '0';
+          paintStrokes(0);
           showDistance();
           toast('Hoyo reiniciado al tee', '#00f076');
         }
@@ -793,7 +822,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
           if (onRestartHole) onRestartHole();
           else if (game) {
             game.restart();
-            if (strokesEl) strokesEl.textContent = '0';
+            paintStrokes(0);
             showDistance();
             toast('Hoyo reiniciado al tee', '#00f076');
           }
@@ -870,11 +899,27 @@ function scoreLabel(strokes, par) {
   return { '-3': '¡Albatros!', '-2': '¡Eagle!', '-1': '¡Birdie!', 0: 'Par', 1: 'Bogey', 2: 'Doble bogey' }[d] ?? `+${d}`;
 }
 
+/**
+ * Avatar y marco de un jugador en pantalla. Tu propio jugador usa lo que tienes equipado ahora (aunque el servidor
+ * vaya un paso por detrás); los demás, lo que manda el servidor (p.avatar, p.frame). Bots: su inicial.
+ */
+function seatAvatar(p) {
+  const me = p.id === 'me';
+  return { avatar: me ? avatar.get() : p.avatar ?? null, frame: me ? progress.prestige?.frame ?? null : p.frame ?? null };
+}
+
+function playerAvatar(p, size = 'xs', hd = false) {
+  const { avatar: av, frame } = seatAvatar(p);
+  return avatarHtml({ size, frame, av, initial: p.name ?? '?', hd });
+}
+
 function standingsTable(players, highlightPayout) {
+  const size = highlightPayout ? 'sm' : 'xs';
   return `<ol class="standings">${players
     .map(
       (p, i) => `<li class="${p.id === 'me' ? 'me' : ''} ${(p.position ?? i + 1) === 1 ? 'first' : ''}" style="--c:${p.color}">
         <span class="pos">${(p.position ?? i + 1) === 1 ? icon('trophy') : p.position ?? i + 1}</span>
+        ${playerAvatar(p, size, highlightPayout && (p.position ?? i + 1) === 1)}
         <span class="name"><i></i>${p.name}</span>
         <span class="scores">${p.scores ? p.scores.join(' · ') : p.finished ? 'Terminado' : `Jugando · ${p.holesPlayed} hoyo${p.holesPlayed === 1 ? '' : 's'}`}${p.tiebreak !== undefined ? ` · ${p.tiebreak.toFixed(2)}m` : ''}</span>
         <b>${p.total ?? '—'}</b>
@@ -929,7 +974,7 @@ function afterLastHole(match) {
   const overlay = h(`
     <div class="overlay">
       <div class="card tiebreak-card">
-        <div class="vs">${tied.map((p) => `<span class="avatar" style="--c:${p.color}">${p.name[0]}</span>`).join('<em>VS</em>')}</div>
+        <div class="vs">${tied.map((p) => playerAvatar(p, 'sm')).join('<em>VS</em>')}</div>
         <h2 class="score-title">¡Empate a ${tied[0].total}!</h2>
         <p class="sub">${tied.map((p) => p.name).join(', ')} van al desempate. Hoyo sin agujero: un solo tiro y gana quien deje la bola más cerca de la diana.</p>
         <button class="primary next">${meTied ? 'Jugar desempate' : 'Ver desempate'}${icon('next')}</button>
@@ -987,7 +1032,7 @@ function showTiebreakResult(match, tied, distances) {
       <div class="card tiebreak-card">
         <h2 class="score-title">Desempate</h2>
         <ol class="standings">${rows
-      .map((p, i) => `<li class="${p.id === 'me' ? 'me' : ''} ${i === 0 ? 'first' : ''}" style="--c:${p.color}"><span class="pos">${i + 1}</span><span class="name"><i></i>${p.name}</span><span></span><b>${distances[p.id].toFixed(2)} m</b></li>`)
+      .map((p, i) => `<li class="${p.id === 'me' ? 'me' : ''} ${i === 0 ? 'first' : ''}" style="--c:${p.color}"><span class="pos">${i + 1}</span>${playerAvatar(p, 'xs')}<span class="name"><i></i>${p.name}</span><span></span><b>${distances[p.id].toFixed(2)} m</b></li>`)
       .join('')}</ol>
         <button class="primary next">Ver resultado${icon('next')}</button>
       </div>
@@ -1214,7 +1259,7 @@ function showLiveRoom(live) {
   const sync = () => {
     for (let i = 0; i < match.seats; i++) {
       const p = match.players.find((q) => q.seat === i);
-      search.setSeat(i, p ? { name: p.id === 'me' ? 'Tú' : p.name, color: p.color, me: p.id === 'me' } : null);
+      search.setSeat(i, p ? { name: p.id === 'me' ? 'Tú' : p.name, color: p.color, me: p.id === 'me', ...seatAvatar(p) } : null);
     }
     if (match.startsAt) search.setStartsAt(match.startsAt);
   };
@@ -1482,7 +1527,7 @@ function liveTiebreak(live, tied) {
   const overlay = h(`
     <div class="overlay">
       <div class="card tiebreak-card">
-        <div class="vs">${tied.map((p) => `<span class="avatar" style="--c:${p.color}">${esc(label(p)[0])}</span>`).join('<em>VS</em>')}</div>
+        <div class="vs">${tied.map((p) => playerAvatar(p, 'sm')).join('<em>VS</em>')}</div>
         <h2 class="score-title">¡Empate a ${tied[0].total}!</h2>
         <p class="sub">${tied.map((p) => esc(label(p))).join(', ')} vais al desempate. Hoyo sin agujero: un solo tiro y gana quien deje la bola más cerca de la diana.</p>
         <button class="primary next">Jugar desempate${icon('next')}</button>

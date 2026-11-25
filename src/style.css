@@ -2994,3 +2994,87 @@ html.has-mmb .notifs { top: calc(env(safe-area-inset-top, 0px) + 74px); }
    para no salirse por la derecha. Al final del archivo para ganar al bloque general de escritorio. */
 .net-stats[data-level='bad'] { color: #ff6b6b; }
 .hud.hud-lean .pill.fullscreen { display: flex !important; }
+
+/* Marcador de golpes propio (abajo a la derecha): solo tus golpes, sin tocar el mapa ni la fuerza.
+   No recibe toques (pointer-events: none) para no robar gestos de cámara ni de tiro. */
+.stroke-marker {
+  --sm-color: #ffffff;
+  position: absolute;
+  right: calc(env(safe-area-inset-right) + 14px);
+  bottom: calc(env(safe-area-inset-bottom) + 14px);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 104px;
+  padding: 6px 14px 7px;
+  border-radius: 16px;
+  background: rgba(11, 15, 21, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45);
+  color: #fff;
+  text-align: center;
+  pointer-events: none;
+  user-select: none;
+}
+.stroke-marker[hidden] { display: none; }
+.stroke-marker.good { --sm-color: #3ddc84; }
+.stroke-marker.warn { --sm-color: #ffd23f; }
+.stroke-marker.bad { --sm-color: #ff5a5a; }
+.stroke-marker.last { border-color: rgba(255, 210, 63, 0.7); }
+.stroke-marker .sm-top { display: flex; align-items: center; gap: 6px; }
+.stroke-marker .sm-top .gi { width: 16px; height: 16px; }
+.stroke-marker .sm-num {
+  font-size: 30px;
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--sm-color);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+.stroke-marker .sm-word {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.9;
+}
+.stroke-marker .sm-par {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.72;
+  white-space: nowrap;
+}
+.stroke-marker.last .sm-par { color: #ffd23f; opacity: 1; }
+.stroke-marker.pop .sm-num { animation: smPop 0.42s var(--ease-out, ease-out); }
+.stroke-marker.pop { animation: smFlash 0.6s ease-out; }
+@keyframes smPop {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+@keyframes smFlash {
+  0% { box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45), 0 0 0 0 var(--sm-color); }
+  100% { box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45), 0 0 0 14px rgba(0, 0, 0, 0); }
+}
+/* escritorio: la barra de controles ocupa la franja inferior centrada; el marcador va justo encima de ella */
+@media (min-width: 900px) and (pointer: fine) {
+  .stroke-marker { bottom: calc(env(safe-area-inset-bottom) + 78px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stroke-marker.pop, .stroke-marker.pop .sm-num { animation: none; }
+}
+/* móvil: más junto al borde, por encima de la ayuda de toques (.hint, 76 px) cuando el alto es poco */
+@media (max-width: 899px), (pointer: coarse) {
+  .stroke-marker { min-width: 92px; padding: 5px 12px 6px; }
+  .stroke-marker .sm-num { font-size: 26px; }
+  /* la ayuda de toques sube por encima del marcador (el centro de la pantalla queda libre de solapes) */
+  .hint { bottom: calc(env(safe-area-inset-bottom) + 104px); }
+}
+@media (max-height: 460px) and (orientation: landscape) {
+  .stroke-marker { bottom: calc(env(safe-area-inset-bottom) + 10px); padding: 4px 12px 5px; min-width: 88px; }
+  .stroke-marker .sm-num { font-size: 22px; }
+  .stroke-marker .sm-word { font-size: 10px; }
+  .stroke-marker .sm-par { font-size: 10px; }
+}
