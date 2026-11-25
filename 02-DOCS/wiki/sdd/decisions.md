@@ -295,3 +295,10 @@ Open     — decisión de diseño del usuario: las zonas `water` jugables del ho
 - **Lava:** entra en el rediseño 1 a 1 (Paso V). Sus luces (`course.js` ~694, ~773, ~859) quedan para la fase de luces.
 - **Temas:** cada mapa debe tener un tema distinto (Paso T). Hay 18 hoyos y 17 temas en `themes.js`: falta al menos un tema nuevo. Repetidos hoy: sunset, canyon, night, neonPink. Sin usar: meadow, autumn, volcano.
 - **Muros y postes de pista:** se rediseñan solo en lo visual; la física no cambia.
+
+## 2026-11-25 — Laboratorio limpio y primer muro nuevo (feature: assets-entorno-1a1, paso M1)
+
+- **Limpieza:** `src/lab/assets/examples.js` deja de listar los assets ya subidos a origin/main (árbol redondo, pino, palmera, arbustos, césped, flores, rocas, agua, pez, especiales y neón). Su código sigue en main; no se borra nada del juego. Los tests de neón que leían la lista dejan de comprobar el laboratorio y comprueban sus módulos.
+- **Por qué:** el laboratorio tiene que mostrar solo lo que aún no está en producción.
+- **Muro M1:** `src/game/render/assets/walls.js`, familia madera. Mismo presupuesto que hoy (600 triángulos por segmento, dos llamadas) y mismo ancho (`WALL_HALF`). Textura de tablones pintada en JS (sin canvas, igual en node y en el navegador).
+- **Abierto:** visto bueno del usuario en `assets-lab.html`; después se sustituye en `course.js`.

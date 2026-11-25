@@ -175,7 +175,7 @@ los entornos tras la aprobación.
   - 2026-11-19: roca suelta de arenisca (`material: 'sandstone'` en canto rodado y losa); en laboratorio como `rock-sandstone` y `rock-slab-sandstone`; pendiente de verla en pantalla.
 - [ ] Paso 8 — agua
 - [ ] Paso 9 — especiales
-- [ ] Paso M — muros por tipo de mapa (2026-11-24, sin empezar). M0 medición, M1–M7 familias, M8 cierre. Ver su apartado.
+- [ ] Paso M — muros por tipo de mapa (2026-11-24). M0 medido 2026-11-25: 600 triángulos por segmento (300 cuerpo + 300 remate), dos llamadas de dibujo; igual en M1. M1 madera en el laboratorio (`wall-wood`, sin visto bueno, sin sustituir en `course.js`). M2–M8 sin empezar.
 - [ ] Paso V — lava y caldera (2026-11-24, sin empezar; incluido en el rediseño 1 a 1). Ver «Paso V» abajo.
 - [ ] Paso T — un tema distinto por mapa (2026-11-24, sin empezar). Se resuelve al rediseñar cada familia. Ver su apartado.
 - [ ] Fase posterior — luces (F2), shaders y optimización (2026-11-24, aplazada: las luces quedan como están).
@@ -297,6 +297,16 @@ y `theme.festoon`. Con luz real solo los 6 primeros (`i < 6`); el resto es halo.
 | Pilones y cristales de neón | `assets/neonProps.js` (N3) | neon, neonPink, cyber2078 | no (emisivo y halo) | ya cubierto por N3 | Ya hecho |
 | Remate emisivo de muros de neón | course.js ~208 (`capMat`) | neon, neonPink, cyber2078 | no (emisivo) | lo cubre M7 | En M7 |
 | Topes de neón (`topMat`) | course.js ~337-339 | neón | no (emisivo) | botón de neón de los topes; se decide en F2.5 | Decide F2.5 |
+
+### Estado 2026-11-25 (laboratorio)
+- Laboratorio limpio: `src/lab/assets/examples.js` solo tiene lo que aún no está en producción (origin/main). Lo
+  ya subido (árbol redondo, pino, palmera, arbustos, césped, flores, rocas, agua, pez, especiales, neón) sale del
+  laboratorio; su código sigue en main y en el historial de git. Se conservan los módulos de parches de la lab
+  (`grassPatch.js`, `waterPatch.js`, `fishPatch.js`) porque los usan tests.
+- Entrada nueva `wall-wood` («Muro · madera», M1): «antes» = muro de hoy por tema (mismos materiales que
+  `course.js`), «después» = `makePlankWall` en `src/game/render/assets/walls.js` para los temas de la familia A
+  (meadow, sunset, snow, autumn, night, gardenNight). Los demás temas muestran «Sin diseño nuevo todavía».
+- Pendiente de visto bueno del usuario en `assets-lab.html`. No se toca `course.js` hasta entonces.
 
 ### Paso M — Muros por tipo de mapa (Sonnet salvo M5-M7, Opus)
 Técnica igual que el resto: procedural en three.js, texturas pintadas en canvas, color de vértice y oclusión, materiales
