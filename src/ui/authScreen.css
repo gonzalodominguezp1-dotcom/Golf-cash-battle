@@ -168,7 +168,7 @@
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
   mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
 }
-.auth-ticker-track { display: flex; width: max-content; animation: auth-ticker 22s linear infinite; will-change: transform; }
+.auth-ticker-track { display: flex; width: max-content; animation: auth-ticker 8s linear infinite; will-change: transform; }
 .auth-ticker-seg { display: inline-flex; align-items: center; gap: 14px; flex: none; padding-right: 14px; white-space: nowrap; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; color: var(--a-dim); }
 .auth-ticker-sep { color: var(--a-gold); font-weight: 900; }
 @keyframes auth-ticker { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-50%, 0, 0); } }
@@ -188,15 +188,25 @@
 
 /* ---------- escritorio ---------- */
 @media (min-width: 900px) {
-  /* una sola columna centrada en la pantalla: logo grande arriba, titular grande, tarjeta debajo */
-  .auth-screen { padding: 48px 32px 72px; }
-  .auth-stage { max-width: 520px; gap: 28px; }
-  .auth-hero { justify-items: center; text-align: center; gap: 18px; }
-  .auth-logo-img { width: 280px; }
+  /* logo grande centrado arriba; debajo, titular a la izquierda y tarjeta (420px) a la derecha.
+     .auth-hero se disuelve (display: contents) para que logo, titular y aviso sean celdas de la rejilla del escenario */
+  .auth-screen { padding: 40px 48px 72px; }
+  .auth-stage {
+    max-width: 1080px; gap: 0 72px; align-content: center;
+    grid-template-columns: minmax(0, 1fr) 420px;
+    grid-template-areas: "logo logo" "tag card" "note card";
+    grid-template-rows: auto auto 1fr;
+  }
+  .auth-hero { display: contents; }
+  .auth-logo { grid-area: logo; justify-self: center; margin-bottom: 36px; }
+  .auth-logo-img { width: 240px; }
   .auth-logo::before { inset: -14% -18%; }
-  .auth-tagline { max-width: 22ch; font-size: 52px; line-height: 1.02; }
-  .auth-notice { margin-inline: auto; }
-  .auth-card { padding: 28px 30px 26px; }
+  .auth-tagline { grid-area: tag; align-self: end; max-width: 14ch; text-align: left; font-size: 56px; line-height: 1.04; text-wrap: balance; }
+  .auth-notice { grid-area: note; align-self: start; justify-self: start; margin: 18px 0 0; max-width: 40ch; text-align: left; }
+  .auth-card { grid-area: card; padding: 28px 30px 26px; }
+  .auth-screen:not([data-view="signup"]):not([data-view="login"]) .auth-logo-img { width: 240px; }
+  /* la banda legal queda fija abajo del todo */
+  .auth-ticker { position: fixed; }
   .auth-veil {
     background:
       linear-gradient(90deg, rgba(6, 8, 14, 0.82) 0%, rgba(6, 8, 14, 0.55) 55%, rgba(6, 8, 14, 0.75) 100%),
