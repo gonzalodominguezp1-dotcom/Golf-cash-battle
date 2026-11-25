@@ -60,9 +60,9 @@ function checklist(input) {
  * Texto legal en una banda fija abajo que se desplaza en bucle. El texto se lee una vez:
  * la copia de relleno va aria-hidden. Con movimiento reducido se oculta la copia y el texto queda fijo.
  */
-function legalTicker(text) {
+function legalTicker(sentences) {
   const seg = (hidden) => {
-    const s = el('span', { class: 'auth-ticker-seg' }, text, el('span', { class: 'auth-ticker-sep', text: '•' }), text, el('span', { class: 'auth-ticker-sep', text: '•' }));
+    const s = el('span', { class: 'auth-ticker-seg' }, sentences.flatMap((t) => [el('span', { text: t }), el('span', { class: 'auth-ticker-sep', text: '•' })]));
     if (hidden) s.setAttribute('aria-hidden', 'true');
     return s;
   };
@@ -191,7 +191,14 @@ export function mountAuth(root, auth, { recovery = false, guest = false, linkErr
       ),
       card,
     ),
-    legalTicker('Créditos de demostración sin valor real. Para jugar mesas con entrada hay que ser mayor de 18 años y verificar la identidad.'),
+    legalTicker([
+      'Créditos de demostración sin valor real.',
+      'Para jugar mesas con entrada hay que ser mayor de 18 años y verificar la identidad.',
+      'Tu sesión se queda guardada en este dispositivo.',
+      'Con tu cuenta guardas saldo, nivel y skins.',
+      'La contraseña debe tener al menos 8 caracteres, con letras y números.',
+      'Si no te llega el email de confirmación, revisa la carpeta de spam.',
+    ]),
   );
   root.replaceChildren(page);
 

@@ -43,16 +43,14 @@
 /* ---------- escenario y héroe ---------- */
 .auth-stage { width: 100%; max-width: 440px; margin: 0 auto; display: grid; gap: 18px; }
 .auth-hero { display: grid; justify-items: center; gap: 10px; text-align: center; }
-.auth-logo { position: relative; isolation: isolate; margin: 0; line-height: 0; animation: auth-float 4.5s ease-in-out 1.1s infinite alternate; }
+.auth-logo { position: relative; isolation: isolate; margin: 0; line-height: 0; }
 .auth-logo::before {
   content: ''; position: absolute; inset: -18% -22%; z-index: -1; border-radius: 50%;
   background: radial-gradient(closest-side, rgba(255, 196, 64, 0.55), rgba(255, 149, 0, 0.18) 60%, transparent);
-  animation: auth-halo 3.2s ease-in-out infinite alternate;
 }
 .auth-logo-img {
   display: block; width: 120px; height: auto;
   filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.55));
-  animation: auth-logo-in 0.9s var(--a-ease) 0.1s backwards;
 }
 .auth-tagline {
   margin: 0; max-width: 30ch;
@@ -191,20 +189,21 @@
   /* logo grande centrado arriba; debajo, titular a la izquierda y tarjeta (420px) a la derecha.
      .auth-hero se disuelve (display: contents) para que logo, titular y aviso sean celdas de la rejilla del escenario */
   .auth-screen { padding: 40px 48px 72px; }
+  /* la rejilla ocupa la altura de la pantalla: la fila central es la que crece y ahí se centra el formulario */
   .auth-stage {
-    max-width: 1080px; gap: 0 72px; align-content: center;
+    max-width: 1080px; min-height: calc(100dvh - 112px); gap: 0 72px; align-content: start;
     grid-template-columns: minmax(0, 1fr) 420px;
     grid-template-areas: "logo logo" "tag card" "note card";
-    grid-template-rows: auto auto 1fr;
+    grid-template-rows: auto 1fr auto;
   }
   .auth-hero { display: contents; }
-  .auth-logo { grid-area: logo; justify-self: center; margin-bottom: 36px; }
-  .auth-logo-img { width: 240px; }
+  .auth-logo { grid-area: logo; justify-self: center; margin-bottom: 24px; }
+  .auth-logo-img { width: 160px; }
   .auth-logo::before { inset: -14% -18%; }
   .auth-tagline { grid-area: tag; align-self: end; max-width: 14ch; text-align: left; font-size: 56px; line-height: 1.04; text-wrap: balance; }
   .auth-notice { grid-area: note; align-self: start; justify-self: start; margin: 18px 0 0; max-width: 40ch; text-align: left; }
-  .auth-card { grid-area: card; padding: 28px 30px 26px; }
-  .auth-screen:not([data-view="signup"]):not([data-view="login"]) .auth-logo-img { width: 240px; }
+  .auth-card { grid-area: card; align-self: center; padding: 28px 30px 26px; }
+  .auth-screen:not([data-view="signup"]):not([data-view="login"]) .auth-logo-img { width: 160px; }
   /* la banda legal queda fija abajo del todo */
   .auth-ticker { position: fixed; }
   .auth-veil {
