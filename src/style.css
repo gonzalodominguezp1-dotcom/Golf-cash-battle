@@ -3001,7 +3001,7 @@ html.has-mmb .notifs { top: calc(env(safe-area-inset-top, 0px) + 74px); }
   --sm-color: #ffffff; /* blanco → rojo según los golpes (JS: strokeColor) */
   position: absolute;
   right: calc(env(safe-area-inset-right) + 14px);
-  bottom: calc(env(safe-area-inset-bottom) + 14px);
+  bottom: calc(env(safe-area-inset-bottom) + 20px);
   z-index: 5;
   display: flex;
   flex-direction: column;
@@ -3046,21 +3046,28 @@ html.has-mmb .notifs { top: calc(env(safe-area-inset-top, 0px) + 74px); }
   0% { box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45), 0 0 0 0 var(--sm-color); }
   100% { box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45), 0 0 0 14px rgba(0, 0, 0, 0); }
 }
-/* escritorio: la barra de controles ocupa la franja inferior centrada; el marcador va justo encima de ella */
+/* escritorio: en la esquina, a la altura del botón «Ver mapa» (24 px desde abajo) */
 @media (min-width: 900px) and (pointer: fine) {
-  .stroke-marker { bottom: calc(env(safe-area-inset-bottom) + 78px); }
+  .stroke-marker {
+    right: calc(env(safe-area-inset-right) + 24px);
+    bottom: calc(env(safe-area-inset-bottom) + 24px);
+  }
+}
+/* escritorio estrecho: la barra de controles sube para no chocar con el marcador de la esquina */
+@media (min-width: 900px) and (max-width: 1199px) and (pointer: fine) {
+  .desktop-controls-bar { bottom: 116px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .stroke-marker.pop, .stroke-marker.pop .sm-num { animation: none; }
 }
 /* móvil: más junto al borde, por encima de la ayuda de toques (.hint, 76 px) cuando el alto es poco */
 @media (max-width: 899px), (pointer: coarse) {
-  .stroke-marker { min-width: 92px; padding: 5px 12px 6px; }
+  .stroke-marker { min-width: 92px; padding: 5px 12px 6px; bottom: calc(env(safe-area-inset-bottom) + 20px); }
   .stroke-marker .sm-num { font-size: 28px; }
   /* la ayuda de toques sube por encima del marcador (el centro de la pantalla queda libre de solapes) */
   .hint { bottom: calc(env(safe-area-inset-bottom) + 104px); }
 }
 @media (max-height: 460px) and (orientation: landscape) {
-  .stroke-marker { bottom: calc(env(safe-area-inset-bottom) + 10px); padding: 4px 12px 5px; min-width: 88px; }
+  .stroke-marker { bottom: calc(env(safe-area-inset-bottom) + 20px); padding: 4px 12px 5px; min-width: 88px; }
   .stroke-marker .sm-num { font-size: 22px; }
 }
