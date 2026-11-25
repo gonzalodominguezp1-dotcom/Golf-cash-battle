@@ -38,7 +38,7 @@ function fx(el, frames, opts) {
 /** Contenido de una tarjeta de asiento. p: { name, isBot?, me? } o null (vacío). */
 export function seatHtml(p) {
   if (!p) return '<span class="avatar mm-avatar-empty"></span><span class="mm-seat-name">Buscando…</span>';
-  const tag = p.me ? '<em class="me-tag">TÚ</em>' : p.isBot ? '<em class="bot-tag">BOT</em>' : '';
+  const tag = p.isBot ? '<em class="bot-tag">BOT</em>' : '';
   const face = avatarHtml({ size: 'sm', frame: p.frame ?? null, av: p.avatar ?? null, initial: p.name ?? '?' });
   return `${face}<span class="mm-seat-name">${esc(p.name)}</span>${tag}`;
 }

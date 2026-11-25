@@ -1144,8 +1144,9 @@ body.sk-noscroll { overflow: hidden; } /* lo usa skinReveal.js: no borrar */
   background: var(--mm-stripes), var(--mm-foil);
   transition: transform 0.55s var(--ease-out);
 }
-.mm-bar-fill::after {
-  content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 40%;
+/* destello sobre TODA la barra (el contenedor tiene overflow: hidden), no sobre el relleno, que se cortaba */
+.mm-bar::after {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 40%; pointer-events: none;
   background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.45), transparent);
   animation: mmShimmer 1.6s linear infinite;
 }
@@ -1254,6 +1255,12 @@ body.sk-noscroll { overflow: hidden; } /* lo usa skinReveal.js: no borrar */
   box-shadow: 0 0 16px var(--mm-g), inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 @media (max-width: 380px) { .mm-actions { grid-template-columns: 1fr; } }
+/* escritorio: la sala ocupa más ancho para que los nombres quepan junto al avatar y al marco, sin scroll */
+@media (min-width: 900px) and (pointer: fine) {
+  .screen.mm { max-width: 1080px; }
+  .mm-bar, .mm-seats, .mm-actions { max-width: 960px; }
+  .mm-seats { gap: 12px; }
+}
 
 /* salida hacia la partida: solo transform y opacidad; will-change solo durante la salida */
 .mm.is-leaving > * { animation: none; }
