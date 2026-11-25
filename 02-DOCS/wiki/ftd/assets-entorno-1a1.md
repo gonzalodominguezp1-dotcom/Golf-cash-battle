@@ -175,7 +175,7 @@ los entornos tras la aprobación.
   - 2026-11-19: roca suelta de arenisca (`material: 'sandstone'` en canto rodado y losa); en laboratorio como `rock-sandstone` y `rock-slab-sandstone`; pendiente de verla en pantalla.
 - [ ] Paso 8 — agua
 - [ ] Paso 9 — especiales
-- [ ] Paso M — muros por tipo de mapa (2026-11-24). M0 medido 2026-11-25: 600 triángulos por segmento (300 cuerpo + 300 remate), dos llamadas de dibujo; igual en M1. M1 madera en el laboratorio (`wall-wood`, sin visto bueno, sin sustituir en `course.js`). M2–M8 sin empezar.
+- [ ] Paso M — muros por tipo de mapa (2026-11-24). M0 medido 2026-11-25: 600 triángulos por segmento (muro redondeado de hoy + remate). Decisión del usuario 2026-11-25: los muros nuevos NO llevan losa superior ni esquinas redondeadas (cajas de caras planas): cambian la heatbox visual y dan errores visuales. Altura nueva 0,37 m. M1 madera: 12 triángulos. Piedra (pradera de día): sillares con juntas hundidas, bultos y coronación irregular, 256 triángulos a 6 m. Valla en X (playa, otoño), roca volcánica (caldera, volcano), neón ASCII y hielo: en el laboratorio (`wall-new`), sin visto bueno y sin sustituir en `course.js`.
 - [ ] Paso V — lava y caldera (2026-11-24, sin empezar; incluido en el rediseño 1 a 1). Ver «Paso V» abajo.
 - [ ] Paso T — un tema distinto por mapa (2026-11-24, sin empezar). Se resuelve al rediseñar cada familia. Ver su apartado.
 - [ ] Fase posterior — luces (F2), shaders y optimización (2026-11-24, aplazada: las luces quedan como están).

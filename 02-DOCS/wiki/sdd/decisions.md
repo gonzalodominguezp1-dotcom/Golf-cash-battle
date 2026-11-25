@@ -302,3 +302,10 @@ Open     — decisión de diseño del usuario: las zonas `water` jugables del ho
 - **Por qué:** el laboratorio tiene que mostrar solo lo que aún no está en producción.
 - **Muro M1:** `src/game/render/assets/walls.js`, familia madera. Mismo presupuesto que hoy (600 triángulos por segmento, dos llamadas) y mismo ancho (`WALL_HALF`). Textura de tablones pintada en JS (sin canvas, igual en node y en el navegador).
 - **Abierto:** visto bueno del usuario en `assets-lab.html`; después se sustituye en `course.js`.
+
+## 2026-11-25 — Muros nuevos sin losa superior ni esquinas redondeadas (feature: assets-entorno-1a1, paso M)
+
+- **Qué pidió el usuario:** quitar la losa superior de casi todos los muros y eliminar las esquinas redondeadas. Las esquinas cambian la heatbox y en algunos casos dan errores visuales y bugs. La piedra necesita más realismo.
+- **Qué hace el código:** todos los muros nuevos son cajas de caras planas (`BoxGeometry`), sin remate como malla aparte. La piedra (`stoneWall.js`) usa la misma caja con las caras trabajadas: juntas hundidas, sillares con bulto, coronación irregular y todo dentro de `WALL_HALF`.
+- **Por qué no toca física:** `WALL_HALF` sigue siendo la mitad del ancho de colisión. Las caras visuales no salen de esa franja.
+- **Abierto:** el agente de neón ASCII e hielo recibe la misma regla. Visto bueno del usuario en `assets-lab.html`.
