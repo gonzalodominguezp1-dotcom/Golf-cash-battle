@@ -57,6 +57,9 @@ Proyecto `golf-cash-battle`. La referencia del proyecto está en el README.
 - **Authentication → URL Configuration:** la dirección de la web (Vercel) como Site URL y en Redirect URLs, sin comodines abiertos (`https://dominio/` y, para vistas previas, solo los dominios propios). Es lo que impide que el enlace del correo mande a una web de otro.
   - Redirect URLs que la app necesita (la vuelta del correo, ver `buildReturnUrl` en `src/account/authRules.js`): `https://<dominio>/?auth=confirm` y `https://<dominio>/?auth=recovery`. Si Supabase no admite query en la lista, usar `https://<dominio>/**`.
   - Si el correo cae en el Site URL o en otra ruta, la app no recibe `?auth=…` y no entra: revisar primero esta lista.
+  - **Aplicado por CLI el 2026-11-25** (`golf-cash-battle`, ref `oyawgvqbmvtmlnyqwgdf`): `additional_redirect_urls` = Vercel (`confirm` y `recovery`) + `localhost:5180` y `127.0.0.1:5180`. Se hizo con `supabase config pull` → editar `supabase/config.toml` → `config diff` → `config push --yes`; el push tocó solo esa propiedad.
+  - **Pendiente:** `site_url` sigue en `http://localhost:3000`. Con ese valor, cualquier correo que no pase por la lista sale con un enlace a localhost. Cambiarlo a la URL de producción es una decisión a confirmar.
+  - `password_requirements` no se envía con `config push`: el remoto no es legible por la API y `""` relajaría la política. Se fija en el panel.
 - **Authentication → Rate Limits:** dejar los límites por defecto o más bajos (envío de emails, intentos de entrada por IP).
 - **Authentication → Attack Protection:** activar CAPTCHA (hCaptcha o Turnstile) antes de abrir el registro al público, y *Leaked password protection* si el plan lo permite.
 - **Authentication → Sessions:** caducidad de sesión y *Detect and revoke potentially compromised refresh tokens* activados.
