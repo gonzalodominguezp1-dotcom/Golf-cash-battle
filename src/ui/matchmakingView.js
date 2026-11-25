@@ -9,6 +9,7 @@
 // (compositor, sin forzar reflow); las animaciones infinitas se pausan con la pestaña oculta (html.doc-hidden).
 import { icon } from './icons.js';
 import { sfx } from '../game/audio.js';
+import { avatarHtml } from '../screens/shared.js';
 import { countdownState, hypeLines, ringTiming, seatBlip, tierFoilClass } from './matchmakingRules.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -38,7 +39,8 @@ function fx(el, frames, opts) {
 export function seatHtml(p) {
   if (!p) return '<span class="avatar mm-avatar-empty"></span><span class="mm-seat-name">Buscando…</span>';
   const tag = p.me ? '<em class="me-tag">TÚ</em>' : p.isBot ? '<em class="bot-tag">BOT</em>' : '';
-  return `<span class="avatar">${esc(String(p.name ?? '?')[0])}</span><span class="mm-seat-name">${esc(p.name)}</span>${tag}`;
+  const face = avatarHtml({ size: 'sm', frame: p.frame ?? null, av: p.avatar ?? null, initial: p.name ?? '?' });
+  return `${face}<span class="mm-seat-name">${esc(p.name)}</span>${tag}`;
 }
 
 /**
@@ -215,7 +217,7 @@ export function createMatchmakingView(o) {
     setSeat(i, p, { sound = true, animate = true } = {}) {
       const el = seatEls[i];
       if (!el) return;
-      const key = p ? `${p.name}|${p.color}|${!!p.isBot}|${!!p.me}` : '';
+      const key = p ? `${p.name}|${p.color}|${!!p.isBot}|${!!p.me}|${p.frame?.id ?? ''}|${p.avatar?.icon ?? ''}|${p.avatar?.image?.length ?? ''}` : '';
       if (key === keys[i]) return;
       const wasEmpty = !keys[i];
       keys[i] = key;

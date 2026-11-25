@@ -1,5 +1,7 @@
 import { InsufficientFundsError } from '../wallet/WalletService.js';
 import { rpcError } from '../backend/supabase.js';
+import { fromWire } from '../progress/avatar.js';
+import { frameById } from '../progress/prestige.js';
 
 /**
  * Misma API que MatchService, pero la partida vive en Supabase: el servidor
@@ -76,6 +78,8 @@ function toPlayer(p) {
     name: p.name,
     isBot: p.is_bot,
     color: p.color,
+    avatar: fromWire(p.avatar),
+    frame: frameById(p.frame),
     skill: Number(p.skill ?? 0.5),
     scores: p.scores ?? [],
     total: p.total ?? 0,

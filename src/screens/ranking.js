@@ -1,6 +1,7 @@
 // Ranking de victorias (T031): lo que showRanking hacía en main.js, ahora como pantalla del router.
 // El CSS (ranking.css) lo importa el arranque, no este módulo, para poder probarlo en Node.
 import { frameById } from '../progress/prestige.js';
+import { fromWire } from '../progress/avatar.js';
 import { bindHeader, bindLobby, header, listState, lobbyButton } from './components.js';
 import { avatarHtml, esc } from './shared.js';
 import { t } from './texts/index.js';
@@ -56,7 +57,7 @@ export async function mount(root, ctx) {
     const medal = r.pos <= 3 ? icon('medal', { tone: MEDALS[r.pos - 1], arg: r.pos, label: t('ranking.place', { n: r.pos }) }) : r.pos;
     return `<li class="rank-row ${r.me ? 'me' : ''} ${r.pos <= 3 ? `podium p${r.pos}` : ''}"${r.me ? ' aria-current="true"' : ''}>
       <b class="rank-pos">${medal}</b>
-      ${avatarHtml({ size: 'sm', frame: f, av: r.me ? ctx.avatar?.get?.() ?? null : null, initial: (r.name ?? '?')[0] })}
+      ${avatarHtml({ size: 'sm', frame: f, av: r.me ? ctx.avatar?.get?.() ?? null : fromWire(r.avatar), initial: (r.name ?? '?')[0] })}
       <span class="rank-name">${esc(r.name)}<small>${esc(t('ranking.level', { n: r.level }))}${f ? ` · ${esc(f.name)}` : ''}</small></span>
       <span class="rank-wins"><b>${r.wins}</b><small>${esc(t(r.wins === 1 ? 'ranking.win' : 'ranking.wins'))}</small></span>
     </li>`;
