@@ -1,7 +1,9 @@
 ---
 author: la-chaqueta (prompt 03-marcador-golpes)
 branch: la-chaqueta-bionica
-status: in-progress
+status: done
+merged: 2026-11-25
+merged_by: Chakets
 ---
 # Marcador de golpes propio (abajo a la derecha)
 
@@ -43,5 +45,4 @@ en Desktop y en móvil. Solo sus golpes, nunca los de los rivales.
 - Medidas de cajas (arnés), antes de quitar el subtítulo: sin solapes en los seis tamaños. Quitar texto solo reduce la caja.
 
 ## Next
-- Probar una partida real en Modo Libre: que el número suba al tirar y que el marcador no tape nada.
-- Decidir si el aviso «último golpe» vuelve a verse como texto.
+Fusionado en main el 2026-11-25 (c499c9f).

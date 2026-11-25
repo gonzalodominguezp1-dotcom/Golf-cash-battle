@@ -1,8 +1,10 @@
 ---
 author: la-chaqueta-bionica
 branch: la-chaqueta-bionica
-status: diseño (listo para implementar)
+status: done
 date: 2026-11-25
+merged: 2026-11-25
+merged_by: Chakets
 ---
 
 # Rediseño de la pantalla de entrada: diseño para implementar
@@ -643,3 +645,6 @@ Checklist visual (lo recorre una persona, no el agente):
 - El registro pierde «Repite la contraseña» (formulario corto). `reset` lo mantiene.
 - El vídeo elige variante al montar (vertical/horizontal) y no cambia si se gira el móvil; el póster por CSS sí cambia.
 - Logo nuevo `public/auth/logo-hero.webp` sacado del icono de 512 px, porque `logo-header.png` es de 139 px.
+
+## Next
+Fusionado en main el 2026-11-25 (c499c9f).
