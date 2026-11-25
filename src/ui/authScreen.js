@@ -3,6 +3,9 @@ import { authMessage, passwordChecks, retryDelayMs, validateEmail, validatePassw
 import { lastEmail } from '../account/AuthService.js';
 import { onVerified } from '../account/verifiedChannel.js';
 
+/** Hash de la pantalla de entrada. Sin sesión la URL es #/acceso; al entrar se quita. */
+export const AUTH_HASH = '#/acceso';
+
 // Todo el texto del usuario entra por textContent / value: nunca markup con datos de fuera.
 function el(tag, props = {}, ...kids) {
   const n = document.createElement(tag);
@@ -150,6 +153,8 @@ export function mountAuth(root, auth, { recovery = false, guest = false, linkErr
   const done = () => {
     if (finished) return;
     finished = true;
+    // se quita #/acceso antes de salir: la recarga de onDone entra en el hub, no de vuelta a la pantalla de entrada
+    history.replaceState(null, '', location.pathname + location.search);
     // si se entra a mitad de una transición, se corta: la pantalla de entrada se va
     swap?.vt.skipTransition();
     onDone();
@@ -201,6 +206,8 @@ export function mountAuth(root, auth, { recovery = false, guest = false, linkErr
     ]),
   );
   root.replaceChildren(page);
+  // la pantalla de entrada vive en #/acceso (sin entrada nueva en el historial): al cerrar sesión no queda #/cuenta
+  if (location.hash !== AUTH_HASH) history.replaceState(null, '', location.pathname + location.search + AUTH_HASH);
 
   // ---------- cambio de vista: «Relevo dorado» (02-DOCS/wiki/ftd/auth-transicion-diseno.md) ----------
   // orden de la tira de vistas: ir a una de índice mayor entra por la derecha; a una menor, por la izquierda
