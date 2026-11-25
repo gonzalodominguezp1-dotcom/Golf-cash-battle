@@ -5,7 +5,7 @@ import { TournamentService } from '../match/TournamentService.js';
 import { PartyService } from '../match/PartyService.js';
 import { AccountService } from '../account/AccountService.js';
 import { AuthService } from '../account/AuthService.js';
-import { cleanReturnUrl, parseReturnUrl } from '../account/authRules.js';
+import { authErrorCode, cleanReturnUrl, parseReturnUrl } from '../account/authRules.js';
 import { announceVerified } from '../account/verifiedChannel.js';
 
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL ?? 'https://oyawgvqbmvtmlnyqwgdf.supabase.co';
@@ -91,24 +91,38 @@ export async function connectSupabase() {
   });
   const wallet = new SupabaseWallet(db, uid);
   const account = new AccountService(db);
-  try {
-    const loaded = await withTimeout(Promise.all([wallet.getBalance(), account.load()]), CONNECT_TIMEOUT_MS);
-    if (loaded === TIMED_OUT) throw new Error('timeout');
-    // justo tras confirmar, el perfil del servidor a veces aún dice «sin confirmar»: un reintento corto
-    if (justVerified && account.profile?.email_confirmed === false) {
-      await new Promise((r) => setTimeout(r, 800));
-      await db.auth.refreshSession().catch(() => {});
-      await account.load();
+  const loadAccount = () => withTimeout(Promise.all([wallet.getBalance(), account.load()]), CONNECT_TIMEOUT_MS);
+  // un fallo justo al entrar suele ser transitorio: un reintento antes de rendirse. Cada error queda en consola.
+  let failure = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      failure = null;
+      const loaded = await loadAccount();
+      if (loaded === TIMED_OUT) throw new Error('timeout al cargar la cuenta');
+      break;
+    } catch (err) {
+      failure = err;
+      console.error(`[gcb] cargar la cuenta, intento ${attempt}:`, err);
+      if (attempt === 1) await new Promise((r) => setTimeout(r, 1200));
     }
-  } catch {
-    // sesión que el servidor no acepta (usuario borrado, token revocado) o sin red al arrancar:
-    // sin sesión a medias. Con red se cierra la sesión local; sin red solo se avisa.
-    if (uid && (await withTimeout(db.auth.getUser(), CONNECT_TIMEOUT_MS)).data?.user) {
+  }
+  if (failure) {
+    // ¿la sesión sigue valiendo? Si solo falla la red o el tiempo de espera, se conserva y se avisa.
+    // Solo se cierra la sesión local si el servidor dice que ya no es válida.
+    const who = await withTimeout(db.auth.getUser(), CONNECT_TIMEOUT_MS);
+    if (who === TIMED_OUT || authErrorCode(who.error) === 'network' || who.data?.user) {
       return { mode: 'auth', db, auth, recovery: false, guest: false, linkError: 'network' };
     }
+    console.error('[gcb] sesión no válida en el servidor, se cierra aquí:', who.error);
     await db.auth.signOut({ scope: 'local' }).catch(() => {});
     clearSupabaseStorage();
     return { mode: 'auth', db, auth, recovery: false, guest: false, linkError: null };
+  }
+  // justo tras confirmar, el perfil del servidor a veces aún dice «sin confirmar»: un reintento corto
+  if (justVerified && account.profile?.email_confirmed === false) {
+    await new Promise((r) => setTimeout(r, 800));
+    await db.auth.refreshSession().catch(() => {});
+    await account.load().catch((err) => console.error('[gcb] recarga tras confirmar:', err));
   }
   return {
     justVerified,
