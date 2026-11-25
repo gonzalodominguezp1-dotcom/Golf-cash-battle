@@ -69,6 +69,8 @@ export const AUTH_MESSAGES = {
   email_not_confirmed: 'Todavía no has confirmado tu email. Revisa tu bandeja de entrada.',
   rate_limited: 'Demasiados intentos. Espera un momento y vuelve a probar.',
   link_expired: 'El enlace ha caducado o ya se usó. Pide uno nuevo.',
+  link_used: 'Este enlace ya se usó o ha caducado. Si tu email ya está confirmado, entra con tu email y contraseña.',
+  confirm_elsewhere: 'Tu email ya está confirmado. Entra con tu email y contraseña.',
   signup_disabled: 'El registro está cerrado ahora mismo.',
   captcha_failed: 'No hemos podido comprobar que eres una persona. Recarga e inténtalo otra vez.',
   network: 'Sin conexión con el servidor. Comprueba tu internet.',
@@ -76,6 +78,57 @@ export const AUTH_MESSAGES = {
 };
 
 export const authMessage = (code) => AUTH_MESSAGES[code] ?? AUTH_MESSAGES.unknown;
+
+// --- Ruta de vuelta del correo (confirmar email y recuperar contraseña) ---
+// Siempre la raíz del sitio con un parámetro propio: existe en cualquier host y no depende del pathname.
+// Hay que tenerla en Supabase → Authentication → URL Configuration → Redirect URLs (ver 02-DOCS/wiki/backend/supabase.md).
+export const RETURN_PARAM = 'auth';
+export const RETURN_FLOWS = Object.freeze({ confirm: 'confirm', recovery: 'recovery' });
+
+/** URL de vuelta para un flujo ('confirm' | 'recovery'). Sin hash ni otras query. */
+export function buildReturnUrl(origin, flow) {
+  if (!Object.values(RETURN_FLOWS).includes(flow)) throw new Error(`flujo de vuelta desconocido: ${flow}`);
+  return `${String(origin).replace(/\/+$/, '')}/?${RETURN_PARAM}=${flow}`;
+}
+
+/**
+ * Lee lo que vuelve del enlace del correo. `code` es el de PKCE (un solo uso);
+ * `error` es el código que Supabase pone en el hash cuando el enlace falla (caducado, ya usado…).
+ * Devuelve null si la URL no es una vuelta de auth.
+ */
+export function parseReturnUrl(href) {
+  let url;
+  try {
+    url = new URL(String(href));
+  } catch {
+    return null;
+  }
+  const flow = url.searchParams.get(RETURN_PARAM);
+  const hash = new URLSearchParams(url.hash.replace(/^#/, ''));
+  const error = hash.get('error_code') || hash.get('error');
+  const code = url.searchParams.get('code');
+  // el error puede llegar sin el parámetro propio si Supabase cae en otra ruta permitida
+  if (!flow && !code && !error) return null;
+  return {
+    flow: Object.values(RETURN_FLOWS).includes(flow) ? flow : null,
+    code: code || null,
+    error: error ? mapLinkError(error) : null,
+  };
+}
+
+/** La misma URL sin query ni hash: lo que queda en la barra tras procesar la vuelta. */
+export function cleanReturnUrl(href) {
+  const url = new URL(String(href));
+  return `${url.origin}${url.pathname}`;
+}
+
+/** Errores del canje del enlace → código de la app. */
+export function mapLinkError(error) {
+  const e = String(error ?? '').toLowerCase();
+  if (/otp_expired|expired|used|already/.test(e)) return 'link_used';
+  if (/flow_state|code_verifier|pkce|access_denied/.test(e)) return 'confirm_elsewhere';
+  return 'unknown';
+}
 
 /** Espera obligada (ms) antes del siguiente intento tras `failures` fallos seguidos. Freno en el cliente; el límite real lo pone Supabase. */
 export function retryDelayMs(failures) {
