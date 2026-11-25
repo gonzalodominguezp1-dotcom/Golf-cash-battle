@@ -309,3 +309,11 @@ Open     — decisión de diseño del usuario: las zonas `water` jugables del ho
 - **Qué hace el código:** todos los muros nuevos son cajas de caras planas (`BoxGeometry`), sin remate como malla aparte. La piedra (`stoneWall.js`) usa la misma caja con las caras trabajadas: juntas hundidas, sillares con bulto, coronación irregular y todo dentro de `WALL_HALF`.
 - **Por qué no toca física:** `WALL_HALF` sigue siendo la mitad del ancho de colisión. Las caras visuales no salen de esa franja.
 - **Abierto:** el agente de neón ASCII e hielo recibe la misma regla. Visto bueno del usuario en `assets-lab.html`.
+
+## 2026-11-25 — Muros de neón ASCII y de hielo (feature: assets-entorno-1a1, paso M)
+
+- **Qué hace el código:** `src/game/render/assets/neonWalls.js` (`makeAsciiNeonWall`) y `src/game/render/assets/iceWalls.js` (`makeIceWall`). Los dos siguen la regla de arriba: una `BoxGeometry` de esquinas vivas y sin remate aparte. Altura `WALL_BODY_H_NEW`, ancho `2·WALL_HALF`. La física no cambia.
+- **Neón, la tira de luz va dentro del cuerpo:** la cara de arriba y los 3 cm más altos de las caras usan el `emissive` del material. Así `course.js` la puede atenuar con `emissiveIntensity` igual que el remate de hoy.
+- **Neón, un material por muro:** el golpe (`uNwHits`) y la transparencia van por tramo. El programa de GPU es uno por nivel (`customProgramCacheKey`) y el atlas es el de `asciiNeon.js`.
+- **Hielo:** es opaco, como pidió el usuario. El cuerpo y las esquirlas usan materiales compartidos por paleta, como la madera. La malla de grietas tiene un material por muro, porque su `alphaTest` guarda el estado del golpe. Las grietas se abren bajando `alphaTest`, así que no hay transparencia ni hay que recompilar. Las esquirlas son un `InstancedMesh` con un número fijo de piezas (6, 10 y 12 según el nivel) que se reutilizan.
+- **Abierto:** los parches GLSL no se han compilado en una GPU real (solo se comprobaron los anclajes contra `ShaderLib`). Falta el visto bueno del usuario en el laboratorio.
