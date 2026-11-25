@@ -323,3 +323,10 @@ Open     — decisión de diseño del usuario: las zonas `water` jugables del ho
 - **Fallo corregido:** la textura de sillares se estiraba a lo largo de los 6 m del muro (las uv de la caja iban de 0 a 1). Ahora hay una tesela por metro en x; en y la tesela cubre el cuerpo entero (dos hiladas).
 - **Temas con piedra (reemplaza el diseño anterior donde lo había):** meadowDay, meadow, jungle, sunset, canyon, night y gardenNight. La madera de tablones (`walls.js`) ya no la usa ningún tema; el módulo se queda por si se necesita después.
 - **Abierto:** visto bueno del usuario en `assets-lab.html`. Sin commit ni cambios en `course.js`.
+
+## 2026-11-25 — Piedra: causa del estiramiento y corrección (feature: assets-entorno-1a1, paso M)
+
+- **Causa:** la uv iba de 0 a 6 en x y de 0 a 1 en y sobre una textura cuadrada de 128 px: el texel salía 2,7 veces más ancho que alto. El muro de hielo pone la uv en metros en los dos ejes y por eso se ve bien.
+- **Además:** las juntas se multiplicaban por 0,45 y se emborronaban (bandas oscuras), los cortes de la geometría no coincidían con la textura y el color efectivo era gris oscuro teñido del horizonte (tono verdoso).
+- **Cambio:** uv en metros por cara, textura de arenisca de 512 × 64, un mismo despiece para color, mapa de normales y bulto de la malla, juntas no alineadas entre hiladas y coronación coherente entre cara y tapa. Sigue en 256 triángulos, una malla y un material transparente por paleta.
+- **Abierto:** visto bueno del usuario en `assets-lab.html`.
