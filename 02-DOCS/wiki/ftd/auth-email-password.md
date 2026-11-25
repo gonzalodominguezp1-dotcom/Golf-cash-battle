@@ -30,7 +30,8 @@ Pantalla de entrada obligatoria (login, registro, recuperar contraseña) con Sup
 - [x] Arranque con tiempo máximo (8 s) y sesión que el servidor rechaza: cierre local y limpieza de `sb-*` — código en `connectSupabase`; **sin probar en navegador**.
 - [x] Red de seguridad en `vercel.json`: rutas desconocidas → `index.html`, excepto `assets/`, `admin.html` y `assets-lab.html`.
 - [ ] Checklist manual de verificación (ver «Next»): mismo navegador, otro navegador/app de Gmail, enlace caducado, dos pestañas, móvil.
-- [x] Redirect URLs en Supabase: aplicadas por CLI el 2026-11-25 (`config diff` sin diferencias tras el push). Pendiente: `site_url` sigue en `localhost:3000`, decisión abierta.
+- [x] Redirect URLs en Supabase: producción con las dos de Vercel (`config diff` sin diferencias). Las de localhost se quitaron tras la prueba. Pendiente: `site_url` sigue en `localhost:3000`, decisión abierta.
+- [x] Prueba manual del usuario OK (2026-11-25). Usuario de prueba borrado de producción con la CLI (auth.users, sin restos en wallets ni profiles).
 
 ## Evidence
 - Producción ya responde "Anonymous sign-ins are disabled": el arranque anterior caía a modo local para cualquier dispositivo nuevo.
