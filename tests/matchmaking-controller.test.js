@@ -195,3 +195,49 @@ test('main.js: stopLive no mata la búsqueda salvo al cancelar (force) y goHome 
   const room = main.slice(main.indexOf('function showLiveRoom'), main.indexOf('async function beginLive'));
   assert.doesNotMatch(room, /setInterval|isConnected|\b250\b/);
 });
+
+test('controlador: el asiento conserva avatar y marco para que la sala los pinte', () => {
+  const env = fakeEnv();
+  const { s } = make(env);
+  const frame = { id: 'f_test', name: 'Test' };
+  const avatar = { icon: 'crown', image: null };
+  s.setSeat(0, { name: 'Ana', color: '#fff', avatar, frame });
+  assert.deepEqual(s.players[0].avatar, avatar);
+  assert.equal(s.players[0].frame, frame);
+  // sin avatar ni marco: null, y la vista cae a la inicial
+  s.setSeat(1, { name: 'Bot', color: '#000', isBot: true });
+  assert.equal(s.players[1].avatar, null);
+  assert.equal(s.players[1].frame, null);
+});
+
+test('controlador: un fallo inesperado al llegar a 0 no se traga en silencio (registro y texto en la sala)', async () => {
+  const env = fakeEnv();
+  const errors = [];
+  const orig = console.error;
+  console.error = (...a) => errors.push(a);
+  try {
+    const { s } = make(env, { onLaunch: async () => { throw new ReferenceError('seatAvatar is not defined'); } });
+    s.setStartsAt(env.timers.now() + 1000);
+    env.timers.advance(1100);
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    assert.equal(s.phase, 'error');
+    assert.equal(s.status, 'No se ha podido empezar la partida.');
+    assert.equal(errors.length, 1);
+    assert.match(String(errors[0][1]), /seatAvatar/);
+  } finally {
+    console.error = orig;
+  }
+});
+
+test('main.js: toda función que se usa para pintar un asiento existe (un ReferenceError colgaba la sala)', () => {
+  const main = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+  const used = new Set([...main.matchAll(/setSeat\([^;]*?\.\.\.(\w+)\(/g)].map((m) => m[1]));
+  assert.ok(used.has('seatAvatar'), 'los asientos llevan avatar y marco');
+  for (const name of used) {
+    const defined = new RegExp(String.raw`(function\s+${name}\s*\(|(const|let)\s+${name}\s*=|import\s*\{[^}]*\b${name}\b[^}]*\})`).test(main);
+    assert.ok(defined, `${name} se usa en setSeat pero no está definida en main.js`);
+  }
+  // la sala en vivo pinta avatar y marco desde el primer latido, no solo al lanzar
+  const room = main.slice(main.indexOf('function showLiveRoom'), main.indexOf('async function launchLive'));
+  assert.match(room, /\.\.\.seatAvatar\(p\)/);
+});

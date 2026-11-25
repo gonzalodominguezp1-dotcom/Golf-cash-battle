@@ -1,7 +1,7 @@
 ---
 author: compañero (rama la-chaqueta-bionica)
 branch: la-chaqueta-bionica
-status: in-progress
+status: done
 ---
 # Avatares y marcos públicos en todas partes
 
@@ -30,12 +30,15 @@ Hasta ahora solo se veía la inicial en la mayoría de esas pantallas.
 ## Checklist
 - [x] Migración `20261125120000_avatares_publicos.sql` escrita (3 funciones, mismas firmas).
       Evidencia: `tests/avatares-publicos.test.js` comprueba `security definer` y que no aparecen campos privados.
-- [ ] Migración aplicada y probada contra Postgres. **No se ha podido desde aquí.** Ver «Pasos para el usuario».
+- [x] Migración aplicada en producción con la CLI (`supabase db push --linked --yes`). Evidencia: `migration list`
+      muestra `20261125120000` en local y en remoto.
 - [x] `toPlayer` y `buildRoster` conservan avatar y marco; sin avatar, cae al de por defecto.
       Evidencia: `node --test tests/avatares-publicos.test.js` → 7/7 pass.
 - [x] Matchmaking, grupo, resultados y desempate usan `avatarHtml`.
       Evidencia: revisión de código; `pnpm run build` en verde.
-- [ ] Capturas de matchmaking, grupo y final de partida en escritorio y móvil. Pendiente: lo verifica el usuario.
+- [x] Matchmaking: avatar y marco se ven en los asientos. Corregido el controlador de búsqueda, que los perdía
+      (commit `76fec94`, prueba en `tests/matchmaking-controller.test.js`). Verificado por el usuario en la app.
+- [ ] Grupo, final de partida, desempate y ranking: no verificados en la app. Quedan para una revisión futura.
 - [x] `pnpm test`: 1340 pass, 6 fail. Los 6 fallos están en `tests/vfx-packs.test.js` y `tests/vfx-presets.test.js`,
       que no importan ningún módulo tocado aquí. Ya fallaban antes de este cambio.
 
@@ -50,5 +53,6 @@ Hasta ahora solo se veía la inicial en la mayoría de esas pantallas.
    para `_tournament_json` (se manda en cada consulta de la partida).
 
 ## Next
-Pendiente de decisión: si el tamaño de las imágenes de avatar en `_tournament_json` es un problema real,
-pasar a miniatura o RPC con caché.
+Feature cerrada. Quedan dos cosas abiertas, sin prisa:
+- Verificar en la app grupo, final de partida, desempate y ranking.
+- Si el tamaño de las imágenes de avatar en `_tournament_json` resulta un problema real, pasar a miniatura o RPC con caché.

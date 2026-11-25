@@ -83,11 +83,19 @@ export function mountPartyPanel(box, tierList, balance, ctx, { friends: given } 
             : `<p class="sub">${esc(t('friends.noFriendsParty'))}</p><button class="chip-btn" data-go="account">${icon('user-plus')}${esc(t('friends.addFriends'))}</button>`)
           : `<p class="sub">${esc(t('friends.noFriendsHere'))}</p>`)}`;
     } else {
+      // avatar y marco públicos; el tuyo, el equipado ahora mismo (aunque el servidor vaya por detrás)
+      const memberAvatar = (m) => (m.me
+        ? avatarHtml({ size: 'sm', frame: ctx.progress?.prestige?.frame ?? null, av: ctx.avatar?.get?.() ?? null, initial: m.name })
+        : avatarHtml({ size: 'sm', frame: frameById(m.frame), av: fromWire(m.avatar), initial: m.name }));
       const members = p.members.map((m) => `<li class="party-member ${m.ready ? 'ready' : ''}">
-          <span class="avatar">${esc(m.name[0] ?? '?')}</span>
+          ${memberAvatar(m)}
           <span><b>${m.me ? esc(t('friends.me')) : esc(m.name)}</b><small>${m.leader ? esc(t('friends.leader')) : ''}${esc(t(m.ready ? 'friends.ready' : 'friends.waiting'))}</small></span>
         </li>`).join('');
-      const invited = p.invited.map((n) => `<li class="party-member invited"><span class="avatar">${esc(n[0] ?? '?')}</span><span><b>${esc(n)}</b><small>${esc(t('friends.invited'))}</small></span></li>`).join('');
+      const invitedInfo = new Map((p.invited_players ?? []).map((x) => [x.name, x]));
+      const invited = p.invited.map((n) => {
+        const info = invitedInfo.get(n);
+        return `<li class="party-member invited">${avatarHtml({ size: 'sm', frame: frameById(info?.frame), av: fromWire(info?.avatar), initial: n })}<span><b>${esc(n)}</b><small>${esc(t('friends.invited'))}</small></span></li>`;
+      }).join('');
       const me = p.members.find((m) => m.me);
       const alone = p.members.length < 2;
       body = `

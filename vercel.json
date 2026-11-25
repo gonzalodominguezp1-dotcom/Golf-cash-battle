@@ -4,6 +4,9 @@
   "installCommand": "npx -y pnpm@11.24.0 install --frozen-lockfile",
   "buildCommand": "npx -y pnpm@11.24.0 run build",
   "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/((?!assets/|admin\\.html|assets-lab\\.html).*)", "destination": "/index.html" }
+  ],
   "headers": [
     {
       "source": "/(.*)",

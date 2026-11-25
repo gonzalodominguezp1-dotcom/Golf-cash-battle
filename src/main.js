@@ -11,6 +11,7 @@ import './screens/account.css';
 import './screens/maps.css';
 import './screens/achievements.css';
 import { HOLE_TIME_LIMIT, PLAYERS_PER_MATCH, TIERS, maxStrokesOf } from './config.js';
+import { strokeMarkerState } from './game/strokeMarker.js';
 import { LocalWallet } from './wallet/LocalWallet.js';
 import { InsufficientFundsError } from './wallet/WalletService.js';
 import { MatchService, leaders } from './match/MatchService.js';
@@ -29,6 +30,7 @@ import { showSkinReveal } from './ui/skinReveal.js';
 import { installThumbObserver, thumbCached, upgradeImg, warmThumbs } from './ui/skinThumbs.js';
 import { mountAuth } from './ui/authScreen.js';
 import { LiveRoom } from './match/LiveRoom.js';
+import { seatLook } from './match/playerRules.js';
 import { buildRoster, humanLeaders, liveStandings, roundComplete, roundReady, seededRng } from './match/liveRules.js';
 import { notify } from './ui/notifyPopup.js';
 import { createNotifier } from './ui/notifier.js';
@@ -152,6 +154,9 @@ settings.subscribe(applySound);
 const { ball } = { ball: createBall(progress) };
 
 let avatar = new AvatarStore(null);
+// avatar y marco de un asiento de la sala (src/match/playerRules.js#seatLook): el tuyo, lo equipado ahora
+// (`avatar` se rehace al iniciar sesión, por eso se lee en cada llamada); los demás, lo del servidor
+const seatAvatar = (p) => seatLook(p, { avatar: avatar.get(), frame: progress.prestige?.frame ?? null });
 
 // router de pila (src/screens): la raíz es el lobby hasta que llegue el hub (F3)
 const ROOT_SCREEN = 'hub'; // el hub es la raíz; el lobby de hoy es la ruta «Mesas» (tables)
@@ -444,7 +449,7 @@ async function startMatch(tier, rematchOf = null) {
     await wait(seatWaits[i]);
     if (search.ended) return quit();
     const p = match.players[i];
-    search.setSeat(i, { name: p.name, color: p.color, me: p.id === 'me' }); // el tic suena al pintar el asiento
+    search.setSeat(i, { name: p.name, color: p.color, me: p.id === 'me', ...seatAvatar(p) }); // el tic suena al pintar el asiento
   }
   await wait(launchWaitMs);
   if (search.ended) return quit();
@@ -491,7 +496,6 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         <div class="pill hl freeplay-pill">Modo Libre</div>
         <div class="pill">${course.name}</div>
         <div class="pill">Par ${course.par}</div>
-        <div class="pill strokes">Golpes <b>0</b></div>
         <div class="pill dist">— m</div>`}
         ${freePlay ? `
         <button class="pill restart-btn hud-freeplay-btn" aria-label="Reiniciar hoyo" title="Reiniciar hoyo al tee (R)">${icon('restart')}Reiniciar <kbd class="kbd-hint">R</kbd></button>
@@ -526,6 +530,10 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       </div>
       <div class="power"><div class="fill"></div></div>
       <button class="map-btn" aria-label="Ver el hoyo completo">${icon('eye')}Ver mapa <kbd class="kbd-hint">Espacio</kbd></button>
+      <div class="stroke-marker" data-stroke-marker aria-live="polite" hidden>
+        <b class="sm-num">0</b>
+        <span class="sm-word">golpes</span>
+      </div>
     </main>`);
   const gameClass = loadGolfGame();
   paintApp(view, { keepGame: keep });
@@ -533,7 +541,28 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
     if (!view.isConnected) { prepared?.dispose(); return; } // se salió de la pantalla mientras cargaba el motor
     playScope?.dispose();
     playScope = createScope();
-    const strokesEl = view.querySelector('.strokes b');
+    // marcador de tus golpes (abajo a la derecha): solo lo mueve el onStroke local, nunca los rivales
+    const strokeMarker = view.querySelector('[data-stroke-marker]');
+    const strokeNumEl = strokeMarker?.querySelector('.sm-num');
+    let shownStrokes = 0;
+    const paintStrokes = (n) => {
+      if (!strokeMarker) return;
+      const s = strokeMarkerState({ strokes: n, par: course.par, max: maxStrokesOf(course), tiebreak });
+      strokeMarker.hidden = s.hidden;
+      strokeMarker.style.setProperty('--sm-color', s.color);
+      strokeMarker.classList.toggle('last', s.last);
+      strokeMarker.querySelector('.sm-word').textContent = s.word;
+      strokeMarker.setAttribute('aria-label', s.text);
+      strokeNumEl.textContent = s.number;
+      // animación corta solo al subir de golpes (no al reiniciar a 0)
+      if (s.number !== shownStrokes && s.number > 0) {
+        strokeMarker.classList.remove('pop');
+        void strokeMarker.offsetWidth;
+        strokeMarker.classList.add('pop');
+      }
+      shownStrokes = s.number;
+    };
+    paintStrokes(0);
     const distEl = view.querySelector('.dist');
     const power = view.querySelector('.power');
     const hint = view.querySelector('.hint');
@@ -670,7 +699,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
             onRestartHole();
           } else if (game) {
             game.restart();
-            if (strokesEl) strokesEl.textContent = '0';
+            paintStrokes(0);
             showDistance();
             toast('Hoyo reiniciado al tee', '#00f076');
           }
@@ -716,7 +745,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       onStroke: (n) => {
         if (n > 0) onShots?.(game.shots);
         if (!tiebreak) setChip('me', n, false);
-        if (strokesEl) strokesEl.textContent = n;
+        paintStrokes(n);
         hint.classList.add('gone');
         view.querySelector('.desktop-controls-bar')?.classList.add('fade-out');
       },
@@ -766,6 +795,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       game.attach(stageEl);
     }
     game.load(course, { bots: freePlay ? [] : rivals ?? players.filter((p) => p.isBot), skin: progress.skin, instance: progress.instance(progress.skin.id), firstSunkTick, timeLimit: freePlay ? null : timeLimit, live });
+    paintStrokes(0); // hoyo nuevo (también el preparado en la sala): el marcador empieza en 0
     onGame?.(game, { toast, view });
     showDistance();
     if (freePlay) {
@@ -774,7 +804,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         if (onRestartHole) onRestartHole();
         else if (game) {
           game.restart();
-          if (strokesEl) strokesEl.textContent = '0';
+          paintStrokes(0);
           showDistance();
           toast('Hoyo reiniciado al tee', '#00f076');
         }
@@ -793,7 +823,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
           if (onRestartHole) onRestartHole();
           else if (game) {
             game.restart();
-            if (strokesEl) strokesEl.textContent = '0';
+            paintStrokes(0);
             showDistance();
             toast('Hoyo reiniciado al tee', '#00f076');
           }
@@ -1214,7 +1244,7 @@ function showLiveRoom(live) {
   const sync = () => {
     for (let i = 0; i < match.seats; i++) {
       const p = match.players.find((q) => q.seat === i);
-      search.setSeat(i, p ? { name: p.id === 'me' ? 'Tú' : p.name, color: p.color, me: p.id === 'me' } : null);
+      search.setSeat(i, p ? { name: p.id === 'me' ? 'Tú' : p.name, color: p.color, me: p.id === 'me', ...seatAvatar(p) } : null);
     }
     if (match.startsAt) search.setStartsAt(match.startsAt);
   };
@@ -1245,7 +1275,7 @@ async function launchLive(live) {
   if (WARM_LIVE) live.warm = gamePreloader.warm(warmRequest(match.courses[0], live.roster.length - 1));
   for (const r of live.roster) {
     if (r.isBot) continue;
-    search.setSeat(r.seat, { name: r.name, color: r.color, me: r.id === 'me' });
+    search.setSeat(r.seat, { name: r.name, color: r.color, me: r.id === 'me', ...seatAvatar(r) });
   }
   for (const r of live.roster) {
     if (!r.isBot) continue;

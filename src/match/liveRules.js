@@ -27,6 +27,7 @@ export function seededRng(text) {
  * jugadores ven los mismos (mismo nombre, color y nivel).
  */
 export function buildRoster(match) {
+  // cada jugador humano lleva su avatar y su marco (null si no tiene: se pinta su inicial)
   const rng = seededRng(`roster:${match.id}`);
   const names = [...BOT_NAMES];
   for (let i = names.length - 1; i > 0; i--) {
@@ -39,11 +40,12 @@ export function buildRoster(match) {
   for (let seat = 0; seat < match.seats; seat++) {
     const p = match.players.find((q) => q.seat === seat);
     if (p) {
-      roster.push({ id: p.id, seat, name: p.id === 'me' ? 'Tú' : p.name, color: p.color, human: true });
+      roster.push({ id: p.id, seat, name: p.id === 'me' ? 'Tú' : p.name, color: p.color, avatar: p.avatar ?? null, frame: p.frame ?? null, human: true });
       continue;
     }
     const skill = 0.3 + rng() * 0.6;
-    roster.push({ id: `bot${seat}`, seat, name: freeNames[seat % freeNames.length], color: PLAYER_COLORS[seat % PLAYER_COLORS.length], skill, isBot: true });
+    // los bots no tienen avatar ni marco: pintan su inicial con su color
+    roster.push({ id: `bot${seat}`, seat, name: freeNames[seat % freeNames.length], color: PLAYER_COLORS[seat % PLAYER_COLORS.length], avatar: null, frame: null, skill, isBot: true });
   }
   return roster;
 }

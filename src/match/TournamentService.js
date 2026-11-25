@@ -1,6 +1,7 @@
 import { InsufficientFundsError } from '../wallet/WalletService.js';
 import { rpcError } from '../backend/supabase.js';
 import { HOLE_TIME_LIMIT } from '../config.js';
+import { toPlayer } from './playerRules.js';
 
 /**
  * Partidas en vivo contra jugadores reales (los huecos los rellenan bots que
@@ -132,21 +133,3 @@ export function toMatch(t, tier) {
   };
 }
 
-function toPlayer(p) {
-  return {
-    id: p.is_me ? 'me' : p.id,
-    seat: p.seat,
-    name: p.name,
-    color: p.color,
-    holesPlayed: p.holes_played,
-    started: !!p.started,
-    online: p.online !== false,
-    finished: p.finished,
-    // las puntuaciones de los demás llegan vacías hasta que terminas tu ronda
-    scores: p.scores ?? null,
-    total: p.total ?? null,
-    tiebreak: p.tiebreak == null ? undefined : Number(p.tiebreak),
-    position: p.position ?? undefined,
-    payout: Number(p.payout ?? 0),
-  };
-}

@@ -1144,8 +1144,9 @@ body.sk-noscroll { overflow: hidden; } /* lo usa skinReveal.js: no borrar */
   background: var(--mm-stripes), var(--mm-foil);
   transition: transform 0.55s var(--ease-out);
 }
-.mm-bar-fill::after {
-  content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 40%;
+/* destello sobre TODA la barra (el contenedor tiene overflow: hidden), no sobre el relleno, que se cortaba */
+.mm-bar::after {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 40%; pointer-events: none;
   background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.45), transparent);
   animation: mmShimmer 1.6s linear infinite;
 }
@@ -1209,6 +1210,8 @@ body.sk-noscroll { overflow: hidden; } /* lo usa skinReveal.js: no borrar */
 }
 .mm .seat.me .mm-seat-name { font-weight: 900; text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5); }
 .mm .seat.me .avatar { box-shadow: 0 0 0 2px rgba(8, 10, 16, 0.7); }
+/* el avatar del asiento (.mm .seat .pf) se ajusta junto a los marcos, más abajo (tras .pf-illustrated) */
+.mm .seat { min-height: 58px; }
 .mm .seat.bot { opacity: 0.82; }
 .mm .seat.mm-enter { animation: mmSeatIn 0.6s cubic-bezier(0.34, 1.4, 0.64, 1) var(--enter-dl, 0ms) both; }
 .mm .seat.mm-enter::before {
@@ -1252,6 +1255,12 @@ body.sk-noscroll { overflow: hidden; } /* lo usa skinReveal.js: no borrar */
   box-shadow: 0 0 16px var(--mm-g), inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 @media (max-width: 380px) { .mm-actions { grid-template-columns: 1fr; } }
+/* escritorio: la sala ocupa más ancho para que los nombres quepan junto al avatar y al marco, sin scroll */
+@media (min-width: 900px) and (pointer: fine) {
+  .screen.mm { max-width: 1080px; }
+  .mm-bar, .mm-seats, .mm-actions { max-width: 960px; }
+  .mm-seats { gap: 12px; }
+}
 
 /* salida hacia la partida: solo transform y opacidad; will-change solo durante la salida */
 .mm.is-leaving > * { animation: none; }
@@ -2852,6 +2861,11 @@ html.has-mmb .notifs { top: calc(env(safe-area-inset-top, 0px) + 74px); }
 .frame-opt { gap: 12px; }
 .frame-opt.locked .pf { filter: grayscale(1) brightness(0.7); }
 .rank-row .pf-sm { margin: 4px 10px; }
+/* avatar en el asiento de la sala de búsqueda: el marco ilustrado no debe pasar del hueco del asiento (el general
+   lo escala hasta 1.5x, y el asiento lo recorta). Cara sin marco de 34 px (como el círculo de antes); con marco,
+   la ilustración crece como mucho 1.3x (≈44 px, el alto útil del asiento de 58 px) y la cara queda en su hueco. */
+.mm .seat .pf { --s: 34px; margin: 0; }
+.mm .seat .pf.pf-illustrated { --k: min(calc(0.97 / var(--hole, 0.5)), 1.3); margin: 0; }
 
 /* ---------- cuenta: perfil + wallet ---------- */
 .avatar-wrap.edit-avatar { background: none; border: 0; padding: 0; cursor: pointer; color: inherit; }
@@ -2994,3 +3008,80 @@ html.has-mmb .notifs { top: calc(env(safe-area-inset-top, 0px) + 74px); }
    para no salirse por la derecha. Al final del archivo para ganar al bloque general de escritorio. */
 .net-stats[data-level='bad'] { color: #ff6b6b; }
 .hud.hud-lean .pill.fullscreen { display: flex !important; }
+
+/* Marcador de golpes propio (abajo a la derecha): solo tus golpes, sin tocar el mapa ni la fuerza.
+   No recibe toques (pointer-events: none) para no robar gestos de cámara ni de tiro. */
+.stroke-marker {
+  --sm-color: #ffffff; /* blanco → rojo según los golpes (JS: strokeColor) */
+  position: absolute;
+  right: calc(env(safe-area-inset-right) + 14px);
+  bottom: calc(env(safe-area-inset-bottom) + 20px);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 104px;
+  padding: 6px 14px 7px;
+  border-radius: 16px;
+  background: rgba(11, 15, 21, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45);
+  color: #fff;
+  text-align: center;
+  pointer-events: none;
+  user-select: none;
+}
+.stroke-marker[hidden] { display: none; }
+.stroke-marker.last { border-color: rgba(255, 210, 63, 0.7); }
+.stroke-marker .sm-num {
+  font-size: 34px;
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--sm-color);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+.stroke-marker .sm-word {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.9;
+}
+.stroke-marker.pop .sm-num { animation: smPop 0.42s var(--ease-out, ease-out); }
+.stroke-marker.pop { animation: smFlash 0.6s ease-out; }
+@keyframes smPop {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+@keyframes smFlash {
+  0% { box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45), 0 0 0 0 var(--sm-color); }
+  100% { box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45), 0 0 0 14px rgba(0, 0, 0, 0); }
+}
+/* escritorio: en la esquina, a la altura del botón «Ver mapa» (24 px desde abajo) */
+@media (min-width: 900px) and (pointer: fine) {
+  .stroke-marker {
+    right: calc(env(safe-area-inset-right) + 24px);
+    bottom: calc(env(safe-area-inset-bottom) + 24px);
+  }
+}
+/* escritorio estrecho: la barra de controles sube para no chocar con el marcador de la esquina */
+@media (min-width: 900px) and (max-width: 1199px) and (pointer: fine) {
+  .desktop-controls-bar { bottom: 116px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stroke-marker.pop, .stroke-marker.pop .sm-num { animation: none; }
+}
+/* móvil: más junto al borde, por encima de la ayuda de toques (.hint, 76 px) cuando el alto es poco */
+@media (max-width: 899px), (pointer: coarse) {
+  .stroke-marker { min-width: 92px; padding: 5px 12px 6px; bottom: calc(env(safe-area-inset-bottom) + 20px); }
+  .stroke-marker .sm-num { font-size: 28px; }
+  /* la ayuda de toques sube por encima del marcador (el centro de la pantalla queda libre de solapes) */
+  .hint { bottom: calc(env(safe-area-inset-bottom) + 104px); }
+}
+@media (max-height: 460px) and (orientation: landscape) {
+  .stroke-marker { bottom: calc(env(safe-area-inset-bottom) + 20px); padding: 4px 12px 5px; min-width: 88px; }
+  .stroke-marker .sm-num { font-size: 22px; }
+}

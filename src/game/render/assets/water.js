@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { LEVELS, TAU, lerp, smooth, treeLevel, vertexLambert, withRim } from './treeKit.js';
 import { applyWind, windUniforms } from './wind.js';
+import { NEON_WATER, makeNeonWaterFx } from './neonWater.js';
 
 // Agua del estilo liso (paso 8 de 02-DOCS/wiki/ftd/assets-entorno-1a1.md). Solo dibujo:
 // la física del agua (zonas `water` de courses.js) no la ve nunca.
@@ -320,18 +321,31 @@ export const riverHalfWidth = (river) => river.w + RIVER_FLOW.bank;
 
 // ---------- temas y paleta ----------
 
-/** ¿Lleva este tema agua de la nueva? Neón, ciudad, lava y caldera no (siguen como estaban). */
-export const waterSupported = (theme) => !!theme && !theme.neon && !theme.cyberCity && !theme.lava && !theme.caldera;
+/**
+ * ¿Lleva este tema agua de la nueva? Lava y caldera no; una ciudad sin neón tampoco (siguen como estaban).
+ * Neón (neon, neonPink y cyber2078, que es neón con ciudad) sí desde 2026-11-23: agua tóxica (assets/neonWater.js).
+ */
+export const waterSupported = (theme) => !!theme && !theme.lava && !theme.caldera && (!!theme.neon || !theme.cyberCity);
 
 /**
  * Colores (lineales) del agua de un tema: cuerpo somero y hondo (el agua del tema, como hoy),
  * espuma y cielo. El cielo del juego se pinta sin tono ni espacio de color (environment.js):
  * se pasa una vez más a lineal para que, tras el tono del agua, el reflejo se parezca al cielo.
+ * Neón: el agua tóxica de NEON_WATER (pútrida abajo, capa radiactiva `surface` arriba), no el color del tema.
  */
 export function waterPalette(theme) {
   const body = new THREE.Color(theme.water ?? (theme.sunIntensity < 2 ? 0x1b5f86 : 0x2bb3e6));
   const skyTop = new THREE.Color(theme.skyTop ?? 0x2f8fe3).convertSRGBToLinear();
   const skyHorizon = new THREE.Color(theme.skyHorizon ?? 0xcdeedd).convertSRGBToLinear();
+  if (theme.neon)
+    return {
+      deep: new THREE.Color(NEON_WATER.deep),
+      shallow: new THREE.Color(NEON_WATER.shallow),
+      surface: new THREE.Color(NEON_WATER.surface),
+      foam: new THREE.Color(NEON_WATER.foam),
+      skyTop,
+      skyHorizon,
+    };
   return {
     deep: body.clone().multiplyScalar(0.55),
     shallow: body.clone().lerp(new THREE.Color(0xffffff), 0.12),
@@ -441,9 +455,15 @@ export function waterNormalMap() {
 
 // ---------- sombreador ----------
 
-/** Sombreador del agua de una calidad (texto GLSL): Bajo sin normal-map, Medio 1 lectura, Alto 3. */
-export function waterShaderSource(level) {
+/**
+ * Sombreador del agua de una calidad (texto GLSL): Bajo sin normal-map, Medio 1 lectura, Alto 3.
+ * opts.neon: agua tóxica (mismo vértice; en el fragmento, menos reflejo del cielo, capa radiactiva uSurface con
+ * fresnel (neonGlow de neonWater.js) rota por el ruido, espuma que brilla y la transparencia de NEON_WATER).
+ */
+export function waterShaderSource(level, { neon = false } = {}) {
   level = treeLevel(level);
+  const NG = NEON_WATER.glow;
+  const alphaK = neon ? NEON_WATER.alpha : LOOK.alpha;
   const n = WATER_BUDGET[level].samples;
   const S = WATER_SAMPLES.slice(0, n);
   const [specK, shin] = LOOK.spec[level];
@@ -504,6 +524,7 @@ export function waterShaderSource(level) {
     'uniform vec3 uFoam;',
     'uniform vec3 uSkyTop;',
     'uniform vec3 uSkyHorizon;',
+    neon ? 'uniform vec3 uSurface;' : '',
     'uniform vec4 uWind;',
     ...(RN ? [`uniform vec4 uRipples[${RN}];`] : []),
     ...(W.length ? ['varying vec3 vSwell;'] : []),
@@ -578,17 +599,25 @@ export function waterShaderSource(level) {
     '  L = normalize((vec4(directionalLights[0].direction, 0.0) * viewMatrix).xyz);',
     '#endif',
     '  vec3 col = body * RECIPROCAL_PI * (irr + sunCol * saturate(dot(N, L)));',
-    '  col = mix(col, sky, F);',
+    neon ? `  col = mix(col, sky, F * ${f(NEON_WATER.reflect)});` : '  col = mix(col, sky, F);',
     '  vec3 H = normalize(L + V);',
     // el brillo sigue la cresta del oleaje: parpadeo suave (frecuencia baja, sin aliasing)
     `  col += sunCol * (${f(specK)} * pow(saturate(dot(N, H)), ${f(shin)})${W.length ? ` * (1.0 + ${f(WATER_SWELL.spark)} * vSwell.z)` : ''});`,
+    // neón: capa radiactiva (neonGlow) sobre el cuerpo pútrido; de canto y en lo somero brilla más, el ruido la rompe
+    ...(neon
+      ? [
+          `  float glowK = (${f(NG.base)} + ${f(NG.fresnel)} * pow(1.0 - cosV, ${f(NG.power)})) * (1.0 - ${f(NG.deep)} * deepK);`,
+          `  col += uSurface * glowK * (${f(1 - NG.sheen)} + ${f(2 * NG.sheen)} * noise);`,
+        ]
+      : []),
     // espuma (waterFoam): franja desde la orilla rota por el ruido
     `  float band = 1.0 - smoothstep(0.0, ${f(FW)}, max(vShore.y, 0.0));`,
     `  float foam = band * smoothstep(1.0 - band - ${f(FS)}, 1.0 - band + ${f(FS)}, noise);`,
     '  vec3 foamCol = uFoam * RECIPROCAL_PI * (irr + sunCol * saturate(L.y));',
+    neon ? `  foamCol += uFoam * ${f(NEON_WATER.foamGlow)};` : '',
     '  col = mix(col, foamCol, foam);',
     ...(RN ? [`  float ripK = saturate(rGlint * ${f(WATER_RIPPLES.glint)});`, '  col = mix(col, foamCol, ripK);'] : []),
-    `  float alpha = mix(${f(LOOK.alpha[0])}, ${f(LOOK.alpha[1])}, deepK);`,
+    `  float alpha = mix(${f(alphaK[0])}, ${f(alphaK[1])}, deepK);`,
     `  alpha += (1.0 - alpha) * max(F, ${RN ? 'max(foam, ripK)' : 'foam'});`,
     '  gl_FragColor = vec4(col, alpha);',
     '  #include <tonemapping_fragment>',
@@ -602,7 +631,8 @@ export function waterShaderSource(level) {
 }
 
 const materials = new Map();
-const paletteKey = (theme) => [theme.water, theme.sunIntensity < 2 ? 1 : 0, theme.skyTop, theme.skyHorizon].join(':');
+const paletteKey = (theme) =>
+  theme.neon ? ['neon', theme.skyTop, theme.skyHorizon].join(':') : [theme.water, theme.sunIntensity < 2 ? 1 : 0, theme.skyTop, theme.skyHorizon].join(':');
 
 /**
  * Material del agua (lago y río), uno por calidad y paleta, compartido. Transparente y
@@ -615,7 +645,8 @@ export function waterMaterial(level, theme) {
   const key = `${level}|${paletteKey(theme)}`;
   if (materials.has(key)) return materials.get(key);
   const pal = waterPalette(theme);
-  const { vertexShader, fragmentShader } = waterShaderSource(level);
+  const neon = !!theme.neon;
+  const { vertexShader, fragmentShader } = waterShaderSource(level, { neon });
   const uniforms = THREE.UniformsUtils.merge([
     THREE.UniformsLib.lights,
     THREE.UniformsLib.fog,
@@ -625,6 +656,7 @@ export function waterMaterial(level, theme) {
       uFoam: { value: pal.foam },
       uSkyTop: { value: pal.skyTop },
       uSkyHorizon: { value: pal.skyHorizon },
+      ...(neon ? { uSurface: { value: pal.surface } } : {}),
     },
   ]);
   // compartidos por referencia (merge clona)
@@ -632,7 +664,7 @@ export function waterMaterial(level, theme) {
   if (WATER_BUDGET[level].samples) uniforms.uNormalMap = { value: waterNormalMap() };
   if (rippleCount(level)) uniforms.uRipples = { value: Array.from({ length: rippleCount(level) }, () => new THREE.Vector4(0, 0, 0, 0)) };
   const m = new THREE.ShaderMaterial({ uniforms, vertexShader, fragmentShader, lights: true, fog: true, transparent: true, depthWrite: true });
-  m.name = `water-${level}`;
+  m.name = neon ? `water-neon-${level}` : `water-${level}`;
   materials.set(key, m);
   return m;
 }
@@ -803,11 +835,12 @@ export function makeWater({ kind, ...opts } = {}) {
 
 /**
  * Agua del hoyo: lago (lo que queda bajo `y`) y río (si hay), con un material compartido,
- * en un grupo añadido a `scene`. opts: { size, center, y, heightAt, river?, level, theme, warp? }.
- * Devuelve { group, lake, river, meshes, material, stats, update(cam), setRipples(events, t?), dispose() } o null si el
- * tema no lleva agua nueva (neón, ciudad, lava, caldera) o no hay agua.
+ * en un grupo añadido a `scene`. opts: { size, center, y, heightAt, river?, level, theme, warp?, area? }.
+ * Neón: además motas de suciedad y vapor (assets/neonWater.js, una malla de puntos cada uno; `area` = {x, z, r} de
+ * la pista para repartirlos cerca de la cámara). Devuelve { group, lake, river, meshes, dirt, vapor, material, stats,
+ * update(cam), setRipples(events, t?), dispose() } o null si el tema no lleva agua nueva (ciudad, lava, caldera) o no hay agua.
  */
-export function addWater(scene, { size = WATER_SIZE, center = [0, 0], y, heightAt, river = null, level, theme, warp = null, seg = null }) {
+export function addWater(scene, { size = WATER_SIZE, center = [0, 0], y, heightAt, river = null, level, theme, warp = null, seg = null, area = null }) {
   if (!waterSupported(theme)) return null;
   level = treeLevel(level);
   const material = waterMaterial(level, theme);
@@ -815,17 +848,24 @@ export function addWater(scene, { size = WATER_SIZE, center = [0, 0], y, heightA
   const lake = makeLake({ size, center, y, heightAt, level, theme, material, warp, seg, river: riverMesh ? river : null });
   const meshes = [riverMesh, lake].filter(Boolean);
   if (!meshes.length) return null;
+  const fx = theme.neon ? makeNeonWaterFx(meshes, { level, area }) : null;
   const group = new THREE.Group();
   group.name = 'water';
   group.add(...meshes);
+  if (fx?.dirt) group.add(fx.dirt);
+  if (fx?.vapor) group.add(fx.vapor);
   scene.add(group);
   const count = (m) => (m ? m.geometry.index.count / 3 : 0);
-  const stats = { level, triangles: count(lake) + count(riverMesh), calls: meshes.length, lake: count(lake), river: count(riverMesh) };
+  const stats = { level, triangles: count(lake) + count(riverMesh), calls: meshes.length + (fx?.calls ?? 0), lake: count(lake), river: count(riverMesh) };
+  if (fx) stats.points = fx.points;
+  let alive = true;
   return {
     group,
     lake,
     river: riverMesh,
     meshes,
+    dirt: fx?.dirt ?? null,
+    vapor: fx?.vapor ?? null,
     material,
     stats,
     /**
@@ -835,10 +875,16 @@ export function addWater(scene, { size = WATER_SIZE, center = [0, 0], y, heightA
     setRipples: (events, t) => setWaterRipples(material, events, t),
     /** Nada que hacer: el tiempo es el del viento (updateWind, una vez por fotograma). Se deja por simetría con césped y flores. */
     update() {},
-    /** Quita el agua de la escena y libera sus geometrías; material y normal-map son compartidos y no se tocan. */
+    /**
+     * Quita el agua de la escena y libera sus geometrías (y, en neón, geometría y material de motas y vapor); el
+     * material del agua y el normal-map son compartidos y no se tocan. Una segunda llamada no hace nada.
+     */
     dispose() {
+      if (!alive) return;
+      alive = false;
       scene.remove(group);
       for (const m of meshes) m.geometry.dispose();
+      fx?.dispose();
     },
   };
 }
