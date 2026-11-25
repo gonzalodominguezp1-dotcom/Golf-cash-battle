@@ -44,6 +44,7 @@ Pantalla de entrada obligatoria (login, registro, recuperar contraseña) con Sup
 ## Cierre (2026-11-25)
 - Feature cerrada por la persona: el flujo de verificación funciona en prueba real (registro, enlace de confirmación, sesión).
 - Hecho en commits locales de `la-chaqueta-bionica` (sin push: el gate ASDD pide spec aprobada para ramas que tocan auth): verificación por email, canje PKCE, aviso entre pestañas, Google OAuth, rediseño de la pantalla de entrada, transición «Relevo dorado» y layout de escritorio.
+- Últimos arreglos: tras entrar, reintento al cargar la cuenta y sin cerrar sesión por fallos de red (`d459dd9`); la pantalla de entrada vive en `#/acceso` y tras cerrar sesión la URL ya no queda en `#/cuenta` (`b498e9a`).
 - Pendiente fuera de esta feature:
   1. Google OAuth: falta activar el proveedor en Supabase (Client ID y secreto de Google Cloud).
   2. `site_url` sigue en `localhost:3000`: decisión abierta.
