@@ -144,9 +144,14 @@ function background() {
  */
 export function mountAuth(root, auth, { recovery = false, guest = false, linkError = null, onDone }) {
   let finished = false;
+  // transición entre vistas en marcha ({ vt }) y momento del último cambio (ver show)
+  let swap = null;
+  let lastSwap = -Infinity;
   const done = () => {
     if (finished) return;
     finished = true;
+    // si se entra a mitad de una transición, se corta: la pantalla de entrada se va
+    swap?.vt.skipTransition();
     onDone();
   };
   // en «Confirma tu email»: si otra pestaña confirma, esta entra sola
@@ -165,7 +170,9 @@ export function mountAuth(root, auth, { recovery = false, guest = false, linkErr
     });
   }
 
-  const card = el('section', { class: 'auth-card' });
+  // el marco (borde de luz) no se sustituye nunca; las vistas se pintan dentro de body
+  const body = el('div', { class: 'auth-card-body' });
+  const card = el('section', { class: 'auth-card' }, body);
   const page = el(
     'main',
     { class: 'auth-screen' },
@@ -188,13 +195,61 @@ export function mountAuth(root, auth, { recovery = false, guest = false, linkErr
   );
   root.replaceChildren(page);
 
-  function show(view, arg, { focus = true } = {}) {
+  // ---------- cambio de vista: «Relevo dorado» (02-DOCS/wiki/ftd/auth-transicion-diseno.md) ----------
+  // orden de la tira de vistas: ir a una de índice mayor entra por la derecha; a una menor, por la izquierda
+  const VIEW_ORDER = { signup: 0, reset: 0, login: 1, forgot: 2, resetSent: 3, check: 3 };
+  // un segundo cambio antes de esto se ignora (doble clic: el 2.º clic caería sobre la vista nueva)
+  const SWAP_LOCK_MS = 350;
+
+  /** Pinta la vista al momento. anim → data-anim para el CSS: null (primera vista), 'none', 'vt', 'fwd' o 'back'. */
+  function render(view, arg, focus, anim) {
     stopListening?.();
     stopListening = null;
     page.dataset.view = view;
+    if (anim) page.dataset.anim = anim;
     // filter: las vistas devuelven null en los nodos opcionales y replaceChildren(null) pintaría el texto «null»
-    card.replaceChildren(...views[view](arg).filter(Boolean));
-    if (focus) card.querySelector('input')?.focus({ preventScroll: true });
+    body.replaceChildren(...views[view](arg).filter(Boolean));
+    const title = body.querySelector('h2');
+    title?.setAttribute('tabindex', '-1');
+    if (focus) focusView(title);
+  }
+
+  /**
+   * Con ratón (sin teclado virtual) el foco va al primer campo. En táctil, o si la vista no tiene campos, va al título:
+   * no abre el teclado y el lector de pantalla anuncia la vista nueva. preventScroll: la página no salta.
+   */
+  function focusView(title) {
+    const input = body.querySelector('input');
+    if (input && mq('(hover: hover) and (pointer: fine)')) input.focus({ preventScroll: true });
+    else title?.focus({ preventScroll: true });
+  }
+
+  function show(view, arg, { focus = true } = {}) {
+    const from = page.dataset.view;
+    // primera vista: sin transición (la tarjeta ya entra con auth-card-in y sus hijos con auth-swap)
+    if (!from) return render(view, arg, focus, null);
+    const now = performance.now();
+    if (now - lastSwap < SWAP_LOCK_MS) return;
+    lastSwap = now;
+    // movimiento reducido: cambio instantáneo
+    if (mq('(prefers-reduced-motion: reduce)')) return render(view, arg, focus, 'none');
+    const dir = (VIEW_ORDER[view] ?? 0) < (VIEW_ORDER[from] ?? 0) ? 'back' : 'fwd';
+    // navegador sin View Transitions: entrada CSS direccional y escalonada
+    if (typeof document.startViewTransition !== 'function') return render(view, arg, focus, dir);
+    const html = document.documentElement;
+    html.classList.add('auth-vt');
+    html.classList.toggle('auth-vt--back', dir === 'back');
+    const vt = document.startViewTransition(() => render(view, arg, focus, 'vt'));
+    const mine = { vt };
+    swap = mine;
+    // ready se rechaza si el navegador se salta la animación (pestaña oculta, cambio de tamaño): el DOM cambia igual
+    vt.ready.catch(() => {});
+    const cleanup = () => {
+      if (swap !== mine) return; // ya empezó otra transición: sus clases siguen haciendo falta
+      swap = null;
+      html.classList.remove('auth-vt', 'auth-vt--back');
+    };
+    vt.finished.then(cleanup, cleanup);
   }
 
   /** «Continuar con Google»: Google no pasa por la verificación de email. */
@@ -438,5 +493,5 @@ export function mountAuth(root, auth, { recovery = false, guest = false, linkErr
   // en móvil no se enfoca al abrir: el teclado taparía el logo y los beneficios
   show(first, undefined, { focus: mq('(min-width: 900px)') });
   // error de la vuelta del correo: se enseña encima del formulario, con el mensaje en español de authRules
-  if (linkError && !recovery) card.prepend(el('p', { class: 'auth-error', role: 'alert', text: authMessage(linkError) }));
+  if (linkError && !recovery) body.prepend(el('p', { class: 'auth-error', role: 'alert', text: authMessage(linkError) }));
 }

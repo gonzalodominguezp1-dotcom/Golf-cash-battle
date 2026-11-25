@@ -81,11 +81,15 @@
   animation: auth-spin 6s linear infinite;
 }
 .auth-card::after { content: ''; position: absolute; z-index: -1; inset: 2px; border-radius: 20px; background: var(--a-card); }
-.auth-card > * { animation: auth-swap 0.35s var(--a-ease) backwards; }
+/* contenido de la vista: es lo único que se sustituye al cambiar de vista; el marco se queda */
+.auth-card-body { display: flow-root; }
+.auth-card-body > * { animation: auth-swap 0.35s var(--a-ease) backwards; }
 .auth-card h2 { margin: 0 0 4px; font: 900 24px/1.1 var(--display); letter-spacing: -0.02em; color: #fff; }
-.auth-card > .sub { margin: 0 0 14px; color: var(--a-dim); font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
-.auth-card > .link, .auth-card > .ghost { margin-top: 10px; }
-.auth-card > .ghost { margin-bottom: 4px; }
+/* el título recibe el foco por programa (tabindex -1) al cambiar de vista en táctil: sin anillo */
+.auth-card h2:focus { outline: none; }
+.auth-card-body > .sub { margin: 0 0 14px; color: var(--a-dim); font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.auth-card-body > .link, .auth-card-body > .ghost { margin-top: 10px; }
+.auth-card-body > .ghost { margin-bottom: 4px; }
 
 /* ---------- Google + separador ---------- */
 .auth-social { display: grid; gap: 8px; }
@@ -224,6 +228,83 @@
   80% { transform: translateX(2px); }
 }
 
+/* ---------- transición entre vistas: «Relevo dorado» (02-DOCS/wiki/ftd/auth-transicion-diseno.md) ---------- */
+/* authScreen.js pone data-anim en .auth-screen en cada cambio de vista y lo deja hasta el siguiente.
+   :where() deja la especificidad en la de .auth-card-body > *, así .auth-error:not(:empty) sigue temblando. */
+
+/* con View Transitions o movimiento reducido, los hijos nuevos no hacen su propia entrada */
+:where(.auth-screen[data-anim="vt"], .auth-screen[data-anim="none"]) .auth-card-body > * { animation: none; }
+
+/* respaldo sin View Transitions: entrada direccional y escalonada (410 ms en total) */
+:where(.auth-screen[data-anim="fwd"], .auth-screen[data-anim="back"]) .auth-card-body > * { animation: auth-swap-x 0.32s var(--a-ease) backwards; }
+:where(.auth-screen[data-anim="fwd"], .auth-screen[data-anim="back"]) .auth-card-body > :nth-child(2) { animation-delay: 0.03s; }
+:where(.auth-screen[data-anim="fwd"], .auth-screen[data-anim="back"]) .auth-card-body > :nth-child(3) { animation-delay: 0.06s; }
+:where(.auth-screen[data-anim="fwd"], .auth-screen[data-anim="back"]) .auth-card-body > :nth-child(n + 4) { animation-delay: 0.09s; }
+.auth-screen[data-anim="back"] { --auth-swap-x: -16px; }
+@keyframes auth-swap-x { from { opacity: 0; transform: translateX(var(--auth-swap-x, 16px)); } }
+
+/* View Transitions: los nombres solo existen mientras <html> tiene .auth-vt (lo pone y lo quita authScreen.js) */
+html.auth-vt {
+  /* la raíz no se captura: el vídeo de fondo no se congela; todo lo que se mueve tiene nombre propio */
+  view-transition-name: none;
+  --auth-vt-dir: 1;
+  --auth-vt-shift: 16px;
+  --auth-vt-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --auth-vt-ease-in: cubic-bezier(0.5, 0, 0.75, 0);
+  --auth-vt-morph: 420ms;
+}
+html.auth-vt--back { --auth-vt-dir: -1; }
+@media (min-width: 900px) { html.auth-vt { --auth-vt-shift: 28px; } }
+
+.auth-vt .auth-logo { view-transition-name: auth-logo; }
+.auth-vt .auth-tagline { view-transition-name: auth-tagline; }
+.auth-vt .auth-notice { view-transition-name: auth-notice; }
+.auth-vt .auth-card { view-transition-name: auth-card; }
+.auth-vt .auth-card-body { view-transition-name: auth-body; }
+.auth-vt .auth-card h2 { view-transition-name: auth-title; }
+.auth-vt .auth-social { view-transition-name: auth-social; }
+.auth-vt .auth-sep { view-transition-name: auth-sep; }
+.auth-vt .auth-form > label:has(> input[name="email"]) { view-transition-name: auth-email; }
+.auth-vt .auth-form > .primary { view-transition-name: auth-submit; }
+.auth-vt .auth-ticker { view-transition-name: auth-ticker; }
+
+/* todos los grupos: mismo tiempo y misma curva para que el escenario se recoloque a la vez */
+html.auth-vt::view-transition-group(*) { animation-duration: var(--auth-vt-morph); animation-timing-function: var(--auth-vt-ease); }
+
+/* marco: la captura vieja (borde congelado) no se ve; la nueva es en vivo, así el borde sigue girando.
+   block-size 100%: la captura se ajusta al alto del grupo mientras cambia de tamaño */
+html.auth-vt::view-transition-old(auth-card) { animation: none; opacity: 0; }
+html.auth-vt::view-transition-new(auth-card) { block-size: 100%; animation: auth-vt-frame var(--auth-vt-morph) var(--auth-vt-ease) both; }
+
+/* contenido: recorte solo vertical, para que el contenido alto no asome por debajo del marco mientras encoge */
+html.auth-vt::view-transition-group(auth-body) { overflow-x: visible; overflow-y: clip; }
+html.auth-vt::view-transition-old(auth-body) { mix-blend-mode: normal; animation: auth-vt-out 180ms var(--auth-vt-ease-in) both; }
+html.auth-vt::view-transition-new(auth-body) { mix-blend-mode: normal; animation: auth-vt-in 360ms var(--auth-vt-ease) 90ms both; }
+
+/* título: segunda capa, se mueve más y llega antes (paralaje) */
+html.auth-vt::view-transition-old(auth-title) { mix-blend-mode: normal; animation: auth-vt-title-out 160ms var(--auth-vt-ease-in) both; }
+html.auth-vt::view-transition-new(auth-title) { mix-blend-mode: normal; animation: auth-vt-title-in 360ms var(--auth-vt-ease) 60ms both; }
+
+/* compartidos que solo están en una de las dos vistas: salen o entran con el contenido */
+html.auth-vt::view-transition-old(auth-social):only-child,
+html.auth-vt::view-transition-old(auth-sep):only-child,
+html.auth-vt::view-transition-old(auth-email):only-child,
+html.auth-vt::view-transition-old(auth-submit):only-child { animation: auth-vt-out 180ms var(--auth-vt-ease-in) both; }
+html.auth-vt::view-transition-new(auth-social):only-child,
+html.auth-vt::view-transition-new(auth-sep):only-child,
+html.auth-vt::view-transition-new(auth-email):only-child,
+html.auth-vt::view-transition-new(auth-submit):only-child { animation: auth-vt-in 360ms var(--auth-vt-ease) 90ms both; }
+
+/* banda legal: solo se recoloca; la captura nueva es en vivo y el texto no deja de correr */
+html.auth-vt::view-transition-old(auth-ticker) { animation: none; opacity: 0; }
+html.auth-vt::view-transition-new(auth-ticker) { animation: none; }
+
+@keyframes auth-vt-out { to { opacity: 0; transform: translateX(calc(var(--auth-vt-shift) * var(--auth-vt-dir) * -1)); } }
+@keyframes auth-vt-in { from { opacity: 0; transform: translateX(calc(var(--auth-vt-shift) * var(--auth-vt-dir))); } }
+@keyframes auth-vt-title-out { to { opacity: 0; transform: translateX(calc(var(--auth-vt-shift) * var(--auth-vt-dir) * -1.25)); } }
+@keyframes auth-vt-title-in { from { opacity: 0; transform: translateX(calc(var(--auth-vt-shift) * var(--auth-vt-dir) * 1.25)); } }
+@keyframes auth-vt-frame { 0%, 100% { transform: scale(1); } 40% { transform: scale(0.985); } }
+
 /* ---------- movimiento reducido: todo quieto, solo el póster ---------- */
 @media (prefers-reduced-motion: reduce) {
   .auth-screen *, .auth-screen *::before, .auth-screen *::after { animation: none !important; transition: none !important; }
@@ -234,4 +315,8 @@
   .auth-ticker-seg[aria-hidden] { display: none; }
   .auth-ticker { height: auto; min-height: 34px; padding-block: 6px; }
   .auth-ticker-seg { white-space: normal; text-align: center; }
+  /* por si acaso: JS ya no arranca la transición con movimiento reducido */
+  html.auth-vt::view-transition-group(*),
+  html.auth-vt::view-transition-old(*),
+  html.auth-vt::view-transition-new(*) { animation: none !important; }
 }
