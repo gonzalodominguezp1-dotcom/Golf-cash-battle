@@ -55,6 +55,8 @@ Proyecto `golf-cash-battle`. La referencia del proyecto está en el README.
 - **Authentication → Sign In / Providers → Email:** activar *Confirm email* (sin esto cualquiera crea cuentas con emails ajenos y salta la comprobación de `_paid_block`), *Secure password change* y *Secure email change*. Longitud mínima de contraseña 8 y requisito *letters and digits* (la app pide lo mismo antes de enviar).
 - **Authentication → Sign In / Providers:** *Allow anonymous sign-ins* **desactivado** (en producción ya lo está). Las sesiones de invitado antiguas siguen valiendo hasta que caduquen y se pueden convertir en cuenta desde la pantalla de registro.
 - **Authentication → URL Configuration:** la dirección de la web (Vercel) como Site URL y en Redirect URLs, sin comodines abiertos (`https://dominio/` y, para vistas previas, solo los dominios propios). Es lo que impide que el enlace del correo mande a una web de otro.
+  - Redirect URLs que la app necesita (la vuelta del correo, ver `buildReturnUrl` en `src/account/authRules.js`): `https://<dominio>/?auth=confirm` y `https://<dominio>/?auth=recovery`. Si Supabase no admite query en la lista, usar `https://<dominio>/**`.
+  - Si el correo cae en el Site URL o en otra ruta, la app no recibe `?auth=…` y no entra: revisar primero esta lista.
 - **Authentication → Rate Limits:** dejar los límites por defecto o más bajos (envío de emails, intentos de entrada por IP).
 - **Authentication → Attack Protection:** activar CAPTCHA (hCaptcha o Turnstile) antes de abrir el registro al público, y *Leaked password protection* si el plan lo permite.
 - **Authentication → Sessions:** caducidad de sesión y *Detect and revoke potentially compromised refresh tokens* activados.
