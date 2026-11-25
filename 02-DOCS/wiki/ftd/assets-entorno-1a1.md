@@ -1,7 +1,9 @@
 ---
 author: compañero (rama la-chaqueta-bionica)
 branch: la-chaqueta-bionica
-status: planned
+status: done
+merged: 2026-11-25
+merged_by: Chakets
 ---
 # Rediseño 1 a 1 de los assets de entorno
 
@@ -458,8 +460,4 @@ tests en verde; el usuario aprueba cada tema en laboratorio.
 - Estado del fichero: el cambio de «Paso F» de 2026-11-24 (sin commit) ya estaba en el worktree; se conserva tal cual.
 
 ## Next step
-Revisión de contexto limpio de esta sustitución y visto bueno visual del usuario (flores y rocas en el juego); luego Pasos 4 (arbustos: visto bueno/sustitución), 8, 9 y F.
-
-> Nota: agua y pez sustituidos en entornos, sin ver en pantalla.
-
-> Nota (2026-11-19): paso 9 sustituido en entornos: pino nevado (x0,85), cactus (x0,97) y árbol seco (x1,115) por `natureTree`; sin ver en pantalla. Detalle en `decisions.md`.
+Fusionado en main el 2026-11-25 (c499c9f).

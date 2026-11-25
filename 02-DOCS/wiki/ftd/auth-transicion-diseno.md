@@ -1,8 +1,10 @@
 ---
 author: la-chaqueta-bionica
 branch: la-chaqueta-bionica
-status: diseño (listo para implementar)
+status: done
 date: 2026-11-25
+merged: 2026-11-25
+merged_by: Chakets
 ---
 
 # Transición entre vistas de la pantalla de entrada: diseño para implementar
@@ -434,3 +436,6 @@ Con `pnpm dev`. Para ver cada fotograma: DevTools → panel **Animations** → v
 - [ ] **Navegador sin la API** (en Chrome, ejecuta en consola `delete Document.prototype.startViewTransition` y cambia
       de vista): los hijos entran escalonados desde el lado correcto; la altura cambia de golpe; sin errores en consola.
 - [ ] Consola sin errores ni avisos nuevos en todos los casos.
+
+## Next
+Fusionado en main el 2026-11-25 (c499c9f).
