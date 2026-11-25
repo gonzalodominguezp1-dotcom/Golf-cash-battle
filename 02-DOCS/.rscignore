@@ -1,0 +1,32 @@
+# 02-DOCS/.rscignore — rutas que el barrido automático de ingesta nunca escanea.
+# Compartido con el equipo. Sintaxis tipo .gitignore. Añade tus patrones al final.
+
+# Código, build y herramientas (base de harness/references/ingest-ignore-defaults.md)
+node_modules/
+.git/
+.next/
+dist/
+build/
+.venv/
+__pycache__/
+.dart_tool/
+.pytest_cache/
+.ruff_cache/
+.worktrees/
+01-TOOLS/
+02-DOCS/inbox/_processed/
+02-DOCS/raw/
+02-DOCS/wiki/
+.DS_Store
+
+# Credenciales y claves: nunca se ingieren, tengan la extensión que tengan
+.env
+.env.*
+*credential*
+*secret*
+*.pem
+*.key
+*.p12
+*.pfx
+service-account*.json
+id_rsa*

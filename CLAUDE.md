@@ -17,3 +17,8 @@ Cada persona trabaja en su propia rama y desde ahí se sube a `main`:
 ## Gestor de paquetes
 
 Usa siempre **pnpm** (`pnpm install`, `pnpm test`, `pnpm exec`, `pnpm dlx`). Nunca `npm` ni `npx`; no crees `package-lock.json`. Detalle en `02-DOCS/wiki/harness/decisions.md`.
+
+## Barrido de documentos (harness)
+
+- El barrido automático de ingesta solo procesa `02-DOCS/inbox/` sin preguntar. Cualquier otro documento que encuentre fuera de ahí se enumera primero y se ingiere solo tras confirmación de la persona.
+- No ingieras credenciales, claves ni `.env`, aunque tengan extensión de documento. `02-DOCS/.rscignore` las excluye.
