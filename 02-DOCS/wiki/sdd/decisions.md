@@ -354,3 +354,14 @@ Open     — decisión de diseño del usuario: las zonas `water` jugables del ho
 - **Por qué no toca física ni luces:** las partículas son solo dibujo; las luces de la lava siguen para la fase de luces.
 - **Contraste de la ceniza:** carbón `0x0c0a09` a punta `0xe6e0d6` (segunda subida tras la de ayer).
 - **Abierto:** sin verificar en pantalla (tamaño y opacidad de los puntos). Las brasas flotantes de siempre (`floaters`) siguen.
+
+## 2026-11-25 — Muros por familia y ceniza en el juego (feature: assets-entorno-1a1, pasos M y V1)
+
+- **Qué pidió el usuario:** visto bueno de los muros del laboratorio, de la ceniza y de la erupción, y aplicarlo en el juego.
+- **Muros:** `course.js` construye los muros de los 17 temas con el módulo de su familia (`wallFamilyOf`, `WALL_MAKERS`). `WALL_HALF` y `wallSegmentsOf` no cambian (huella de segmentos comprobada). Los postes no cambian. `GolfGame.js` llama `hitWall` en el golpe contra pared y libera la vista vieja con `dispose`.
+- **Clones por tramo:** los materiales en caché se clonan por tramo y se marcan transparentes; si no, aclarar un muro aclararía todos. El cuerpo del hielo deja de ser opaco a nivel de material para que el aclarado funcione. Pendiente de verlo en pantalla.
+- **Grietas fuera de `mats`:** van por alphaTest; el bucle de transparencia les pondría el emissive a 0.
+- **Altura del aclarado:** `wallBlocksBall` usa `WALL_BODY_H_NEW` (0,37) + 0,04. La familia volcánica tiene picos de hasta ~0,48 m y la piedra ±2,5 cm; aceptado por el encargo.
+- **Coste en relieve:** cortar cada 0,2 m sube los triángulos. La Herradura (valla) ~38,7k y El Molino del Prado ~21,7k; el resto, entre 60 y 9k por hoyo. Las llamadas de dibujo no cambian.
+- **Ceniza en el juego:** lava y caldera usan `addAsh` (`environment.js`) en lugar de `makeTuft`. Excluye el cráter del volcán (`volcano.q < 2.9`).
+- **Abierto:** aspecto en pantalla (costuras del recorte, orden de dibujo de muros transparentes, sombras), GLSL del neón en GPU real, golpe en partida real.
