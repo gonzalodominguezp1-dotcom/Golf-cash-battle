@@ -41,7 +41,11 @@ Pantalla de entrada obligatoria (login, registro, recuperar contraseña) con Sup
 - `node --test` de `auth-rules` y `auth-return`: 14/14 verdes. `pnpm run build`: correcto.
 - `pnpm test` completo: `tests/rock-env.test.js` tarda más de 100 s y `vfx-*` tiene fallos (golden, SKINS y SIG, dir in). Esos ficheros tienen cambios sin commitear de la rama; no se ha comprobado contra el HEAD limpio.
 
-## Next
-1. Persona: recorrer la checklist manual en un navegador real con una cuenta de prueba (registro, enlace, otro navegador, enlace caducado, dos pestañas).
-2. Persona: poner en el panel de Supabase las Redirect URLs de arriba y revisar la plantilla de confirmación.
-3. Fusionado en main el 2026-11-02 (0af27a4) — base de esta mejora.
+## Cierre (2026-11-25)
+- Feature cerrada por la persona: el flujo de verificación funciona en prueba real (registro, enlace de confirmación, sesión).
+- Hecho en commits locales de `la-chaqueta-bionica` (sin push: el gate ASDD pide spec aprobada para ramas que tocan auth): verificación por email, canje PKCE, aviso entre pestañas, Google OAuth, rediseño de la pantalla de entrada, transición «Relevo dorado» y layout de escritorio.
+- Pendiente fuera de esta feature:
+  1. Google OAuth: falta activar el proveedor en Supabase (Client ID y secreto de Google Cloud).
+  2. `site_url` sigue en `localhost:3000`: decisión abierta.
+  3. Push de la rama: requiere spec aprobada o una decisión explícita de saltar el gate.
+- Fusionado en main el 2026-11-02 (0af27a4) — base de esta mejora.
