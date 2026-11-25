@@ -211,6 +211,12 @@ Las luces de la lava (`course.js` ~694, ~773, ~859) no se tocan: van en la fase 
 - Revisión de contraste (2026-11-25, pedido del usuario: «no se nota»): la primera paleta era gris medio (luminosidad
   ~0,10) y casi no se distinguía del suelo. Ahora la base es carbón y la punta ceniza clara; luminosidad media ~0,20.
   Tests de color ajustados a la nueva paleta (tope de luminosidad = la punta, no un gris fijo).
+- Segunda subida de contraste (2026-11-25, pedido del usuario): carbón `0x0c0a09` y punta ceniza `0xe6e0d6`.
+- Erupción (2026-11-25, pedido del usuario): `src/game/render/assets/eruption.js` (`makeEruption`): columna de ceniza gris
+  que sube y la lleva el viento, y brasas aditivas que saltan del cráter. Dos `Points` (2 llamadas). Partículas por
+  calidad `ERUPTION_BUDGET` (ceniza 60/140/240, brasas 24/50/90; índice = `quality().lod`). Una tirada del rng del hoyo.
+  Activa con `eruption: true` en `themes.js` (`volcano` y `caldera`); enganchada al final de `buildEnvironment`, se
+  libera en `dispose`. Sin luces ni física. Las brasas flotantes de siempre (`floaters`) siguen igual.
 - Pendiente: visto bueno del usuario en `assets-lab.html` (aspecto real y contraste sobre el suelo de caldera); el
   calor del atlas en las puntas secas (Medio/Alto) puede dar un tono beis; no se sustituye `makeTuft` en `environment.js`
   hasta el visto bueno. `makeTuft` y `makeGrassClump` siguen en uso.

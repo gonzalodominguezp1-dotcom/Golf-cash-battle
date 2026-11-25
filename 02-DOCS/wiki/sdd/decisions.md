@@ -345,3 +345,12 @@ Open     — decisión de diseño del usuario: las zonas `water` jugables del ho
 - **Mallas con nombre propio (`ash`, `ash-<especie>`):** no cuentan como césped cuando entren en el entorno.
 - **Contraste:** la primera paleta (gris medio) casi no se veía sobre el suelo oscuro; el usuario pidió más contraste y colores realistas. Se pasó a carbón y punta ceniza clara (luminosidad media ~0,20). Pendiente de visto bueno en `assets-lab.html`.
 - **Abierto:** no se sustituye `makeTuft` en `environment.js` hasta el visto bueno. Las puntas de las especies secas en Medio/Alto pueden verse algo beis por el atlas.
+
+## 2026-11-25 — Erupción de volcán y caldera (feature: assets-entorno-1a1, paso V1)
+
+- **Qué pidió el usuario:** más contraste en la ceniza y partículas de ceniza y fuego en el aire en volcán y caldera, para que se lea un volcán en erupción.
+- **Qué hace el código:** `src/game/render/assets/eruption.js` (`makeEruption`): columna de ceniza gris que sube y la empuja el viento, y brasas aditivas que saltan del cráter. Dos `THREE.Points`, dos llamadas. Presupuesto por calidad `ERUPTION_BUDGET` (ceniza 60/140/240, brasas 24/50/90), medido y comprobado en `tests/eruption.test.js`.
+- **Dónde se enchufa:** `theme.eruption: true` en `volcano` y `caldera` (`themes.js`); `buildEnvironment` la añade al final, después de todo el decorado, para que su única tirada del rng no mueva nada de antes. Se quita en `dispose`.
+- **Por qué no toca física ni luces:** las partículas son solo dibujo; las luces de la lava siguen para la fase de luces.
+- **Contraste de la ceniza:** carbón `0x0c0a09` a punta `0xe6e0d6` (segunda subida tras la de ayer).
+- **Abierto:** sin verificar en pantalla (tamaño y opacidad de los puntos). Las brasas flotantes de siempre (`floaters`) siguen.
