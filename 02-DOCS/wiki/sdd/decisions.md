@@ -309,3 +309,30 @@ Open     — decisión de diseño del usuario: las zonas `water` jugables del ho
 - **Qué hace el código:** todos los muros nuevos son cajas de caras planas (`BoxGeometry`), sin remate como malla aparte. La piedra (`stoneWall.js`) usa la misma caja con las caras trabajadas: juntas hundidas, sillares con bulto, coronación irregular y todo dentro de `WALL_HALF`.
 - **Por qué no toca física:** `WALL_HALF` sigue siendo la mitad del ancho de colisión. Las caras visuales no salen de esa franja.
 - **Abierto:** el agente de neón ASCII e hielo recibe la misma regla. Visto bueno del usuario en `assets-lab.html`.
+
+## 2026-11-25 — Muros de neón ASCII y de hielo (feature: assets-entorno-1a1, paso M)
+
+- **Qué hace el código:** `src/game/render/assets/neonWalls.js` (`makeAsciiNeonWall`) y `src/game/render/assets/iceWalls.js` (`makeIceWall`). Los dos siguen la regla de arriba: una `BoxGeometry` de esquinas vivas y sin remate aparte. Altura `WALL_BODY_H_NEW`, ancho `2·WALL_HALF`. La física no cambia.
+- **Neón, la tira de luz va dentro del cuerpo:** la cara de arriba y los 3 cm más altos de las caras usan el `emissive` del material. Así `course.js` la puede atenuar con `emissiveIntensity` igual que el remate de hoy.
+- **Neón, un material por muro:** el golpe (`uNwHits`) y la transparencia van por tramo. El programa de GPU es uno por nivel (`customProgramCacheKey`) y el atlas es el de `asciiNeon.js`.
+- **Hielo:** es opaco, como pidió el usuario. El cuerpo y las esquirlas usan materiales compartidos por paleta, como la madera. La malla de grietas tiene un material por muro, porque su `alphaTest` guarda el estado del golpe. Las grietas se abren bajando `alphaTest`, así que no hay transparencia ni hay que recompilar. Las esquirlas son un `InstancedMesh` con un número fijo de piezas (6, 10 y 12 según el nivel) que se reutilizan.
+- **Abierto:** los parches GLSL no se han compilado en una GPU real (solo se comprobaron los anclajes contra `ShaderLib`). Falta el visto bueno del usuario en el laboratorio.
+
+## 2026-11-25 — Piedra corregida y en seis temas más (feature: assets-entorno-1a1, paso M)
+
+- **Fallo corregido:** la textura de sillares se estiraba a lo largo de los 6 m del muro (las uv de la caja iban de 0 a 1). Ahora hay una tesela por metro en x; en y la tesela cubre el cuerpo entero (dos hiladas).
+- **Temas con piedra (reemplaza el diseño anterior donde lo había):** meadowDay, meadow, jungle, sunset, canyon, night y gardenNight. La madera de tablones (`walls.js`) ya no la usa ningún tema; el módulo se queda por si se necesita después.
+- **Abierto:** visto bueno del usuario en `assets-lab.html`. Sin commit ni cambios en `course.js`.
+
+## 2026-11-25 — Piedra: causa del estiramiento y corrección (feature: assets-entorno-1a1, paso M)
+
+- **Causa:** la uv iba de 0 a 6 en x y de 0 a 1 en y sobre una textura cuadrada de 128 px: el texel salía 2,7 veces más ancho que alto. El muro de hielo pone la uv en metros en los dos ejes y por eso se ve bien.
+- **Además:** las juntas se multiplicaban por 0,45 y se emborronaban (bandas oscuras), los cortes de la geometría no coincidían con la textura y el color efectivo era gris oscuro teñido del horizonte (tono verdoso).
+- **Cambio:** uv en metros por cara, textura de arenisca de 512 × 64, un mismo despiece para color, mapa de normales y bulto de la malla, juntas no alineadas entre hiladas y coronación coherente entre cara y tapa. Sigue en 256 triángulos, una malla y un material transparente por paleta.
+- **Abierto:** visto bueno del usuario en `assets-lab.html`.
+
+## 2026-11-25 — Muro de hielo también en glacier (feature: assets-entorno-1a1, paso M)
+
+- **Qué pidió el usuario:** que el muro del tema snow vaya también en glacier.
+- **Qué hace el código:** `glacier` usa `makeIceWall`, igual que `snow` (laboratorio, `wall-new`).
+- **Abierto:** visto bueno del usuario en `assets-lab.html`.
