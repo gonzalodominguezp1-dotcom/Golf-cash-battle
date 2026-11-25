@@ -317,3 +317,9 @@ Open     — decisión de diseño del usuario: las zonas `water` jugables del ho
 - **Neón, un material por muro:** el golpe (`uNwHits`) y la transparencia van por tramo. El programa de GPU es uno por nivel (`customProgramCacheKey`) y el atlas es el de `asciiNeon.js`.
 - **Hielo:** es opaco, como pidió el usuario. El cuerpo y las esquirlas usan materiales compartidos por paleta, como la madera. La malla de grietas tiene un material por muro, porque su `alphaTest` guarda el estado del golpe. Las grietas se abren bajando `alphaTest`, así que no hay transparencia ni hay que recompilar. Las esquirlas son un `InstancedMesh` con un número fijo de piezas (6, 10 y 12 según el nivel) que se reutilizan.
 - **Abierto:** los parches GLSL no se han compilado en una GPU real (solo se comprobaron los anclajes contra `ShaderLib`). Falta el visto bueno del usuario en el laboratorio.
+
+## 2026-11-25 — Piedra corregida y en seis temas más (feature: assets-entorno-1a1, paso M)
+
+- **Fallo corregido:** la textura de sillares se estiraba a lo largo de los 6 m del muro (las uv de la caja iban de 0 a 1). Ahora hay una tesela por metro en x; en y la tesela cubre el cuerpo entero (dos hiladas).
+- **Temas con piedra (reemplaza el diseño anterior donde lo había):** meadowDay, meadow, jungle, sunset, canyon, night y gardenNight. La madera de tablones (`walls.js`) ya no la usa ningún tema; el módulo se queda por si se necesita después.
+- **Abierto:** visto bueno del usuario en `assets-lab.html`. Sin commit ni cambios en `course.js`.
