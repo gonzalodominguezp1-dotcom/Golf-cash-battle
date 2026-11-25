@@ -1,6 +1,7 @@
 import './authScreen.css';
 import { authMessage, passwordChecks, retryDelayMs, validateEmail, validatePassword, PASSWORD_MIN } from '../account/authRules.js';
 import { lastEmail } from '../account/AuthService.js';
+import { onVerified } from '../account/verifiedChannel.js';
 
 // Todo el texto del usuario entra por textContent / value: nada de innerHTML con datos de fuera.
 function el(tag, props = {}, ...kids) {
@@ -59,14 +60,24 @@ function checklist(input) {
  * Pantallas de entrada: login, registro, recuperar contraseña, "revisa tu email" y nueva contraseña.
  * @param {HTMLElement} root
  * @param {import('../account/AuthService.js').AuthService} auth
- * @param {{ recovery?: boolean, guest?: boolean, onDone: () => void }} opts onDone: ya hay sesión (o se cambió la contraseña)
+ * @param {{ recovery?: boolean, guest?: boolean, linkError?: string, onDone: () => void }} opts
+ *   onDone: ya hay sesión (o se cambió la contraseña). linkError: código de authRules si la vuelta del correo falló.
  */
-export function mountAuth(root, auth, { recovery = false, guest = false, onDone }) {
+export function mountAuth(root, auth, { recovery = false, guest = false, linkError = null, onDone }) {
   let finished = false;
   const done = () => {
     if (finished) return;
     finished = true;
     onDone();
+  };
+  // en «Confirma tu email»: si otra pestaña confirma, esta entra sola
+  let stopListening = null;
+  const tryEnter = async () => {
+    if (finished) return;
+    const {
+      data: { session },
+    } = await auth.db.auth.getSession();
+    if (session && !session.user.is_anonymous) done();
   };
   // la sesión puede llegar desde otra pestaña (enlace de confirmación abierto allí)
   if (!recovery) {
@@ -89,6 +100,8 @@ export function mountAuth(root, auth, { recovery = false, guest = false, onDone 
   root.replaceChildren(page);
 
   function show(view, arg) {
+    stopListening?.();
+    stopListening = null;
     card.replaceChildren(...views[view](arg));
     card.querySelector('input')?.focus({ preventScroll: true });
   }
@@ -232,6 +245,17 @@ export function mountAuth(root, auth, { recovery = false, guest = false, onDone 
         tick();
       };
       cooldown(30);
+      // otra pestaña (o el propio canje) confirma → esta entra sin recargar a mano
+      stopListening = onVerified(tryEnter);
+      const enter = el('button', {
+        class: 'link',
+        type: 'button',
+        text: 'Ya lo he confirmado, entrar',
+        onclick: async () => {
+          await tryEnter();
+          if (!finished) show('login', email);
+        },
+      });
       again.addEventListener('click', async () => {
         clearTimeout(timer);
         again.disabled = true;
@@ -251,7 +275,7 @@ export function mountAuth(root, auth, { recovery = false, guest = false, onDone 
         el('p', { class: 'sub' }, 'Te hemos enviado un enlace a ', el('b', { text: email }), '. Ábrelo y vuelve aquí para entrar. Puede tardar un minuto; mira también en spam.'),
         again,
         status,
-        link('Ya lo he confirmado, entrar', 'login', email),
+        enter,
       ];
     },
 
@@ -275,4 +299,6 @@ export function mountAuth(root, auth, { recovery = false, guest = false, onDone 
   };
 
   show(recovery ? 'reset' : 'login');
+  // error de la vuelta del correo: se enseña encima del formulario, con el mensaje en español de authRules
+  if (linkError && !recovery) card.prepend(el('p', { class: 'auth-error', role: 'alert', text: authMessage(linkError) }));
 }
