@@ -26,7 +26,10 @@ aprobando cada uno antes de pasar al siguiente, para que el campo se vea vivo y 
   de suciedad y vapor verde ascendente (ver «Neón / Cyberpunk», N6).
   Ver el apartado «Neón / Cyberpunk (N0–NF)».
 - **Orden:** viento → árbol redondo → pino → palmera → arbustos → césped → flores → rocas → agua →
-  especiales (pino nevado, cactus, árbol seco, montón de rocas).
+  especiales (pino nevado, cactus, árbol seco, montón de rocas) → neón (N) → muros (M) → farolas y luces (F2) →
+  cierre (F). El cierre va el último para que retire también lo que dejen M y F2.
+- 2026-11-24: el usuario pide rehacer los muros de todos los mapas con variaciones según el tipo de mapa (hoy son
+  casi todos de madera) y rediseñar las farolas y luces que se usan. Ver «Muros y farolas (pasos M y F2)».
 
 ## Ejecución: con subagentes, como siempre
 - El agente principal coordina, revisa cada entrega y habla con el usuario. No escribe él solo el
@@ -36,6 +39,11 @@ aprobando cada uno antes de pasar al siguiente, para que el campo se vea vivo y 
   el árbol redondo (pasos 1–2, que fijan la técnica de copas), el césped (paso 5) y el agua (paso 8).
 - Lo mecánico va con Sonnet (`model: sonnet`): la página laboratorio, arbustos, flores, rocas,
   especiales, sustituir en `environment.js`, tests de presupuesto y recaptura de previews.
+- Muros y farolas (2026-11-24): con Opus (`model: opus`) el hielo translúcido (M5), la roca volcánica con grietas
+  de lava (M6), el neón metal (M7) y la política de luces reales por hoyo (F2.0). Con Sonnet (`model: sonnet`) la
+  medición (M0), madera, piedra, bambú, pradera de día, cierre de M, farolillo, antorcha, guirnalda, poste de
+  esquina y sustituciones en `course.js`/`environment.js`. Mismas reglas: un subagente por tarea, revisor de
+  contexto limpio, sin commits de subagentes, visto bueno del usuario por familia antes de seguir.
 - Tras cada tarea, un revisor de contexto limpio lee el diff (`rsc risk` decide cuántos).
 - Un asset no pasa al siguiente sin el visto bueno del usuario en el laboratorio.
 - Tareas sin ficheros en común pueden ir en paralelo (p. ej. rocas y flores), pero nunca dos
@@ -166,6 +174,8 @@ los entornos tras la aprobación.
   - 2026-11-19: roca suelta de arenisca (`material: 'sandstone'` en canto rodado y losa); en laboratorio como `rock-sandstone` y `rock-slab-sandstone`; pendiente de verla en pantalla.
 - [ ] Paso 8 — agua
 - [ ] Paso 9 — especiales
+- [ ] Paso M — muros por tipo de mapa (2026-11-24, sin empezar). M0 medición, M1–M7 familias, M8 cierre. Ver su apartado.
+- [ ] Paso F2 — farolas y luces (2026-11-24, sin empezar). F2.0 política de luces, F2.1–F2.5, F2.6 cierre. Ver su apartado.
 - [ ] Paso F — cierre, tests y previews. Cierre parcial (2026-11-24, sin commit): retirados `makeRock` y `makeFlower`
   de `environment.js` y sus «Antes» del laboratorio (solo los usaba el laboratorio). Unificado `roundTree.js` con
   `treeKit.js` (`TAU`, `LEVELS`, `lerp`, `range`, `smooth`, `withRim`, `treeLevel`). Previews recapturadas con todos los
@@ -227,6 +237,110 @@ Propuesta (2026-11-19) para rediseñar SOLO el entorno de `neon`, `neonPink` y `
 - [ ] NF — cierre y previews.
 - N5 (pista/atracciones) descartado por el usuario. (No hay N1: su contenido, quitar el agua, ya está en N0.)
 
+## Muros y farolas (pasos M y F2, 2026-11-24)
+Encargo del usuario (2026-11-24): rehacer los muros de todos los mapas con variaciones según el tipo de mapa («creo
+que ahora es casi el mismo muro siempre») y rediseñar las farolas y luces que se usan. Solo visual: la física no cambia.
+
+### Inventario de muros (pista)
+Se construyen en `src/game/render/course.js` (~185-330): cuerpo (`RoundedBoxGeometry`, o `BoxGeometry` troceada si hay
+relieve) + remate (`capMat`) por cada segmento de `wallSegmentsOf(course)` (`src/game/physics.js`); postes cilíndricos
+con bola en las esquinas; franja de sombra de contacto (`aoStripTexture`). Materiales por flags de `src/game/themes.js`.
+
+Dato que cambia el punto de partida: **10 de los 17 temas usan la madera normal** (meadow, beach, sunset, snow, canyon,
+autumn, night, volcano, gardenNight, beachNight). `snow` NO tiene `iceWalls`: solo lo tiene `glacier`. Y `volcano` no lo
+usa ningún hoyo (ver decisiones abiertas).
+
+| Tema | Hoyos (`courses.js`) | Muro hoy (flags) | Variación propuesta | Familia |
+|---|---|---|---|---|
+| meadow | ninguno | madera + remate blanco; postes blancos, bola roja | madera con tablones, clavos y juntas | A madera |
+| meadowDay | El Molino del Prado | verde (`glowWalls`) + remate que brilla con `theme.rim` | mantener el brillo; tablones verdes con musgo en la base | M2 pradera |
+| jungle | El Templo de la Selva | arenisca teñida (`stoneWalls`) | piedra tallada en sillares con musgo en las juntas | M3 piedra |
+| beach | Las Tuberías | madera | bambú o caña atada con cuerdas | M4 bambú |
+| sunset | Zigzag, Desempate | madera (+ farolillos) | tablones desgastados con remate ámbar | A madera |
+| snow | Turbo | madera (sin `iceWalls`) | madera con escarcha en el remate | A madera |
+| glacier | El Glaciar | hielo azul + remate de nieve (`iceWalls`) | bloques de hielo translúcido con escarcha y grietas | M5 hielo |
+| canyon | Bloques, El Abismo | madera | estratos de arenisca tallados | M3 piedra |
+| autumn | ninguno | madera | empalizada de estacas con cuerdas | A madera |
+| night | El Portal, Molinos de Noche | madera (+ farolillos muchos) | madera envejecida con tira de luz al anochecer (`baseEmissive`) | A madera |
+| volcano | ninguno | madera | roca volcánica con grietas de lava | M6 volcánica |
+| caldera | Dentro del Volcán | roca (`rockFloor`) + remate gris | roca volcánica con grietas incandescentes en el remate | M6 volcánica |
+| neon | Looping Neón | cuerpo oscuro metálico + remate emisivo `neonColor(i)` | metal con paneles y tiras de neón | M7 neón |
+| neonPink | Doble Looping, Tubos Neón | igual | paneles rosas con tiras de neón | M7 neón |
+| cyber2078 | Cyberpunk2078 | igual (clon de `neon`) | paneles con líneas de datos y tiras (`cyberCity`) | M7 neón |
+| gardenNight | Molinos | madera (+ farolillos muchos y guirnalda) | celosía de madera del jardín | A madera |
+| beachNight | La Herradura | madera (+ farolillos y antorchas) | bambú con remate de antorcha | M4 bambú |
+
+`courses.js` tiene 18 hoyos (incluido «Desempate»), con 14 temas distintos. `meadow`, `autumn` y `volcano` no los usa ningún hoyo:
+se diseñan con su familia y se prueban en laboratorio, pero van al final de la cola.
+
+### Inventario de farolas y luces
+Farolillos y antorchas: `makeLantern`, `makeTorch`, `festoon`, `haloSprite`, `perimeterSpots` en
+`src/game/render/environment.js` (~406-425, ~1055-1130). Salen con `theme.lanterns` (`true` o `'many'`), `theme.torches`
+y `theme.festoon`. Con luz real solo los 6 primeros (`i < 6`); el resto es halo. Parpadean con el reloj `animated`.
+
+| Elemento | Dónde | En qué temas | ¿Luz real? | Propuesta de rediseño | Entra |
+|---|---|---|---|---|---|
+| Farolillo (`makeLantern`) | environment.js ~1077 | sunset (`true`, 4), night, gardenNight, beachNight (`many`) | sí, `PointLight` 3,2 / 6,5 m, hasta 6 | forma de linterna de papel con costillas; luz real solo en el tope de F2.0 | Sí (F2.1) |
+| Antorcha (`makeTorch`) | environment.js ~1105 | beachNight (la mitad de los farolillos) | sí, 3 / 6 m, mismo tope | llama con variación de color barata; comparte el tope con el farolillo | Sí (F2.2) |
+| Guirnalda (`festoon`) | environment.js ~1130 | gardenNight | no | cable con bombillas emisivas y halo; sin `PointLight` | Sí (F2.3) |
+| Poste de esquina y bola roja de los muros | course.js ~281-325 | todos los temas con muro (bola emisiva de noche con `baseEmissive`) | no | poste con remate propio por familia (M); bola con halo barato | Sí (F2.4) |
+| Luz de volcán (`volcanoShell`, `volcanoBackdrop`) | environment.js ~1268, ~1359 | solo si hay volcán (caldera) | sí, 8 y 30 de intensidad | decorado de lava: fuera salvo que lo pidas | No, pregunta |
+| Luz de lava de pista (charcos y grietas) | course.js ~694, ~773, ~859 | caldera | sí, una por charco/grieta | pista: fuera salvo que lo pidas | No, pregunta |
+| Luces de atracciones | attractions.js ~377, ~596, ~693, ~734 | loop, molino, tubos (neón y otros) | sí, 1,5-3 / 2,5-5 m | N5 las deja fuera | No (pregunta del encargo) |
+| Pilones y cristales de neón | `assets/neonProps.js` (N3) | neon, neonPink, cyber2078 | no (emisivo y halo) | ya cubierto por N3 | Ya hecho |
+| Remate emisivo de muros de neón | course.js ~208 (`capMat`) | neon, neonPink, cyber2078 | no (emisivo) | lo cubre M7 | En M7 |
+| Topes de neón (`topMat`) | course.js ~337-339 | neón | no (emisivo) | botón de neón de los topes; se decide en F2.5 | Decide F2.5 |
+
+### Paso M — Muros por tipo de mapa (Sonnet salvo M5-M7, Opus)
+Técnica igual que el resto: procedural en three.js, texturas pintadas en canvas, color de vértice y oclusión, materiales
+compartidos, `rng` con semilla (el mismo hoyo sale igual), compatible con la transparencia que deja ver la bola
+(`wallBlocksBall`, `mats`, `opacity`), `baseEmissive` para la noche, móvil primero.
+
+- **M0 — Línea base (Sonnet).** Medir los muros de hoy por hoyo en Bajo/Medio/Alto: triángulos, llamadas de dibujo,
+  texturas en memoria. Script de medición fuera de la pista (no se toca `course.js`). Hecho cuando: tabla con los 18
+  hoyos en la spec. Presupuesto: ningún hoyo sube de lo medido hoy sin visto bueno.
+- **M1 — Familia A, madera (Sonnet).** meadow, sunset, snow, autumn, night, gardenNight: tablones con clavos y junta,
+  estacas, celosía; variantes por tema con la paleta de cada uno. Remate propio por tema.
+- **M2 — Pradera de día (Sonnet).** meadowDay: mantener el brillo `glowWalls` con `theme.rim`; tablones verdes con
+  musgo en la base.
+- **M3 — Familia piedra (Sonnet).** jungle (sillares con musgo en las juntas) y canyon (estratos de arenisca).
+- **M4 — Familia bambú (Sonnet).** beach y beachNight: bambú o caña atada; remate con cuerda.
+- **M5 — Hielo (Opus).** glacier: bloques de hielo translúcido con escarcha y grietas, sin transmisión física (cara en
+  móvil); remate de nieve. Hecho cuando: en laboratorio, el hielo deja ver la luz del fondo sin `MeshPhysicalMaterial`.
+- **M6 — Roca volcánica (Opus).** caldera (y volcano si se pide): grietas incandescentes animadas con el reloj
+  compartido; sin luces nuevas.
+- **M7 — Neón metal (Opus).** neon, neonPink, cyber2078: cuerpo metálico oscuro con paneles y tiras de neón; mismo
+  remate emisivo `neonColor(i)`; `cyberCity` conserva sus líneas de datos.
+- **M8 — Cierre (Sonnet).** Tests: presupuesto por hoyo y calidad (`tests/walls-env.test.js`, modelo
+  `tests/*-env.test.js`); colisiones intactas (`WALL_H`, `WALL_HALF` y `wallSegmentsOf` iguales a los de antes);
+  `wallBlocksBall` y `baseEmissive` siguen funcionando. Laboratorio `assets-lab.html` (`src/lab/assets/examples.js`)
+  con antes/después por tema. Recaptura de previews (`pnpm previews:capture`).
+
+### Paso F2 — Farolas y luces (Sonnet, F2.0 con Opus)
+Subpasos: farolillo, antorcha, guirnalda, poste de esquina y la parte de neón que no cubra N3. Máximo de `PointLight`
+reales por hoyo y por calidad; halo o emisivo barato para el resto; parpadeo con el mismo reloj; variaciones por tema.
+
+- **F2.0 — Política de luces (Opus).** Fijar el tope de `PointLight` reales por hoyo y calidad. Propuesta: 6 en Alto,
+  4 en Medio, 2 en Bajo, sumando farolillos, antorchas y volcán; el resto, halo. Hoy: 6 farolillos/antorchas + 2 de
+  volcán en Alto. Medir con M0. Decide el usuario (ver abiertas).
+- **F2.1 — Farolillo (Sonnet).** Forma nueva; luz real hasta el tope; halo para el resto.
+- **F2.2 — Antorcha (Sonnet).** Llama animada barata; comparte tope con el farolillo.
+- **F2.3 — Guirnalda (Sonnet).** Cable y bombillas emisivas con halo; sin luz real; parpadeo con el reloj compartido.
+- **F2.4 — Poste de esquina (Sonnet).** Remate por familia (M) y bola roja emisiva de noche con `baseEmissive`.
+- **F2.5 — Neón que sobre tras N3 (Sonnet).** Revisar topes de neón (`topMat`) y lo que quede; decidir si entra.
+- **F2.6 — Cierre (Sonnet).** Tests de tope de `PointLight` por hoyo y calidad; parpadeo; previews.
+
+Hecho cuando (F2): ningún hoyo supera el tope de luces reales; el resto del decorado se ve igual sin `PointLight`;
+tests en verde; el usuario aprueba cada tema en laboratorio.
+
+### Decisiones abiertas (para el usuario)
+1. **Muros y postes son pista.** La spec dice «pista y atracciones no se tocan» (N5 descartado). Propuesta: sí, solo
+   visual (la física y los segmentos no cambian). ¿Lo apruebas?
+2. **Luces de atracciones y de lava de pista** (`attractions.js`, `course.js`, luz de volcán): quedan fuera, como
+   pediste preguntar. ¿Quieres incluir alguna?
+3. **Tope de `PointLight` por hoyo** (F2.0): ¿6/4/2 por calidad, o más/menos?
+4. **Temas sin hoyo** (`meadow`, `autumn`, `volcano`): ¿los diseño igualmente o los dejo para el final?
+
 ## Reglas que se respetan
 - Solo la física decide el juego: el decorado nunca cambia colisiones ni la simulación.
 - Todo con `rng` con semilla: el mismo hoyo sale siempre igual.
@@ -285,6 +399,12 @@ Propuesta (2026-11-19) para rediseñar SOLO el entorno de `neon`, `neonPink` y `
 - Agua nueva (`water.js`: lisa, normal-map procedural, fresnel, espuma por profundidad de vértice, oleaje 0/2/3 cm, ondas de salpicadura) y pez que salta (`fish.js`, 2–3 por hoyo) integrados en `environment.js`. Triángulos de agua máx. 1 131/2 038/3 491 (Bajo/Medio/Alto) frente a 16 200 fijos; 1 llamada de dibujo. `tests/water.test.js`, `tests/water-env.test.js`, `tests/fish.test.js`, `tests/fish-env.test.js`. `GolfGame.dispose` limpia el entorno.
 - Revisiones de contexto limpio: sin bloqueantes; should-fix corregidos. Abierto: extremo oblicuo de la cinta del río en el borde del mapa (≤1 m, a 110 m).
 - `pnpm test` 568/573 (5 VFX ajenos). `pnpm build` ok. Sin verificar: GLSL en GPU real, vista en pantalla, rendimiento en móvil (+~70 ms de `buildEnvironment` en Alto).
+
+(2026-11-24) **Solo documentación: inventario de muros y farolas, pasos M y F2 añadidos a la spec.** Sin código tocado.
+- Inventario leído en `course.js` (muros, postes), `themes.js` (flags de los 17 temas), `courses.js` (hoyo → tema), `environment.js` (farolillos, antorchas, guirnalda, luces de volcán), `attractions.js` y `course.js` (luces de atracciones y de lava).
+- Hallazgo: 10 de 17 temas usan la madera normal; `snow` no tiene `iceWalls` (solo `glacier`); `meadow`, `autumn` y `volcano` no los usa ningún hoyo.
+- Sin medir todavía: los triángulos y llamadas actuales de los muros los mide M0 antes de cualquier cambio.
+- Estado del fichero: el cambio de «Paso F» de 2026-11-24 (sin commit) ya estaba en el worktree; se conserva tal cual.
 
 ## Next step
 Revisión de contexto limpio de esta sustitución y visto bueno visual del usuario (flores y rocas en el juego); luego Pasos 4 (arbustos: visto bueno/sustitución), 8, 9 y F.

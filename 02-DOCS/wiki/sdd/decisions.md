@@ -279,3 +279,12 @@ Open     — decisión de diseño del usuario: las zonas `water` jugables del ho
 - **Dispose:** `env.dispose()` libera la geometría y el material del terreno neón (una vez); la rejilla es compartida y se queda.
 - **Tests:** `tests/neon-terrain.test.js` (7). El de la línea de vista falló antes del cambio (15,45 m tapados) y pasa ahora en los 4 hoyos x 3 calidades (peor caso −0,02 m: el llano justo delante del pie, rasante).
 - **Abierto:** sin ver en pantalla ni en GPU real. Los pilares ASCII (96-114 m) nacen ahora detrás de la sierra: su parte baja queda tapada. Con el ojo en otro punto de la pista (no en el centro) el margen cambia algo.
+
+## 2026-11-24 — Muros por tipo de mapa y farolas/luces (feature: assets-entorno-1a1, pasos M y F2)
+
+- **Qué pidió el usuario:** rehacer los muros de todos los mapas con variaciones según el tipo de mapa (hoy casi todos son madera) y rediseñar las farolas y luces que se usan. Se añade a la spec como Paso M (muros, subpasos M0–M8) y Paso F2 (farolas y luces, subpasos F2.0–F2.6), con el inventario en «Muros y farolas (pasos M y F2)».
+- **Hallazgo que condiciona el plan:** 10 de los 17 temas usan la madera normal; `snow` no tiene `iceWalls` (solo `glacier`); `meadow`, `autumn` y `volcano` no los usa ningún hoyo de `courses.js`.
+- **Alcance (abierto):** los muros y postes son pista (`course.js`). La spec dice que pista y atracciones no se tocan; la propuesta es tocarlos solo en lo visual, con la física intacta. Las luces de atracciones y de lava quedan fuera hasta que el usuario lo decida.
+- **Orden:** neón (N) → muros (M) → farolas y luces (F2) → cierre (F), para que el cierre retire también lo que dejen M y F2.
+- **Luces:** el tope de `PointLight` reales por hoyo y calidad lo fija F2.0 (propuesta 6/4/2 en Alto/Medio/Bajo); el resto usa halo o emisivo.
+- **Abierto:** sin medir aún; M0 mide la línea base antes de cambiar nada. Sin código tocado en esta sesión.
