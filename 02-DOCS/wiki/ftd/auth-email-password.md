@@ -24,10 +24,24 @@ Pantalla de entrada obligatoria (login, registro, recuperar contraseña) con Sup
 - [ ] Registro real, confirmación por email y recuperación: **no probado** (no se crean cuentas desde el agente). Pendiente de que una persona lo recorra.
 - [ ] Ajustes de Auth en el panel de Supabase (lista en `02-DOCS/wiki/backend/supabase.md`).
 - [ ] Ejecutar `supabase/audit/auth_security_audit.sql` y corregir lo que devuelva.
+- [x] Vuelta del correo propia y fija: `buildReturnUrl` → `/?auth=confirm` o `/?auth=recovery`, nunca `location.pathname` — `tests/auth-return.test.js`.
+- [x] Canje PKCE explícito (`detectSessionInUrl: false`), URL limpiada con `history.replaceState`, errores del enlace a texto en español (`link_used`, `confirm_elsewhere`) — `tests/auth-return.test.js` y `pnpm run build`.
+- [x] Aviso entre pestañas (`BroadcastChannel 'gcb-auth'` con respaldo `storage`) y la pestaña «Confirma tu email» entra sola al confirmar — código en `src/account/verifiedChannel.js`; **sin probar en navegador**.
+- [x] Arranque con tiempo máximo (8 s) y sesión que el servidor rechaza: cierre local y limpieza de `sb-*` — código en `connectSupabase`; **sin probar en navegador**.
+- [x] Red de seguridad en `vercel.json`: rutas desconocidas → `index.html`, excepto `assets/`, `admin.html` y `assets-lab.html`.
+- [ ] Checklist manual de verificación (ver «Next»): mismo navegador, otro navegador/app de Gmail, enlace caducado, dos pestañas, móvil.
+- [x] Redirect URLs en Supabase: producción con las dos de Vercel (`config diff` sin diferencias). Las de localhost se quitaron tras la prueba. Pendiente: `site_url` sigue en `localhost:3000`, decisión abierta.
+- [x] Prueba manual del usuario OK (2026-11-25). Usuario de prueba borrado de producción con la CLI (auth.users, sin restos en wallets ni profiles).
 
 ## Evidence
 - Producción ya responde "Anonymous sign-ins are disabled": el arranque anterior caía a modo local para cualquier dispositivo nuevo.
-- Con PKCE, supabase-js 2.118 emite `PASSWORD_RECOVERY` al canjear el código (`GoTrueClient.ts`, `_exchangeCodeForSession`).
+- supabase-js 2.118 (`GoTrueClient.js`, `_exchangeCodeForSession`) emite `PASSWORD_RECOVERY` solo si el tipo guardado con el verifier es `recovery`; la confirmación emite `SIGNED_IN`. Por eso la confirmación no manda a la pantalla de nueva contraseña.
+- Causa probable del 404 (no comprobada contra el panel): el enlace caía en una URL que no existe en Vercel (sin `rewrites`) o en un Site URL/Redirect URL distinto. Lo cubre la nueva vuelta en `/?auth=…` y el rewrite.
+- Causa probable de «se queda colgado»: el canje PKCE falla en otro navegador y la app arrancaba con sesión a medias. Ahora el canje fallido limpia el verifier y muestra mensaje.
+- `node --test` de `auth-rules` y `auth-return`: 14/14 verdes. `pnpm run build`: correcto.
+- `pnpm test` completo: `tests/rock-env.test.js` tarda más de 100 s y `vfx-*` tiene fallos (golden, SKINS y SIG, dir in). Esos ficheros tienen cambios sin commitear de la rama; no se ha comprobado contra el HEAD limpio.
 
 ## Next
-Fusionado en main el 2026-11-02 (0af27a4).
+1. Persona: recorrer la checklist manual en un navegador real con una cuenta de prueba (registro, enlace, otro navegador, enlace caducado, dos pestañas).
+2. Persona: poner en el panel de Supabase las Redirect URLs de arriba y revisar la plantilla de confirmación.
+3. Fusionado en main el 2026-11-02 (0af27a4) — base de esta mejora.
