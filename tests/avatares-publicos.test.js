@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { toPlayer } from '../src/match/playerRules.js';
+import { seatLook, toPlayer } from '../src/match/playerRules.js';
 import { buildRoster } from '../src/match/liveRules.js';
 import { FRAMES, frameById } from '../src/progress/prestige.js';
 
@@ -66,4 +66,17 @@ test('la migración de avatares solo publica avatar y marco, nunca datos privado
   for (const bad of ['email', 'balance', 'kyc', 'wallet', 'phone']) {
     assert.doesNotMatch(sql, new RegExp(`'${bad}'`, 'i'));
   }
+});
+
+test('seatLook: tu asiento usa lo equipado en el cliente; los demás, lo del servidor; los bots, nada', () => {
+  const mine = { avatar: { icon: 'crown', image: null }, frame: FRAME };
+  const me = toPlayer({ id: 'e0', is_me: true, seat: 0, name: 'Yo', color: '#0f0', avatar: null, frame: null });
+  assert.deepEqual(seatLook(me, mine), mine, 'el servidor puede ir un paso por detrás: manda lo equipado');
+  assert.deepEqual(seatLook({ name: 'Tú', me: true }, mine), mine);
+  const rival = toPlayer({ id: 'e1', seat: 1, name: 'Ana', color: '#f00', avatar: IMG, frame: FRAME.id });
+  assert.deepEqual(seatLook(rival, mine), { avatar: { icon: null, image: IMG }, frame: FRAME });
+  assert.deepEqual(seatLook({ id: 'bot2', name: 'Lucía', isBot: true }, mine), { avatar: null, frame: null });
+  assert.deepEqual(seatLook({ id: 'e2', name: 'Sin datos' }, mine), { avatar: null, frame: null });
+  assert.deepEqual(seatLook(null, mine), { avatar: null, frame: null });
+  assert.deepEqual(seatLook(me), { avatar: null, frame: null }, 'sin nada equipado: la inicial');
 });

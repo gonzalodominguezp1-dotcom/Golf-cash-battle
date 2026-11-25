@@ -24,3 +24,16 @@ export function toPlayer(p) {
     payout: Number(p.payout ?? 0),
   };
 }
+
+/**
+ * Avatar y marco con los que se pinta un jugador en un asiento. Tú (id 'me' o me: true): lo que tienes equipado
+ * ahora en el cliente (`mine`), porque el servidor puede ir un paso por detrás. Los demás: lo que manda el servidor.
+ * Bots: nada (se pinta su inicial).
+ * @param {object|null} p jugador (de toPlayer, de buildRoster o de la práctica)
+ * @param {{ avatar?: object|null, frame?: object|null }} [mine] lo equipado por el jugador propio
+ */
+export function seatLook(p, mine = {}) {
+  if (!p || p.isBot) return { avatar: null, frame: null };
+  if (p.id === 'me' || p.me === true) return { avatar: mine.avatar ?? null, frame: mine.frame ?? null };
+  return { avatar: p.avatar ?? null, frame: p.frame ?? null };
+}

@@ -30,6 +30,7 @@ import { showSkinReveal } from './ui/skinReveal.js';
 import { installThumbObserver, thumbCached, upgradeImg, warmThumbs } from './ui/skinThumbs.js';
 import { mountAuth } from './ui/authScreen.js';
 import { LiveRoom } from './match/LiveRoom.js';
+import { seatLook } from './match/playerRules.js';
 import { buildRoster, humanLeaders, liveStandings, roundComplete, roundReady, seededRng } from './match/liveRules.js';
 import { notify } from './ui/notifyPopup.js';
 import { createNotifier } from './ui/notifier.js';
@@ -153,6 +154,9 @@ settings.subscribe(applySound);
 const { ball } = { ball: createBall(progress) };
 
 let avatar = new AvatarStore(null);
+// avatar y marco de un asiento de la sala (src/match/playerRules.js#seatLook): el tuyo, lo equipado ahora
+// (`avatar` se rehace al iniciar sesión, por eso se lee en cada llamada); los demás, lo del servidor
+const seatAvatar = (p) => seatLook(p, { avatar: avatar.get(), frame: progress.prestige?.frame ?? null });
 
 // router de pila (src/screens): la raíz es el lobby hasta que llegue el hub (F3)
 const ROOT_SCREEN = 'hub'; // el hub es la raíz; el lobby de hoy es la ruta «Mesas» (tables)
@@ -1240,7 +1244,7 @@ function showLiveRoom(live) {
   const sync = () => {
     for (let i = 0; i < match.seats; i++) {
       const p = match.players.find((q) => q.seat === i);
-      search.setSeat(i, p ? { name: p.id === 'me' ? 'Tú' : p.name, color: p.color, me: p.id === 'me' } : null);
+      search.setSeat(i, p ? { name: p.id === 'me' ? 'Tú' : p.name, color: p.color, me: p.id === 'me', ...seatAvatar(p) } : null);
     }
     if (match.startsAt) search.setStartsAt(match.startsAt);
   };

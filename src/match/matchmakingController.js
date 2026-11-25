@@ -87,7 +87,14 @@ export function createSearch(o) {
       emit('second', { secs: c.secs, urgent: c.urgent });
     }
     if (left <= 0) {
-      if (s.phase === 'search' && o.onLaunch) s.launch().catch(() => {});
+      // un fallo inesperado del arranque no se traga en silencio: queda en el registro y la sala lo dice
+      // (fase 'error': se puede cancelar y recuperar la entrada)
+      if (s.phase === 'search' && o.onLaunch) {
+        s.launch().catch((e) => {
+          console.error('matchmaking launch', e);
+          if (!s.ended && s.phase === 'error') s.setStatus(o.launchErrorText ?? 'No se ha podido empezar la partida.');
+        });
+      }
       return;
     }
     tickTimer = timers.setTimeout(tick, nextTickDelay(left));
