@@ -526,10 +526,9 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       </div>
       <div class="power"><div class="fill"></div></div>
       <button class="map-btn" aria-label="Ver el hoyo completo">${icon('eye')}Ver mapa <kbd class="kbd-hint">Espacio</kbd></button>
-      <div class="stroke-marker neutral" data-stroke-marker aria-live="polite" hidden>
-        <div class="sm-top">${icon('dot', { tone: 'white' })}<b class="sm-num">0</b></div>
+      <div class="stroke-marker" data-stroke-marker aria-live="polite" hidden>
+        <b class="sm-num">0</b>
         <span class="sm-word">golpes</span>
-        <span class="sm-par">${course.par ? `Par ${course.par}` : ''}</span>
       </div>
     </main>`);
   const gameClass = loadGolfGame();
@@ -546,11 +545,9 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       if (!strokeMarker) return;
       const s = strokeMarkerState({ strokes: n, par: course.par, max: maxStrokesOf(course), tiebreak });
       strokeMarker.hidden = s.hidden;
-      strokeMarker.classList.remove('good', 'warn', 'bad', 'neutral');
-      strokeMarker.classList.add(s.tone);
+      strokeMarker.style.setProperty('--sm-color', s.color);
       strokeMarker.classList.toggle('last', s.last);
       strokeMarker.querySelector('.sm-word').textContent = s.word;
-      strokeMarker.querySelector('.sm-par').textContent = s.parLine;
       strokeMarker.setAttribute('aria-label', s.text);
       strokeNumEl.textContent = s.number;
       // animación corta solo al subir de golpes (no al reiniciar a 0)

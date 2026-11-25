@@ -1,21 +1,24 @@
 // Marcador de golpes propio (abajo a la derecha). Solo cuenta tus golpes: nunca los de los rivales.
 // Lógica pura (sin DOM) para poder probarla con node --test.
 
-/** Tono según vayas respecto al par. El número manda; el tono solo acompaña. */
-export const STROKE_TONE = Object.freeze({ GOOD: 'good', WARN: 'warn', BAD: 'bad', NEUTRAL: 'neutral' });
+const WHITE = [255, 255, 255];
+const RED = [255, 64, 64];
+const DEFAULT_TOP = 8;
 
 /** «golpe» en singular, «golpes» en el resto de casos. */
 export function strokeWord(n) {
   return n === 1 ? 'golpe' : 'golpes';
 }
 
-/** Igual o menos que el par: verde · +1: amarillo · +2 o más: rojo · sin par conocido: neutro. */
-export function strokeTone(strokes, par) {
-  if (!Number.isFinite(par)) return STROKE_TONE.NEUTRAL;
-  const over = strokes - par;
-  if (over <= 0) return STROKE_TONE.GOOD;
-  if (over === 1) return STROKE_TONE.WARN;
-  return STROKE_TONE.BAD;
+/**
+ * Color del número: blanco con 0 golpes, rojo al llegar al máximo del hoyo (`max` = maxStrokesOf(course)).
+ * Va progresando de forma lineal entre ambos.
+ */
+export function strokeColor(strokes, max) {
+  const top = Number.isFinite(max) && max > 0 ? max : DEFAULT_TOP;
+  const t = Math.min(1, Math.max(0, strokes / top));
+  const [r, g, b] = WHITE.map((c, i) => Math.round(c + (RED[i] - c) * t));
+  return `rgb(${r}, ${g}, ${b})`;
 }
 
 /** El siguiente golpe es el último permitido (`max` = maxStrokesOf(course)). */
@@ -30,13 +33,11 @@ export function isNextStrokeLast(strokes, max) {
 export function strokeMarkerState({ strokes = 0, par, max, tiebreak = false } = {}) {
   const n = Math.max(0, Math.floor(Number(strokes) || 0));
   const last = !tiebreak && isNextStrokeLast(n, max);
-  const parLine = Number.isFinite(par) ? `Par ${par}` : '';
   return {
     hidden: !!tiebreak,
     number: n,
     word: strokeWord(n),
-    parLine: last ? `${parLine ? `${parLine} · ` : ''}último golpe` : parLine,
-    tone: strokeTone(n, par),
+    color: strokeColor(n, max),
     last,
     text: `Golpes: ${n}${Number.isFinite(par) ? `. Par ${par}` : ''}${last ? '. Último golpe' : ''}`,
   };
