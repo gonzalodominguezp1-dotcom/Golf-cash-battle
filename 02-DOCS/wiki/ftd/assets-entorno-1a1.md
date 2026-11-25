@@ -198,6 +198,23 @@ Las luces de la lava (`course.js` ~694, ~773, ~859) no se tocan: van en la fase 
 - Orden: 1) matas de ceniza con `grass.js` (paleta de ceniza), 2) árboles y rocas volcánicas, 3) lago de lava con el
   agua nueva, 4) caldera (volcán y lava del cráter). Retirar el viejo solo cuando nada lo use.
 
+#### V1 — Matas de ceniza (2026-11-25, en laboratorio, sin visto bueno)
+- Hecho: `src/game/render/assets/ash.js` (`makeAshField`, `addAsh`): el césped nuevo (`makeGrassField`) con paleta de
+  ceniza (`ASH_TINT` = carbón `0x1c1917` a punta ceniza `0xb9b1a8`, sin verde ni ocre), reparto `ASH_MIX` (fina, seca y
+  espigas; `ochre: 0`), densidad `ASH_DENSITY` 0,25 del tope del césped. Mallas y grupo `ash-*`/`ash`.
+- `grass.js`: campo opcional `ochre` en el reparto (por defecto 1; los repartos existentes no cambian) y quinto argumento
+  de `grassColorAt`. Sumas de control de la pradera, playa y nieve iguales a antes.
+- Presupuesto medido (`tests/ash.test.js`, 5 semillas): Bajo 375 matas / 3 375 tri / 3 llamadas; Medio 750 / 9 000 / 3;
+  Alto 950 / 17 100 / 3. Una tirada del rng del hoyo.
+- Laboratorio: entrada `ash-tuft` («antes» = `oldAshPatch`, copia de `makeTuft`; «después» = `newAshPatch`), solo para
+  `volcano` y `caldera`. Ojo: ningún hoyo usa `volcano`; la ceniza se verá en la caldera.
+- Revisión de contraste (2026-11-25, pedido del usuario: «no se nota»): la primera paleta era gris medio (luminosidad
+  ~0,10) y casi no se distinguía del suelo. Ahora la base es carbón y la punta ceniza clara; luminosidad media ~0,20.
+  Tests de color ajustados a la nueva paleta (tope de luminosidad = la punta, no un gris fijo).
+- Pendiente: visto bueno del usuario en `assets-lab.html` (aspecto real y contraste sobre el suelo de caldera); el
+  calor del atlas en las puntas secas (Medio/Alto) puede dar un tono beis; no se sustituye `makeTuft` en `environment.js`
+  hasta el visto bueno. `makeTuft` y `makeGrassClump` siguen en uso.
+
 ## Neón / Cyberpunk (N0–NF)
 Propuesta (2026-11-19) para rediseñar SOLO el entorno de `neon`, `neonPink` y `cyber2078` (hoyo 15 incluido): ciudad lejana, cielo, suelo/montañas, pilones y cristales. Sin agua. Pista y atracciones no se tocan; la física tampoco.
 - [x] N0 — preparación y agua fuera: textura de fachada determinista (`drawSkyscraperFacade`, rng con semilla) y sin plano de agua en neón (`environment.js`); tests `*-env` de neón actualizados.

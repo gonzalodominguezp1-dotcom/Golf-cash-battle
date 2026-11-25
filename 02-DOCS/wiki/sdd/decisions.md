@@ -336,3 +336,12 @@ Open     — decisión de diseño del usuario: las zonas `water` jugables del ho
 - **Qué pidió el usuario:** que el muro del tema snow vaya también en glacier.
 - **Qué hace el código:** `glacier` usa `makeIceWall`, igual que `snow` (laboratorio, `wall-new`).
 - **Abierto:** visto bueno del usuario en `assets-lab.html`.
+
+## 2026-11-25 — Matas de ceniza para lava y caldera (feature: assets-entorno-1a1, paso V1)
+
+- **Qué hace el código:** `src/game/render/assets/ash.js` (`makeAshField`, `addAsh`) reutiliza `makeGrassField` de `grass.js` con una paleta de ceniza (`ASH_TINT`: carbón `0x1c1917` a punta ceniza `0xb9b1a8`) y un reparto propio (`ASH_MIX`: hierba fina, seca y espigas, sin ocre). Mismo presupuesto por mata que el césped, mismo material, mismo viento (capa grass) y una sola tirada del rng del hoyo.
+- **Cambio en grass.js:** campo opcional `ochre` en el reparto (por defecto 1, así los repartos actuales no cambian) y quinto argumento opcional en `grassColorAt`. Sumas de control de pradera, playa y nieve iguales a antes.
+- **Por qué ceniza con reparto aparte y no el césped de hoy:** el verde y el ocre no existen en lava y caldera; con `ochre` 0 la ceniza no tira al amarillo.
+- **Mallas con nombre propio (`ash`, `ash-<especie>`):** no cuentan como césped cuando entren en el entorno.
+- **Contraste:** la primera paleta (gris medio) casi no se veía sobre el suelo oscuro; el usuario pidió más contraste y colores realistas. Se pasó a carbón y punta ceniza clara (luminosidad media ~0,20). Pendiente de visto bueno en `assets-lab.html`.
+- **Abierto:** no se sustituye `makeTuft` en `environment.js` hasta el visto bueno. Las puntas de las especies secas en Medio/Alto pueden verse algo beis por el atlas.
