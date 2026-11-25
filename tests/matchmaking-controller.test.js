@@ -195,3 +195,17 @@ test('main.js: stopLive no mata la búsqueda salvo al cancelar (force) y goHome 
   const room = main.slice(main.indexOf('function showLiveRoom'), main.indexOf('async function beginLive'));
   assert.doesNotMatch(room, /setInterval|isConnected|\b250\b/);
 });
+
+test('controlador: el asiento conserva avatar y marco para que la sala los pinte', () => {
+  const env = fakeEnv();
+  const { s } = make(env);
+  const frame = { id: 'f_test', name: 'Test' };
+  const avatar = { icon: 'crown', image: null };
+  s.setSeat(0, { name: 'Ana', color: '#fff', avatar, frame });
+  assert.deepEqual(s.players[0].avatar, avatar);
+  assert.equal(s.players[0].frame, frame);
+  // sin avatar ni marco: null, y la vista cae a la inicial
+  s.setSeat(1, { name: 'Bot', color: '#000', isBot: true });
+  assert.equal(s.players[1].avatar, null);
+  assert.equal(s.players[1].frame, null);
+});

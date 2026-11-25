@@ -1209,6 +1209,8 @@ body.sk-noscroll { overflow: hidden; } /* lo usa skinReveal.js: no borrar */
 }
 .mm .seat.me .mm-seat-name { font-weight: 900; text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5); }
 .mm .seat.me .avatar { box-shadow: 0 0 0 2px rgba(8, 10, 16, 0.7); }
+/* avatar con marco dentro del asiento: mismo hueco que el avatar de antes (34px) y sin margen que empuje la fila */
+.mm .seat .pf { --s: 34px; margin: 0; }
 .mm .seat.bot { opacity: 0.82; }
 .mm .seat.mm-enter { animation: mmSeatIn 0.6s cubic-bezier(0.34, 1.4, 0.64, 1) var(--enter-dl, 0ms) both; }
 .mm .seat.mm-enter::before {

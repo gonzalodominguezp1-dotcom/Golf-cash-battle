@@ -445,7 +445,7 @@ async function startMatch(tier, rematchOf = null) {
     await wait(seatWaits[i]);
     if (search.ended) return quit();
     const p = match.players[i];
-    search.setSeat(i, { name: p.name, color: p.color, me: p.id === 'me' }); // el tic suena al pintar el asiento
+    search.setSeat(i, { name: p.name, color: p.color, me: p.id === 'me', ...seatAvatar(p) }); // el tic suena al pintar el asiento
   }
   await wait(launchWaitMs);
   if (search.ended) return quit();
@@ -1271,7 +1271,7 @@ async function launchLive(live) {
   if (WARM_LIVE) live.warm = gamePreloader.warm(warmRequest(match.courses[0], live.roster.length - 1));
   for (const r of live.roster) {
     if (r.isBot) continue;
-    search.setSeat(r.seat, { name: r.name, color: r.color, me: r.id === 'me' });
+    search.setSeat(r.seat, { name: r.name, color: r.color, me: r.id === 'me', ...seatAvatar(r) });
   }
   for (const r of live.roster) {
     if (!r.isBot) continue;

@@ -126,7 +126,8 @@ export function createSearch(o) {
 
     setSeat(i, p) {
       if (s.ended || i < 0 || i >= s.seats) return;
-      const next = p ? { name: p.name, color: p.color, me: !!p.me, isBot: !!p.isBot } : null;
+      // avatar y marco viajan con el asiento (la vista los pinta); sin ellos el jugador se ve como inicial
+      const next = p ? { name: p.name, color: p.color, me: !!p.me, isBot: !!p.isBot, avatar: p.avatar ?? null, frame: p.frame ?? null } : null;
       const prev = s.players[i];
       if (JSON.stringify(prev) === JSON.stringify(next)) return;
       s.players[i] = next;
