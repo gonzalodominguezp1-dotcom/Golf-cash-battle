@@ -330,3 +330,9 @@ Open     — decisión de diseño del usuario: las zonas `water` jugables del ho
 - **Además:** las juntas se multiplicaban por 0,45 y se emborronaban (bandas oscuras), los cortes de la geometría no coincidían con la textura y el color efectivo era gris oscuro teñido del horizonte (tono verdoso).
 - **Cambio:** uv en metros por cara, textura de arenisca de 512 × 64, un mismo despiece para color, mapa de normales y bulto de la malla, juntas no alineadas entre hiladas y coronación coherente entre cara y tapa. Sigue en 256 triángulos, una malla y un material transparente por paleta.
 - **Abierto:** visto bueno del usuario en `assets-lab.html`.
+
+## 2026-11-25 — Muro de hielo también en glacier (feature: assets-entorno-1a1, paso M)
+
+- **Qué pidió el usuario:** que el muro del tema snow vaya también en glacier.
+- **Qué hace el código:** `glacier` usa `makeIceWall`, igual que `snow` (laboratorio, `wall-new`).
+- **Abierto:** visto bueno del usuario en `assets-lab.html`.
