@@ -2,7 +2,6 @@ import './authScreen.css';
 import { authMessage, passwordChecks, retryDelayMs, validateEmail, validatePassword, PASSWORD_MIN } from '../account/authRules.js';
 import { lastEmail } from '../account/AuthService.js';
 import { onVerified } from '../account/verifiedChannel.js';
-import { iconUrl } from './icons.js';
 
 // Todo el texto del usuario entra por textContent / value: nunca markup con datos de fuera.
 function el(tag, props = {}, ...kids) {
@@ -57,6 +56,19 @@ function checklist(input) {
   return list;
 }
 
+/**
+ * Texto legal en una banda fija abajo que se desplaza en bucle. El texto se lee una vez:
+ * la copia de relleno va aria-hidden. Con movimiento reducido se oculta la copia y el texto queda fijo.
+ */
+function legalTicker(text) {
+  const seg = (hidden) => {
+    const s = el('span', { class: 'auth-ticker-seg' }, text, el('span', { class: 'auth-ticker-sep', text: '•' }), text, el('span', { class: 'auth-ticker-sep', text: '•' }));
+    if (hidden) s.setAttribute('aria-hidden', 'true');
+    return s;
+  };
+  return el('footer', { class: 'auth-ticker' }, el('div', { class: 'auth-ticker-track' }, seg(false), seg(true)));
+}
+
 const mq = (q) => {
   try {
     return !!globalThis.matchMedia?.(q).matches;
@@ -95,20 +107,6 @@ function googleMark() {
     svg.append(p);
   }
   return svg;
-}
-
-const PERKS = [
-  ['coins', 'Saldo de demostración para empezar'],
-  ['skins', 'Skins y nivel siempre guardados'],
-  ['play', 'Juega desde cualquier dispositivo'],
-];
-
-function perks() {
-  return el(
-    'ul',
-    { class: 'auth-perks', 'aria-label': 'Qué ganas con tu cuenta' },
-    PERKS.map(([ico, text]) => el('li', { class: 'auth-perk' }, el('img', { class: 'auth-perk-ico', src: iconUrl(ico), alt: '', width: 22, height: 22 }), el('span', { text }))),
-  );
 }
 
 /**
@@ -183,11 +181,10 @@ export function mountAuth(root, auth, { recovery = false, guest = false, linkErr
         guest
           ? el('p', { class: 'notice auth-notice', text: 'Tu cuenta de invitado sigue ahí. Crea tu cuenta con email para conservar saldo, nivel y skins.' })
           : null,
-        perks(),
       ),
       card,
     ),
-    el('p', { class: 'legal auth-legal', text: 'Créditos de demostración sin valor real. Para jugar mesas con entrada hay que ser mayor de 18 años y verificar la identidad.' }),
+    legalTicker('Créditos de demostración sin valor real. Para jugar mesas con entrada hay que ser mayor de 18 años y verificar la identidad.'),
   );
   root.replaceChildren(page);
 
