@@ -26,7 +26,7 @@ export async function runSteps(steps, { signal, yieldFn = yieldToMain, onProgres
 }
 
 /** Resuelve { ok: true, value } o { ok: false, timeout: true } si pasan `ms`. */
-export function withCap(promise, ms, timers = { setTimeout, clearTimeout }) {
+export function withCap(promise, ms, timers = globalThis) {
   return new Promise((resolve, reject) => {
     const id = timers.setTimeout(() => resolve({ ok: false, timeout: true }), ms);
     Promise.resolve(promise).then(
