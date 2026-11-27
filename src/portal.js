@@ -62,7 +62,7 @@ function crazyAdapter() {
     }),
     // el jugador puede silenciar desde el propio portal
     onMuteSetting: (cb) => {
-      const read = () => cb(Boolean(C.game.settings?.muteAudio));
+      const read = (s) => cb(Boolean((s || C.game.settings)?.muteAudio));
       C.game.addSettingsChangeListener?.(read);
       read();
     },

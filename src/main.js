@@ -130,8 +130,12 @@ const loadSkinInspector = () => import('./ui/skinInspector.js');
 const DEVICE = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches ? 'móvil' : 'equipo';
 
 // sonido según los ajustes guardados (settings.js), ahora y cada vez que cambien
+// silencio efectivo: ajuste del jugador, silencio del portal (CrazyGames muteAudio) o anuncio en curso
+let portalMuted = false;
+let adMuted = false;
+const syncMute = () => setMuted(adMuted || portalMuted || settings.peek().sound.muted);
 function applySound(s) {
-  setMuted(s.sound.muted);
+  setMuted(adMuted || portalMuted || s.sound.muted);
   setVolume(s.sound.master / 100);
   setAmbientVolume(s.sound.ambient / 100);
   document.querySelectorAll('.pill.mute').forEach((b) => (b.innerHTML = soundLabel()));
@@ -1822,9 +1826,13 @@ if (skinLab) {
   app.innerHTML = '<main class="screen loading"><h1>Golf Cash Battle</h1><p class="sub">Conectando…</p></main>';
   // en portales: el SDK silencia el juego durante los anuncios sin tocar la preferencia del jugador
   const portalReady = IS_PORTAL ? initPortal({
-    mute: () => setMuted(true),
-    unmute: () => setMuted(settings.peek().sound.muted),
-    setMuted: (portalMute) => setMuted(portalMute || settings.peek().sound.muted),
+    mute: () => { adMuted = true; syncMute(); },
+    unmute: () => { adMuted = false; syncMute(); },
+    setMuted: (m) => {
+      portalMuted = m;
+      syncMute();
+      document.querySelectorAll('.pill.mute').forEach((b) => (b.innerHTML = soundLabel()));
+    },
   }).then(loadingStart) : Promise.resolve();
   portalReady.then(createBackend).then(async (b) => {
     if (b.mode === 'auth') {
