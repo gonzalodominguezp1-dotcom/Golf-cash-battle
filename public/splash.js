@@ -5,6 +5,8 @@
   'use strict';
 
   var WEIGHTS = { html: 5, bundle: 20, session: 20, progress: 15, three: 20, scene: 15, hub: 5 };
+  // build de portal (CrazyGames, Poki): <html data-portal="1">. Sin dinero: bolas de golf en vez de monedas y carga más corta.
+  var PORTAL = !!(root.document && root.document.documentElement && root.document.documentElement.getAttribute('data-portal') === '1');
   var TIPS = [
     'Un golpe suave en el green vale más que uno fuerte.',
     'Mira la pendiente antes de golpear: la bola siempre sigue la bajada.',
@@ -137,7 +139,7 @@
   root.__gcbSplashCore = api;
 
   // minMs: el splash se queda al menos este tiempo, para que dé tiempo a leer el estado y un consejo.
-  var core = createSplashCore({ maxMs: 15000, minMs: 3000 });
+  var core = createSplashCore({ maxMs: 15000, minMs: PORTAL ? 1000 : 3000 });
   var listeners = [];
   function emit() {
     var copy = listeners.slice();
@@ -166,7 +168,7 @@
   var HOLE_PORT_W = 1080, HOLE_PORT_H = 1920;   // public/splash/hole-portrait.jpg (vertical)
   var HOLE_PORT_FX = 0.5, HOLE_PORT_FY = 0.5;   // centro del hoyo en la foto vertical
   var HOLE_PORT_R = 0.125;                      // radio del hoyo respecto al ancho de la foto vertical
-  var COIN_SRC = '/splash/coin.png';
+  var COIN_SRC = PORTAL ? 'splash/ball.png' : '/splash/coin.png';   // portal: ruta relativa (se sirve desde una subcarpeta)
   var MAX_COINS = 60;                       // monedas a la vez
   var SPAWN_MIN = 0.1, SPAWN_VAR = 0.12;    // una moneda cada 0,1–0,22 s
   var SAFETY_MS = 700;                      // fundido = 500 ms en index.html; si no llega transitionend
@@ -225,7 +227,7 @@
       }
       for (var j = 0; j < 3; j++) {
         sc.pops.push({ x: g.hx + (rnd() - 0.5) * g.holeR * 1.6, y: g.hy, vy: -(110 + rnd() * 90),
-          life: 1, ch: rnd() < 0.6 ? '$' : '↑', sc: 0.8 + rnd() * 0.6 });
+          life: 1, ch: PORTAL ? (rnd() < 0.6 ? '★' : '↑') : (rnd() < 0.6 ? '$' : '↑'), sc: 0.8 + rnd() * 0.6 });
       }
     }
     function alive(o) { return o.life > 0; }
@@ -251,7 +253,7 @@
         c.y = y0 + (g.hy - y0) * p + py * c.depth * 14;
         c.size = size * (1 - 0.72 * t) * (0.55 + 0.45 * c.depth);
         if (t > 0.85) { c.fade = Math.max(0, 1 - (t - 0.85) / 0.15); c.y += (t - 0.85) * H * 0.05; }   // se hunde
-        c.flip = Math.max(0.12, Math.abs(Math.cos(c.ph + t * c.spins * Math.PI * 2)));                  // giro en Y
+        c.flip = PORTAL ? 1 : Math.max(0.12, Math.abs(Math.cos(c.ph + t * c.spins * Math.PI * 2)));                  // giro en Y
         if (c.t >= 1 && !c.landed) { c.landed = true; land(g); }
       }
       sc.coins = sc.coins.filter(notLanded);

@@ -163,7 +163,7 @@ const EN = {
   'Sonido silenciado · actívalo en Ajustes': 'Sound muted · turn it on in Settings',
   '¡Hoyo en uno!': 'Hole in one!', '¡Albatros!': 'Albatross!', '¡Eagle!': 'Eagle!', '¡Birdie!': 'Birdie!', 'Par': 'Par', 'Bogey': 'Bogey',
   'Doble bogey': 'Double bogey', 'Triple bogey': 'Triple bogey',
-  'Descalificado': 'Disqualified', 'Siguiente hoyo': 'Next hole', 'Ver resultado': 'See results',
+  'Descalificado': 'Disqualified', '¡Se acabó el tiempo!': 'Time’s up!', 'Siguiente hoyo': 'Next hole', 'Ver resultado': 'See results',
   'Jugar desempate': 'Play tiebreak', 'Ver desempate': 'Watch tiebreak',
   // final
   'Victoria': 'Victory', '¡Has ganado!': 'You won!', 'Revancha': 'Rematch', 'Salir': 'Exit', 'Reclamar y salir': 'Claim and exit',
@@ -197,7 +197,7 @@ const EN = {
   // cofre
   'Próximo cofre': 'Next chest', 'Desactiva el bloqueador de anuncios para abrirlo': 'Turn off your ad blocker to open it',
   // sala de emparejamiento y recompensas
-  'Buscando rivales': 'Finding rivals', 'Práctica contra rivales simulados': 'Quick match vs 7 rivals', 'Rivales simulados · juega sin riesgo': '8 players · 3 holes',
+  'Buscando rivales': 'Finding rivals', 'Contra la IA': 'Vs AI', 'Preparando rivales': 'Getting rivals ready', 'Práctica contra rivales simulados': 'Quick match vs 7 rivals', 'Rivales simulados · juega sin riesgo': '8 players · 3 holes',
   'Mesa': 'Table', 'Cancelar emparejamiento': 'Cancel', 'Jugadores en la mesa': 'Players at the table', 'Cómo funciona la sala': 'How it works',
   'Ya estás buscando partida': 'Already finding a match', 'Te llevamos a tu sala de emparejamiento.': 'Taking you back to your lobby.',
   'Buscando partida': 'Finding a match', '¡Partida encontrada!': 'Match found!', 'Error al iniciar partida': 'Could not start the match',
@@ -238,7 +238,7 @@ const EN = {
   'Golpes, rebotes, música de victoria.': 'Hits, bounces, victory music.', 'Pájaros, olas, lluvia, grillos…': 'Birds, waves, rain, crickets…',
   'Quita todo el sonido. Atajo en el ordenador: M.': 'Turns off all sound. Keyboard shortcut: M.',
   'Probar sonido': 'Test sound', 'Probar': 'Test', 'Suena un golpe con el volumen elegido.': 'Plays a hit at the chosen volume.',
-  'Sin apuesta': 'Free', 'Entrenamiento': 'Quick match', 'Buscando rivales a tu altura…': 'Finding rivals at your level…', 'seg': 's',
+  'Sin apuesta': 'Free', 'Entrenamiento': 'Quick match', 'Buscando rivales a tu altura…': 'Picking rivals at your level…', 'Calienta el putt: aquí no se pierde nada': 'Warm up your putt: nothing to lose here', 'Tus rivales simulados ya están en el tee': 'Your AI rivals are on the tee', 'Prepara el primer golpe': 'Get ready for the first shot', 'Tu rival ya está calentando…': 'Your rival is warming up…', 'seg': 's',
   // portada (splash)
   'Arrancando el juego…': 'Starting the game…', 'Cargando el juego…': 'Loading the game…', 'Comprobando tu sesión…': 'Checking your save…',
   'Cargando tu saldo…': 'Loading your progress…', 'Preparando el campo 3D…': 'Preparing the 3D course…', 'Colocando las banderas…': 'Placing the flags…',

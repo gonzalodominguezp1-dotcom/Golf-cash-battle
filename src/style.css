@@ -3066,3 +3066,20 @@ html.has-mmb .notifs { top: calc(env(safe-area-inset-top, 0px) + 74px); }
 .hub-chest:not(.is-wait) > svg { animation: chest-wiggle 2.4s ease-in-out infinite; }
 .hub-chest.is-wait { filter: saturate(0.4) brightness(0.85); }
 .is-portal .hub { background-image: none; background-color: #0b0f15; }
+
+/* portal: mano del tutorial encima de la bola (arrastrar hacia atrás y soltar) */
+.tut-hand { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 6; pointer-events: none; opacity: 0; transition: opacity 0.25s; }
+.tut-hand.on { opacity: 1; }
+.tut-hand-ring { position: absolute; left: -22px; top: -22px; width: 44px; height: 44px; border-radius: 50%; border: 3px solid #ffd23f; box-shadow: 0 0 14px rgba(255, 210, 63, 0.7); animation: tut-ring 1.8s ease-out infinite; }
+.tut-hand-line { position: absolute; left: -2px; top: 0; width: 4px; height: 0; border-radius: 2px; background: linear-gradient(rgba(255, 210, 63, 0.95), rgba(255, 210, 63, 0)); animation: tut-hand-line 1.8s ease-in-out infinite; }
+.tut-hand-ico { position: absolute; left: -12px; top: -6px; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.45)); animation: tut-hand 1.8s ease-in-out infinite; }
+@keyframes tut-hand { 0% { transform: translateY(0) scale(1); opacity: 0; } 12% { opacity: 1; transform: translateY(0) scale(0.9); } 60% { transform: translateY(90px) scale(0.9); opacity: 1; } 72% { transform: translateY(90px) scale(1); opacity: 1; } 90%, 100% { transform: translateY(90px) scale(1); opacity: 0; } }
+@keyframes tut-hand-line { 0%, 12% { height: 0; opacity: 1; } 60%, 72% { height: 90px; opacity: 1; } 90%, 100% { height: 90px; opacity: 0; } }
+@keyframes tut-ring { 0% { transform: scale(0.7); opacity: 0.9; } 70%, 100% { transform: scale(1.5); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .tut-hand-ico, .tut-hand-line, .tut-hand-ring { animation: none; } }
+/* portal: en la sala de rivales no hay «Volver al lobby» (la partida empieza enseguida) */
+.is-portal .mm-actions [data-mm-lobby] { display: none; }
+/* portal: HUD de partida con hoyo, par y golpes (sin el contador de FPS) */
+.is-portal .hud.hud-lean .pill.strokes b { color: var(--yellow, #ffd23f); margin-left: 4px; }
+/* portal en vertical: el logo va dibujado en la portada; Logros y Skins bajan para no taparlo */
+@media (orientation: portrait) { .is-portal .hub-mid { align-items: flex-end; padding-bottom: 14px; } }

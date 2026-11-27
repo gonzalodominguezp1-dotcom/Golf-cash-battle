@@ -4,6 +4,8 @@ register('matchmaking', {
   title: 'Buscando rivales',
   practice: 'Práctica contra rivales simulados',
   practiceKicker: 'Práctica',
+  portalKicker: 'Contra la IA',
+  portalTitle: 'Preparando rivales',
   practiceNote: 'Rivales simulados · juega sin riesgo',
   table: 'Mesa',
   prize: 'Premio al ganador',

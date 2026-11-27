@@ -51,7 +51,9 @@ export default defineConfig(({ mode }) => {
         transformIndexHtml: (html) => html
           .replaceAll('Golf Cash Battle', 'GolfitoBattle')
           .replaceAll('/logo-header.png', '/logo-golfito-header.png')
-          .replace(/\s*<link rel="canonical"[^>]*>/, ''),
+          .replace(/\s*<link rel="canonical"[^>]*>/, '')
+          .replace('<html lang="es">', '<html lang="es" data-portal="1">')
+          .replace(/splash\/coin\.png/g, 'splash/ball.png'),
       }],
       define,
       build: {

@@ -451,7 +451,8 @@ async function startMatch(tier, rematchOf = null) {
   warm = gamePreloader.warm(warmRequest(match.courses[0], match.players.filter((p) => p.isBot).length));
   const quit = () => { warm.cancel(); };
   // F5: la sala dura al menos ROOM_MIN_MS desde el clic (`?room=old` o ROOM_MIN_MS = 0: tiempos de antes)
-  const roomMin = new URLSearchParams(location.search).get('room') === 'old' ? 0 : ROOM_MIN_MS;
+  // portal: rivales de IA, la sala es solo un respiro antes de jugar (más corta)
+  const roomMin = new URLSearchParams(location.search).get('room') === 'old' ? 0 : IS_PORTAL ? 1200 : ROOM_MIN_MS;
   const { seatWaits, launchWaitMs } = roomDelays({ players: match.players.length, rnd: Math.random, elapsedMs: performance.now() - clickAt, minMs: roomMin });
   for (let i = 0; i < match.players.length; i++) {
     await wait(seatWaits[i]);
@@ -501,7 +502,10 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
       <div class="stage"></div>
       <div class="vignette"></div>
       <div class="hud ${freePlay ? 'hud-freeplay' : 'hud-lean'}">
-        ${lean ? '<div class="pill net-stats" title="Fotogramas por segundo · latencia con el servidor">— FPS · — ms</div>' : `
+        ${lean && IS_PORTAL ? `
+        <div class="pill hl">${tiebreak ? subtitle : (title ?? subtitle)}</div>
+        ${tiebreak ? '' : `<div class="pill">Par ${course.par}</div>
+        <div class="pill strokes">Golpes <b>0</b></div>`}` : lean ? '<div class="pill net-stats" title="Fotogramas por segundo · latencia con el servidor">— FPS · — ms</div>' : `
         <div class="pill hl freeplay-pill">Modo Libre</div>
         <div class="pill">${course.name}</div>
         <div class="pill">Par ${course.par}</div>
@@ -754,7 +758,7 @@ function playScreen(match, { course, title, subtitle, players, onDone, firstSunk
         if (freePlay) return;
         timerEl.hidden = true;
         setChip('me', 'DQ', true);
-        banner('¡Tiempo! Descalificado');
+        banner(IS_PORTAL ? '¡Se acabó el tiempo!' : '¡Tiempo! Descalificado');
         cupBanner.classList.add('dq');
         setTimeout(() => finish(maxStrokesOf(course)), 1600);
       },
@@ -858,7 +862,7 @@ function playHole(match, index, { prepared = null, reuse = false } = {}) {
   perf.setContext({ hole: index, course: course.name, courseIndex: match.courses[index] });
   let tutorial = null;
   const guided = match.tutorial && index === 0 ? {
-    onGame: (_g, { view }) => { tutorial = startTutorial(view); },
+    onGame: (g, { view }) => { tutorial = startTutorial(view, g); },
     onShots: () => tutorial?.stroke(1),
   } : {};
   playScreen(match, {
@@ -868,6 +872,8 @@ function playHole(match, index, { prepared = null, reuse = false } = {}) {
     reuse,
     title: `Hoyo ${index + 1}/${match.holes}`,
     subtitle: `Hoyo ${index + 1}`,
+    // portal: más margen tras el primero en embocar (45 s) y en el hoyo del tutorial (90 s), para que un jugador nuevo no quede fuera
+    timeLimit: IS_PORTAL ? (match.tutorial && index === 0 ? 90 : 45) : HOLE_TIME_LIMIT,
     players: match.players,
     onDone: (g, strokes) => {
       const bots = g.finishBots();
@@ -905,6 +911,7 @@ function standingsTable(players, highlightPayout) {
 }
 
 function holeHeader(strokes, par, dq) {
+  if (dq && IS_PORTAL) return `<h2 class="score-title">¡Se acabó el tiempo!</h2><p class="sub">No embocaste a tiempo · se apuntan ${strokes} golpes</p>`;
   if (dq) return `<h2 class="score-title">Descalificado</h2><p class="sub">No embocaste a tiempo · se apuntan ${strokes} golpes</p>`;
   return `<h2 class="score-title">${scoreLabel(strokes, par)}</h2><p class="sub">${strokes} golpe${strokes === 1 ? '' : 's'} · par ${par}</p>`;
 }

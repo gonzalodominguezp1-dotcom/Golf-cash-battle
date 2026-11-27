@@ -11,11 +11,14 @@ import { t } from './texts/index.js';
 import './texts/common.js';
 import './texts/matchmaking.js';
 
+const PORTAL = !!import.meta.env?.VITE_PORTAL;
+
 /** Textos por defecto de la sala de práctica / mesa local (la sala en vivo trae los suyos en search.info). */
 export function defaultInfo(tier) {
   return {
-    kicker: tier.entryFee ? `${esc(tier.name)} · ${esc(t('matchmaking.table'))}` : esc(t('matchmaking.practiceKicker')),
-    title: esc(t('matchmaking.title')),
+    // portal: los rivales son IA y se dice claro (no se finge una búsqueda online)
+    kicker: tier.entryFee ? `${esc(tier.name)} · ${esc(t('matchmaking.table'))}` : esc(t(PORTAL ? 'matchmaking.portalKicker' : 'matchmaking.practiceKicker')),
+    title: esc(t(PORTAL && !tier.entryFee ? 'matchmaking.portalTitle' : 'matchmaking.title')),
     potNote: tier.entryFee ? `${esc(t('matchmaking.prize'))} ${coin(prizeFor(tier))}` : esc(t('matchmaking.practiceNote')),
     infoHtml: '',
   };
