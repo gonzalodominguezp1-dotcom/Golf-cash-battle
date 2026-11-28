@@ -365,3 +365,10 @@ Open     — decisión de diseño del usuario: las zonas `water` jugables del ho
 - **Coste en relieve:** cortar cada 0,2 m sube los triángulos. La Herradura (valla) ~38,7k y El Molino del Prado ~21,7k; el resto, entre 60 y 9k por hoyo. Las llamadas de dibujo no cambian.
 - **Ceniza en el juego:** lava y caldera usan `addAsh` (`environment.js`) en lugar de `makeTuft`. Excluye el cráter del volcán (`volcano.q < 2.9`).
 - **Abierto:** aspecto en pantalla (costuras del recorte, orden de dibujo de muros transparentes, sombras), GLSL del neón en GPU real, golpe en partida real.
+
+## 2026-11-28 · Esquinas de muro sin pivote
+- **Qué:** `course.js` (`src/game/render/course.js`): los postes redondos y las bolas de esquina salen; en cada extremo de muro va un bloque `RoundedBoxGeometry` de la anchura del muro (`2·WALL_HALF`) y alto `WALL_H + 0.05`. Sale también el fundido de postes al tapar la bola y `postBlocksBall`.
+- **Por qué:** el poste tenía forma y radio distintos al muro; la bola rebotaba de forma distinta al pasar cerca de la esquina.
+- **Física:** sin cambios. `wallSegmentsOf` y el choque por segmento siguen igual.
+- **Pruebas:** `tests/walls-course.test.js` 13/13; `pnpm build` correcto.
+- **Abierto:** revisión visual en pantalla (color del bloque de esquina, neón sin bolas de colores). Los bloques no se funden al tapar la bola, a diferencia de los muros.
